@@ -1,32 +1,39 @@
-import type { GameState, MissionKind, DraftOption, RevealItem, Battle, Character } from '../types';
-import { NATIONS, RULER_TRAITS } from '../data/nations';
-import { TROOPS, EQUIPMENT, TACTICS, COUNTER_TEXT } from '../data/troops';
-import { TECHS, TECH, BUILDINGS } from '../data/techs';
-import { TRAITS } from '../data/characters';
+import type { GameState, MissionKind, DraftOption, RevealItem, Battle, Character, Cat, Heir } from '../types';
+import { CATS } from '../types';
+import { NATIONS, RULER_ARCHS } from '../data/nations';
+import { TROOPS, EQUIPMENT, COUNTER_TEXT } from '../data/troops';
+import { TECHS, TECH, BUILDINGS, type TechTrack } from '../data/techs';
+import { TRAITS, RARITY } from '../data/characters';
+import { GOODS } from '../data/goods';
+import { REGIONS } from '../data/overseas';
 import {
-  player, provsOf, incomeOf, manpowerGain, manpowerMax, getRel, atWar, hasTreaty, enemiesOf, alliesOf, armyPower,
-  armyCap, courtCap, draftsPerTurn, provinceIncome, buildingAllowed, buildingCost, roleName, nationName, inTruce,
+  player, provsOf, incomeOf, playerManpower, getRel, atWar, hasTreaty, enemiesOf, alliesOf, armyPower,
+  armyCap, courtCap, courtCount, provinceIncome, buildingAllowed, buildingCost, roleName, nationName, inTruce,
+  tierOf, TIERS, population, townSlots, ruralSlots, builtAt, ownGoods, colonyGoods,
 } from '../engine/core';
-import { newGame, endTurn, chooseEventOption, playerDeclareWar, warCost, ranking, dismissCharacter, disbandTroop, SAVE_VERSION } from '../engine/turn';
+import { newGame, endTurn, chooseEventOption, playerDeclareWar, warCost, ranking, powerTable, dismissCharacter, disbandTroop, chooseHeir, SAVE_VERSION } from '../engine/turn';
 import { EVENT, eventTitle, upcomingHistory } from '../engine/events';
-import { CARDS, playCard, cardBlocked } from '../engine/cards';
+import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBlocked, troopHireCost, discardCard, HAND_LIMIT, cardFor } from '../engine/cards';
 import {
-  MISSION_INFO, DIPLO, missionBlocked, launchMission, cancelMission, diploChance, missionTurns, techCost, researchRate, attackRoute, developCost,
+  MISSION_INFO, DIPLO, missionBlocked, launchMission, cancelMission, diploChance, missionTurns, techCost, researchRate, attackRoute,
+  developCost, foundCost, importable, cardRole, voyageCost,
 } from '../engine/missions';
-import { startTroopDraft, startCourtDraft, takeDraftOption, draftBlocked, courtBlocked, draftCost, mergePreview, doMerge, AMBITIONS } from '../engine/drafts';
+import { buyCard, buyBlocked, hireWithCard, takeDraftOption, mergePreview, doMerge, AMBITIONS } from '../engine/drafts';
+import { regionState, discoverable, exploreChance, colonizeChance, conquistaChance, colonizeBlocked, promote, promoteBlocked, PROMOTION, colonyCost } from '../engine/overseas';
 import { playRound, autoResolve, finishBattle, ratio, breakLevel, hp } from '../engine/battle';
 import { getGeo } from '../engine/map';
 import { h, $, clear, sleep, reduced, fmt, signed } from './dom';
 import { icon } from './icons';
-import { troopCard, equipCard, charCard, handCard, tacticCard, backCard, flipCard } from './cards';
+import { troopCard, charCard, handCard, tacticCard, backCard, flipCard } from './cards';
 import { MapView } from './map';
 
-const KEY = 'lasting-empires.save.v1';
+const KEY = 'lasting-empires.save.v2';
 let S: GameState;
 let map: MapView;
 let sheet: { kind: string; arg?: string } | null = null;
 let modalOpen = false;
 let forge: number[] = [];
+let chronTab = 'powers';
 
 // ---------- persistence ----------
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { /* storage may be blocked */ } }
@@ -42,22 +49,21 @@ export function snapshot() { return S ? { save: JSON.stringify(S) } : {}; }
 
 // ---------- shell ----------
 export function boot(data: { save?: string }) {
-  const root = $('#app');
-  clear(root);
+  clear($('#app'));
   let restored: GameState | null = null;
   if (data?.save) { try { restored = JSON.parse(data.save); } catch { /* ignore */ } }
-  if (restored && !restored.over) { start(restored); return; }
+  if (restored && !restored.over && restored.version === SAVE_VERSION) { start(restored); return; }
   showTitle();
 }
 
 function showTitle() {
   const root = clear($('#app'));
   const saved = loadSave();
-  const wrap = h('div', { class: 'title-screen' },
+  root.append(h('div', { class: 'title-screen' },
     h('div', { class: 'title-inner' },
       h('p', { class: 'eyebrow' }, 'Anno Domini 1453 – 1750'),
       h('h1', { class: 'title' }, 'Lasting Empires'),
-      h('p', { class: 'lede' }, 'Raise troops, forge them into tercios, send your court on missions, and let history surprise you. One turn is one year.'),
+      h('p', { class: 'lede' }, 'Every action is a card. Gather Military, Diplomacy, Internal, Economy and Research cards each year, then send your people on missions. One turn is one year.'),
       saved && !saved.over ? h('button', { class: 'btn primary wide', onclick: () => start(saved) }, `Continue as ${saved.nations[saved.player].name}, ${saved.year}`) : null,
       h('h2', { class: 'pick-h' }, 'Choose your crown'),
       h('div', { class: 'nation-picks' }, NATIONS.filter(n => n.playable).map(n =>
@@ -69,45 +75,41 @@ function showTitle() {
       h('details', { class: 'howto' },
         h('summary', {}, 'How to play'),
         h('ul', {},
-          h('li', {}, 'Tap a province on the map to build, develop, attack or talk to its owner.'),
-          h('li', {}, 'Every mission needs a character: generals lead troops, diplomats sign treaties, administrators research and build.'),
-          h('li', {}, 'Draft troop and equipment cards in the Army panel, then forge them: Levy + Long Pikes = Pikemen; Pikemen + Arquebusiers = Tercio.'),
+          h('li', {}, 'You draw about one card of each kind a year. Buildings, research and your monarch raise those rates. Spend nation points to buy more (pick 1 of 3).'),
+          h('li', {}, 'Mission cards need a person: generals, diplomats, administrators, merchants and researchers. Each has a rarity from Common to Legendary.'),
+          h('li', {}, 'Manpower is scarce: hiring a troop or a person costs 1. Ducats pay for troops, building salaries and imported goods.'),
+          h('li', {}, 'Forge troops in the Military panel: Levy + Long Pikes = Pikemen; Pikemen + Arquebusiers = Tercio.'),
           h('li', {}, 'In battle both sides play a tactic face-down. Counter the enemy and they take extra damage.'),
-          h('li', {}, 'Play cards from your hand at any time. History cards along the top will flip when their time comes.'),
-          h('li', {}, 'Press End Year when you are ready. Score the most prestige by 1750.'),
-        ))));
-  root.append(wrap);
+          h('li', {}, 'Diplomats can become Explorers, generals Conquerors, administrators Colonists, to win lands overseas. There is no going back.'),
+        )))));
 }
 
 function start(s: GameState) {
   S = s;
   const root = clear($('#app'));
-  const me = player(S);
   root.append(
     h('header', { id: 'top' }),
     h('main', { id: 'board' }, h('div', { id: 'timeline' }), h('div', { id: 'zoom' },
       h('button', { class: 'zbtn', 'aria-label': 'Zoom in', onclick: () => map.zoomBy(0.75), html: icon('plus', 18) }),
       h('button', { class: 'zbtn', 'aria-label': 'Zoom out', onclick: () => map.zoomBy(1.33), html: '<svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7"><path d="M5 12 H19"/></svg>' }),
-      h('button', { class: 'zbtn', 'aria-label': 'Show my realm', onclick: () => map.focus(provsOf(S, S.player).map(p => p.id)), html: icon('crown', 18) }))),
+      h('button', { class: 'zbtn', 'aria-label': 'Show my realm', onclick: () => map.focus(provsOf(S, S.player).map(p => p.id)), html: icon('crown', 18) }),
+      h('button', { class: 'zbtn', 'aria-label': 'Overseas', title: 'Overseas', onclick: () => toggleSheet('overseas'), html: icon('anchor', 18) })),
+      h('div', { id: 'tracker' })),
     h('aside', { id: 'sheet', hidden: true }),
-    h('section', { id: 'dock' }, h('div', { id: 'hand' }), h('button', { id: 'endturn', class: 'btn primary', onclick: onEndTurn })),
-    h('nav', { id: 'tabs' }, ...[
-      ['army', 'Army', 'tercio'], ['court', 'Court', 'crown'], ['missions', 'Missions', 'hourglass'],
-      ['research', 'Research', 'book'], ['nations', 'Nations', 'hands'], ['chronicle', 'Chronicle', 'scroll'],
-    ].map(([k, label, ic]) => h('button', { class: 'tab', 'data-tab': k, onclick: () => toggleSheet(k) }, h('span', { html: icon(ic, 20) }), h('span', { class: 'tab-l' }, label)))),
+    h('nav', { id: 'tabs' }),
     h('div', { id: 'modal', hidden: true }),
     h('div', { id: 'toast', role: 'status', 'aria-live': 'polite' }),
   );
   map = new MapView($('#board'));
   map.onSelect = id => { if (id) openSheet('province', id); else if (sheet?.kind === 'province') closeSheet(); };
-  document.documentElement.style.setProperty('--me', me.color);
+  document.documentElement.style.setProperty('--me', player(S).color);
   refresh();
   requestAnimationFrame(() => map.focus(provsOf(S, S.player).map(p => p.id), 120));
   processQueue();
 }
 
 function refresh() {
-  renderTop(); map.render(S); renderHand(); renderTimeline();
+  renderTop(); renderTabs(); map.render(S); renderTimeline(); renderTracker();
   if (sheet) renderSheet();
   save();
 }
@@ -132,6 +134,7 @@ function act(fn: () => string | null | void, okMsg?: string) {
 function renderTop() {
   const me = player(S);
   const inc = incomeOf(S, S.player);
+  const mp = playerManpower(S);
   const top = clear($('#top'));
   top.append(
     h('button', { class: 'crest', onclick: () => toggleSheet('realm'), style: `--nc:${me.color}` },
@@ -140,32 +143,36 @@ function renderTop() {
     h('div', { class: 'year' }, h('span', { class: 'year-n' }, String(S.year)), h('small', {}, 'A.D.')),
     h('div', { class: 'res' },
       chip('coin', fmt(me.gold), signed(inc.total), 'Ducats', inc.total < 0 ? 'bad' : ''),
-      chip('people', fmt(me.manpower), '/' + fmt(manpowerMax(S, S.player)), 'Manpower'),
+      chip('people', String(Math.floor(me.manpower)), '+' + mp.gain.toFixed(1), 'Manpower'),
+      chip('star', S.np.toFixed(1), '+' + npRate(S).rate.toFixed(1), 'Nation points'),
       h('button', { class: 'chip stab', title: 'Stability', onclick: () => toggleSheet('realm') },
         h('span', { html: icon('scales', 16) }),
         h('span', { class: 'pips' }, ...[-3, -2, -1, 0, 1, 2, 3].map(v => h('i', { class: (v === 0 ? 'zero ' : '') + (me.stability >= v && v > 0 ? 'on' : me.stability <= v && v < 0 ? 'neg' : '') }))),
         h('span', { class: 'sr' }, `Stability ${me.stability}`)),
       chip('laurel', fmt(me.prestige), '', 'Prestige'),
     ),
+    h('div', { class: 'top-btns' },
+      h('button', { class: 'tbtn' + (sheet?.kind === 'missions' ? ' on' : ''), onclick: () => toggleSheet('missions'), title: 'Missions' },
+        h('span', { html: icon('hourglass', 18) }), h('span', { class: 'tb-l' }, 'Missions'), S.missions.length ? h('span', { class: 'badge' }, String(S.missions.length)) : null),
+      h('button', { class: 'tbtn' + (sheet?.kind === 'chronicle' ? ' on' : ''), onclick: () => toggleSheet('chronicle'), title: 'Chronicle' },
+        h('span', { html: icon('laurel', 18) }), h('span', { class: 'tb-l' }, 'Chronicle'))),
   );
 }
 function chip(ic: string, v: string, sub: string, label: string, tone = '') {
   return h('button', { class: 'chip ' + tone, title: label, onclick: () => toggleSheet('realm') }, h('span', { html: icon(ic, 16) }), h('b', {}, v), sub ? h('small', {}, sub) : null, h('span', { class: 'sr' }, label));
 }
 
-// ---------- hand & timeline ----------
-function renderHand() {
-  const hand = clear($('#hand'));
-  if (!S.hand.length) hand.append(h('p', { class: 'empty-hand' }, 'No cards in hand. You draw one each year.'));
-  S.hand.forEach((c, i) => {
-    const blocked = cardBlocked(S, CARDS[c.card]);
-    const el = handCard(c.card, { small: true, dim: !!blocked, onclick: () => openCardModal(c.uid) });
-    el.style.setProperty('--i', String(i));
-    hand.append(el);
-  });
-  const et = $('#endturn');
-  et.innerHTML = '';
-  et.append(h('span', { class: 'et-l' }, 'End Year'), h('small', {}, `${S.year} → ${S.year + 1}`));
+function renderTabs() {
+  const nav = clear($('#tabs'));
+  const rates = cardRates(S);
+  for (const c of CATS) {
+    const n = handOf(S, c).length;
+    nav.append(h('button', { class: 'tab' + (sheet?.kind === c ? ' on' : ''), onclick: () => toggleSheet(c), style: `--cc:${CAT_INFO[c].color}` },
+      h('span', { class: 'tab-i', html: icon(CAT_INFO[c].icon, 20) }),
+      h('span', { class: 'tab-l' }, c === 'diplomacy' ? 'Diplomacy' : CAT_INFO[c].name),
+      h('span', { class: 'tab-n' }, `${n} · +${rates[c].rate.toFixed(1)}`)));
+  }
+  nav.append(h('button', { id: 'endturn', class: 'btn primary', onclick: onEndTurn }, h('span', { class: 'et-l' }, 'End Year'), h('small', {}, `${S.year} → ${S.year + 1}`)));
 }
 
 function renderTimeline() {
@@ -179,22 +186,35 @@ function renderTimeline() {
   }
 }
 
+function missionTitle(m: GameState['missions'][number]) {
+  const tname = S.provinces[m.target]?.name ?? S.nations[m.target]?.name ?? TECH[m.target]?.name ?? REGIONS[m.target]?.name ?? '';
+  return `${MISSION_INFO[m.kind].name}${m.kind === 'build' ? ': ' + BUILDINGS[m.building!].name : ''}${tname ? ' · ' + tname : ''}`;
+}
+
+function renderTracker() {
+  const tr = clear($('#tracker'));
+  for (const m of S.missions.slice(0, 8)) {
+    tr.append(h('button', { class: 'trk', onclick: () => openSheet('missions') },
+      h('span', { html: icon(MISSION_INFO[m.kind].icon, 14) }), h('span', { class: 'trk-t' }, missionTitle(m)), h('b', {}, `${m.turnsLeft}y`)));
+  }
+  if (S.missions.length > 8) tr.append(h('button', { class: 'trk', onclick: () => openSheet('missions') }, `+${S.missions.length - 8} more`));
+}
+
 // ---------- sheets ----------
 function toggleSheet(kind: string, arg?: string) {
   if (sheet && sheet.kind === kind && sheet.arg === arg) closeSheet(); else openSheet(kind, arg);
 }
 function openSheet(kind: string, arg?: string) {
-  if (kind !== 'army') forge = [];
+  if (kind !== 'military') forge = [];
   sheet = { kind, arg };
-  renderSheet();
   $('#sheet').hidden = false;
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', (t as HTMLElement).dataset.tab === kind));
+  refresh();
 }
 function closeSheet() {
   sheet = null; forge = [];
   $('#sheet').hidden = true;
   map.select(null);
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+  refresh();
 }
 
 function sheetHead(title: string, sub?: string, color?: string) {
@@ -208,76 +228,126 @@ function renderSheet() {
   const el = clear($('#sheet'));
   const body = h('div', { class: 'sh-body' });
   const k = sheet.kind;
-  if (k === 'province') el.append(...provinceSheet(sheet.arg!, body));
-  else if (k === 'nation') el.append(...nationSheet(sheet.arg!, body));
-  else if (k === 'army') el.append(...armySheet(body));
-  else if (k === 'court') el.append(...courtSheet(body));
-  else if (k === 'missions') el.append(...missionsSheet(body));
-  else if (k === 'research') el.append(...researchSheet(body));
-  else if (k === 'nations') el.append(...nationsSheet(body));
-  else if (k === 'chronicle') el.append(...chronicleSheet(body));
-  else if (k === 'realm') el.append(...realmSheet(body));
+  const scroll = $('#sheet .sh-body')?.scrollTop ?? 0;
+  let parts: HTMLElement[] = [];
+  if (k === 'province') parts = provinceSheet(sheet.arg!, body);
+  else if (k === 'nation') parts = nationSheet(sheet.arg!, body);
+  else if (k === 'military') parts = militarySheet(body);
+  else if (k === 'diplomacy') parts = diplomacySheet(body);
+  else if (k === 'internal') parts = internalSheet(body);
+  else if (k === 'economy') parts = economySheet(body);
+  else if (k === 'research') parts = researchSheet(body);
+  else if (k === 'missions') parts = missionsSheet(body);
+  else if (k === 'chronicle') parts = chronicleSheet(body);
+  else if (k === 'realm') parts = realmSheet(body);
+  else if (k === 'overseas') parts = overseasSheet(body);
+  el.append(...parts);
+  body.scrollTop = scroll;
 }
 
 const stat = (label: string, value: string | number | HTMLElement) => h('div', { class: 'stat' }, h('span', {}, label), typeof value === 'object' ? value : h('b', {}, String(value)));
-
-function provinceSheet(id: string, body: HTMLElement) {
-  const p = S.provinces[id];
-  const owner = S.nations[p.owner];
-  const mine = p.owner === S.player;
-  const g = getGeo();
-  body.append(h('div', { class: 'stats' },
-    stat('Development', p.dev), stat('Fort', p.fort ? '▮'.repeat(p.fort) : 'none'),
-    stat('Income', provinceIncome(S, id).toFixed(1)), stat('Coast', g.coastal[id] ? 'yes' : 'inland'),
-    p.unrest ? stat('Unrest', p.unrest + ' yrs') : null));
-  if (p.buildings.length) body.append(h('div', { class: 'tags' }, p.buildings.map(b => h('span', { class: 'tag', html: icon(BUILDINGS[b].icon, 14) + ' ' + BUILDINGS[b].name }))));
-  if (mine) {
-    body.append(h('h3', {}, 'Develop'));
-    const devWhy = missionBlocked(S, 'develop', id);
-    body.append(actionRow('wheat', `Develop ${p.name}`, `+1 development · ${developCost(S, id)} ducats · 3 years`, devWhy, () => openPlanner('develop', id)));
-    body.append(h('h3', {}, 'Build'));
-    for (const b of Object.values(BUILDINGS)) {
-      const why = buildingAllowed(S, id, b.id) ?? (player(S).gold < buildingCost(S, b.id) ? `Needs ${buildingCost(S, b.id)} ducats` : null);
-      if (why && (why.startsWith('Needs Ocean') || why === 'Coastal provinces only')) continue;
-      body.append(actionRow(b.icon, b.name, `${b.desc} · ${buildingCost(S, b.id)} ducats · ${b.turns} yrs`, why, () => openPlanner('build', id, b.id)));
-    }
-  } else {
-    const war = atWar(S, S.player, p.owner);
-    body.append(h('h3', {}, war ? 'At war' : 'Relations'));
-    if (war) {
-      const route = attackRoute(S, id);
-      body.append(actionRow('sword', `Conquer ${p.name}`, route ? `${route.naval ? 'By sea' : 'Over land'} · ${route.turns} yr march` : 'No route', missionBlocked(S, 'conquer', id), () => openPlanner('conquer', id)));
-      body.append(actionRow('torch', `Raid ${p.name}`, 'Plunder ducats, take no land', missionBlocked(S, 'raid', id), () => openPlanner('raid', id)));
-    }
-    body.append(actionRow('hands', `${owner.name}`, `Relations ${getRel(S, S.player, p.owner)} · open diplomacy`, null, () => openSheet('nation', p.owner)));
-    if (!war) body.append(declareWarRow(p.owner));
-    body.append(armyIntel(p.owner));
-  }
-  return [sheetHead(p.name, mine ? 'Your province' : `${owner.name}${p.core !== p.owner ? ` · formerly ${nationName(S, p.core)}` : ''}`, owner.color), body];
-}
-
-function armyIntel(n: string) {
-  const nat = S.nations[n];
-  const spied = (nat.spiedUntil ?? 0) > S.year;
-  if (spied) {
-    return h('div', { class: 'intel' }, h('h3', {}, `${nat.adj} army (spies)`),
-      h('div', { class: 'cards-row' }, nat.army.slice(0, 12).map(t => troopCard(t, { small: true }))));
-  }
-  const n2 = nat.army.length;
-  return h('div', { class: 'intel' }, h('h3', {}, `${nat.adj} army`), h('p', { class: 'muted' }, `Scouts count about ${Math.max(0, n2 - 1)}–${n2 + 2} companies. Play a Spy Network card to see them.`));
-}
-
-function declareWarRow(n: string) {
-  const truce = inTruce(S, S.player, n);
-  const cost = warCost(S, n);
-  return actionRow('sword', `Declare war on ${nationName(S, n)}`, cost ? `Stability −${cost}${cost > 1 ? ' (breaks your treaty)' : ''}` : 'You hold a claim: no stability loss', truce ? 'A truce is in force' : null, () => confirmBox(`Declare war on ${nationName(S, n)}?`, cost ? `Stability falls by ${cost}. Their allies may join them.` : 'Your claim justifies the war.', 'Declare war', () => act(() => playerDeclareWar(S, n), 'War declared')), 'danger');
-}
 
 function actionRow(ic: string, title: string, sub: string, blocked: string | null, onclick: () => void, tone = '') {
   return h('button', { class: `action ${tone}${blocked ? ' blocked' : ''}`, onclick: () => (blocked ? toast(blocked, 'bad') : onclick()) },
     h('span', { class: 'a-ico', html: icon(ic, 20) }),
     h('span', { class: 'a-t' }, h('b', {}, title), h('small', {}, blocked ?? sub)),
     h('span', { class: 'a-go', html: icon('next', 14) }));
+}
+
+/** The card section at the top of every category panel. */
+function cardSection(cat: Cat) {
+  const rate = cardRates(S)[cat];
+  const hand = handOf(S, cat);
+  const pct = Math.round((S.cardAccum[cat] ?? 0) * 100);
+  const wrap = h('div', { class: 'cardsec', style: `--cc:${CAT_INFO[cat].color}` });
+  wrap.append(h('div', { class: 'cs-head' },
+    h('b', {}, `Your ${CAT_INFO[cat].name.toLowerCase()} cards (${hand.length}/${HAND_LIMIT})`),
+    h('small', { title: rate.parts.map(p => `${p.label} ${signed(p.v)}`).join(', ') }, `+${rate.rate.toFixed(2)} a year · next card ${pct}%`)));
+  const row = h('div', { class: 'cards-row wrap' });
+  if (!hand.length) row.append(h('p', { class: 'muted' }, 'No cards yet. You draw them every year, or buy one below.'));
+  for (const c of hand) row.append(handCard(c.card, { small: true, dim: !!cardBlocked(S, CARDS[c.card]) && CARDS[c.card].kind !== 'mission', onclick: () => openCardModal(c.uid) }));
+  wrap.append(row);
+  const why = buyBlocked(S, cat);
+  wrap.append(h('button', { class: 'btn buy' + (why ? ' blocked' : ''), onclick: () => act(() => buyCard(S, cat)) },
+    h('span', { html: icon('star', 16) }), h('b', {}, `Buy a card · ${buyCost(S, cat)} nation points`), h('small', {}, why ?? 'Three are revealed, you keep one')));
+  return wrap;
+}
+
+function peopleSection(roles: Character['role'][], title: string) {
+  const ppl = S.characters.filter(c => roles.includes(c.role));
+  const grid = h('div', { class: 'cards-row wrap' });
+  if (!ppl.length) grid.append(h('p', { class: 'muted' }, 'Nobody yet. Play a hiring card to recruit someone.'));
+  for (const c of ppl) grid.append(charCard(c, S, { small: true, onclick: () => charDetail(c) }));
+  return [h('h3', {}, `${title} (${ppl.length})`), grid];
+}
+
+// ---------- province ----------
+function provinceSheet(id: string, body: HTMLElement) {
+  const p = S.provinces[id];
+  const owner = S.nations[p.owner];
+  const mine = p.owner === S.player;
+  const g = getGeo();
+  const tier = tierOf(p);
+  body.append(h('div', { class: 'stats' },
+    stat(TIERS[tier].name, `${(population(S, p) / 1000).toFixed(0)}k people`), stat('Development', p.dev),
+    stat('Control', `${Math.round(p.control)}%`), stat('Produces', GOODS[p.good]?.name ?? p.good),
+    stat('Income', provinceIncome(S, id).toFixed(1)), stat('Fort', p.fort ? '▮'.repeat(p.fort) : 'none'),
+    g.coastal[id] ? stat('Coast', 'yes') : null, p.cities ? stat('New cities', p.cities) : null));
+  const site = (sname: 'town' | 'rural', label: string) => {
+    const blds = p.buildings.filter(b => BUILDINGS[b]?.site === sname);
+    const slots = sname === 'town' ? townSlots(p) : ruralSlots(p);
+    return h('div', { class: 'site' }, h('h3', {}, `${label} (${builtAt(p, sname)}/${slots})`),
+      h('div', { class: 'tags' }, blds.length ? blds.map(b => h('span', { class: 'tag', html: icon(BUILDINGS[b].icon, 14) + ' ' + BUILDINGS[b].name })) : h('span', { class: 'muted' }, 'Nothing built yet')));
+  };
+  body.append(site('town', TIERS[tier].name), site('rural', 'Countryside'));
+  if (mine) {
+    body.append(h('h3', {}, 'Actions'));
+    const devCard = cardFor(S, 'develop');
+    body.append(actionRow('wheat', 'Develop', `+1 development · ${developCost(S, id)} ducats · uses Settlers or Irrigation`, !devCard ? 'Needs a Settlers (Internal) or Irrigation (Economy) card' : missionBlocked(S, 'develop', id), () => openPlanner('develop', id, undefined, devCard!.uid)));
+    const fc = cardFor(S, 'found');
+    body.append(actionRow('tower', 'Found a new city', `+1 development, +2 town slots · ${foundCost(S)} ducats`, !fc ? 'Needs a Found a City card (Internal)' : missionBlocked(S, 'found', id), () => openPlanner('found', id, undefined, fc!.uid)));
+    for (const [siteName, label] of [['town', 'Build in town'], ['rural', 'Build in the countryside']] as const) {
+      body.append(h('h3', {}, label));
+      for (const b of Object.values(BUILDINGS).filter(b => b.site === siteName)) {
+        const why = buildingAllowed(S, id, b.id);
+        if (why && (why.startsWith('Needs Ocean') || why === 'Coastal provinces only')) continue;
+        const card = cardFor(S, 'build', { group: b.group });
+        const need = b.group === 'internal' ? 'Royal Works (Internal)' : 'Guild Charter (Economy)';
+        const block = why ?? (!card ? `Needs a ${need} card` : player(S).gold < buildingCost(S, b.id) ? `Needs ${buildingCost(S, b.id)} ducats` : null);
+        body.append(actionRow(b.icon, b.name, `${b.desc} · ${buildingCost(S, b.id)} ducats · salary ${b.salary}/yr`, block, () => openPlanner('build', id, b.id, card!.uid)));
+      }
+    }
+  } else {
+    const war = atWar(S, S.player, p.owner);
+    if (war) {
+      const route = attackRoute(S, id);
+      const card = cardFor(S, 'conquer');
+      body.append(h('h3', {}, 'At war'));
+      const block = !card ? 'Needs a March Orders card (Military)' : null;
+      body.append(actionRow('sword', `Conquer ${p.name}`, route ? `${route.naval ? 'By sea' : 'Over land'} · ${route.turns} yr march` : 'No route', block ?? missionBlocked(S, 'conquer', id), () => openPlanner('conquer', id, undefined, card!.uid)));
+      body.append(actionRow('torch', `Raid ${p.name}`, 'Plunder ducats, take no land', block ?? missionBlocked(S, 'raid', id), () => openPlanner('raid', id, undefined, card!.uid)));
+    }
+    body.append(actionRow('hands', owner.name, `Relations ${getRel(S, S.player, p.owner)} · open diplomacy`, null, () => openSheet('nation', p.owner)));
+    if (!war) body.append(declareWarRow(p.owner));
+    body.append(armyIntel(p.owner));
+  }
+  return [sheetHead(p.name, mine ? `Your province · ${TIERS[tier].name}` : `${owner.name}${p.core !== p.owner ? ` · formerly ${nationName(S, p.core)}` : ''}`, owner.color), body];
+}
+
+function armyIntel(n: string) {
+  const nat = S.nations[n];
+  if ((nat.spiedUntil ?? 0) > S.year) {
+    return h('div', { class: 'intel' }, h('h3', {}, `${nat.adj} army (spies)`), h('div', { class: 'cards-row wrap' }, nat.army.slice(0, 12).map(t => troopCard(t, { small: true }))));
+  }
+  const n2 = nat.army.length;
+  return h('div', { class: 'intel' }, h('h3', {}, `${nat.adj} army`), h('p', { class: 'muted' }, `Scouts count about ${Math.max(0, n2 - 1)}–${n2 + 2} companies. A Spy Network card reveals them.`));
+}
+
+function declareWarRow(n: string) {
+  const truce = inTruce(S, S.player, n);
+  const cost = warCost(S, n);
+  return actionRow('sword', `Declare war on ${nationName(S, n)}`, cost ? `Stability −${cost}${cost > 1 ? ' (breaks your treaty)' : ''}` : 'You hold a claim: no stability loss', truce ? 'A truce is in force' : null,
+    () => confirmBox(`Declare war on ${nationName(S, n)}?`, cost ? `Stability falls by ${cost}. Their allies may join them.` : 'Your claim justifies the war.', 'Declare war', () => act(() => playerDeclareWar(S, n), 'War declared')), 'danger');
 }
 
 function nationSheet(id: string, body: HTMLElement) {
@@ -289,70 +359,55 @@ function nationSheet(id: string, body: HTMLElement) {
   body.append(h('div', { class: 'stats' },
     stat('Provinces', provsOf(S, id).length), stat('Ruler', n.ruler.name), stat('Temper', n.personality),
     stat('Status', war ? 'At war with you' : tre.length ? tre.join(', ') : 'Neutral')));
+  const goods = [...ownGoods(S, id)].map(g => GOODS[g]?.name ?? g);
+  body.append(h('p', { class: 'muted' }, `Goods: ${goods.join(', ') || 'none'}.`));
   const theirWars = enemiesOf(S, id).filter(e => e !== S.player).map(e => nationName(S, e));
   const theirAllies = alliesOf(S, id).map(e => nationName(S, e));
   if (theirWars.length || theirAllies.length) body.append(h('p', { class: 'muted' }, [theirAllies.length ? `Allies: ${theirAllies.join(', ')}.` : '', theirWars.length ? ` At war with ${theirWars.join(', ')}.` : ''].join('')));
   body.append(h('h3', {}, 'Send a diplomat'));
   for (const k of DIPLO) {
     if (war !== (k === 'peace')) continue;
-    const why = missionBlocked(S, k, id);
-    body.append(actionRow(MISSION_INFO[k].icon, MISSION_INFO[k].name, diploHint(k), why, () => openPlanner(k, id)));
+    const card = cardFor(S, k);
+    const why = !card ? `Needs a ${({ relations: 'Embassy', trade: 'Trade Route', alliance: 'Alliance Pact', marriage: 'Royal Marriage', peace: 'Peace Envoy' } as Record<string, string>)[k]} card` : missionBlocked(S, k, id);
+    body.append(actionRow(MISSION_INFO[k].icon, MISSION_INFO[k].name, diploHint(k), why, () => openPlanner(k, id, undefined, card!.uid)));
   }
   if (!war) body.append(declareWarRow(id));
   body.append(armyIntel(id));
   return [sheetHead(n.name, `${n.adj} crown`, n.color), body];
 }
 function diploHint(k: MissionKind) {
-  return ({ relations: 'Relations +25', trade: 'Both earn ducats every year', alliance: 'They join your wars', marriage: 'Relations grow every year, prestige', peace: 'End the war, 10-year truce' } as Record<string, string>)[k] ?? '';
+  return ({ relations: 'Relations +25', trade: 'Ducats every year, and import a good', alliance: 'They join your wars', marriage: 'Relations grow every year, prestige', peace: 'End the war, 10-year truce' } as Record<string, string>)[k] ?? '';
 }
 
-function armySheet(body: HTMLElement) {
-  const me = player(S);
-  const left = draftsPerTurn(S) - S.draftsThisTurn;
-  const lc = draftCost(S, 'levy'), pc = draftCost(S, 'pro');
-  body.append(h('div', { class: 'draft-row' },
-    h('button', { class: 'btn draft' + (draftBlocked(S, 'levy') ? ' blocked' : ''), onclick: () => act(() => startTroopDraft(S, 'levy')) },
-      h('b', {}, 'Levy draft'), h('small', {}, `${lc.gold} ducats · ${lc.mp} men`)),
-    h('button', { class: 'btn draft pro' + (draftBlocked(S, 'pro') ? ' blocked' : ''), onclick: () => act(() => startTroopDraft(S, 'pro')) },
-      h('b', {}, 'Professional draft'), h('small', {}, `${pc.gold} ducats · ${pc.mp} men`))));
-  body.append(h('p', { class: 'muted' }, `Drafts left this year: ${left}. Army ${S.troops.length}/${armyCap(S)}. Upkeep ${incomeOf(S, S.player).upkeep.toFixed(1)} a year. Each draft reveals 3 cards; you keep one.`));
-
-  // forge
+// ---------- category panels ----------
+function militarySheet(body: HTMLElement) {
+  body.append(cardSection('military'));
   const fb = h('div', { class: 'forge' + (forge.length ? ' active' : '') });
-  fb.append(h('div', { class: 'forge-h' }, h('span', { html: icon('merge', 18) }), h('b', {}, 'Forge'), h('small', {}, 'Tap two cards to combine them')));
+  fb.append(h('div', { class: 'forge-h' }, h('span', { html: icon('merge', 18) }), h('b', {}, 'Forge'), h('small', {}, 'Tap two troops of the same kind for a veteran, or play an equipment card to upgrade a troop')));
   if (forge.length === 2) {
     const r = mergePreview(S, forge[0], forge[1]);
     if ('error' in r) fb.append(h('p', { class: 'bad' }, r.error));
-    else {
-      fb.append(h('div', { class: 'forge-res' }, troopCard({ type: r.out, vet: r.vet, str: 100 }, { small: true }),
-        h('div', {}, h('b', {}, `${TROOPS[r.out].name} ${'★'.repeat(r.vet)}`),
-          h('p', { class: 'muted' }, r.tech ? `Needs research: ${TECH[r.tech].name}` : `${r.cost} ducats`),
-          h('button', { class: 'btn primary' + (r.tech || me.gold < r.cost ? ' blocked' : ''), onclick: () => { const a = forge[0], b = forge[1]; forge = []; act(() => doMerge(S, a, b), 'Forged!'); } }, 'Forge'))));
-    }
-  } else if (forge.length === 1) fb.append(h('p', { class: 'muted' }, 'Now pick a second card.'));
+    else fb.append(h('div', { class: 'forge-res' }, troopCard({ type: r.out, vet: r.vet, str: 100 }, { small: true }),
+      h('div', {}, h('b', {}, `${TROOPS[r.out].name} ${'★'.repeat(r.vet)}`), h('p', { class: 'muted' }, r.tech ? `Needs research: ${TECH[r.tech].name}` : `${r.cost} ducats`),
+        h('button', { class: 'btn primary' + (r.tech || player(S).gold < r.cost ? ' blocked' : ''), onclick: () => { const a = forge[0], b = forge[1]; forge = []; act(() => doMerge(S, a, b), 'Forged!'); } }, 'Forge'))));
+  }
   body.append(fb);
-
-  const sel = (u: number) => {
-    if (forge.includes(u)) forge = forge.filter(x => x !== u);
-    else forge = [...forge.slice(-1), u];
-    renderSheet();
-  };
-  body.append(h('h3', {}, `Troops (${S.troops.length})`));
+  body.append(h('h3', {}, `Armies (${S.troops.length}/${armyCap(S)}) · upkeep ${incomeOf(S, S.player).upkeep.toFixed(1)} a year`));
   const tr = h('div', { class: 'cards-grid' });
   [...S.troops].sort((a, b) => TROOPS[b.type].tier - TROOPS[a.type].tier || b.vet - a.vet).forEach(t =>
-    tr.append(troopCard(t, { selected: forge.includes(t.uid), onclick: () => (t.mission != null ? toast('This troop is away on a mission') : sel(t.uid)) })));
+    tr.append(troopCard(t, { small: true, selected: forge.includes(t.uid), onclick: () => {
+      if (t.mission != null) return toast('This troop is away on a mission');
+      forge = forge.includes(t.uid) ? forge.filter(x => x !== t.uid) : [...forge.slice(-1), t.uid];
+      renderSheet();
+    } })));
   body.append(tr);
-  body.append(h('h3', {}, `Equipment (${S.equipment.length})`));
-  const eq = h('div', { class: 'cards-grid' });
-  if (!S.equipment.length) eq.append(h('p', { class: 'muted' }, 'Equipment comes from drafts, Armouries and Master Smith cards.'));
-  S.equipment.forEach(e => eq.append(equipCard(e, { selected: forge.includes(e.uid), onclick: () => sel(e.uid) })));
-  body.append(eq);
-  if (forge.length === 1 && S.troops.some(t => t.uid === forge[0])) {
-    const t = S.troops.find(x => x.uid === forge[0])!;
-    body.append(h('button', { class: 'btn ghost danger', onclick: () => confirmBox(`Disband ${TROOPS[t.type].name}?`, 'The troop is removed. You recover 1 manpower.', 'Disband', () => { forge = []; act(() => disbandTroop(S, t.uid)); }) }, 'Disband selected troop'));
+  if (forge.length === 1) {
+    const t = S.troops.find(x => x.uid === forge[0]);
+    if (t) body.append(h('button', { class: 'btn ghost danger', onclick: () => confirmBox(`Disband ${TROOPS[t.type].name}?`, 'The troop is removed for good.', 'Disband', () => { forge = []; act(() => disbandTroop(S, t.uid)); }) }, 'Disband selected troop'));
   }
+  body.append(...peopleSection(['general', 'conqueror'], 'Generals and conquerors'));
   body.append(recipeBook());
-  return [sheetHead('Army', `${S.troops.length} companies · power ${Math.round(armyPower(S.troops))}`), body];
+  return [sheetHead('Military', `Army power ${Math.round(armyPower(S.troops))}`, CAT_INFO.military.color), body];
 }
 
 function recipeBook() {
@@ -362,82 +417,17 @@ function recipeBook() {
     ['Jinetes', 'Plate Armour', 'Knights'], ['Men-at-Arms', 'Warhorses', 'Knights'], ['Pikemen', 'Arquebusiers', 'Tercio', 'tercio_doctrine'],
     ['Bombard', 'Bronze Casting', 'Field Cannon', 'bronze_cannon'], ['Jinetes', 'Pistols', 'Reiters', 'wheellock'], ['Knights', 'Pistols', 'Cuirassiers', 'wheellock'],
     ['Arquebusiers', 'Muskets', 'Musketeers', 'musket'], ['Tercio', 'Muskets', 'Tercio Viejo', 'musket'], ['Reiters', 'Muskets', 'Dragoons', 'military_drill'],
-    ['Musketeers', 'Bayonets', 'Line Infantry', 'bayonet'], ['Any two of the same', '', '+1 star'], ['Any troop', 'Regimental Colours', '+1 star'],
+    ['Musketeers', 'Bayonets', 'Line Infantry', 'bayonet'], ['Two of the same troop', '', '+1 star'], ['Any troop', 'Regimental Colours', '+1 star'],
   ];
   d.append(h('table', { class: 'rtable' }, h('tbody', {}, rows.map(([a, b, c, t]) => h('tr', { class: t && !S.techs.includes(t) ? 'locked' : '' },
     h('td', {}, a), h('td', {}, b ? '+ ' + b : ''), h('td', {}, '= ', h('b', {}, c)), h('td', { class: 'muted' }, t && !S.techs.includes(t) ? TECH[t].name : ''))))));
   return d;
 }
 
-function courtSheet(body: HTMLElement) {
-  const me = player(S);
-  body.append(h('div', { class: 'ruler' },
-    h('span', { class: 'np-shield', style: `--nc:${me.color}` }, me.name[0]),
-    h('div', {}, h('b', {}, me.ruler.name), h('p', { class: 'muted' }, `Reigns since ${me.ruler.from}`),
-      h('div', { class: 'tags' }, me.ruler.traits.map(t => h('span', { class: 'tag', title: RULER_TRAITS[t]?.desc }, t + ': ' + (RULER_TRAITS[t]?.desc ?? '')))))));
-  const why = courtBlocked(S);
-  body.append(actionRow('crown', 'Hold an audience', `${draftCost(S, 'court').gold} ducats · meet 3 candidates, keep one · legends may appear`, why, () => act(() => startCourtDraft(S))));
-  body.append(h('h3', {}, `Court (${S.characters.length}/${courtCap(S)})`));
-  const grid = h('div', { class: 'cards-grid' });
-  for (const c of S.characters) grid.append(charCard(c, S, { onclick: () => charDetail(c) }));
-  body.append(grid);
-  return [sheetHead('Court', 'Generals, diplomats and administrators'), body];
-}
-
-function charDetail(c: Character) {
-  const m = c.mission != null ? S.missions.find(x => x.id === c.mission) : null;
-  openModal(h('div', { class: 'mbox narrow' },
-    h('div', { class: 'center' }, charCard(c, S)),
-    h('h2', {}, c.name),
-    h('p', { class: 'muted' }, `${roleName[c.role]} · skill ${c.skill} · experience ${c.xp}/3 · age ${S.year - c.born}`),
-    h('ul', { class: 'traits' }, c.traits.map(t => h('li', {}, h('b', {}, TRAITS[t]?.name ?? t), ' ', TRAITS[t]?.desc ?? ''))),
-    m ? h('p', {}, `On a mission: ${MISSION_INFO[m.kind].name}, ${m.turnsLeft} year(s) left.`) : null,
-    h('div', { class: 'mrow' },
-      h('button', { class: 'btn ghost', onclick: closeModal }, 'Close'),
-      !m ? h('button', { class: 'btn ghost danger', onclick: () => { closeModal(); confirmBox(`Dismiss ${c.name}?`, 'This frees a seat at court.', 'Dismiss', () => act(() => dismissCharacter(S, c.uid))); } }, 'Dismiss') : null)));
-}
-
-function missionsSheet(body: HTMLElement) {
-  if (!S.missions.length) body.append(h('p', { class: 'muted' }, 'No missions under way. Tap a province or a nation to send someone.'));
-  for (const m of S.missions) {
-    const c = S.characters.find(x => x.uid === m.char);
-    const info = MISSION_INFO[m.kind];
-    const tname = S.provinces[m.target]?.name ?? S.nations[m.target]?.name ?? TECH[m.target]?.name ?? 'the realm';
-    const pct = m.kind === 'research' ? Math.min(100, (m.progress / techCost(S, m.target)) * 100) : ((m.total - m.turnsLeft) / Math.max(1, m.total)) * 100;
-    body.append(h('div', { class: 'mission k-' + info.role },
-      h('span', { class: 'a-ico', html: icon(info.icon, 20) }),
-      h('div', { class: 'a-t' }, h('b', {}, `${info.name}: ${m.kind === 'build' ? BUILDINGS[m.building!].name + ' in ' : ''}${tname}`),
-        h('small', {}, `${c?.name ?? '?'}${m.troops.length ? ` with ${m.troops.length} troops` : ''} · ${m.turnsLeft} yr left`),
-        h('div', { class: 'pbar' }, h('i', { style: `width:${pct}%` }))),
-      h('button', { class: 'iconbtn', 'aria-label': 'Recall', title: 'Recall', onclick: () => confirmBox('Recall this mission?', m.kind === 'build' || m.kind === 'develop' ? 'Half the cost is refunded.' : 'Progress is lost.', 'Recall', () => act(() => cancelMission(S, m.id))), html: icon('close', 16) })));
-  }
-  body.append(h('h3', {}, 'Royal business'));
-  body.append(actionRow('coin', 'Collect taxes', 'Administrator · 1 year · ducats now', missionBlocked(S, 'tax', ''), () => openPlanner('tax', '')));
-  body.append(actionRow('crown', 'Royal progress', 'Administrator · 2 years · stability +1, prestige +2', missionBlocked(S, 'progress', ''), () => openPlanner('progress', '')));
-  return [sheetHead('Missions', `${S.missions.length} under way`), body];
-}
-
-function researchSheet(body: HTMLElement) {
-  const tracks: [string, string][] = [['military', 'Military'], ['economy', 'Economy'], ['state', 'Statecraft']];
-  const wrap = h('div', { class: 'tech-cols' });
-  for (const [tr, label] of tracks) {
-    const col = h('div', { class: 'tech-col' }, h('h3', {}, label));
-    for (const t of TECHS.filter(x => x.track === tr)) {
-      const known = S.techs.includes(t.id);
-      const m = S.missions.find(x => x.kind === 'research' && x.target === t.id);
-      const why = known ? null : missionBlocked(S, 'research', t.id);
-      const cost = techCost(S, t.id);
-      col.append(h('button', { class: `tech${known ? ' known' : m ? ' active' : why ? ' locked' : ''}`, onclick: () => (known ? toast(t.desc) : m ? toast(`Being studied: ${m.turnsLeft} year(s) left`) : why ? toast(why, 'bad') : openPlanner('research', t.id)) },
-        h('span', { class: 'tech-t' }, h('b', {}, t.name), h('small', {}, known ? 'Known' : m ? `${Math.floor(m.progress)}/${cost} · ${m.turnsLeft} yr` : `${t.year} · ${cost} pts${t.year > S.year ? ' (ahead of its time)' : ''}`)),
-        h('span', { class: 'tech-d' }, t.desc)));
-    }
-    wrap.append(col);
-  }
-  body.append(wrap);
-  return [sheetHead('Research', `${S.techs.length} of ${TECHS.length} known · send an administrator to study`), body];
-}
-
-function nationsSheet(body: HTMLElement) {
+function diplomacySheet(body: HTMLElement) {
+  body.append(cardSection('diplomacy'));
+  body.append(...peopleSection(['diplomat', 'explorer'], 'Diplomats and explorers'));
+  body.append(h('h3', {}, 'Nations'));
   const list = Object.values(S.nations).filter(n => n.alive && n.id !== S.player).sort((a, b) => getRel(S, S.player, b.id) - getRel(S, S.player, a.id));
   for (const n of list) {
     const rel = getRel(S, S.player, n.id);
@@ -449,35 +439,188 @@ function nationsSheet(body: HTMLElement) {
       h('span', { class: 'nr-badges' }, badges.map(b => h('span', { class: 'tag ' + b.toLowerCase() }, b))),
       h('span', { class: 'nr-rel ' + (rel >= 30 ? 'good' : rel <= -30 ? 'bad' : '') }, signed(rel))));
   }
-  return [sheetHead('Nations', 'Relations, treaties and wars'), body];
+  return [sheetHead('Diplomacy', 'Relations, treaties, envoys and explorers', CAT_INFO.diplomacy.color), body];
+}
+
+function internalSheet(body: HTMLElement) {
+  body.append(cardSection('internal'));
+  body.append(...peopleSection(['admin', 'colonist'], 'Administrators and colonists'));
+  body.append(h('h3', {}, 'Provinces'));
+  const t = h('table', { class: 'ptable' }, h('thead', {}, h('tr', {}, h('th', {}, 'Province'), h('th', {}, 'Settlement'), h('th', {}, 'People'), h('th', {}, 'Dev'), h('th', {}, 'Control'), h('th', {}, 'Built'))));
+  const tb = h('tbody');
+  for (const p of provsOf(S, S.player).sort((a, b) => b.dev - a.dev)) {
+    tb.append(h('tr', { onclick: () => { map.select(p.id); openSheet('province', p.id); } },
+      h('td', {}, p.name), h('td', {}, TIERS[tierOf(p)].name), h('td', {}, `${Math.round(population(S, p) / 1000)}k`), h('td', {}, String(p.dev)),
+      h('td', { class: p.control < 30 ? 'bad' : '' }, `${Math.round(p.control)}%`), h('td', {}, `${p.buildings.length}`)));
+  }
+  t.append(tb);
+  body.append(h('div', { class: 'tscroll' }, t));
+  body.append(actionRow('anchor', 'Overseas lands', 'Discoveries and colonies', null, () => openSheet('overseas')));
+  return [sheetHead('Internal', 'Provinces, towns and the royal administration', CAT_INFO.internal.color), body];
+}
+
+function economySheet(body: HTMLElement) {
+  body.append(cardSection('economy'));
+  const inc = incomeOf(S, S.player);
+  body.append(h('h3', {}, 'Income and expenses'));
+  body.append(h('table', { class: 'ledger' }, h('tbody', {},
+    h('tr', {}, h('td', {}, 'Provinces (after control)'), h('td', {}, inc.provinces.toFixed(1))),
+    h('tr', {}, h('td', {}, 'Trade treaties'), h('td', {}, inc.trade.toFixed(1))),
+    h('tr', {}, h('td', {}, 'Goods'), h('td', {}, inc.goods.toFixed(1))),
+    h('tr', {}, h('td', {}, 'Colonies and overseas'), h('td', {}, inc.other.toFixed(1))),
+    h('tr', {}, h('td', {}, `Stability ×${inc.stabMult.toFixed(2)}`), h('td', {}, '')),
+    h('tr', {}, h('td', {}, 'Troop upkeep'), h('td', { class: 'bad' }, '−' + inc.upkeep.toFixed(1))),
+    h('tr', {}, h('td', {}, 'Building salaries'), h('td', { class: 'bad' }, '−' + inc.salaries.toFixed(1))),
+    h('tr', {}, h('td', {}, 'Imported goods'), h('td', { class: 'bad' }, '−' + inc.imports.toFixed(1))),
+    h('tr', { class: 'total' }, h('td', {}, 'Each year'), h('td', {}, signed(inc.total))))));
+  body.append(h('h3', {}, 'Goods'));
+  const own = ownGoods(S), col = colonyGoods(S);
+  const gl = h('div', { class: 'goods' });
+  for (const g of Object.values(GOODS)) {
+    const imp = S.imports.find(i => i.good === g.id);
+    const src = own.has(g.id) ? 'Produced' : col.has(g.id) ? 'Colonies' : imp ? `Imported from ${nationName(S, imp.from)} (−${g.price}/yr)` : '';
+    gl.append(h('div', { class: 'good' + (src ? ' have' : '') }, h('span', { html: icon(g.icon, 16) }), h('b', {}, g.name), h('small', {}, src || 'Missing: sign a Trade Route to import'), h('small', { class: 'muted' }, g.desc)));
+  }
+  body.append(gl);
+  body.append(h('h3', {}, 'Control and unrest'));
+  for (const p of provsOf(S, S.player).sort((a, b) => a.control - b.control)) {
+    body.append(h('div', { class: 'ctl' }, h('span', {}, p.name), h('span', { class: 'ctl-bar' }, h('i', { style: `width:${p.control}%`, class: p.control < 30 ? 'low' : '' })), h('b', {}, `${Math.round(p.control)}%`)));
+  }
+  body.append(h('p', { class: 'muted' }, 'Low control cuts income and can spark revolts. Temples, courthouses, stability and Royal Progress raise it. Newly conquered lands start low.'));
+  body.append(...peopleSection(['merchant'], 'Merchants'));
+  return [sheetHead('Economy', `${signed(inc.total)} ducats a year`, CAT_INFO.economy.color), body];
+}
+
+function researchSheet(body: HTMLElement) {
+  body.append(cardSection('research'));
+  body.append(...peopleSection(['researcher'], 'Researchers'));
+  const tracks: [TechTrack, string][] = [['military', 'Military'], ['economy', 'Economy'], ['state', 'Statecraft']];
+  const wrap = h('div', { class: 'tech-cols' });
+  for (const [tr, label] of tracks) {
+    const col = h('div', { class: 'tech-col' }, h('h3', {}, label));
+    for (const t of TECHS.filter(x => x.track === tr)) {
+      const known = S.techs.includes(t.id);
+      const m = S.missions.find(x => x.kind === 'research' && x.target === t.id);
+      const why = known ? null : missionBlocked(S, 'research', t.id);
+      const card = cardFor(S, 'research', { track: tr });
+      const cost = techCost(S, t.id);
+      col.append(h('button', { class: `tech${known ? ' known' : m ? ' active' : why ? ' locked' : ''}`, onclick: () => (known ? toast(t.desc) : m ? toast(`Being studied: ${m.turnsLeft} year(s) left`) : why ? toast(why, 'bad') : !card ? toast(`Needs a ${label} treatise card`, 'bad') : openPlanner('research', t.id, undefined, card.uid)) },
+        h('span', { class: 'tech-t' }, h('b', {}, t.name), h('small', {}, known ? 'Known' : m ? `${Math.floor(m.progress)}/${cost} · ${m.turnsLeft} yr` : `${t.year} · ${cost} pts${t.year > S.year ? ' (ahead of its time)' : ''}`)),
+        h('span', { class: 'tech-d' }, t.desc)));
+    }
+    wrap.append(col);
+  }
+  body.append(wrap);
+  return [sheetHead('Research', `${S.techs.length} of ${TECHS.length} known`, CAT_INFO.research.color), body];
+}
+
+function missionsSheet(body: HTMLElement) {
+  if (!S.missions.length) body.append(h('p', { class: 'muted' }, 'No missions under way. Play a mission card from any panel, or tap a province or nation.'));
+  for (const m of S.missions) {
+    const c = S.characters.find(x => x.uid === m.char);
+    const info = MISSION_INFO[m.kind];
+    const pct = m.kind === 'research' ? Math.min(100, (m.progress / techCost(S, m.target)) * 100) : ((m.total - m.turnsLeft) / Math.max(1, m.total)) * 100;
+    body.append(h('div', { class: 'mission k-' + info.role },
+      h('span', { class: 'a-ico', html: icon(info.icon, 20) }),
+      h('div', { class: 'a-t' }, h('b', {}, missionTitle(m)),
+        h('small', {}, `${c?.name ?? '?'}${m.troops.length ? ` with ${m.troops.length} troops` : ''} · ${m.turnsLeft} yr left`),
+        h('div', { class: 'pbar' }, h('i', { style: `width:${pct}%` }))),
+      h('button', { class: 'iconbtn', 'aria-label': 'Recall', title: 'Recall', onclick: () => confirmBox('Recall this mission?', 'The card is lost. Construction refunds half its cost.', 'Recall', () => act(() => cancelMission(S, m.id))), html: icon('close', 16) })));
+  }
+  return [sheetHead('Missions', `${S.missions.length} under way`), body];
+}
+
+function overseasSheet(body: HTMLElement) {
+  const exp = cardFor(S, 'explore');
+  body.append(actionRow('anchor', 'Voyage of discovery', `An explorer sails out · ${voyageCost(S)} ducats · ${discoverable(S).length} lands within reach`, !exp ? 'Needs a Voyage of Discovery card (Diplomacy)' : missionBlocked(S, 'explore', ''), () => openPlanner('explore', '', undefined, exp!.uid)));
+  body.append(h('p', { class: 'muted' }, 'Explorers, conquerors and colonists come from your diplomats, generals and administrators. Open a person\'s card in the court panels to make them specialise.'));
+  const groups: Record<string, string[]> = {};
+  for (const r of Object.values(REGIONS)) (groups[r.where] ??= []).push(r.id);
+  for (const [where, ids] of Object.entries(groups)) {
+    body.append(h('h3', {}, where));
+    for (const id of ids) {
+      const r = REGIONS[id], st = regionState(S, id);
+      if (!st.found) {
+        body.append(h('div', { class: 'region unknown' }, h('span', { class: 'a-ico', html: icon('star', 18) }), h('div', { class: 'a-t' }, h('b', {}, 'Uncharted'), h('small', {}, st.holder ? `Rumours say ${nationName(S, st.holder)} has been there` : 'Send an explorer'))));
+        continue;
+      }
+      const mine = st.holder === S.player;
+      const status = st.holder && !mine ? `Held by ${nationName(S, st.holder)}` : st.colony ? `Your colony, level ${st.colony}/3` : st.subdued ? 'Conquered, ready to settle' : r.natives ? `Home of the ${r.people}` : 'Empty land';
+      const row = h('div', { class: 'region' + (mine ? ' mine' : '') }, h('span', { class: 'a-ico', html: icon('anchor', 18) }),
+        h('div', { class: 'a-t' }, h('b', {}, r.name), h('small', {}, `${status} · ${GOODS[r.good]?.name} · +${r.value}/level`), h('small', { class: 'muted' }, r.text)));
+      const acts = h('div', { class: 'r-acts' });
+      const cc = cardFor(S, 'colonize');
+      const cw = colonizeBlocked(S, id, S.characters.find(c => c.role === 'colonist' && c.traits.includes('missionary')));
+      if (!st.holder || mine) acts.append(h('button', { class: 'btn small' + (!cc || cw ? ' blocked' : ''), onclick: () => (!cc ? toast('Needs a Colonial Charter card (Internal)', 'bad') : cw ? toast(cw, 'bad') : openPlanner('colonize', id, undefined, cc.uid)) }, 'Colonise'));
+      const kc = cardFor(S, 'conquista');
+      if (r.natives && !st.subdued && (!st.holder || mine)) acts.append(h('button', { class: 'btn small' + (!kc ? ' blocked' : ''), onclick: () => (!kc ? toast('Needs a Conquista card (Military)', 'bad') : openPlanner('conquista', id, undefined, kc.uid)) }, 'Conquer'));
+      row.append(acts);
+      body.append(row);
+    }
+  }
+  return [sheetHead('Overseas', 'Lands beyond the map'), body];
 }
 
 function chronicleSheet(body: HTMLElement) {
-  const a = AMBITIONS.find(x => x.id === S.ambition);
-  if (a) body.append(h('div', { class: 'ambition' + (S.ambitionDone ? ' done' : '') }, h('span', { html: icon('crown', 20) }), h('div', {}, h('b', {}, `Ambition: ${a.name}`), h('small', {}, `${a.text} Reward: ${a.reward} prestige.${S.ambitionDone ? ' Resolved.' : ''}`))));
-  body.append(h('h3', {}, 'Great powers'));
-  const r = ranking(S).slice(0, 6);
-  body.append(h('ol', { class: 'rank' }, r.map(x => h('li', { class: x.id === S.player ? 'me' : '' }, h('span', {}, x.name), h('b', {}, String(x.score))))));
-  body.append(h('h3', {}, 'Chronicle'));
-  body.append(h('ul', { class: 'log' }, S.log.slice(0, 60).map(l => h('li', { class: 't-' + l.tone }, h('span', { class: 'ly' }, String(l.year)), l.text))));
-  return [sheetHead('Chronicle', `Score = prestige + 2 × development. The game ends in ${S.endYear}.`), body];
+  const tabs = h('div', { class: 'seg' }, ...[['powers', 'Powers'], ['generals', 'Generals'], ['kings', 'Monarchs'], ['log', 'Chronicle']].map(([k, l]) =>
+    h('button', { class: 'seg-b' + (chronTab === k ? ' on' : ''), onclick: () => { chronTab = k; renderSheet(); } }, l)));
+  body.append(tabs);
+  if (chronTab === 'powers') {
+    const a = AMBITIONS.find(x => x.id === S.ambition);
+    if (a) body.append(h('div', { class: 'ambition' + (S.ambitionDone ? ' done' : '') }, h('span', { html: icon('crown', 20) }), h('div', {}, h('b', {}, `Ambition: ${a.name}`), h('small', {}, `${a.text} Reward: ${a.reward} prestige.${S.ambitionDone ? ' Resolved.' : ''}`))));
+    const score = Object.fromEntries(ranking(S).map(r => [r.id, r.score]));
+    const rows = powerTable(S).sort((x, y) => (score[y.id] ?? 0) - (score[x.id] ?? 0));
+    const t = h('table', { class: 'ptable' }, h('thead', {}, h('tr', {}, ...['Nation', 'Score', 'Army', 'Income', 'Dev', 'Battles'].map(x => h('th', {}, x)))));
+    const tb = h('tbody');
+    for (const r of rows) {
+      const tot = r.won + r.lost;
+      tb.append(h('tr', { class: r.id === S.player ? 'me' : '' }, h('td', {}, h('span', { class: 'swatch', style: `background:${r.color}` }), ' ', r.name),
+        h('td', {}, String(score[r.id] ?? 0)), h('td', {}, String(r.military)), h('td', {}, String(r.economy)), h('td', {}, String(r.dev)),
+        h('td', {}, tot ? `${r.won}–${r.lost} (${Math.round((r.won / tot) * 100)}%)` : '—')));
+    }
+    t.append(tb);
+    body.append(h('div', { class: 'tscroll' }, t));
+    body.append(h('p', { class: 'muted' }, `Score = prestige + 2 × development. Wars you won: ${S.stats.wars.won}, lost: ${S.stats.wars.lost}. The game ends in ${S.endYear}.`));
+  } else if (chronTab === 'generals') {
+    const gens = [
+      ...S.characters.filter(c => c.role === 'general' || c.role === 'conqueror' || (c.wins ?? 0) + (c.losses ?? 0) > 0).map(c => ({ name: c.name, rarity: c.rarity as string, wins: c.wins ?? 0, losses: c.losses ?? 0, note: 'Serving' })),
+      ...S.stats.fallen.map(f => ({ name: f.name, rarity: '', wins: f.wins, losses: f.losses, note: `Until ${f.until}` })),
+    ].sort((a, b) => b.wins - a.wins);
+    const t = h('table', { class: 'ptable' }, h('thead', {}, h('tr', {}, ...['General', 'Won', 'Lost', '%', ''].map(x => h('th', {}, x)))));
+    t.append(h('tbody', {}, gens.map(g => h('tr', {}, h('td', {}, g.name, g.rarity ? h('small', { class: 'muted' }, ' ' + RARITY[g.rarity as Character['rarity']].name) : null), h('td', {}, String(g.wins)), h('td', {}, String(g.losses)),
+      h('td', {}, g.wins + g.losses ? `${Math.round((g.wins / (g.wins + g.losses)) * 100)}%` : '—'), h('td', { class: 'muted' }, g.note)))));
+    body.append(h('div', { class: 'tscroll' }, t));
+  } else if (chronTab === 'kings') {
+    const me = player(S);
+    const kings = [...S.stats.kings, { name: me.ruler.name, arch: me.ruler.arch, from: me.ruler.from, to: S.year, prestige: Math.round(me.prestige - (me.ruler.prestigeAtStart ?? 0)) }];
+    const t = h('table', { class: 'ptable' }, h('thead', {}, h('tr', {}, ...['Monarch', 'Kind', 'Reign', 'Prestige won'].map(x => h('th', {}, x)))));
+    t.append(h('tbody', {}, [...kings].sort((a, b) => b.prestige - a.prestige).map(k => h('tr', { class: k.name === me.ruler.name ? 'me' : '' },
+      h('td', {}, k.name), h('td', {}, RULER_ARCHS[k.arch]?.name ?? k.arch), h('td', {}, `${k.from}–${k.to}`), h('td', {}, String(k.prestige))))));
+    body.append(h('div', { class: 'tscroll' }, t));
+  } else {
+    body.append(h('ul', { class: 'log' }, S.log.slice(0, 80).map(l => h('li', { class: 't-' + l.tone }, h('span', { class: 'ly' }, String(l.year)), l.text))));
+  }
+  return [sheetHead('Chronicle', 'Rankings, records and history'), body];
 }
 
 function realmSheet(body: HTMLElement) {
   const me = player(S);
-  const inc = incomeOf(S, S.player);
-  body.append(h('table', { class: 'ledger' }, h('tbody', {},
-    h('tr', {}, h('td', {}, 'Provinces'), h('td', {}, inc.provinces.toFixed(1))),
-    h('tr', {}, h('td', {}, 'Trade treaties'), h('td', {}, inc.trade.toFixed(1))),
-    h('tr', {}, h('td', {}, 'Crown and overseas'), h('td', {}, inc.other.toFixed(1))),
-    h('tr', {}, h('td', {}, `Stability ×${inc.stabMult.toFixed(2)}`), h('td', {}, '')),
-    h('tr', {}, h('td', {}, 'Army upkeep'), h('td', { class: 'bad' }, '−' + inc.upkeep.toFixed(1))),
-    h('tr', { class: 'total' }, h('td', {}, 'Each year'), h('td', {}, signed(inc.total))))));
+  const arch = RULER_ARCHS[me.ruler.arch];
+  body.append(h('div', { class: 'ruler' },
+    h('span', { class: 'np-shield', style: `--nc:${me.color}` }, me.name[0]),
+    h('div', {}, h('b', {}, me.ruler.name), h('p', { class: 'muted' }, `${arch?.name ?? ''} monarch · reigns since ${me.ruler.from}`), h('p', {}, arch?.desc ?? ''))));
+  const rates = cardRates(S);
+  body.append(h('h3', {}, 'Cards each year'));
+  body.append(h('table', { class: 'ledger' }, h('tbody', {}, CATS.map(c => h('tr', {}, h('td', {}, CAT_INFO[c].name, h('small', { class: 'muted' }, ' ' + rates[c].parts.map(p => `${p.label} ${signed(p.v)}`).join(' · '))), h('td', {}, rates[c].rate.toFixed(2)))))));
+  const np = npRate(S);
+  body.append(h('h3', {}, 'Nation points each year'));
+  body.append(h('p', {}, `${np.rate.toFixed(1)} · ${np.parts.map(p => `${p.label} ${signed(p.v)}`).join(' · ')}`));
+  const mp = playerManpower(S);
   body.append(h('div', { class: 'stats' },
-    stat('Manpower', `${fmt(me.manpower)} (+${manpowerGain(S, S.player).toFixed(1)})`), stat('Stability', me.stability),
-    stat('Prestige', fmt(me.prestige)), stat('Provinces', provsOf(S, S.player).length)));
-  body.append(h('p', { class: 'muted' }, 'Stability from −3 to +3 changes income by 6% a step. At −2 or lower, revolts break out. Raise it with Royal Progress, cards and cathedrals.'));
-  body.append(h('button', { class: 'btn ghost', onclick: () => confirmBox('Abandon this campaign?', 'Your saved game will be replaced when you start a new one.', 'Back to title', () => { closeModal(); showTitle(); }) }, 'Back to title screen'));
+    stat('Manpower', `${Math.floor(me.manpower)}/${mp.max} (+${mp.gain.toFixed(1)})`), stat('Stability', me.stability),
+    stat('Court', `${courtCount(S)}/${courtCap(S)}`), stat('Provinces', provsOf(S, S.player).length)));
+  body.append(h('p', { class: 'muted' }, 'Stability from −3 to +3 changes income by 6% a step and nation points by 0.5. At −2 or lower, revolts break out and you draw fewer cards.'));
+  body.append(h('button', { class: 'btn ghost', onclick: () => confirmBox('Leave this campaign?', 'It stays saved. You can continue it from the title screen.', 'Back to title', () => { closeModal(); showTitle(); }) }, 'Back to title screen'));
   return [sheetHead(me.name, `${me.ruler.name} · ${S.year}`, me.color), body];
 }
 
@@ -494,10 +637,69 @@ function closeModal() {
   modalOpen = false;
 }
 function confirmBox(title: string, text: string, okLabel: string, ok: () => void) {
-  const prevOpen = modalOpen;
-  if (prevOpen) return ok();
+  if (modalOpen) return ok();
   openModal(h('div', { class: 'mbox narrow' }, h('h2', {}, title), h('p', {}, text),
     h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: closeModal }, 'Cancel'), h('button', { class: 'btn primary', onclick: () => { closeModal(); ok(); } }, okLabel))));
+}
+
+function charDetail(c: Character) {
+  const m = c.mission != null ? S.missions.find(x => x.id === c.mission) : null;
+  const to = PROMOTION[c.role];
+  const pw = promoteBlocked(S, c);
+  openModal(h('div', { class: 'mbox narrow' },
+    h('div', { class: 'center' }, charCard(c, S)),
+    h('h2', {}, c.name),
+    h('p', { class: 'muted' }, `${c.ruler ? 'Monarch acting as ' : ''}${roleName[c.role]} · ${RARITY[c.rarity].name} (traits ×${RARITY[c.rarity].mult}) · experience ${c.xp}/3 · age ${S.year - c.born}`),
+    h('ul', { class: 'traits' }, c.traits.map(t => h('li', {}, h('b', {}, TRAITS[t]?.name ?? t), ' ', TRAITS[t]?.desc ?? ''))),
+    (c.wins ?? 0) + (c.losses ?? 0) ? h('p', {}, `Battles: ${c.wins ?? 0} won, ${c.losses ?? 0} lost.`) : null,
+    m ? h('p', {}, `On a mission: ${missionTitle(m)}, ${m.turnsLeft} year(s) left.`) : null,
+    to ? h('div', { class: 'promo' }, h('b', {}, `Become ${to === 'explorer' ? 'an Explorer' : 'a ' + roleName[to]}`),
+      h('p', { class: 'muted' }, `For lands overseas. Permanent: ${c.name.split(' ')[0]} gets new ${roleName[to].toLowerCase()} traits and can no longer work as a ${roleName[c.role].toLowerCase()}.`),
+      h('button', { class: 'btn' + (pw ? ' blocked' : ''), onclick: () => { if (pw) return toast(pw, 'bad'); closeModal(); confirmBox(`Make ${c.name} ${roleName[to].toLowerCase()}?`, 'There is no going back.', 'Specialise', () => act(() => promote(S, c.uid), `${c.name} is now ${roleName[to].toLowerCase()}`)); } }, pw ?? 'Specialise')) : null,
+    h('div', { class: 'mrow' },
+      h('button', { class: 'btn ghost', onclick: closeModal }, 'Close'),
+      !m && !c.ruler ? h('button', { class: 'btn ghost danger', onclick: () => { closeModal(); confirmBox(`Dismiss ${c.name}?`, 'This frees a seat at court.', 'Dismiss', () => act(() => dismissCharacter(S, c.uid))); } }, 'Dismiss') : null)));
+}
+
+interface TargetRow { label: string; sub: string; color?: string; acts: { label: string; kind: MissionKind; target: string; building?: string; why: string | null }[]; }
+
+/** Targets a mission card can be used on. */
+function missionTargets(handUid: number): TargetRow[] {
+  const hc = S.hand.find(x => x.uid === handUid)!;
+  const d = CARDS[hc.card];
+  const kind = d.missions![0];
+  const rows: TargetRow[] = [];
+  if (kind === 'conquer') {
+    for (const p of Object.values(S.provinces)) {
+      if (p.owner === S.player || !atWar(S, S.player, p.owner) || !attackRoute(S, p.id)) continue;
+      rows.push({ label: p.name, sub: `${nationName(S, p.owner)} · fort ${p.fort} · dev ${p.dev}`, color: S.nations[p.owner].color,
+        acts: [{ label: 'Conquer', kind: 'conquer', target: p.id, why: missionBlocked(S, 'conquer', p.id) }, { label: 'Raid', kind: 'raid', target: p.id, why: missionBlocked(S, 'raid', p.id) }] });
+    }
+  } else if (DIPLO.includes(kind)) {
+    for (const n of Object.values(S.nations).filter(n => n.alive && n.id !== S.player)) {
+      const why = missionBlocked(S, kind, n.id);
+      if (why && (why.startsWith('You are') || why.includes('already'))) continue;
+      rows.push({ label: n.name, sub: `Relations ${getRel(S, S.player, n.id)}`, color: n.color, acts: [{ label: MISSION_INFO[kind].name, kind, target: n.id, why }] });
+    }
+  } else if (kind === 'research') {
+    for (const t of TECHS.filter(t => t.track === d.track && !S.techs.includes(t.id))) rows.push({ label: t.name, sub: `${techCost(S, t.id)} pts · ${t.desc}`, acts: [{ label: 'Study', kind, target: t.id, why: missionBlocked(S, 'research', t.id) }] });
+  } else if (kind === 'build') {
+    for (const p of provsOf(S, S.player)) {
+      const acts = Object.values(BUILDINGS).filter(b => b.group === d.group).map(b => ({ label: b.name, kind, target: p.id, building: b.id, why: missionBlocked(S, 'build', p.id, b.id) })).filter(a => !a.why || a.why.startsWith('Needs') && !a.why.startsWith('Needs Ocean') || a.why.startsWith('No free'));
+      if (acts.length) rows.push({ label: p.name, sub: `${TIERS[tierOf(p)].name} · town ${builtAt(p, 'town')}/${townSlots(p)} · countryside ${builtAt(p, 'rural')}/${ruralSlots(p)}`, acts });
+    }
+  } else if (kind === 'develop' || kind === 'found') {
+    for (const p of provsOf(S, S.player)) rows.push({ label: p.name, sub: `dev ${p.dev} · ${TIERS[tierOf(p)].name}`, acts: [{ label: kind === 'develop' ? `Develop (${developCost(S, p.id)})` : `Found city (${foundCost(S)})`, kind, target: p.id, why: missionBlocked(S, kind, p.id) }] });
+  } else if (kind === 'colonize' || kind === 'conquista') {
+    for (const r of Object.values(REGIONS)) {
+      if (!regionState(S, r.id).found) continue;
+      const why = missionBlocked(S, kind, r.id);
+      rows.push({ label: r.name, sub: `${r.where} · ${GOODS[r.good]?.name}`, acts: [{ label: kind === 'colonize' ? 'Settle' : 'Conquer', kind, target: r.id, why }] });
+    }
+  } else {
+    rows.push({ label: MISSION_INFO[kind].name, sub: MISSION_INFO[kind].verb, acts: [{ label: 'Start', kind, target: '', why: missionBlocked(S, kind, '') }] });
+  }
+  return rows;
 }
 
 function openCardModal(handUid: number) {
@@ -505,105 +707,151 @@ function openCardModal(handUid: number) {
   if (!hc) return;
   const def = CARDS[hc.card];
   const blocked = cardBlocked(S, def);
-  let target = '';
-  const targets = h('div', { class: 'targets' });
-  const playBtn = h('button', { class: 'btn primary' }, def.burden ? 'Pay it off' : 'Play card');
-  const setBtn = () => playBtn.classList.toggle('blocked', !!blocked || (def.target !== 'none' && !target));
-  playBtn.onclick = () => {
-    if (blocked) return toast(blocked, 'bad');
-    if (def.target !== 'none' && !target) return toast('Choose a target first', 'bad');
-    const before = S.hand.length;
-    const msg = playCard(S, handUid, target);
-    closeModal();
-    if (S.hand.length < before) toast(`${def.name}: ${msg}`, 'good'); else toast(msg, 'bad');
-    refresh(); processQueue();
-  };
-  const pickT = (val: string, el: HTMLElement) => { target = val; targets.querySelectorAll('.sel').forEach(x => x.classList.remove('sel')); el.classList.add('sel'); setBtn(); };
-  if (!blocked && def.target === 'nation') {
-    for (const n of Object.values(S.nations).filter(n => n.alive && n.id !== S.player && def.targetOk!(S, n.id))) {
-      const b: HTMLElement = h('button', { class: 'tchip', style: `--nc:${n.color}`, onclick: () => pickT(n.id, b) }, h('span', { class: 'swatch', style: `background:${n.color}` }), n.name);
-      targets.append(b);
+  const body = h('div', { class: 'targets-wrap' });
+  const done = (msg: string) => { closeModal(); if (msg.startsWith('!')) toast(msg.slice(1), 'bad'); else toast(msg, 'good'); refresh(); processQueue(); };
+  const footer = h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: closeModal }, 'Keep it'),
+    !def.burden ? h('button', { class: 'btn ghost', onclick: () => { closeModal(); act(() => discardCard(S, handUid), 'Discarded: +0.5 nation points'); } }, 'Discard (+0.5 NP)') : null);
+
+  if (def.kind === 'troop') {
+    body.append(h('p', {}, `Hire for 1 manpower and ${troopHireCost(S, def.troop!)} ducats. Upkeep ${TROOPS[def.troop!].upkeep} a year.`));
+    footer.append(h('button', { class: 'btn primary' + (blocked ? ' blocked' : ''), onclick: () => (blocked ? toast(blocked, 'bad') : done(playCard(S, handUid, ''))) }, blocked ?? 'Hire'));
+  } else if (def.kind === 'hire') {
+    body.append(h('p', {}, `Costs 1 manpower. Three candidates are revealed; you keep one. Court ${courtCount(S)}/${courtCap(S)}.`));
+    footer.append(h('button', { class: 'btn primary' + (blocked ? ' blocked' : ''), onclick: () => { if (blocked) return toast(blocked, 'bad'); closeModal(); act(() => hireWithCard(S, handUid)); } }, blocked ?? 'Hire'));
+  } else if (def.kind === 'equip') {
+    body.append(h('h3', {}, 'Fit to a troop at home'));
+    const row = h('div', { class: 'cards-row wrap' });
+    let any = false;
+    for (const t of S.troops.filter(t => t.mission == null)) {
+      const r = mergePreview(S, t.uid, handUid);
+      if ('error' in r) continue;
+      any = true;
+      row.append(h('div', { class: 'fit' }, troopCard(t, { small: true }), h('span', { class: 'arrow' }, '→'), troopCard({ type: r.out, vet: r.vet, str: 100 }, { small: true }),
+        h('button', { class: 'btn small' + (r.tech || player(S).gold < r.cost ? ' blocked' : ''), onclick: () => { if (r.tech) return toast(`Needs ${TECH[r.tech].name}`, 'bad'); const e = doMerge(S, t.uid, handUid); done(e ? '!' + e : `Forged ${TROOPS[r.out].name}`); } }, r.tech ? `Needs ${TECH[r.tech].name}` : `Forge · ${r.cost}`)));
     }
-  } else if (!blocked && def.target === 'mission') {
-    for (const m of S.missions.filter(m => def.targetOk!(S, String(m.id)))) {
-      const tname = S.provinces[m.target]?.name ?? S.nations[m.target]?.name ?? TECH[m.target]?.name ?? '';
-      const b: HTMLElement = h('button', { class: 'tchip', onclick: () => pickT(String(m.id), b) }, `${MISSION_INFO[m.kind].name}: ${tname} (${m.turnsLeft} yr)`);
-      targets.append(b);
+    if (!any) row.append(h('p', { class: 'muted' }, 'None of your troops at home can use this. Check the recipe book in the Military panel.'));
+    body.append(row);
+  } else if (def.kind === 'mission') {
+    const role = cardRole(def.id);
+    body.append(h('p', { class: 'muted' }, `Needs a free ${roleName[role].toLowerCase()}. Choose where to send them.`));
+    const rows = missionTargets(handUid);
+    if (!rows.length) body.append(h('p', { class: 'bad' }, def.missions![0] === 'conquer' ? 'You are not at war with anyone you can reach. Declare war from a province or the Diplomacy panel.' : def.missions![0] === 'colonize' || def.missions![0] === 'conquista' ? 'No land discovered yet. Send an explorer first.' : 'No valid target right now.'));
+    const list = h('div', { class: 'tlist' });
+    for (const r of rows) {
+      list.append(h('div', { class: 'trow' }, r.color ? h('span', { class: 'swatch', style: `background:${r.color}` }) : null,
+        h('div', { class: 'a-t' }, h('b', {}, r.label), h('small', {}, r.sub)),
+        h('div', { class: 'r-acts' }, r.acts.map(a => h('button', { class: 'btn small' + (a.why ? ' blocked' : ''), title: a.why ?? '', onclick: () => { if (a.why) return toast(a.why, 'bad'); closeModal(); openPlanner(a.kind, a.target, a.building, handUid); } }, a.label)))));
     }
-  } else if (!blocked && def.target === 'troop') {
-    const g = h('div', { class: 'cards-row' });
-    for (const t of S.troops.filter(t => def.targetOk!(S, String(t.uid)))) {
-      const c: HTMLElement = troopCard(t, { small: true, onclick: () => pickT(String(t.uid), c) });
-      g.append(c);
+    body.append(list);
+  } else {
+    let target = '';
+    const targets = h('div', { class: 'targets' });
+    const playBtn = h('button', { class: 'btn primary' }, def.burden ? 'Pay it off' : 'Play card');
+    const setBtn = () => playBtn.classList.toggle('blocked', !!blocked || (!!def.target && def.target !== 'none' && !target));
+    playBtn.onclick = () => {
+      if (blocked) return toast(blocked, 'bad');
+      if (def.target && def.target !== 'none' && !target) return toast('Choose a target first', 'bad');
+      done(playCard(S, handUid, target));
+    };
+    const pickT = (val: string, el: HTMLElement) => { target = val; targets.querySelectorAll('.sel').forEach(x => x.classList.remove('sel')); el.classList.add('sel'); setBtn(); };
+    if (!blocked && def.target === 'nation') {
+      for (const n of Object.values(S.nations).filter(n => n.alive && n.id !== S.player && def.targetOk!(S, n.id))) {
+        const b: HTMLElement = h('button', { class: 'tchip', onclick: () => pickT(n.id, b) }, h('span', { class: 'swatch', style: `background:${n.color}` }), n.name);
+        targets.append(b);
+      }
+    } else if (!blocked && def.target === 'mission') {
+      for (const m of S.missions.filter(m => def.targetOk!(S, String(m.id)))) {
+        const b: HTMLElement = h('button', { class: 'tchip', onclick: () => pickT(String(m.id), b) }, `${missionTitle(m)} (${m.turnsLeft} yr)`);
+        targets.append(b);
+      }
+    } else if (!blocked && def.target === 'troop') {
+      const g = h('div', { class: 'cards-row wrap' });
+      for (const t of S.troops.filter(t => def.targetOk!(S, String(t.uid)))) { const c: HTMLElement = troopCard(t, { small: true, onclick: () => pickT(String(t.uid), c) }); g.append(c); }
+      targets.append(g);
     }
-    targets.append(g);
+    setBtn();
+    if (blocked) body.append(h('p', { class: 'bad' }, blocked)); else if (def.target && def.target !== 'none') body.append(h('h3', {}, 'Choose a target'));
+    body.append(targets);
+    footer.append(playBtn);
   }
-  setBtn();
-  openModal(h('div', { class: 'mbox narrow' },
-    h('div', { class: 'center' }, handCard(hc.card)),
-    blocked ? h('p', { class: 'bad center' }, blocked) : def.target !== 'none' ? h('h3', {}, 'Choose a target') : null,
-    targets,
-    h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: closeModal }, 'Keep it'), playBtn)));
+  openModal(h('div', { class: 'mbox narrow' }, h('div', { class: 'center' }, handCard(hc.card)), body, footer));
 }
 
 // ---------- mission planner ----------
-function openPlanner(kind: MissionKind, target: string, building?: string) {
+function openPlanner(kind: MissionKind, target: string, building: string | undefined, cardUid: number) {
+  const card = S.hand.find(x => x.uid === cardUid);
+  if (!card) { toast('That card is gone', 'bad'); return; }
+  const role = cardRole(card.card);
   const info = MISSION_INFO[kind];
-  const chars = S.characters.filter(c => c.role === info.role);
+  const chars = S.characters.filter(c => c.role === role);
   const free = chars.filter(c => c.mission == null);
-  if (!chars.length) { toast(`You have no ${roleName[info.role].toLowerCase()} at court. Hold an audience in the Court panel.`, 'bad'); return; }
-  if (!free.length) { toast(`All your ${roleName[info.role].toLowerCase()}s are busy`, 'bad'); return; }
-  const military = kind === 'conquer' || kind === 'raid';
+  const base = Object.entries(PROMOTION).find(([, v]) => v === role)?.[0];
+  if (!chars.length) { toast(`You have no ${roleName[role].toLowerCase()}. ${base ? `Make one of your ${roleName[base as Character['role']].toLowerCase()}s specialise.` : 'Play a hiring card.'}`, 'bad'); return; }
+  if (!free.length) { toast(`All your ${roleName[role].toLowerCase()}s are busy`, 'bad'); return; }
+  const military = kind === 'conquer' || kind === 'raid' || kind === 'conquista';
   let ch = [...free].sort((a, b) => b.skill - a.skill)[0];
   const home = S.troops.filter(t => t.mission == null && t.str >= 30).sort((a, b) => armyPower([b]) - armyPower([a]));
-  let picked: number[] = [];
   const maxTroops = () => ch.skill + 3;
-  if (military) picked = home.slice(0, maxTroops()).map(t => t.uid);
+  let picked: number[] = military ? home.slice(0, maxTroops()).map(t => t.uid) : [];
+  const goods = kind === 'trade' ? importable(S, target) : [];
+  let good: string | undefined = goods[0];
 
-  const tname = S.provinces[target]?.name ?? S.nations[target]?.name ?? TECH[target]?.name ?? 'the realm';
+  const tname = S.provinces[target]?.name ?? S.nations[target]?.name ?? TECH[target]?.name ?? REGIONS[target]?.name ?? 'the realm';
   const box = h('div', { class: 'mbox planner' });
   const draw = () => {
     clear(box);
     box.append(h('div', { class: 'pl-head' }, h('span', { class: 'a-ico', html: icon(info.icon, 22) }),
-      h('div', {}, h('h2', {}, `${info.name}${kind === 'build' ? ': ' + BUILDINGS[building!].name : ''}`), h('p', { class: 'muted' }, `${info.verb} ${tname}`))));
-    box.append(h('h3', {}, `Choose a ${roleName[info.role].toLowerCase()}`));
+      h('div', {}, h('h2', {}, `${info.name}${kind === 'build' ? ': ' + BUILDINGS[building!].name : ''}`), h('p', { class: 'muted' }, `${info.verb} ${tname} · uses ${CARDS[card.card].name}`))));
+    box.append(h('h3', {}, `Choose a ${roleName[role].toLowerCase()}`));
     const row = h('div', { class: 'cards-row' });
     for (const c of chars) {
       const busy = c.mission != null;
-      let sub = '';
+      let sub = `${missionTurns(S, kind, c, target, building)} yr`;
       if (DIPLO.includes(kind)) sub = `${Math.round(diploChance(S, kind, c, target) * 100)}%`;
-      else if (kind === 'research') sub = `${missionTurns(S, kind, c, target)} yr`;
-      else sub = `${missionTurns(S, kind, c, target, building)} yr`;
-      const card = charCard(c, S, { small: true, selected: c.uid === ch.uid, dim: busy, badge: busy ? 'busy' : sub, onclick: () => { if (busy) return toast('Busy on another mission'); ch = c; if (military) picked = picked.slice(0, maxTroops()); draw(); } });
-      row.append(card);
+      if (kind === 'explore') sub = `${Math.round(exploreChance(S, c) * 100)}%`;
+      if (kind === 'colonize') sub = `${Math.round(colonizeChance(S, target, c) * 100)}%`;
+      row.append(charCard(c, S, { small: true, selected: c.uid === ch.uid, dim: busy, badge: busy ? 'busy' : sub, onclick: () => { if (busy) return toast('Busy on another mission'); ch = c; if (military) picked = picked.slice(0, maxTroops()); draw(); } }));
     }
     box.append(row);
-
     const turns = missionTurns(S, kind, ch, target, building);
     const facts: (string | HTMLElement)[] = [`${turns} year${turns > 1 ? 's' : ''}`];
     if (DIPLO.includes(kind)) facts.push(`${Math.round(diploChance(S, kind, ch, target) * 100)}% chance`);
-    if (kind === 'research') facts.push(`${researchRate(S, ch)} research a year · ${techCost(S, target)} needed`);
-    if (kind === 'build') facts.push(`${buildingCost(S, building!)} ducats now`);
+    if (kind === 'research') facts.push(`${researchRate(S, ch, TECH[target]?.track)} research a year · ${techCost(S, target)} needed`);
+    if (kind === 'build') facts.push(`${buildingCost(S, building!)} ducats now · salary ${BUILDINGS[building!].salary} a year`);
     if (kind === 'develop') facts.push(`${developCost(S, target)} ducats now`);
-
+    if (kind === 'found') facts.push(`${foundCost(S)} ducats now`);
+    if (kind === 'explore') facts.push(`${Math.round(exploreChance(S, ch) * 100)}% chance of a discovery · ${voyageCost(S)} ducats`);
+    if (kind === 'colonize') facts.push(`${Math.round(colonizeChance(S, target, ch) * 100)}% chance · ${colonyCost(S)} ducats and 1 manpower`);
+    if (kind === 'trade') {
+      box.append(h('h3', {}, 'Import a good'));
+      const gr = h('div', { class: 'targets' });
+      if (!goods.length) gr.append(h('p', { class: 'muted' }, 'They have nothing you lack.'));
+      for (const g of [...goods, '']) {
+        const lbl = g ? `${GOODS[g].name}: ${GOODS[g].desc} (−${GOODS[g].price}/yr)` : 'No import';
+        gr.append(h('button', { class: 'tchip' + (good === (g || undefined) ? ' sel' : ''), onclick: () => { good = g || undefined; draw(); } }, lbl));
+      }
+      box.append(gr);
+    }
     if (military) {
       box.append(h('h3', {}, `Troops (${picked.length}/${maxTroops()})`));
       const tr = h('div', { class: 'cards-row wrap' });
-      if (!home.length) tr.append(h('p', { class: 'muted' }, 'No troops at home. Draft some in the Army panel.'));
+      if (!home.length) tr.append(h('p', { class: 'muted' }, 'No troops at home. Hire some with Military troop cards.'));
       for (const t of home) tr.append(troopCard(t, { small: true, selected: picked.includes(t.uid), onclick: () => {
         if (picked.includes(t.uid)) picked = picked.filter(x => x !== t.uid);
-        else if (picked.length < maxTroops()) picked = [...picked, t.uid]; else toast(`${ch.name} can lead ${maxTroops()} troops (skill + 3)`);
+        else if (picked.length < maxTroops()) picked = [...picked, t.uid]; else toast(`${ch.name} can lead ${maxTroops()} troops`);
         draw();
       } }));
       box.append(tr);
-      const prov = S.provinces[target];
-      const enemy = S.nations[prov.owner];
-      const mine = Math.round(armyPower(S.troops.filter(t => picked.includes(t.uid))) * (1 + 0.07 * ch.skill));
-      const spied = (enemy.spiedUntil ?? 0) > S.year;
-      const theirs = Math.round(armyPower([...enemy.army].sort((a, b) => armyPower([b]) - armyPower([a])).slice(0, kind === 'raid' ? 3 : 6)));
-      facts.push(h('span', {}, `Your strength ${mine} vs `, spied ? h('b', {}, `${theirs}`) : h('b', {}, `~${Math.round(theirs * 0.8)}–${Math.round(theirs * 1.25)}`), ` · fort ${prov.fort}`));
-      const home2 = S.troops.filter(t => t.mission == null && !picked.includes(t.uid)).length;
-      if (home2 === 0) facts.push(h('span', { class: 'bad' }, 'No troops left at home to defend'));
+      if (kind === 'conquista') facts.push(`${Math.round(conquistaChance(S, target, ch, picked) * 100)}% chance against the ${REGIONS[target].people}`);
+      else {
+        const prov = S.provinces[target];
+        const enemy = S.nations[prov.owner];
+        const mine = Math.round(armyPower(S.troops.filter(t => picked.includes(t.uid))) * (1 + 0.07 * ch.skill));
+        const spied = (enemy.spiedUntil ?? 0) > S.year;
+        const theirs = Math.round(armyPower([...enemy.army].sort((a, b) => armyPower([b]) - armyPower([a])).slice(0, kind === 'raid' ? 3 : 6)));
+        facts.push(h('span', {}, `Your strength ${mine} vs `, h('b', {}, spied ? `${theirs}` : `~${Math.round(theirs * 0.8)}–${Math.round(theirs * 1.25)}`), ` · fort ${prov.fort}`));
+      }
+      if (!S.troops.some(t => t.mission == null && !picked.includes(t.uid))) facts.push(h('span', { class: 'bad' }, 'No troops left at home to defend'));
     }
     box.append(h('div', { class: 'facts' }, facts.map(f => h('span', { class: 'fact' }, f))));
     const why = missionBlocked(S, kind, target, building) ?? (military && !picked.length ? 'Choose at least one troop' : null);
@@ -611,7 +859,7 @@ function openPlanner(kind: MissionKind, target: string, building?: string) {
       h('button', { class: 'btn ghost', onclick: closeModal }, 'Cancel'),
       h('button', { class: 'btn primary' + (why ? ' blocked' : ''), onclick: () => {
         if (why) return toast(why, 'bad');
-        const r = launchMission(S, kind, ch.uid, target, picked, building);
+        const r = launchMission(S, kind, ch.uid, target, picked, building, cardUid, good);
         if (r) return toast(r, 'bad');
         closeModal();
         toast(`${ch.name} sets out`, 'good');
@@ -626,20 +874,21 @@ function openPlanner(kind: MissionKind, target: string, building?: string) {
 async function onEndTurn() {
   if (modalOpen) return;
   if (S.queue.length) { processQueue(); return; }
-  const goldBefore = player(S).gold;
-  endTurn(S);
-  closeSheetIfStale();
+  const rep = endTurn(S);
+  if (sheet?.kind === 'province' && !S.provinces[sheet.arg!]) closeSheet();
   refresh();
-  await yearFlash(S.year, player(S).gold - goldBefore);
+  if (rep) {
+    const got = CATS.filter(c => rep.cards[c]).map(c => `${rep.cards[c]} ${CAT_INFO[c].name}`).join(', ');
+    await yearFlash(S.year, `${signed(rep.gold)} ducats · +${rep.np.toFixed(1)} NP${got ? ' · cards: ' + got : ''}`);
+  }
   processQueue();
 }
-function closeSheetIfStale() { if (sheet?.kind === 'province' && !S.provinces[sheet.arg!]) closeSheet(); }
 
-async function yearFlash(year: number, dGold: number) {
-  if (reduced()) { toast(`${year}: ${signed(dGold)} ducats`); return; }
-  const f = h('div', { class: 'yearflash' }, h('span', {}, String(year)), h('small', {}, `${signed(dGold)} ducats`));
+async function yearFlash(year: number, line: string) {
+  if (reduced()) { toast(`${year}: ${line}`); return; }
+  const f = h('div', { class: 'yearflash' }, h('span', {}, String(year)), h('small', {}, line));
   document.body.append(f);
-  await sleep(900);
+  await sleep(1100);
   f.classList.add('out');
   setTimeout(() => f.remove(), 400);
 }
@@ -651,6 +900,7 @@ function processQueue() {
   else if (p.kind === 'event') showEvent();
   else if (p.kind === 'draft') showDraft(p.draft, p.options);
   else if (p.kind === 'battle') showBattle(p.battle);
+  else if (p.kind === 'succession') showSuccession(p.heirs, p.old);
   else if (p.kind === 'gameover') showGameOver(p.victory, p.reason);
 }
 function afterPrompt() { closeModal(); refresh(); setTimeout(processQueue, 60); }
@@ -669,8 +919,7 @@ async function flipAll(flips: { flip: () => void }[], delay = 380) {
 function showReveal(title: string, subtitle: string | undefined, items: RevealItem[], done: () => void) {
   const row = h('div', { class: 'reveal-row' });
   const flips = items.map(it => { const f = flipCard(infoCard(it), ''); row.append(f.el); return f; });
-  const btn = h('button', { class: 'btn primary', onclick: done }, 'Continue');
-  openModal(h('div', { class: 'mbox reveal' }, h('h2', {}, title), subtitle ? h('p', { class: 'muted' }, subtitle) : null, row, h('div', { class: 'mrow' }, btn)));
+  openModal(h('div', { class: 'mbox reveal' }, h('h2', {}, title), subtitle ? h('p', { class: 'muted' }, subtitle) : null, row, h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: done }, 'Continue'))));
   flipAll(flips);
 }
 
@@ -684,7 +933,7 @@ function showEvent() {
     h('div', { class: 'c-name c-title' }, eventTitle(S, p.eventId, p.vars)),
     h('div', { class: 'c-text' }, e.text(S, p.vars)));
   const f = flipCard(front, e.history ? 'History' : 'Event', true);
-  const opts = h('div', { class: 'ev-opts' });
+  const opts = h('div', { class: 'ev-opts hidden-opts' });
   e.options.forEach((o, i) => {
     const why = o.can?.(S, p.vars) ?? null;
     opts.append(h('button', { class: 'btn opt' + (why ? ' blocked' : ''), onclick: () => {
@@ -695,46 +944,74 @@ function showEvent() {
       showReveal(eventTitle(S, p.eventId, p.vars), 'What came of it', res, afterPrompt);
     } }, h('b', {}, o.label), why ? h('small', {}, why) : o.hint ? h('small', {}, o.hint) : null));
   });
-  opts.classList.add('hidden-opts');
   openModal(h('div', { class: 'mbox event' }, f.el, opts));
   setTimeout(() => { f.flip(); setTimeout(() => opts.classList.remove('hidden-opts'), reduced() ? 0 : 450); }, reduced() ? 0 : 350);
 }
 
 function draftFront(o: DraftOption) {
   if (o.t === 'troop') return troopCard({ type: o.type, vet: o.vet, str: 100 });
-  if (o.t === 'equip') return equipCard({ type: o.type });
   if (o.t === 'char') return charCard(o.ch, S);
+  if (o.t === 'card') return handCard(o.card);
+  if (o.t === 'equip') return handCard('eq_' + o.type);
   const a = AMBITIONS.find(x => x.id === o.id)!;
   return h('div', { class: 'card k-event' }, h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, 'Ambition')),
     h('div', { class: 'c-art', html: icon('crown', 34) }), h('div', { class: 'c-name c-title' }, a.name), h('div', { class: 'c-text' }, a.text), h('div', { class: 'c-text gold' }, `+${a.reward} prestige`));
 }
 
+function optName(o: DraftOption) {
+  return o.t === 'troop' ? TROOPS[o.type].name : o.t === 'equip' ? EQUIPMENT[o.type].name : o.t === 'char' ? o.ch.name : o.t === 'card' ? CARDS[o.card].name : AMBITIONS.find(a => a.id === o.id)!.name;
+}
+
 function showDraft(kind: string, options: DraftOption[]) {
   const titles: Record<string, [string, string]> = {
-    levy: ['Levy draft', 'Three cards are drawn. Keep one.'], pro: ['Professional draft', 'Seasoned companies and fine gear. Keep one.'],
-    court: ['An audience at court', 'Three candidates seek your favour. Keep one.'], ambition: ['Your ambition', 'Choose the goal your dynasty will pursue. Fulfil it for great prestige.'],
+    buy: ['A new card', 'Three cards are revealed. Keep one.'], gift: ['A gift of fortune', 'Keep one.'],
+    court: ['An audience at court', 'Three candidates seek your favour. Keep one.'], ambition: ['Your ambition', 'Choose the goal your crown will pursue. Fulfil it for great prestige.'],
   };
-  const [t, sub] = titles[kind];
+  const [t, sub] = titles[kind] ?? titles.buy;
   const row = h('div', { class: 'reveal-row' });
   let ready = false;
   const flips = options.map(o => {
-    const front = draftFront(o);
-    const f = flipCard(front, kind === 'ambition' ? 'Ambition' : kind === 'court' ? 'Court' : 'Draft');
+    const f = flipCard(draftFront(o), kind === 'ambition' ? 'Ambition' : kind === 'court' ? 'Court' : 'Card');
     f.el.addEventListener('click', () => {
       if (!ready) return;
       takeDraftOption(S, o);
       S.queue.shift();
-      const name = o.t === 'troop' ? TROOPS[o.type].name : o.t === 'equip' ? EQUIPMENT[o.type].name : o.t === 'char' ? o.ch.name : AMBITIONS.find(a => a.id === o.id)!.name;
-      toast(`${name} chosen`, 'good');
+      toast(`${optName(o)} chosen`, 'good');
       afterPrompt();
     });
-    if (o.t === 'char' && o.ch.rarity === 'legendary') f.el.classList.add('legend');
+    if (o.t === 'char' && (o.ch.rarity === 'legendary' || o.ch.rarity === 'epic')) f.el.classList.add('legend');
     row.append(f.el);
     return f;
   });
   const hint = h('p', { class: 'muted center' }, 'Revealing…');
   openModal(h('div', { class: 'mbox reveal' }, h('h2', {}, t), h('p', { class: 'muted' }, sub), row, hint));
   flipAll(flips, 450).then(() => { ready = true; hint.textContent = 'Tap a card to keep it.'; });
+}
+
+function heirCard(hr: Heir) {
+  const a = RULER_ARCHS[hr.arch];
+  return h('div', { class: 'card k-event heir' },
+    h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, hr.historical ? 'Heir of history' : 'Heir')),
+    h('div', { class: 'c-art', html: icon(a.role ? ({ general: 'helm', diplomat: 'scroll', admin: 'quill', merchant: 'coin', researcher: 'book' } as Record<string, string>)[a.role] : 'crown', 30) }),
+    h('div', { class: 'c-name c-title' }, hr.name),
+    h('div', { class: 'c-rarity' }, `${a.name} · skill ${hr.skill}`),
+    h('div', { class: 'c-text' }, a.desc),
+    h('div', { class: 'c-text muted' }, `Likely reign: ~${hr.reign} years`));
+}
+
+function showSuccession(heirs: Heir[], old: string) {
+  const row = h('div', { class: 'reveal-row' });
+  let ready = false;
+  const flips = heirs.map((hr, i) => {
+    const f = flipCard(heirCard(hr), 'Heir');
+    f.el.classList.add('heirflip');
+    f.el.addEventListener('click', () => { if (!ready) return; chooseHeir(S, i); toast(`Long live ${player(S).ruler.name}!`, 'good'); afterPrompt(); });
+    row.append(f.el);
+    return f;
+  });
+  const hint = h('p', { class: 'muted center' }, 'Revealing the heirs…');
+  openModal(h('div', { class: 'mbox reveal' }, h('h2', {}, `${old} is dead`), h('p', { class: 'muted' }, 'Choose who takes the crown. Their talents shape the cards you draw.'), row, hint));
+  flipAll(flips, 450).then(() => { ready = true; hint.textContent = 'Tap an heir to crown them.'; });
 }
 
 // ---------- battle ----------
@@ -750,21 +1027,17 @@ function showBattle(b: Battle) {
   const foe = b.playerSide === 'att' ? b.def : b.att;
   const prov = S.provinces[b.province];
   const box = h('div', { class: 'mbox battle' });
-  let busy = false;
-
   const draw = (last?: { mine: string; theirs: string; myC: boolean; theirC: boolean; dmgMe: number; dmgThem: number }) => {
     clear(box);
     const foeName = foe.nation === 'rebels' ? 'Rebels' : nationName(S, foe.nation);
     const ctx = { conquer: 'Siege of', defend: 'Defence of', raid: 'Raid on', rebels: 'Fighting at' }[b.context];
     box.append(h('div', { class: 'b-head' }, h('h2', {}, `${ctx} ${prov.name}`), h('p', { class: 'muted' }, `Round ${Math.min(3, b.round + (b.done ? 0 : 1))} of 3 · ${foeName}${foe.fort ? ` · fort ${foe.fort}` : me.fort ? ` · your fort ${me.fort}` : ''}`)));
     const side = (sd: typeof me, label: string, cls: string) => h('div', { class: 'b-side ' + cls },
-      h('div', { class: 'b-label' }, h('b', {}, label), h('small', {}, sd.general ? `${sd.general.name} · skill ${sd.general.skill}` : 'No general'),
+      h('div', { class: 'b-label' }, h('b', {}, label), h('small', {}, sd.general ? `${sd.general.name}` : 'No general'),
         h('span', { class: 'hpbar' }, h('i', { style: `width:${Math.round(ratio(sd) * 100)}%` }), h('em', { style: `left:${breakLevel(sd) * 100}%`, title: 'Breaking point' }), h('span', {}, `${Math.round(ratio(sd) * 100)}%`))),
       h('div', { class: 'uchips' }, sd.units.map(unitChip)));
     box.append(side(foe, foeName, 'foe'));
-    // tactic slots
-    const slotFoe = h('div', { class: 'slot' });
-    const slotMe = h('div', { class: 'slot' });
+    const slotFoe = h('div', { class: 'slot' }), slotMe = h('div', { class: 'slot' });
     if (last) {
       slotFoe.append(tacticCard(last.theirs, { small: true, cls: last.theirC ? 'countered' : '' }));
       slotMe.append(tacticCard(last.mine, { small: true, cls: last.myC ? 'countered' : '' }));
@@ -772,10 +1045,9 @@ function showBattle(b: Battle) {
       slotFoe.append(b.scout ? tacticCard(b.enemyNext, { small: true, cls: 'scouted' }) : backCard('?', { small: true }));
       slotMe.append(h('div', { class: 'slot-empty' }, 'Your tactic'));
     }
-    const mid = h('div', { class: 'b-mid' }, slotFoe, h('div', { class: 'vs' }, last ? h('div', { class: 'dmg' },
+    box.append(h('div', { class: 'b-mid' }, slotFoe, h('div', { class: 'vs' }, last ? h('div', { class: 'dmg' },
       h('span', { class: 'good' }, `You deal ${last.dmgThem}`), h('span', { class: 'bad' }, `You take ${last.dmgMe}`),
-      last.theirC ? h('span', { class: 'good' }, 'Their tactic was countered!') : null, last.myC ? h('span', { class: 'bad' }, 'Your tactic was countered!') : null) : 'vs'), slotMe);
-    box.append(mid);
+      last.theirC ? h('span', { class: 'good' }, 'Their tactic was countered!') : null, last.myC ? h('span', { class: 'bad' }, 'Your tactic was countered!') : null) : 'vs'), slotMe));
     box.append(side(me, 'Your army', 'mine'));
     if (b.done) {
       const out = b.result ?? (b.result = finishBattle(S, b));
@@ -784,31 +1056,19 @@ function showBattle(b: Battle) {
         h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: () => { S.queue.shift(); afterPrompt(); } }, 'Continue')));
       return;
     }
-    if (last) {
-      box.append(h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: () => draw() }, 'Next round')));
-      return;
-    }
+    if (last) { box.append(h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: () => draw() }, 'Next round'))); return; }
     box.append(h('p', { class: 'muted center' }, b.scout ? 'Your scouts have seen the enemy\'s plan.' : 'Choose a tactic. The enemy has already chosen theirs, face-down.'));
-    const opts = h('div', { class: 'cards-row center' });
-    for (const t of b.options) opts.append(tacticCard(t, { onclick: () => commit(t) }));
-    box.append(opts);
+    box.append(h('div', { class: 'cards-row center' }, b.options.map(t => tacticCard(t, { onclick: () => commit(t) }))));
     box.append(h('p', { class: 'muted small center' }, COUNTER_TEXT));
     box.append(h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: () => { autoResolve(S, b); draw(); } }, 'Auto-resolve')));
   };
   const commit = (t: string) => {
-    if (busy) return;
-    busy = true;
     const beforeMe = hp(me), beforeFoe = hp(foe);
     const lg = playRound(S, b, t);
-    const mineTac = b.playerSide === 'att' ? lg.attTactic : lg.defTactic;
-    const theirTac = b.playerSide === 'att' ? lg.defTactic : lg.attTactic;
-    const myC = b.playerSide === 'att' ? lg.attCountered : lg.defCountered;
-    const theirC = b.playerSide === 'att' ? lg.defCountered : lg.attCountered;
-    draw({ mine: mineTac, theirs: theirTac, myC, theirC, dmgMe: Math.round(beforeMe - hp(me)), dmgThem: Math.round(beforeFoe - hp(foe)) });
+    const att = b.playerSide === 'att';
+    draw({ mine: att ? lg.attTactic : lg.defTactic, theirs: att ? lg.defTactic : lg.attTactic, myC: att ? lg.attCountered : lg.defCountered, theirC: att ? lg.defCountered : lg.attCountered, dmgMe: Math.round(beforeMe - hp(me)), dmgThem: Math.round(beforeFoe - hp(foe)) });
     box.querySelectorAll('.slot .card').forEach(c => c.classList.add('slam'));
-    busy = false;
   };
-  void TACTICS;
   draw();
   openModal(box);
 }

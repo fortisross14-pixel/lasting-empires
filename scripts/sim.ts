@@ -1,93 +1,123 @@
-import { newGame, endTurn, chooseEventOption, playerDeclareWar, ranking } from '../src/engine/turn';
+import { newGame, endTurn, chooseEventOption, playerDeclareWar, ranking, chooseHeir } from '../src/engine/turn';
 import { EVENT } from '../src/engine/events';
 import { autoResolve, finishBattle } from '../src/engine/battle';
-import { takeDraftOption, startTroopDraft, doMerge, mergePreview } from '../src/engine/drafts';
-import { launchMission, missionBlocked } from '../src/engine/missions';
-import { TECHS } from '../src/data/techs';
-import { provsOf, player, atWar, enemiesOf, armyCap } from '../src/engine/core';
-import { CARDS, playCard, cardBlocked } from '../src/engine/cards';
+import { takeDraftOption, doMerge, mergePreview, buyCard, hireWithCard } from '../src/engine/drafts';
+import { launchMission, missionBlocked, importable, cardRole } from '../src/engine/missions';
+import { promote, discoverable } from '../src/engine/overseas';
+import { REGIONS } from '../src/data/overseas';
+import { TECHS, BUILDINGS } from '../src/data/techs';
+import { provsOf, player, enemiesOf, armyCap, incomeOf } from '../src/engine/core';
+import { CARDS, playCard, cardBlocked, buyCost } from '../src/engine/cards';
 import { neighbours } from '../src/engine/map';
-import type { GameState } from '../src/types';
+import { CATS, type GameState } from '../src/types';
 
+const R = Math.random;
 function resolveQueue(s: GameState) {
   let guard = 0;
-  while (s.queue.length && guard++ < 50) {
+  while (s.queue.length && guard++ < 60) {
     const p = s.queue[0];
     if (p.kind === 'event') {
       const e = EVENT[p.eventId];
       const ok = e.options.map((o, i) => [o, i] as const).filter(([o]) => !o.can?.(s, p.vars));
-      const pickI = ok.length ? ok[Math.floor(Math.random() * ok.length)][1] : -1;
-      if (pickI < 0) { s.queue.shift(); continue; }
-      const r = chooseEventOption(s, pickI);
+      if (!ok.length) { s.queue.shift(); continue; }
+      const r = chooseEventOption(s, ok[Math.floor(R() * ok.length)][1]);
       if (typeof r === 'string') s.queue.shift();
     } else if (p.kind === 'battle') { autoResolve(s, p.battle); finishBattle(s, p.battle); s.queue.shift(); }
-    else if (p.kind === 'draft') { takeDraftOption(s, p.options[0]); s.queue.shift(); }
-    else if (p.kind === 'gameover') { s.queue.shift(); }
+    else if (p.kind === 'draft') { takeDraftOption(s, p.options[Math.floor(R() * p.options.length)]); s.queue.shift(); }
+    else if (p.kind === 'succession') chooseHeir(s, Math.floor(R() * p.heirs.length));
     else s.queue.shift();
   }
 }
+const free = (s: GameState, role: string) => s.characters.filter(c => c.role === role && c.mission == null).sort((a, b) => b.skill - a.skill)[0];
 
 function botTurn(s: GameState) {
   const me = player(s);
-  // play cards
+  for (let k = 0; k < 3; k++) { const c = CATS[Math.floor(R() * 5)]; if (s.np >= buyCost(s, c) + 2) { buyCard(s, c); resolveQueue(s); } }
   for (const h of [...s.hand]) {
+    if (!s.hand.includes(h)) continue;
     const d = CARDS[h.card];
-    if (cardBlocked(s, d)) continue;
-    let target = '';
-    if (d.target === 'nation') target = Object.keys(s.nations).find(n => n !== s.player && s.nations[n].alive)!;
-    if (d.target === 'mission') { const m = s.missions.find(m => d.targetOk!(s, String(m.id))); if (!m) continue; target = String(m.id); }
-    if (d.target === 'troop') { const t = s.troops.find(t => d.targetOk!(s, String(t.uid))); if (!t) continue; target = String(t.uid); }
-    playCard(s, h.uid, target);
-  }
-  for (let k = 0; k < 3; k++) if (s.troops.length < armyCap(s) && me.gold > 30) { startTroopDraft(s, me.gold > 150 ? 'pro' : 'levy'); resolveQueue(s); }
-  // merges
-  for (const a of s.troops) for (const b of [...s.troops, ...s.equipment as any[]]) {
-    if (a.uid === b.uid) continue;
-    const r = mergePreview(s, a.uid, b.uid);
-    if (!('error' in r) && !r.tech && r.out !== a.type) { doMerge(s, a.uid, b.uid); return botTurn2(s); }
-  }
-  botTurn2(s);
-}
-function botTurn2(s: GameState) {
-  const me = player(s);
-  for (const c of s.characters.filter(c => c.mission == null)) {
-    if (c.role === 'admin') {
-      const t = TECHS.find(t => !missionBlocked(s, 'research', t.id));
-      if (t && Math.random() < 0.7) { launchMission(s, 'research', c.uid, t.id, []); continue; }
-      const b = ['barracks', 'fortress', 'market', 'university', 'bank', 'armoury', 'harbour', 'manufactory', 'cathedral'].find(b => provsOf(s, s.player).some(p => !missionBlocked(s, 'build', p.id, b)));
-      const p = b && provsOf(s, s.player).find(p => !missionBlocked(s, 'build', p.id, b));
-      if (p && b) launchMission(s, 'build', c.uid, p.id, [], b); else if (me.gold > 300) { const q = provsOf(s, s.player).find(p => !missionBlocked(s, 'develop', p.id)); if (q) launchMission(s, 'develop', c.uid, q.id, []); } else if (me.stability < 1) launchMission(s, 'progress', c.uid, '', []); else launchMission(s, 'tax', c.uid, '', []);
-    } else if (c.role === 'diplomat') {
-      const others = Object.keys(s.nations).filter(n => n !== s.player && s.nations[n].alive);
-      const en = enemiesOf(s, s.player)[0];
-      if (en && Math.random() < 0.3) { launchMission(s, 'peace', c.uid, en, []); continue; }
-      const t = others[Math.floor(Math.random() * others.length)];
-      if (!missionBlocked(s, 'trade', t)) launchMission(s, 'trade', c.uid, t, []); else if (!missionBlocked(s, 'relations', t)) launchMission(s, 'relations', c.uid, t, []);
-    } else {
+    if (d.kind === 'troop') { if (!cardBlocked(s, d) && me.gold > 30) playCard(s, h.uid, ''); continue; }
+    if (d.kind === 'hire') { if (s.characters.filter(c => c.role === d.role).length < 2) { hireWithCard(s, h.uid); resolveQueue(s); } continue; }
+    if (d.kind === 'equip') {
+      for (const t of s.troops) { const r = mergePreview(s, t.uid, h.uid); if (!('error' in r) && !r.tech && me.gold > r.cost + 20) { doMerge(s, t.uid, h.uid); break; } }
+      continue;
+    }
+    if (d.kind === 'instant') {
+      if (cardBlocked(s, d)) continue;
+      let target = '';
+      if (d.target === 'nation') target = Object.keys(s.nations).find(n => n !== s.player && s.nations[n].alive)!;
+      if (d.target === 'mission') { const m = s.missions.find(m => d.targetOk!(s, String(m.id))); if (!m) continue; target = String(m.id); }
+      if (d.target === 'troop') { const t = s.troops.find(t => d.targetOk!(s, String(t.uid))); if (!t) continue; target = String(t.uid); }
+      if (d.burden && me.gold < 80) continue;
+      playCard(s, h.uid, target); continue;
+    }
+    // mission cards
+    const kind = d.missions![0];
+    const role = cardRole(d.id);
+    if (kind === 'explore' || kind === 'colonize' || kind === 'conquista') {
+      let c = free(s, role);
+      if (!c) { const base = s.characters.find(x => !x.ruler && x.mission == null && ({ explorer: 'diplomat', conqueror: 'general', colonist: 'admin' } as any)[role] === x.role && s.characters.filter(y => y.role === x.role).length > 1); if (base && !promote(s, base.uid)) c = base; }
+      if (!c) continue;
+      if (kind === 'explore') { if (discoverable(s).length && me.gold > 60) launchMission(s, 'explore', c.uid, '', [], undefined, h.uid); continue; }
+      const tgt = Object.keys(REGIONS).find(id => !missionBlocked(s, kind, id));
+      if (!tgt) continue;
+      const troops = kind === 'conquista' ? s.troops.filter(t => t.mission == null).slice(0, 4).map(t => t.uid) : [];
+      launchMission(s, kind, c.uid, tgt, troops, undefined, h.uid);
+      continue;
+    }
+    if (kind === 'conquer') {
+      const g = free(s, role); if (!g) continue;
       const en = enemiesOf(s, s.player);
-      const targets = Object.values(s.provinces).filter(p => en.includes(p.owner) && !missionBlocked(s, 'conquer', p.id));
-      const home = s.troops.filter(t => t.mission == null);
-      if (targets.length && home.length >= 4) { targets.sort((a, b) => a.fort - b.fort); launchMission(s, 'conquer', c.uid, targets[0].id, home.slice(0, Math.min(c.skill + 3, Math.ceil(home.length * 0.6))).map(t => t.uid)); }
+      const targets = Object.values(s.provinces).filter(p => en.includes(p.owner) && !missionBlocked(s, 'conquer', p.id)).sort((a, b) => a.fort - b.fort);
+      const home = s.troops.filter(t => t.mission == null && t.str > 40);
+      if (targets.length && home.length >= 4) launchMission(s, 'conquer', g.uid, targets[0].id, home.slice(0, Math.min(g.skill + 3, Math.ceil(home.length * 0.6))).map(t => t.uid), undefined, h.uid);
+    } else if (['relations', 'trade', 'alliance', 'marriage', 'peace'].includes(kind)) {
+      const dip = free(s, role); if (!dip) continue;
+      const others = Object.keys(s.nations).filter(n => n !== s.player && s.nations[n].alive && !missionBlocked(s, kind, n));
+      if (!others.length) continue;
+      const t = others[Math.floor(R() * others.length)];
+      launchMission(s, kind, dip.uid, t, [], undefined, h.uid, kind === 'trade' ? importable(s, t)[0] : undefined);
+    } else if (kind === 'research') {
+      const r = free(s, role); if (!r) continue;
+      const t = TECHS.find(t => t.track === d.track && !missionBlocked(s, 'research', t.id));
+      if (t) launchMission(s, 'research', r.uid, t.id, [], undefined, h.uid);
+    } else {
+      const a = free(s, role); if (!a) continue;
+      if (kind === 'build') {
+        const opts = Object.values(BUILDINGS).filter(b => b.group === d.group).map(b => b.id);
+        for (const b of opts) { const p = provsOf(s, s.player).find(p => !missionBlocked(s, 'build', p.id, b)); if (p) { launchMission(s, 'build', a.uid, p.id, [], b, h.uid); break; } }
+      } else if (kind === 'develop' || kind === 'found') {
+        const p = provsOf(s, s.player).find(p => !missionBlocked(s, kind, p.id)); if (p && me.gold > 120) launchMission(s, kind, a.uid, p.id, [], undefined, h.uid);
+      } else launchMission(s, kind, a.uid, '', [], undefined, h.uid);
     }
   }
-  if (!enemiesOf(s, s.player).length && Math.random() < 0.05 && s.troops.length >= 8) {
+  if (!enemiesOf(s, s.player).length && R() < 0.05 && s.troops.length >= 8) {
     const nb = new Set<string>();
     for (const p of provsOf(s, s.player)) for (const n of neighbours(p.id)) if (s.provinces[n].owner !== s.player) nb.add(s.provinces[n].owner);
-    const t = [...nb].sort((a, b) => s.nations[a].army.length - s.nations[b].army.length)[0]; if (t && s.nations[t].army.length < s.troops.length) playerDeclareWar(s, t);
+    const t = [...nb].sort((a, b) => s.nations[a].army.length - s.nations[b].army.length)[0];
+    if (t && s.nations[t].army.length < s.troops.length) playerDeclareWar(s, t);
   }
-  void me; void atWar;
 }
 
-const nations = ['castile', 'portugal', 'aragon'];
-for (const n of nations) for (let seed = 1; seed <= 3; seed++) {
+for (const n of ['castile', 'portugal', 'aragon']) for (let seed = 1; seed <= 3; seed++) {
   const s = newGame(n, seed * 7919);
   resolveQueue(s);
   let turns = 0;
   try {
-    while (!s.over && turns < 400) { botTurn(s); resolveQueue(s); endTurn(s); resolveQueue(s); turns++;
-      if (s.year % 60 === 0 && seed===1) { const inc = (require('../src/engine/core') as any).incomeOf(s, n); console.log('  ', s.year, 'gold', Math.round(player(s).gold), 'inc', inc.total.toFixed(1), 'up', inc.upkeep.toFixed(1), 'troops', s.troops.length, 'cap', armyCap(s)); } }
+    while (!s.over && turns < 400) {
+      botTurn(s); resolveQueue(s); endTurn(s); resolveQueue(s); turns++;
+      if (seed === 1 && s.year % 60 === 0) { const inc = incomeOf(s, n); console.log('  ', s.year, 'gold', Math.round(player(s).gold), 'inc', inc.total.toFixed(1), 'up', inc.upkeep.toFixed(1), 'sal', inc.salaries.toFixed(1), 'mp', player(s).manpower.toFixed(1), 'np', s.np.toFixed(1), 'hand', s.hand.length, 'troops', s.troops.length, '/', armyCap(s), 'chars', s.characters.length, 'missions', s.missions.length, 'king', player(s).ruler.name, player(s).ruler.arch); }
+    }
   } catch (e) { console.error('CRASH', n, seed, s.year, e); throw e; }
   const me = player(s);
   const r = ranking(s);
-  console.log(n, seed, 'year', s.year, 'provs', provsOf(s, n).length, 'gold', Math.round(me.gold), 'troops', s.troops.length, s.troops.map(t=>t.type).slice(0,6).join('/'), 'techs', s.techs.length, 'stab', me.stability, 'rank', r.findIndex(x => x.id === n) + 1, 'top', r.slice(0, 3).map(x => x.name + ':' + x.score).join(' '), 'alive', Object.values(s.nations).filter(x=>x.alive).length);
+  console.log(n, seed, 'year', s.year, 'provs', provsOf(s, n).length, 'gold', Math.round(me.gold), 'troops', s.troops.length, 'techs', s.techs.length, 'stab', me.stability, 'rank', r.findIndex(x => x.id === n) + 1, 'top', r.slice(0, 3).map(x => x.name + ':' + x.score).join(' '), 'alive', Object.values(s.nations).filter(x => x.alive).length, 'kings', s.stats.kings.length, 'wars', JSON.stringify(s.stats.wars), 'imports', s.imports.length, 'colonies', Object.values(s.overseas).filter(o => o.holder === n && o.colony).length, 'found', Object.values(s.overseas).filter(o => o.found).length, 'rar', s.characters.map(c => c.rarity[0]).join(''));
+}
+{
+  const s = newGame('castile', 99);
+  resolveQueue(s);
+  for (let i = 0; i < 120; i++) { botTurn(s); resolveQueue(s); endTurn(s); resolveQueue(s); }
+  const c: Record<string, number> = {};
+  for (const h of s.hand) c[h.card] = (c[h.card] ?? 0) + 1;
+  console.log(Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 12));
 }

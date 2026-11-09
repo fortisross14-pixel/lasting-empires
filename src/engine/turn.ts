@@ -1,58 +1,117 @@
 // New game setup, the yearly turn, and player actions that touch several systems.
-import type { GameState, Nation, Ruler, RevealItem } from '../types';
-import { NATIONS, START_REL, RULERS, RULER_TRAITS, RULER_NAMES } from '../data/nations';
+import type { GameState, Nation, Ruler, RevealItem, Heir, Character } from '../types';
+import { CATS } from '../types';
+import { NATIONS, START_REL, RULERS, RULER_NAMES, RULER_ARCHS, archFromTraits } from '../data/nations';
 import { PROVINCES } from '../data/geo';
-import { EQUIPMENT } from '../data/troops';
+import { PROVINCE_GOODS } from '../data/goods';
+import { BUILDINGS } from '../data/techs';
 import {
-  rand, pick, randInt, uid, clamp, player, provsOf, incomeOf, manpowerGain, manpowerMax, log, push, addRel,
-  addTreaty, rulerMod, hasTech, genCharacter, declareWar, nationName, atWar, getRel,
+  rand, pick, randInt, uid, clamp, player, provsOf, incomeOf, log, push, addRel, playerManpower,
+  addTreaty, hasTech, genCharacter, declareWar, nationName, atWar, getRel, hasGood, armyPower,
 } from './core';
-import { STARTING_DECK, shuffle, drawCard, addToHand } from './cards';
+import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS } from './cards';
 import { advanceMissions } from './missions';
 import { runAI } from './ai';
 import { rollEvents, EVENT } from './events';
 import { AMBITIONS, ambitionOptions } from './drafts';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
-function makeRuler(s: GameState, nation: string, year: number): Ruler {
-  const list = RULERS[nation] ?? [];
-  const hist = list.find(r => r.from <= year && r.to > year);
-  if (hist && !(nation === 'castile' && s.flags.juana && hist.from >= 1474 && hist.from < 1516)) return { ...hist };
-  if (nation === 'castile' && s.flags.juana && year >= 1474 && year < 1504) {
-    return { name: 'Juana I and Afonso', traits: ['Weak', 'Fortunate'], from: 1474, to: 1500 };
-  }
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+
+function genRulerName(s: GameState, nation: string, title = true): string {
   const culture = s.nations[nation]?.culture ?? 'castilian';
   const names = RULER_NAMES[culture] ?? RULER_NAMES.castilian;
   const base = pick(s, names);
-  const count = (s.flags['regnal_' + base] = (s.flags['regnal_' + base] ?? randInt(s, 1, 3)) + 1);
-  const roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'][Math.min(10, count - 1)];
-  const traitIds = Object.keys(RULER_TRAITS);
-  const traits = [pick(s, traitIds)];
-  if (rand(s) < 0.4) { const t = pick(s, traitIds); if (!traits.includes(t)) traits.push(t); }
-  return { name: `${base} ${roman}`, traits, from: year, to: year + randInt(s, traits.includes('Sickly') ? 3 : 10, 35) };
+  if (!title) return base;
+  const count = (s.flags['regnal_' + nation + base] = (s.flags['regnal_' + nation + base] ?? randInt(s, 1, 3)) + 1);
+  return `${base} ${ROMAN[Math.min(11, count - 1)]}`;
+}
+
+function histRuler(nation: string, year: number) {
+  return (RULERS[nation] ?? []).find(r => r.from <= year && r.to > year);
+}
+
+/** Starting ruler for any nation (AI rulers are flavour only). */
+function initialRuler(s: GameState, nation: string): Ruler {
+  const h = histRuler(nation, 1453);
+  if (h) return { name: h.name, traits: [...h.traits], arch: archFromTraits(h.traits), skill: h.traits.some(t => ['Weak', 'Idle', 'Unstable'].includes(t)) ? 1 : 3, from: h.from, to: h.to };
+  return { name: genRulerName(s, nation), traits: [], arch: pick(s, Object.keys(RULER_ARCHS)), skill: randInt(s, 2, 4), from: 1453, to: 1453 + randInt(s, 8, 30) };
+}
+
+/** Three heirs with different talents. The historical one, if any, is first. */
+export function makeHeirs(s: GameState): Heir[] {
+  const out: Heir[] = [];
+  const h = (RULERS[s.player] ?? []).find(r => r.from >= s.year - 1 && r.from <= s.year + 1 && r.name !== player(s).ruler.name);
+  const juanaBlock = s.player === 'castile' && s.flags.juana && h && h.from >= 1474 && h.from < 1516;
+  if (h && !juanaBlock) {
+    const arch = archFromTraits(h.traits);
+    out.push({ name: h.name, arch, skill: arch === 'weak' ? 1 : randInt(s, 3, 5), reign: Math.max(3, h.to - h.from), historical: true, traits: [...h.traits] });
+  }
+  const archs = Object.keys(RULER_ARCHS).filter(a => a !== 'weak' && !out.some(o => o.arch === a)).sort(() => rand(s) - 0.5);
+  while (out.length < 3) {
+    const arch = archs.pop() ?? 'balanced';
+    const female = rand(s) < 0.3;
+    const nm = genRulerName(s, s.player, false);
+    out.push({ name: `${female ? 'Infanta' : 'Infante'} ${nm}`, arch, skill: randInt(s, 2, 5), reign: randInt(s, 10, 35), traits: [] });
+  }
+  return out;
+}
+
+function setRuler(s: GameState, heir: Heir) {
+  const me = player(s);
+  if (me.ruler.name) s.stats.kings.push({ name: me.ruler.name, arch: me.ruler.arch, from: me.ruler.from, to: s.year, prestige: Math.round(me.prestige - (me.ruler.prestigeAtStart ?? 0)) });
+  // remove the old monarch from the court
+  const old = s.characters.find(c => c.ruler);
+  if (old) {
+    if (old.mission != null) {
+      for (const t of s.troops) if (t.mission === old.mission) delete t.mission;
+      s.missions = s.missions.filter(m => m.id !== old.mission);
+    }
+    s.characters = s.characters.filter(c => !c.ruler);
+  }
+  const name = heir.name.replace(/^Infant[ae] /, '') + (heir.historical || /\s[IVX]+$/.test(heir.name) ? '' : ' ' + ROMAN[Math.min(11, ((s.flags['regnal_' + s.player + heir.name.replace(/^Infant[ae] /, '')] = (s.flags['regnal_' + s.player + heir.name.replace(/^Infant[ae] /, '')] ?? 0) + 1)) - 1)]);
+  me.ruler = { name, traits: heir.traits, arch: heir.arch, skill: heir.skill, from: s.year, to: s.year + heir.reign, prestigeAtStart: me.prestige };
+  const a = RULER_ARCHS[heir.arch];
+  if (a.stab) me.stability = clamp(me.stability + a.stab, -3, 3);
+  if (a.startCards) grantRandomCards(s, a.startCards);
+  if (a.role) {
+    s.characters.unshift({ uid: uid(s), name: me.ruler.name, role: a.role, skill: heir.skill, traits: [], born: s.year - 25, dies: me.ruler.to, rarity: 'legendary', xp: 0, ruler: true });
+  }
+}
+
+export function chooseHeir(s: GameState, idx: number) {
+  const p = s.queue[0];
+  if (!p || p.kind !== 'succession') return;
+  const heir = p.heirs[idx];
+  s.queue.shift();
+  setRuler(s, heir);
+  log(s, `${player(s).ruler.name} is crowned.`, 'good');
 }
 
 export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)): GameState {
   const s: GameState = {
     version: SAVE_VERSION, seed, rng: seed, nextUid: 1, year: 1453, startYear: 1453, endYear: 1750, player: nationId,
-    nations: {}, provinces: {}, rel: {}, treaties: [], wars: [], truces: [], hand: [], deck: [], discard: [],
+    nations: {}, provinces: {}, rel: {}, treaties: [], wars: [], truces: [], hand: [],
+    cardAccum: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 },
+    bought: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 },
+    np: 3, imports: [], overseas: {}, stats: { battles: {}, kings: [], fallen: [], wars: { won: 0, lost: 0 } },
     troops: [], equipment: [], characters: [], missions: [], techs: [], firedEvents: [], usedLegends: [], queue: [],
-    log: [], flags: {}, ambition: null, ambitionDone: false, draftsThisTurn: 0, over: false,
+    log: [], flags: {}, ambition: null, ambitionDone: false, over: false,
   };
   for (const d of NATIONS) {
     const n: Nation = {
       id: d.id, name: d.name, adj: d.adj, color: d.color, culture: d.culture, capital: d.capital, gold: d.gold,
       manpower: 10, stability: 1, prestige: 0, personality: d.personality, alive: true,
       army: d.id === nationId ? [] : d.army.map(type => ({ uid: s.nextUid++, type, vet: 0, str: 100 })),
-      ruler: { name: '', traits: [], from: 1453, to: 1453 },
+      ruler: { name: '', traits: [], arch: 'balanced', skill: 2, from: 1453, to: 1453 },
     };
     s.nations[d.id] = n;
   }
-  for (const n of Object.values(s.nations)) n.ruler = makeRuler(s, n.id, 1453);
   for (const [id, name, owner, dev, fort, land, lon, lat] of PROVINCES) {
-    s.provinces[id] = { id, name, owner, core: owner, dev, fort, buildings: [], land, lon, lat, unrest: 0 };
+    s.provinces[id] = { id, name, owner, core: owner, dev, fort, buildings: [], land, lon, lat, control: 80, good: PROVINCE_GOODS[id] ?? 'grain', cities: 0 };
   }
+  for (const n of Object.values(s.nations)) if (n.id !== nationId) n.ruler = initialRuler(s, n.id);
   for (const [a, b, v] of START_REL) addRel(s, a, b, v);
   addTreaty(s, 'aragon', 'naples', 'alliance');
   addTreaty(s, 'castile', 'france', 'alliance');
@@ -60,26 +119,30 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   addTreaty(s, 'granada', 'morocco', 'alliance');
   addTreaty(s, 'venice', 'florence', 'trade');
   addTreaty(s, 'genoa', 'castile', 'trade');
-  declareWar(s, 'castile', 'granada'); // the frontier war of the Reconquista simmers on
-  if (nationId !== 'castile') { s.wars = s.wars.filter(w => !(w.a === 'castile' && w.b === 'granada')); }
+  if (nationId === 'castile') declareWar(s, 'castile', 'granada'); // the frontier war of the Reconquista simmers on
 
   const me = player(s);
   const def = NATIONS.find(d => d.id === nationId)!;
-  me.manpower = 14;
+  me.manpower = 5;
   s.troops = def.army.map(type => ({ uid: uid(s), type, vet: 0, str: 100 }));
-  s.equipment = [{ uid: uid(s), type: 'plate' }];
   s.characters = [
     genCharacter(s, 'general', me.culture, 1),
     genCharacter(s, 'diplomat', me.culture, 1),
     genCharacter(s, 'admin', me.culture, 1),
+    genCharacter(s, 'merchant', me.culture, 1),
+    genCharacter(s, 'researcher', me.culture, 1),
   ];
   if (nationId === 'portugal' && !s.usedLegends.includes('henry')) {
     s.usedLegends.push('henry');
-    s.characters.push({ uid: uid(s), name: 'Henrique, the Navigator', role: 'admin', skill: 6, traits: ['explorer', 'scholar'], born: 1394, dies: 1460, rarity: 'legendary', xp: 0, legendId: 'henry' });
+    s.characters.push({ uid: uid(s), name: 'Henrique, the Navigator', role: 'researcher', skill: 6, traits: ['scholar', 'polymath'], born: 1394, dies: 1460, rarity: 'legendary', xp: 0, legendId: 'henry' });
   }
-  s.deck = [...STARTING_DECK];
-  shuffle(s, s.deck);
-  for (let i = 0; i < 4; i++) drawCard(s);
+  const r = initialRuler(s, nationId);
+  me.ruler = { name: '', traits: [], arch: 'balanced', skill: 1, from: 1453, to: 1453 };
+  setRuler(s, { name: r.name, arch: r.arch, skill: r.skill, reign: r.to - 1453, historical: true, traits: r.traits });
+  s.stats.kings = [];
+  me.ruler.from = r.from;
+  for (const c of CATS) { drawCat(s, c); drawCat(s, c); }
+  addCard(s, 'eq_plate');
   push(s, { kind: 'draft', draft: 'ambition', options: ambitionOptions(s) });
   rollEvents(s);
   log(s, `${me.ruler.name} rules ${me.name}. The year is 1453.`);
@@ -89,23 +152,19 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
 function successionCheck(s: GameState) {
   const me = player(s);
   if (s.year < me.ruler.to) return;
-  const old = me.ruler.name;
-  me.ruler = makeRuler(s, s.player, s.year);
-  const items: RevealItem[] = [];
-  let st = 0;
-  for (const t of me.ruler.traits) st += RULER_TRAITS[t]?.stab ?? 0;
-  if (st) me.stability = clamp(me.stability + st, -3, 3);
-  if (me.ruler.traits.includes('Magnanimous')) for (const n of Object.keys(s.nations)) if (n !== s.player) addRel(s, s.player, n, 10);
-  for (const t of me.ruler.traits) items.push({ title: t, text: RULER_TRAITS[t]?.desc ?? '', tone: (RULER_TRAITS[t]?.stab ?? 0) < 0 || ['Weak', 'Idle', 'Sickly', 'Unstable'].includes(t) ? 'bad' : 'good', kind: 'crown' });
-  push(s, { kind: 'reveal', title: `${old} is dead. Long live ${me.ruler.name}!`, subtitle: 'A new monarch takes the throne', items });
-  log(s, `${me.ruler.name} takes the throne.`);
-  for (const n of Object.values(s.nations)) if (n.id !== s.player && s.year >= n.ruler.to) n.ruler = makeRuler(s, n.id, s.year);
+  push(s, { kind: 'succession', heirs: makeHeirs(s), old: me.ruler.name });
+  me.ruler.to = 9999; // until the heir is chosen
+  for (const n of Object.values(s.nations)) {
+    if (n.id === s.player || s.year < n.ruler.to) continue;
+    n.ruler = { name: genRulerName(s, n.id), traits: [], arch: pick(s, Object.keys(RULER_ARCHS)), skill: randInt(s, 1, 5), from: s.year, to: s.year + randInt(s, 10, 30) };
+  }
 }
 
 function characterAging(s: GameState) {
   for (const c of [...s.characters]) {
-    if (s.year < c.dies) continue;
+    if (c.ruler || s.year < c.dies) continue;
     s.characters = s.characters.filter(x => x.uid !== c.uid);
+    if (c.role === 'general' || (c.wins ?? 0) > 0) s.stats.fallen.push({ name: c.name, role: c.role, skill: c.skill, wins: c.wins ?? 0, losses: c.losses ?? 0, until: s.year });
     let extra = '';
     if (c.mission != null) {
       const m = s.missions.find(x => x.id === c.mission);
@@ -125,38 +184,35 @@ function playerEconomy(s: GameState) {
   const me = player(s);
   const inc = incomeOf(s, s.player);
   me.gold += inc.total;
-  me.manpower = Math.min(manpowerMax(s, s.player), me.manpower + manpowerGain(s, s.player));
-  // troops at home recover strength
-  for (const t of s.troops) {
-    if (t.mission != null || t.str >= 100) continue;
-    const add = Math.min(100 - t.str, 20);
-    const mp = add / 25;
-    if (me.manpower >= mp) { t.str += add; me.manpower -= mp; }
-  }
-  // armouries
+  const mp = playerManpower(s);
+  me.manpower = Math.min(mp.max, me.manpower + mp.gain);
+  for (const t of s.troops) if (t.mission == null && t.str < 100) t.str = Math.min(100, t.str + 15);
+  // control
   for (const p of provsOf(s, s.player)) {
-    if (p.buildings.includes('armoury') && (s.year + p.dev) % 4 === 0) {
-      const pool = Object.values(EQUIPMENT).filter(e => !e.tech || hasTech(s, e.tech));
-      const e = pick(s, pool);
-      s.equipment.push({ uid: uid(s), type: e.id });
-      log(s, `The armoury in ${p.name} forges ${e.name}.`, 'good');
+    let d = 2 + me.stability;
+    for (const b of p.buildings) d += BUILDINGS[b]?.control ?? 0;
+    if (p.core !== s.player) d -= 1;
+    p.control = clamp(p.control + d, 0, 100);
+  }
+  // workshops forge equipment cards
+  for (const p of provsOf(s, s.player)) {
+    if (p.buildings.includes('workshop') && (s.year + p.dev) % 4 === 0) {
+      const eqs = Object.values(CARDS).filter(c => c.kind === 'equip' && c.weight(s) > 0);
+      const e = pick(s, eqs);
+      addCard(s, e.id);
+      log(s, `The workshop in ${p.name} forges ${e.name}.`, 'good');
     }
   }
-  // new world grows
   if (s.flags.new_world && s.year % 5 === 0 && (s.flags.new_world_income ?? 0) < 12) s.flags.new_world_income = (s.flags.new_world_income ?? 0) + 1;
   // prestige
-  me.prestige += rulerMod(s, 'prestige') + provsOf(s, s.player).filter(p => p.buildings.includes('cathedral')).length + (hasTech(s, 'absolutism') ? 2 : 0);
-  // debt
+  me.prestige += provsOf(s, s.player).filter(p => p.buildings.includes('temple')).length * 0.5 + (hasTech(s, 'absolutism') ? 2 : 0) + (hasGood(s, 'silk') ? 1 : 0);
   if (me.gold < 0) {
     me.gold += 40;
-    addToHand(s, 'debt');
+    addCard(s, 'debt');
     me.stability = clamp(me.stability - 1, -3, 3);
-    push(s, { kind: 'reveal', title: 'The treasury is empty', items: [{ title: 'Emergency loan', text: 'Genoese bankers lend you 40 ducats. A Crown Debt card is added to your hand and stability falls by 1.', tone: 'bad', kind: 'chain' }] });
+    push(s, { kind: 'reveal', title: 'The treasury is empty', items: [{ title: 'Emergency loan', text: 'Genoese bankers lend you 40 ducats. A Crown Debt card is added and stability falls by 1.', tone: 'bad', kind: 'chain' }] });
   }
-  // burdens
   for (const h of s.hand) if (h.card === 'unrest' && rand(s) < 0.2) { me.stability = clamp(me.stability - 1, -3, 3); log(s, 'Peasant unrest lowers stability.', 'bad'); }
-  for (const p of provsOf(s, s.player)) if (p.unrest > 0) p.unrest--;
-  // stability drifts toward 0 when at war for long
   if (s.wars.some(w => (w.a === s.player || w.b === s.player) && s.year - w.since > 8) && rand(s) < 0.15) {
     me.stability = clamp(me.stability - 1, -3, 3); log(s, 'War weariness lowers stability.', 'bad');
   }
@@ -184,9 +240,26 @@ export function ranking(s: GameState): { id: string; name: string; score: number
     .sort((a, b) => b.score - a.score);
 }
 
-export function endTurn(s: GameState) {
-  if (s.over || s.queue.length) return;
-  s.draftsThisTurn = 0;
+export interface PowerRow { id: string; name: string; color: string; military: number; economy: number; dev: number; prestige: number; provinces: number; won: number; lost: number; }
+export function powerTable(s: GameState): PowerRow[] {
+  return Object.values(s.nations).filter(n => n.alive).map(n => {
+    const b = s.stats.battles[n.id] ?? { won: 0, lost: 0 };
+    return {
+      id: n.id, name: n.name, color: n.color,
+      military: Math.round(armyPower(n.id === s.player ? s.troops : n.army)),
+      economy: Math.round(incomeOf(s, n.id).total + (n.id === s.player ? 0 : 0)),
+      dev: provsOf(s, n.id).reduce((a, p) => a + p.dev, 0),
+      prestige: Math.round(n.prestige), provinces: provsOf(s, n.id).length, won: b.won, lost: b.lost,
+    };
+  });
+}
+
+export interface YearReport { gold: number; np: number; cards: Record<string, number>; }
+
+export function endTurn(s: GameState): YearReport | null {
+  if (s.over || s.queue.length) return null;
+  const g0 = player(s).gold, np0 = s.np;
+  s.bought = { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 };
   advanceMissions(s);
   runAI(s);
   playerEconomy(s);
@@ -194,7 +267,7 @@ export function endTurn(s: GameState) {
   characterAging(s);
   successionCheck(s);
   rollEvents(s);
-  drawCard(s);
+  const cards = yearlyCards(s);
   checkAmbition(s);
   if (!provsOf(s, s.player).length) {
     s.over = true;
@@ -205,6 +278,7 @@ export function endTurn(s: GameState) {
     const place = r.findIndex(x => x.id === s.player) + 1;
     push(s, { kind: 'gameover', victory: place <= 3, reason: `The year is ${s.year}. ${player(s).name} ranks #${place} among the powers.` });
   }
+  return { gold: player(s).gold - g0, np: s.np - np0, cards };
 }
 
 // ---------- player actions ----------
@@ -239,7 +313,7 @@ export function chooseEventOption(s: GameState, idx: number): RevealItem[] | str
 
 export function dismissCharacter(s: GameState, uidC: number) {
   const c = s.characters.find(x => x.uid === uidC);
-  if (!c || c.mission != null) return;
+  if (!c || c.mission != null || c.ruler) return;
   s.characters = s.characters.filter(x => x.uid !== uidC);
 }
 
@@ -247,7 +321,7 @@ export function disbandTroop(s: GameState, uidT: number) {
   const t = s.troops.find(x => x.uid === uidT);
   if (!t || t.mission != null) return;
   s.troops = s.troops.filter(x => x.uid !== uidT);
-  player(s).manpower += 1;
 }
 
-export { getRel };
+export { getRel, nationName, atWar };
+void getRel; void (null as unknown as Character);

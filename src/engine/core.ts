@@ -1,9 +1,11 @@
 // Shared helpers: RNG, lookups, relations, treaties, wars, logging.
-import type { GameState, Nation, TroopCard, Character, Role, LogEntry, Prompt } from '../types';
+import type { GameState, Nation, TroopCard, Character, Role, LogEntry, Prompt, Rarity, Province } from '../types';
 import { TROOPS } from '../data/troops';
 import { BUILDINGS, TECH } from '../data/techs';
-import { RULER_TRAITS } from '../data/nations';
-import { TRAITS, FIRST_NAMES, SURNAMES } from '../data/characters';
+import { RULER_ARCHS } from '../data/nations';
+import { GOODS } from '../data/goods';
+import { REGIONS } from '../data/overseas';
+import { TRAITS, FIRST_NAMES, SURNAMES, RARITY, RARITY_ORDER } from '../data/characters';
 import { getGeo, neighbours } from './map';
 
 // ---------- RNG (mulberry32, state kept in the save) ----------
@@ -50,6 +52,7 @@ export function addTreaty(s: GameState, a: string, b: string, kind: 'trade' | 'a
 }
 export function breakTreaties(s: GameState, a: string, b: string) {
   s.treaties = s.treaties.filter(t => !((t.a === a && t.b === b) || (t.a === b && t.b === a)));
+  s.imports = s.imports.filter(i => !((a === s.player && i.from === b) || (b === s.player && i.from === a)));
 }
 export const findWar = (s: GameState, a: string, b: string) =>
   s.wars.find(w => (w.a === a && w.b === b) || (w.a === b && w.b === a));
@@ -95,7 +98,7 @@ export const armyPower = (arr: { type: string; vet: number; str: number }[]) => 
 /** Prices rise over the centuries. */
 export const inflation = (s: GameState) => 1 + (s.year - 1453) / 160;
 
-export const buildingCost = (s: GameState, b: string) => Math.round(BUILDINGS[b].cost * inflation(s));
+export const buildingCost = (s: GameState, b: string) => Math.round(BUILDINGS[b].cost * inflation(s) * (hasGood(s, 'timber') ? 0.85 : 1));
 
 export function upkeepOf(s: GameState, arr: TroopCard[]): number {
   const mult = (hasTech(s, 'standing_army') ? 0.8 : 1) * (0.7 + 0.3 * inflation(s));
@@ -107,18 +110,32 @@ export function armyCap(s: GameState): number {
   const barracks = ps.reduce((a, p) => a + p.buildings.filter(b => b === 'barracks').length, 0);
   return 5 + Math.floor(ps.length / 2) + barracks + (hasTech(s, 'standing_army') ? 3 : 0);
 }
-export function draftsPerTurn(s: GameState): number {
-  const barracks = provsOf(s, s.player).reduce((a, p) => a + p.buildings.filter(b => b === 'barracks').length, 0);
-  return 2 + barracks;
-}
 export function courtCap(s: GameState): number {
-  return 4 + (hasTech(s, 'embassies') ? 1 : 0) + (hasTech(s, 'councils') ? 1 : 0);
+  return 6 + (hasTech(s, 'embassies') ? 1 : 0) + (hasTech(s, 'councils') ? 1 : 0);
 }
+export const courtCount = (s: GameState) => s.characters.filter(c => !c.ruler).length;
+
+// ---------- goods ----------
+/** Goods the player has: produced in owned provinces, or imported. */
+export function ownGoods(s: GameState, n = s.player): Set<string> {
+  const g = new Set<string>();
+  for (const p of provsOf(s, n)) if (p.good) g.add(p.good);
+  return g;
+}
+export function hasGood(s: GameState, good: string): boolean {
+  return ownGoods(s).has(good) || s.imports.some(i => i.good === good) || colonyGoods(s).has(good);
+}
+export function colonyGoods(s: GameState): Set<string> {
+  const g = new Set<string>();
+  for (const [id, o] of Object.entries(s.overseas ?? {})) if (o.holder === s.player && o.colony > 0 && REGIONS[id]) g.add(REGIONS[id].good);
+  return g;
+}
+export const importCost = (s: GameState) => s.imports.reduce((a, i) => a + (GOODS[i.good]?.price ?? 0), 0) * inflation(s);
 
 // ---------- ruler modifiers ----------
-export function rulerMod(s: GameState, field: 'battle' | 'diplo' | 'research' | 'gold' | 'prestige'): number {
-  const r = player(s).ruler;
-  return r.traits.reduce((a, t) => a + (RULER_TRAITS[t]?.[field] ?? 0), 0);
+export function rulerMod(s: GameState, field: 'battle' | 'diplo' | 'research' | 'goldPct' | 'np'): number {
+  const a = RULER_ARCHS[player(s).ruler.arch];
+  return (a?.[field] as number | undefined) ?? 0;
 }
 
 // ---------- economy ----------
@@ -127,9 +144,13 @@ export function provinceIncome(s: GameState, id: string): number {
   const g = getGeo();
   let v = p.dev * 0.6 + (g.coastal[id] ? 0.4 : 0);
   for (const b of p.buildings) v += BUILDINGS[b]?.gold ?? 0;
-  if (p.unrest > 0) v *= 0.5;
-  return v;
+  if (p.buildings.includes('pasture') && (p.good === 'wool' || p.good === 'horses')) v += 1;
+  if (p.buildings.includes('mine') && (p.good === 'iron' || p.good === 'silver')) v += 3;
+  v += TIERS[tierOf(p)].gold;
+  return v * controlMult(p.control);
 }
+
+export const controlMult = (c: number) => 0.35 + 0.65 * Math.max(0, Math.min(100, c)) / 100;
 
 export function tradeValue(s: GameState, a: string, b: string): number {
   const partnerDev = provsOf(s, b).reduce((x, p) => x + p.dev, 0);
@@ -141,27 +162,61 @@ export function tradeValue(s: GameState, a: string, b: string): number {
   return Math.min(v, 6);
 }
 
-export interface IncomeBreakdown { provinces: number; trade: number; other: number; upkeep: number; total: number; stabMult: number; }
+export interface IncomeBreakdown {
+  provinces: number; trade: number; goods: number; other: number;
+  upkeep: number; salaries: number; imports: number; total: number; stabMult: number;
+}
+
+export function salaries(s: GameState, n: string) {
+  return provsOf(s, n).reduce((a, p) => a + p.buildings.reduce((x, b) => x + (BUILDINGS[b]?.salary ?? 0), 0), 0) * inflation(s);
+}
 
 export function incomeOf(s: GameState, n: string): IncomeBreakdown {
   const nat = s.nations[n];
   let provinces = provsOf(s, n).reduce((a, p) => a + provinceIncome(s, p.id), 0);
   const trade = s.treaties.filter(t => t.kind === 'trade' && (t.a === n || t.b === n))
     .reduce((a, t) => a + tradeValue(s, n, t.a === n ? t.b : t.a), 0);
-  let other = 0;
+  let other = 0, goods = 0, sal = 0, imp = 0;
   if (n === s.player) {
-    other += rulerMod(s, 'gold');
     other += s.flags.new_world_income ?? 0;
     other += s.flags.spice_income ?? 0;
     if (hasTech(s, 'banking')) provinces *= 1.1;
+    provinces *= 1 + rulerMod(s, 'goldPct');
     other -= s.hand.filter(h => h.card === 'debt').length * 2;
+    if (hasGood(s, 'oil')) goods += 2;
+    if (hasGood(s, 'silver')) goods += 3;
+    if (hasGood(s, 'sugar')) goods += 2;
+    if (hasGood(s, 'gold')) goods += 4;
+    if (hasGood(s, 'spices')) goods += 2;
+    if (hasGood(s, 'furs')) goods += 2;
+    other += colonyIncome(s);
+    if (hasGood(s, 'wool')) goods += provsOf(s, n).filter(p => p.buildings.includes('market')).length;
+    sal = salaries(s, n);
+    imp = importCost(s);
   } else {
     other += s.flags['ai_bonus_' + n] ?? 0;
   }
   const stabMult = 1 + 0.06 * nat.stability;
   const upkeep = n === s.player ? upkeepOf(s, s.troops) : nat.army.reduce((a, t) => a + TROOPS[t.type].upkeep, 0) * 0.8;
-  const total = (provinces + trade + other) * stabMult - upkeep;
-  return { provinces, trade, other, upkeep, total, stabMult };
+  const total = (provinces + trade + goods + other) * stabMult - upkeep - sal - imp;
+  return { provinces, trade, goods, other, upkeep, salaries: sal, imports: imp, total, stabMult };
+}
+
+export function colonyIncome(s: GameState): number {
+  let v = 0;
+  for (const [id, o] of Object.entries(s.overseas ?? {})) if (o.holder === s.player && REGIONS[id]) v += REGIONS[id].value * o.colony + (s.flags['planter_' + id] ?? 0) * o.colony;
+  return v;
+}
+
+/** Player manpower: the scarce pool for hiring troops and people (1 each). */
+export function playerManpower(s: GameState): { gain: number; max: number } {
+  const ps = provsOf(s, s.player);
+  const dev = ps.reduce((a, p) => a + p.dev, 0);
+  let gain = 0.5 + dev * 0.04 + ps.reduce((a, p) => a + p.buildings.filter(b => b === 'barracks').length * 0.5, 0);
+  gain += ps.reduce((a, p) => a + (p.buildings.includes('farm') ? 0.5 : 0), 0);
+  if (hasGood(s, 'grain')) gain += 0.5;
+  if (hasGood(s, 'fish')) gain += 0.3;
+  return { gain, max: Math.round(5 + dev * 0.3) };
 }
 
 export function manpowerGain(s: GameState, n: string): number {
@@ -171,35 +226,76 @@ export function manpowerGain(s: GameState, n: string): number {
 export const manpowerMax = (s: GameState, n: string) => provsOf(s, n).reduce((a, p) => a + p.dev * 3, 0);
 
 // ---------- characters ----------
-export function genCharacter(s: GameState, role: Role, culture: string, skillBias = 0): Character {
+export function genCharacter(s: GameState, role: Role, culture: string, minRarity = 0): Character {
   const first = pick(s, FIRST_NAMES[culture] ?? FIRST_NAMES.castilian);
   const last = pick(s, SURNAMES[culture] ?? SURNAMES.castilian);
-  const skill = clamp(weighted(s, [[1, 2], [2, 5], [3, 5], [4, 2], [5, 0.6]]) + skillBias, 1, 6);
-  const roleTraits = Object.values(TRAITS).filter(t => t.role === role);
-  const traits: string[] = [];
-  if (chance(s, 0.75)) traits.push(pick(s, roleTraits).id);
-  if (chance(s, 0.2)) { const t = pick(s, roleTraits).id; if (!traits.includes(t)) traits.push(t); }
+  const tiers = RARITY_ORDER.slice(minRarity, 4).map(r => [r, RARITY[r].weight] as [Rarity, number]);
+  const rarity = weighted(s, tiers);
+  const traits = rollTraits(s, role, RARITY[rarity].traits);
   const age = randInt(s, 22, 40);
-  return {
-    uid: uid(s), name: `${first} ${last}`, role, skill, traits,
-    born: s.year - age, dies: s.year + randInt(s, 12, 40), rarity: skill >= 4 || traits.length > 1 ? 'rare' : 'common', xp: 0,
-  };
+  return { uid: uid(s), name: `${first} ${last}`, role, skill: RARITY[rarity].skill, traits, born: s.year - age, dies: s.year + randInt(s, 12, 40), rarity, xp: 0 };
 }
 
-export const roleName: Record<Role, string> = { general: 'General', diplomat: 'Diplomat', admin: 'Administrator' };
+export function rollTraits(s: GameState, role: Role, n: number, keep: string[] = []): string[] {
+  const pool = Object.values(TRAITS).filter(t => t.role === role && !keep.includes(t.id)).map(t => t.id);
+  const out = [...keep];
+  while (out.length < n + keep.length && pool.length) out.push(pool.splice(Math.floor(rand(s) * pool.length), 1)[0]);
+  return out;
+}
+
+/** How strongly a character's traits act (Common ×1 … Legendary ×2). */
+export const traitMult = (c: { rarity?: Rarity }) => RARITY[c.rarity ?? 'common']?.mult ?? 1;
+
+/** Experience raises rarity: three successes move a character up one tier (Epic at most, unless legendary). */
+export function promoteRarity(s: GameState, c: Character): boolean {
+  const i = RARITY_ORDER.indexOf(c.rarity);
+  if (c.ruler || i < 0 || i >= 3) return false;
+  c.rarity = RARITY_ORDER[i + 1];
+  c.skill = RARITY[c.rarity].skill;
+  if (c.traits.length < RARITY[c.rarity].traits) c.traits = rollTraits(s, c.role, 1, c.traits);
+  return true;
+}
+
+export const roleName: Record<Role, string> = {
+  general: 'General', diplomat: 'Diplomat', admin: 'Administrator', merchant: 'Merchant', researcher: 'Researcher',
+  explorer: 'Explorer', conqueror: 'Conqueror', colonist: 'Colonist',
+};
+
+/** Building slots in the town (grows with development and new cities) and in the countryside. */
+export const townSlots = (p: Province) => 1 + Math.ceil(p.dev / 2) + 2 * (p.cities ?? 0);
+export const ruralSlots = (p: Province) => 2 + Math.floor(p.dev / 3);
+export const buildingSlots = (s: GameState, id: string, site: 'town' | 'rural' = 'town') => (site === 'town' ? townSlots(s.provinces[id]) : ruralSlots(s.provinces[id]));
+export const builtAt = (p: Province, site: 'town' | 'rural') => p.buildings.filter(b => b !== 'fortress' && BUILDINGS[b]?.site === site).length;
+
+export type Tier = 'village' | 'town' | 'city' | 'metropolis';
+export const TIERS: Record<Tier, { name: string; gold: number; np: number; rate: number }> = {
+  village: { name: 'Village', gold: 0, np: 0, rate: 0 },
+  town: { name: 'Town', gold: 0.5, np: 0, rate: 0 },
+  city: { name: 'City', gold: 1.5, np: 0.2, rate: 0.03 },
+  metropolis: { name: 'Metropolis', gold: 3, np: 0.5, rate: 0.08 },
+};
+/** The settlement grows with development, town buildings and founded cities. */
+export function tierOf(p: Province, capital = false): Tier {
+  const score = p.dev + builtAt(p, 'town') + 2 * (p.cities ?? 0) + (capital ? 2 : 0);
+  return score >= 12 ? 'metropolis' : score >= 8 ? 'city' : score >= 4 ? 'town' : 'village';
+}
+export function population(s: GameState, p: Province): number {
+  const k = p.dev * 8 + builtAt(p, 'town') * 3 + builtAt(p, 'rural') * 2 + (p.cities ?? 0) * 10;
+  return Math.round(k * (1 + (s.year - 1453) / 300)) * 1000;
+}
 
 export function buildingAllowed(s: GameState, provId: string, b: string): string | null {
   const p = s.provinces[provId];
   const def = BUILDINGS[b];
   if (def.tech && !hasTech(s, def.tech)) return `Needs ${TECH[def.tech].name}`;
   if (def.coastal && !getGeo().coastal[provId]) return 'Coastal provinces only';
-  const slots = 1 + Math.ceil(p.dev / 2);
+  const slots = buildingSlots(s, provId, def.site);
   if (b === 'fortress') {
     const max = hasTech(s, 'star_forts') ? 3 : 2;
     if (p.fort >= max) return `Fort already at level ${max}`;
   } else {
     if (p.buildings.includes(b)) return 'Already built';
-    if (p.buildings.filter(x => x !== 'fortress').length >= slots) return `No free building slots (${slots})`;
+    if (builtAt(p, def.site) >= slots) return `No free ${def.site === 'town' ? 'town' : 'rural'} slots (${slots})`;
   }
   if (s.missions.some(m => m.kind === 'build' && m.target === provId)) return 'Construction already under way';
   return null;

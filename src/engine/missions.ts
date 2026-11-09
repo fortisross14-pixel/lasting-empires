@@ -1,15 +1,19 @@
 // Missions: characters (and troops) sent to do things over several years.
-import type { GameState, Mission, MissionKind, RevealItem, Character } from '../types';
+import type { GameState, Mission, MissionKind, RevealItem, Character, Role } from '../types';
+import { CARDS, drawCat, CAT_INFO } from './cards';
+import { REGIONS } from '../data/overseas';
+import { colonizeBlocked, conquistaBlocked, discoverable, resolveExplore, resolveColonize, resolveConquista, colonyCost } from './overseas';
+import { GOODS } from '../data/goods';
 import { TECH } from '../data/techs';
 import { BUILDINGS } from '../data/techs';
 import {
   player, provsOf, hasTech, getRel, addRel, addTreaty, hasTreaty, atWar, findWar, makePeace, rulerMod, clamp,
-  rand, pick, uid, log, nationName, armyPower, buildingAllowed, push, buildingCost, inflation,
+  rand, pick, uid, log, nationName, armyPower, buildingAllowed, push, buildingCost, inflation, ownGoods, traitMult, promoteRarity,
 } from './core';
 import { getGeo } from './map';
 import { createBattle, makeSide, toBattleUnits, genericGeneral, freeMission, transferProvince } from './battle';
 
-export const MISSION_INFO: Record<MissionKind, { name: string; role: 'general' | 'diplomat' | 'admin'; icon: string; verb: string }> = {
+export const MISSION_INFO: Record<MissionKind, { name: string; role: Role; icon: string; verb: string }> = {
   conquer: { name: 'Conquest', role: 'general', icon: 'sword', verb: 'Conquer' },
   raid: { name: 'Raid', role: 'general', icon: 'torch', verb: 'Raid' },
   relations: { name: 'Embassy', role: 'diplomat', icon: 'scroll', verb: 'Improve relations with' },
@@ -17,14 +21,35 @@ export const MISSION_INFO: Record<MissionKind, { name: string; role: 'general' |
   alliance: { name: 'Alliance', role: 'diplomat', icon: 'hands', verb: 'Seek an alliance with' },
   marriage: { name: 'Royal Marriage', role: 'diplomat', icon: 'ring', verb: 'Arrange a marriage with' },
   peace: { name: 'Peace Talks', role: 'diplomat', icon: 'dove', verb: 'Negotiate peace with' },
-  research: { name: 'Study', role: 'admin', icon: 'book', verb: 'Research' },
+  research: { name: 'Study', role: 'researcher', icon: 'book', verb: 'Research' },
   build: { name: 'Construction', role: 'admin', icon: 'hammer', verb: 'Build' },
   develop: { name: 'Development', role: 'admin', icon: 'wheat', verb: 'Develop' },
+  found: { name: 'New City', role: 'admin', icon: 'tower', verb: 'Found a city in' },
   tax: { name: 'Tax Collection', role: 'admin', icon: 'coin', verb: 'Collect taxes' },
   progress: { name: 'Royal Progress', role: 'admin', icon: 'crown', verb: 'Tour the realm' },
+  explore: { name: 'Voyage of Discovery', role: 'explorer', icon: 'anchor', verb: 'Sail into the unknown' },
+  colonize: { name: 'Colony', role: 'colonist', icon: 'tower', verb: 'Settle' },
+  conquista: { name: 'Conquista', role: 'conqueror', icon: 'sword', verb: 'Conquer' },
 };
 
+/** Who can carry out a mission started by this card. */
+export function cardRole(cardId: string): Role {
+  const d = CARDS[cardId];
+  return d.agent ?? CAT_INFO[d.cat].role;
+}
+
 export const developCost = (s: GameState, prov: string) => Math.round((25 + s.provinces[prov].dev * 15) * inflation(s));
+
+export const foundCost = (s: GameState) => Math.round(70 * inflation(s));
+
+/** Goods a trade partner can sell you that you do not have. */
+export function importable(s: GameState, partner: string): string[] {
+  const mine = ownGoods(s);
+  const theirs = ownGoods(s, partner);
+  return [...theirs].filter(g => !mine.has(g) && !s.imports.some(i => i.good === g));
+}
+
+export const voyageCost = (s: GameState) => Math.round(30 * inflation(s));
 
 export const DIPLO: MissionKind[] = ['relations', 'trade', 'alliance', 'marriage', 'peace'];
 
@@ -33,12 +58,18 @@ export function techCost(s: GameState, techId: string): number {
   return Math.round(t.cost * (1 + Math.max(0, t.year - s.year) / 25));
 }
 
-export function researchRate(s: GameState, ch: Character): number {
+export function researchRate(s: GameState, ch: Character, track?: string): number {
   const unis = Math.min(2, provsOf(s, s.player).filter(p => p.buildings.includes('university')).length);
   let r = 1 + ch.skill + unis + rulerMod(s, 'research') + (hasTech(s, 'councils') ? 1 : 0) + (s.flags.reform_research ?? 0) + (s.flags.printing_bonus ?? 0);
-  if (ch.traits.includes('scholar')) r += 1;
-  if (ch.traits.includes('polymath')) r += 2;
-  return Math.max(1, r);
+  const m = traitMult(ch);
+  if (ch.traits.includes('scholar')) r += 1 * m;
+  if (ch.traits.includes('polymath')) r += 2 * m;
+  if (track) {
+    if (track === 'military' && ch.traits.includes('inventor')) r += 2 * m;
+    if (track === 'economy' && ch.traits.includes('economist')) r += 2 * m;
+    if (track === 'state' && ch.traits.includes('jurist')) r += 2 * m;
+  }
+  return Math.max(1, Math.round(r * 10) / 10);
 }
 
 /** Which provinces can launch an attack on this province, and how long it takes. */
@@ -55,9 +86,17 @@ export function attackRoute(s: GameState, target: string): { turns: number; nava
 export function missionTurns(s: GameState, kind: MissionKind, ch: Character, target: string, building?: string): number {
   switch (kind) {
     case 'conquer': case 'raid': return attackRoute(s, target)?.turns ?? 2;
-    case 'research': return Math.max(1, Math.ceil(techCost(s, target) / researchRate(s, ch)));
-    case 'build': return Math.max(1, BUILDINGS[building!].turns - (ch.traits.includes('architect') ? 1 : 0));
+    case 'research': return Math.max(1, Math.ceil(techCost(s, target) / researchRate(s, ch, TECH[target]?.track)));
+    case 'build': {
+      const b = BUILDINGS[building!];
+      const fast = (b.group === 'internal' && ch.traits.includes('architect')) || (b.group === 'economy' && ch.traits.includes('guildmaster'));
+      return Math.max(1, b.turns - (fast ? (traitMult(ch) >= 1.75 ? 2 : 1) : 0));
+    }
+    case 'explore': return Math.max(2, 3 - (ch.traits.includes('cartographer') ? 1 : 0));
+    case 'colonize': return 4;
+    case 'conquista': return 3;
     case 'develop': return 3;
+    case 'found': return 4;
     case 'tax': return 1;
     case 'progress': return 2;
     default: {
@@ -72,8 +111,8 @@ export function diploChance(s: GameState, kind: MissionKind, ch: Character, targ
   const nat = s.nations[target];
   let p = ({ relations: 0.75, trade: 0.55, marriage: 0.45, alliance: 0.4, peace: 0.35 } as Record<string, number>)[kind] ?? 0.5;
   p += ch.skill * 0.06 + rel / 250 + bonus + rulerMod(s, 'diplo');
-  if (ch.traits.includes('silver')) p += 0.1;
-  if (kind === 'marriage' && ch.traits.includes('matchmaker')) p += 0.2;
+  if (ch.traits.includes('silver')) p += 0.1 * traitMult(ch);
+  if (kind === 'marriage' && ch.traits.includes('matchmaker')) p += 0.2 * traitMult(ch);
   if (hasTech(s, 'chancery')) p += 0.1;
   if ((nat.spiedUntil ?? 0) > s.year) p += 0.1;
   if (kind === 'trade' && nat.personality === 'merchant') p += 0.1;
@@ -144,6 +183,21 @@ export function missionBlocked(s: GameState, kind: MissionKind, target: string, 
     if (player(s).gold < developCost(s, target)) return `Needs ${developCost(s, target)} ducats`;
     return null;
   }
+  if (kind === 'found') {
+    const p = s.provinces[target];
+    if (p?.owner !== me) return 'Choose one of your provinces';
+    if ((p.cities ?? 0) >= 2) return 'Two cities already founded here';
+    if (s.missions.some(m => m.kind === 'found' && m.target === target)) return 'Already under way';
+    if (player(s).gold < foundCost(s)) return `Needs ${foundCost(s)} ducats`;
+    return null;
+  }
+  if (kind === 'explore') {
+    if (!discoverable(s).length) return 'There is nothing left you can reach (Ocean Navigation opens farther seas)';
+    if (player(s).gold < voyageCost(s)) return `Needs ${voyageCost(s)} ducats`;
+    return null;
+  }
+  if (kind === 'colonize') return colonizeBlocked(s, target);
+  if (kind === 'conquista') return conquistaBlocked(s, target);
   if (kind === 'tax' || kind === 'progress') {
     if (s.missions.some(m => m.kind === kind)) return 'Already under way';
     return null;
@@ -151,20 +205,34 @@ export function missionBlocked(s: GameState, kind: MissionKind, target: string, 
   return null;
 }
 
-export function launchMission(s: GameState, kind: MissionKind, charUid: number, target: string, troopUids: number[], building?: string): string | null {
+export function launchMission(s: GameState, kind: MissionKind, charUid: number, target: string, troopUids: number[], building?: string, cardUid?: number, good?: string): string | null {
+  const card = s.hand.find(h => h.uid === cardUid);
+  const cdef = card && CARDS[card.card];
+  if (!cdef || !cdef.missions?.includes(kind)) return 'You need a card for this mission';
+  if (kind === 'research' && cdef.track && TECH[target]?.track !== cdef.track) return 'This card studies another field';
+  if (kind === 'build' && cdef.group && BUILDINGS[building!]?.group !== cdef.group) return 'This card builds another kind of building';
   const ch = s.characters.find(c => c.uid === charUid);
   if (!ch || ch.mission != null) return 'Choose a free character';
-  if (ch.role !== MISSION_INFO[kind].role) return `Needs a ${MISSION_INFO[kind].role}`;
-  const why = missionBlocked(s, kind, target, building);
+  const role = cardRole(cdef.id);
+  if (ch.role !== role) return `Needs a ${role}`;
+  const why = kind === 'colonize' ? colonizeBlocked(s, target, ch) : missionBlocked(s, kind, target, building);
   if (why) return why;
-  if ((kind === 'conquer' || kind === 'raid') && !troopUids.length) return 'Send at least one troop';
+  if ((kind === 'conquer' || kind === 'raid' || kind === 'conquista') && !troopUids.length) return 'Send at least one troop';
   const m: Mission = {
     id: uid(s), kind, char: charUid, troops: troopUids, target, building,
-    turnsLeft: missionTurns(s, kind, ch, target, building), total: 0, progress: 0, bonus: 0,
+    turnsLeft: missionTurns(s, kind, ch, target, building), total: 0, progress: 0, bonus: 0, good,
   };
+  s.hand = s.hand.filter(h => h.uid !== cardUid);
   m.total = m.turnsLeft;
-  if (kind === 'build') { m.progress = buildingCost(s, building!); player(s).gold -= m.progress; }
+  if (kind === 'build') {
+    m.progress = buildingCost(s, building!);
+    if (BUILDINGS[building!].group === 'economy' && ch.traits.includes('banker')) m.progress = Math.round(m.progress * (1 - Math.min(0.5, 0.2 * traitMult(ch))));
+    player(s).gold -= m.progress;
+  }
+  if (kind === 'explore') { m.progress = voyageCost(s); player(s).gold -= m.progress; }
+  if (kind === 'colonize') { m.progress = colonyCost(s); player(s).gold -= m.progress; player(s).manpower -= 1; }
   if (kind === 'develop') { m.progress = developCost(s, target); player(s).gold -= m.progress; }
+  if (kind === 'found') { m.progress = foundCost(s); player(s).gold -= m.progress; }
   ch.mission = m.id;
   for (const t of s.troops) if (troopUids.includes(t.uid)) t.mission = m.id;
   s.missions.push(m);
@@ -174,7 +242,7 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
 export function cancelMission(s: GameState, id: number) {
   const m = s.missions.find(x => x.id === id);
   if (!m) return;
-  if ((m.kind === 'build' || m.kind === 'develop') && m.progress) player(s).gold += Math.round(m.progress / 2);
+  if ((m.kind === 'build' || m.kind === 'develop' || m.kind === 'found' || m.kind === 'colonize') && m.progress) player(s).gold += Math.round(m.progress / 2);
   freeMission(s, id);
   s.missions = s.missions.filter(x => x.id !== id);
 }
@@ -191,7 +259,7 @@ const TWISTS: { title: string; text: string; d: number; rel: number }[] = [
 function gainXp(s: GameState, ch: Character | undefined, items: RevealItem[]) {
   if (!ch) return;
   ch.xp++;
-  if (ch.xp >= 3 && ch.skill < 6) { ch.skill++; ch.xp = 0; items.push({ title: `${ch.name} improves`, text: `Skill rises to ${ch.skill}.`, tone: 'good', kind: 'star' }); }
+  if (ch.xp >= 3) { ch.xp = 0; if (promoteRarity(s, ch)) items.push({ title: `${ch.name} rises`, text: `Now ${ch.rarity[0].toUpperCase() + ch.rarity.slice(1)}: stronger traits.`, tone: 'good', kind: 'star' }); }
 }
 
 /** Advance all missions by one year. Battles and results are pushed onto the prompt queue. */
@@ -200,10 +268,10 @@ export function advanceMissions(s: GameState) {
     const ch = s.characters.find(c => c.uid === m.char);
     if (!ch) { cancelMission(s, m.id); continue; }
     if (m.kind === 'research') {
-      m.progress += researchRate(s, ch);
+      m.progress += researchRate(s, ch, TECH[m.target].track);
       if (rand(s) < 0.08) { m.progress += 2; log(s, `Breakthrough in the study of ${TECH[m.target].name}!`, 'good'); }
       const cost = techCost(s, m.target);
-      m.turnsLeft = Math.max(0, Math.ceil((cost - m.progress) / researchRate(s, ch)));
+      m.turnsLeft = Math.max(0, Math.ceil((cost - m.progress) / researchRate(s, ch, TECH[m.target].track)));
       if (m.progress >= cost) completeResearch(s, m, ch);
       continue;
     }
@@ -218,7 +286,7 @@ function finish(s: GameState, m: Mission) { freeMission(s, m.id); s.missions = s
 function completeResearch(s: GameState, m: Mission, ch: Character) {
   const t = TECH[m.target];
   s.techs.push(t.id);
-  player(s).prestige += 2;
+  player(s).prestige += 1;
   if (t.id === 'bureaucracy' || t.id === 'absolutism') player(s).stability = clamp(player(s).stability + 1, -3, 3);
   if (t.id === 'star_forts') { const cap = s.provinces[player(s).capital]; if (cap && cap.owner === s.player) cap.fort = Math.min(3, cap.fort + 1); }
   const items: RevealItem[] = [{ title: t.name, text: t.desc, tone: 'good', kind: 'book' }];
@@ -239,7 +307,7 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
     const enemy = s.nations[prov.owner];
     const troops = s.troops.filter(t => m.troops.includes(t.uid));
     if (!troops.length) { finish(s, m); return; }
-    const att = makeSide(s.player, toBattleUnits(troops), { name: ch.name, skill: ch.skill, traits: ch.traits, uid: ch.uid }, 0, true);
+    const att = makeSide(s.player, toBattleUnits(troops), { name: ch.name, skill: ch.skill, traits: ch.traits, uid: ch.uid, mult: traitMult(ch) }, 0, true);
     const defUnits = [...enemy.army].sort((a, b) => armyPower([b]) - armyPower([a])).slice(0, m.kind === 'raid' ? 3 : 6);
     const fort = m.kind === 'raid' ? Math.max(0, prov.fort - 1) : prov.fort;
     if (!defUnits.length && fort === 0) {
@@ -287,11 +355,16 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
         case 'trade': {
           addTreaty(s, s.player, target, 'trade'); addRel(s, s.player, target, 10); me.prestige += 2;
           if (ch.traits.includes('merchant')) s.flags['trade_bonus_' + target] = 2;
-          items.push({ title: 'Treaty signed', text: `A trade route opens with ${tname}. Both crowns earn ducats every year.`, tone: 'good', kind: 'coin' }); break;
+          items.push({ title: 'Treaty signed', text: `A trade route opens with ${tname}. Both crowns earn ducats every year.`, tone: 'good', kind: 'coin' });
+          if (m.good && GOODS[m.good] && !s.imports.some(i => i.good === m.good)) {
+            s.imports.push({ good: m.good, from: target });
+            items.push({ title: `${GOODS[m.good].name} imported`, text: `${GOODS[m.good].desc}. Costs ${GOODS[m.good].price} ducats a year.`, tone: 'good', kind: GOODS[m.good].icon });
+          }
+          break;
         }
         case 'alliance': addTreaty(s, s.player, target, 'alliance'); addRel(s, s.player, target, 15); me.prestige += 3; items.push({ title: 'Alliance sealed', text: `${tname} will stand with you in war.`, tone: 'good', kind: 'hands' }); break;
         case 'marriage': addTreaty(s, s.player, target, 'marriage'); addRel(s, s.player, target, 20); me.prestige += 4; items.push({ title: 'A royal wedding', text: `The houses of ${me.name} and ${tname} are joined. Relations improve every year.`, tone: 'good', kind: 'ring' }); break;
-        case 'peace': makePeace(s, s.player, target); items.push({ title: 'Peace', text: `The war with ${tname} is over. A ten-year truce begins.`, tone: 'good', kind: 'dove' }); break;
+        case 'peace': items.push(...endWar(s, target)); makePeace(s, s.player, target); items.push({ title: 'Peace', text: `The war with ${tname} is over. A ten-year truce begins.`, tone: 'good', kind: 'dove' }); break;
       }
       gainXp(s, ch, items);
       log(s, `${MISSION_INFO[m.kind].name} with ${tname} succeeded.`, 'good');
@@ -318,6 +391,14 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
     finish(s, m); return;
   }
 
+  if (m.kind === 'explore' || m.kind === 'colonize' || m.kind === 'conquista') {
+    const items: RevealItem[] = [];
+    const ok = m.kind === 'explore' ? resolveExplore(s, ch, items) : m.kind === 'colonize' ? resolveColonize(s, m.target, ch, items) : resolveConquista(s, m.target, ch, m.troops, items);
+    if (ok && s.characters.includes(ch)) gainXp(s, ch, items);
+    push(s, { kind: 'reveal', title: MISSION_INFO[m.kind].name, subtitle: m.kind === 'explore' ? `${ch.name} returns` : REGIONS[m.target]?.name, items });
+    finish(s, m); return;
+  }
+
   if (m.kind === 'develop') {
     const prov = s.provinces[m.target];
     if (prov.owner !== s.player) { finish(s, m); return; }
@@ -328,10 +409,21 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
     finish(s, m); return;
   }
 
+  if (m.kind === 'found') {
+    const prov = s.provinces[m.target];
+    if (prov.owner !== s.player) { finish(s, m); return; }
+    prov.cities = (prov.cities ?? 0) + 1; prov.dev++; prov.control = Math.min(100, prov.control + 5); me.prestige += 3;
+    const items: RevealItem[] = [{ title: `A new city in ${prov.name}`, text: `Development +1, two more building slots, prestige +3.`, tone: 'good', kind: 'tower' }];
+    gainXp(s, ch, items);
+    push(s, { kind: 'reveal', title: 'City founded', items });
+    log(s, `A new city is founded in ${prov.name}.`, 'good');
+    finish(s, m); return;
+  }
+
   if (m.kind === 'tax') {
     const dev = provsOf(s, s.player).reduce((a, p) => a + p.dev, 0);
     let g = 4 * ch.skill + dev * 0.5;
-    if (ch.traits.includes('tax')) g *= 1.5;
+    if (ch.traits.includes('tax')) g *= 1 + 0.5 * traitMult(ch);
     if (hasTech(s, 'bureaucracy')) g *= 1.5;
     g = Math.round(g);
     me.gold += g;
@@ -343,14 +435,30 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
   }
 
   if (m.kind === 'progress') {
-    const d = 1 + (ch.traits.includes('steward') ? 1 : 0);
+    const d = 1 + (ch.traits.includes('steward') ? (traitMult(ch) >= 2 ? 2 : 1) : 0);
     me.stability = clamp(me.stability + d, -3, 3);
     me.prestige += 2;
-    for (const p of provsOf(s, s.player)) p.unrest = Math.max(0, p.unrest - 2);
-    const items: RevealItem[] = [{ title: 'The crown is cheered', text: `Stability +${d}, prestige +2. Unrest falls everywhere.`, tone: 'good', kind: 'crown' }];
+    for (const p of provsOf(s, s.player)) p.control = Math.min(100, p.control + 10);
+    const items: RevealItem[] = [{ title: 'The crown is cheered', text: `Stability +${d}, prestige +2. Control +10 everywhere.`, tone: 'good', kind: 'crown' }];
     gainXp(s, ch, items);
     push(s, { kind: 'reveal', title: 'Royal Progress', items });
     finish(s, m); return;
   }
 }
 
+
+/** Called when the player's war with `enemy` ends: winning a war earns a Military card. */
+export function endWar(s: GameState, enemy: string): RevealItem[] {
+  const w = findWar(s, s.player, enemy);
+  if (!w) return [];
+  const mine = w.a === s.player ? w.gainsA : w.gainsB, theirs = w.a === s.player ? w.gainsB : w.gainsA;
+  s.imports = s.imports.filter(i => i.from !== enemy);
+  if (mine > theirs) {
+    s.stats.wars.won++;
+    player(s).prestige += 5;
+    drawCat(s, 'military');
+    return [{ title: 'Victory!', text: `You won the war (${mine} provinces taken, ${theirs} lost). Prestige +5 and a Military card.`, tone: 'good', kind: 'laurel' }];
+  }
+  if (theirs > mine) { s.stats.wars.lost++; return [{ title: 'A bitter peace', text: `You lost ${theirs} provinces and took ${mine}.`, tone: 'bad', kind: 'twist' }]; }
+  return [];
+}

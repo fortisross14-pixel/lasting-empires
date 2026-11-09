@@ -6,7 +6,9 @@ import {
   player, provsOf, clamp, rand, pick, randInt, uid, addRel, getRel, addTreaty, hasTreaty, atWar, declareWar, makePeace,
   nationName, log, hasTech, push, armyCap, alliesOf, enemiesOf,
 } from './core';
-import { addToDeck, addToHand } from './cards';
+import { addCard, grantRandomCards } from './cards';
+import { endWar } from './missions';
+import { regionState } from './overseas';
 import { getGeo } from './map';
 import { createBattle, makeSide, genericGeneral, transferProvince } from './battle';
 import { courtOptions } from './drafts';
@@ -34,6 +36,7 @@ export interface EventDef {
   history?: boolean;        // shown on the history timeline
 }
 
+const addCards = (s: GameState, id: string, n: number) => { for (let i = 0; i < n; i++) addCard(s, id); };
 const stab = (s: GameState, d: number) => { const p = player(s); p.stability = clamp(p.stability + d, -3, 3); };
 const good = (title: string, text: string, kind = 'star'): RevealItem => ({ title, text, tone: 'good', kind });
 const bad = (title: string, text: string, kind = 'twist'): RevealItem => ({ title, text, tone: 'bad', kind });
@@ -45,7 +48,7 @@ const ATLANTIC = ['seville', 'lisbon', 'porto', 'algarve', 'galicia', 'asturias'
 
 function annexNation(s: GameState, other: string) {
   const o = s.nations[other];
-  for (const p of provsOf(s, other)) { p.owner = s.player; p.core = s.player; p.unrest = 0; }
+  for (const p of provsOf(s, other)) { p.owner = s.player; p.core = s.player; p.control = Math.max(p.control, 50); }
   const room = armyCap(s) + 4 - s.troops.length;
   for (const t of o.army.slice(0, Math.max(0, room))) s.troops.push({ uid: uid(s), type: t.type, vet: t.vet, str: t.str });
   player(s).gold += Math.max(0, Math.round(o.gold));
@@ -62,8 +65,8 @@ export const EVENTS: EventDef[] = [
       label: 'Await the news',
       run: s => {
         if (rand(s) < 0.85) {
-          addToDeck(s, 'greek_scholars', 2);
-          return [bad('The City has fallen', 'The Ottoman Turks take Constantinople. Greek scholars flee west with their books.'), good('Greek Scholars', 'Two Greek Scholars cards are shuffled into your deck.', 'book')];
+          addCards(s, 'greek_scholars', 2);
+          return [bad('The City has fallen', 'The Ottoman Turks take Constantinople. Greek scholars flee west with their books.'), good('Greek Scholars', 'Two Greek Scholars research cards are added to your hand.', 'book')];
         }
         s.flags.const_holds = 1;
         player(s).gold += 20;
@@ -120,25 +123,27 @@ export const EVENTS: EventDef[] = [
     text: () => 'The Pope issues a bull of crusade against the last Muslim kingdom of Iberia. Gold and volunteers are offered to whoever takes the cross.',
     options: [
       { label: 'Take the cross', run: s => {
-        s.flags.claim_granada = 1; addToHand(s, 'crusade'); addRel(s, P(s), 'papacy', 15);
+        s.flags.claim_granada = 1; addCard(s, 'crusade'); addRel(s, P(s), 'papacy', 15);
         if (!atWar(s, P(s), 'granada')) declareWar(s, P(s), 'granada');
-        return [good('Holy war', 'You are at war with Granada without losing stability. A Crusade Bull card is added to your hand.', 'church')];
+        return [good('Holy war', 'You are at war with Granada without losing stability. A Crusade Bull card is added.', 'church')];
       } },
       { label: 'Not now', run: s => { addRel(s, P(s), 'papacy', -10); return [neutral('The Pope is disappointed', 'Relations with the Papacy −10.')]; } },
     ],
   },
   {
     id: 'columbus', history: true, title: 'A Genoese Navigator', art: 'anchor', window: [1484, 1496], chance: 0.25,
-    cond: s => provsOf(s, P(s)).some(p => ATLANTIC.includes(p.id)) && !s.flags.new_world,
+    cond: s => provsOf(s, P(s)).some(p => ATLANTIC.includes(p.id)) && !s.flags.new_world && !regionState(s, 'caribbean').found,
     text: () => 'Cristóbal Colón swears he can reach the Indies by sailing west. The scholars say the world is far bigger than he thinks. He needs three ships.',
     options: [
       { label: 'Fund the voyage (−40 ducats)', can: s => player(s).gold < 40 ? 'Needs 40 ducats' : null, run: s => {
         player(s).gold -= 40;
         const p = hasTech(s, 'navigation') ? 0.85 : 0.7;
         if (rand(s) < p) {
-          s.flags.new_world = 1; s.flags.new_world_income = 4; player(s).prestige += 15;
-          addToDeck(s, 'treasure_fleet', 2); addToDeck(s, 'conquistadors', 2);
-          return [good('Land beyond the Ocean!', 'Colón finds a New World. +4 ducats a year (growing over time), prestige +15. Treasure Fleets and Conquistadors join your deck.', 'anchor')];
+          s.flags.new_world = 1; s.flags.new_world_income = 2; player(s).prestige += 15;
+          regionState(s, 'caribbean').found = true;
+          addCards(s, 'treasure_fleet', 1); addCards(s, 'conquistadors', 1); addCard(s, 'colonial_charter'); addCard(s, 'conquista');
+          if (!s.usedLegends.includes('columbus')) { s.usedLegends.push('columbus'); s.characters.push({ uid: uid(s), name: 'Cristóbal Colón', role: 'explorer', skill: 5, traits: ['navigator', 'survivor'], born: s.year - 40, dies: 1506, rarity: 'legendary', xp: 0, legendId: 'columbus' }); }
+          return [good('Land beyond the Ocean!', 'Colón finds the Antilles, the door to a New World. Prestige +15, and he joins your court as an explorer. Settle it with colonists, or send conquerors.', 'anchor')];
         }
         return [bad('Lost at sea', 'The ships never return. Perhaps another captain will come.', 'anchor')];
       } },
@@ -157,13 +162,14 @@ export const EVENTS: EventDef[] = [
       { label: 'Send the fleet (−30 ducats)', can: s => player(s).gold < 30 ? 'Needs 30 ducats' : null, run: s => {
         player(s).gold -= 30;
         if (rand(s) < (hasTech(s, 'navigation') ? 0.8 : 0.55)) {
-          s.flags.spice_income = 7; player(s).prestige += 15;
+          s.flags.spice_income = 4; player(s).prestige += 15;
+          for (const r of ['guinea', 'cape', 'india']) regionState(s, r).found = true;
           const leg = LEGENDS.find(l => l.id === 'gama')!;
           if (!s.usedLegends.includes('gama')) {
             s.usedLegends.push('gama');
-            s.characters.push({ uid: uid(s), name: leg.name, role: leg.role, skill: leg.skill, traits: leg.traits, born: s.year - 30, dies: leg.to, rarity: 'legendary', xp: 0, legendId: leg.id });
+            s.characters.push({ uid: uid(s), name: leg.name, role: leg.role, skill: leg.skill, traits: [...leg.traits], born: s.year - 30, dies: leg.to, rarity: 'legendary', xp: 0, legendId: leg.id });
           }
-          return [good('The road to India', 'Spices flow to Lisbon: +7 ducats a year, prestige +15.', 'anchor'), good('Vasco da Gama', 'The great captain joins your court.', 'crown')];
+          return [good('The road to India', 'Spices flow to Lisbon: +4 ducats a year, prestige +15. The Gold Coast, the Cape and India are now on your charts.', 'anchor'), good('Vasco da Gama', 'The great captain joins your court.', 'crown')];
         }
         return [bad('Storms at the Cape', 'The fleet turns back, battered. Try again in a few years.', 'anchor')];
       } },
@@ -210,13 +216,13 @@ export const EVENTS: EventDef[] = [
     id: 'potosi', history: true, title: 'The Silver Mountain', art: 'coin', window: [1545, 1565], chance: 0.3,
     cond: s => !!s.flags.new_world,
     text: () => 'In the high Andes your colonists have found a mountain made of silver.',
-    options: [{ label: 'Open the mines', run: s => { s.flags.new_world_income = (s.flags.new_world_income ?? 0) + 6; addToDeck(s, 'treasure_fleet', 2); return [good('Potosí', 'New World income +6 ducats a year. Two more Treasure Fleets join your deck.', 'coin')]; } }],
+    options: [{ label: 'Open the mines', run: s => { s.flags.new_world_income = (s.flags.new_world_income ?? 0) + 6; addCards(s, 'treasure_fleet', 2); return [good('Potosí', 'New World income +6 ducats a year. Two Treasure Fleet cards are added.', 'coin')]; } }],
   },
   {
     id: 'price_revolution', history: true, title: 'The Price Revolution', art: 'coin', window: [1560, 1600], chance: 0.2,
     cond: s => !!s.flags.new_world,
     text: () => 'So much silver floods in that prices soar. Your treasury is richer, yet everything costs more.',
-    options: [{ label: 'Borrow from the Genoese', run: s => { player(s).gold += 50; addToDeck(s, 'debt', 2); return [neutral('Bankers\' gold', '+50 ducats now, but two Crown Debt cards join your deck.', 'chain')]; } },
+    options: [{ label: 'Borrow from the Genoese', run: s => { player(s).gold += 50; addCards(s, 'debt', 2); return [neutral('Bankers\' gold', '+50 ducats now, but two Crown Debt cards are added.', 'chain')]; } },
       { label: 'Cut spending', run: s => { stab(s, -1); return [neutral('Austerity', 'Stability −1.')]; } }],
   },
   {
@@ -299,13 +305,13 @@ export const EVENTS: EventDef[] = [
     text: () => 'Rain has rotted the grain in the fields. Bread prices double and the poor go hungry.',
     options: [
       { label: 'Open the granaries (−25 ducats)', can: s => player(s).gold < 25 ? 'Needs 25 ducats' : null, run: s => { player(s).gold -= 25; return [good('Bread for all', 'The people bless the crown.', 'wheat')]; } },
-      { label: 'Let the market decide', run: s => { addToHand(s, 'unrest'); return [bad('Hunger', 'A Peasant Unrest card is added to your hand.', 'chain')]; } },
+      { label: 'Let the market decide', run: s => { addCard(s, 'unrest'); return [bad('Hunger', 'A Peasant Unrest card is added to your hand.', 'chain')]; } },
     ],
   },
   {
     id: 'court_visitor', title: 'A Talent at Court', art: 'crown', chance: 0.07, repeat: 4,
     text: () => 'Three promising people seek a place at your court. You may take one, at no cost.',
-    options: [{ label: 'Meet them', can: s => s.characters.length >= 8 ? 'Your court is crowded' : null, run: s => { push(s, { kind: 'draft', draft: 'court', options: courtOptions(s, 1) }); return [neutral('Audience', 'Choose one of them.', 'crown')]; } },
+    options: [{ label: 'Meet them', can: s => s.characters.length >= 8 ? 'Your court is crowded' : null, run: s => { push(s, { kind: 'draft', draft: 'court', options: courtOptions(s, undefined, 1) }); return [neutral('Audience', 'Choose one of them.', 'crown')]; } },
       { label: 'Send them away', run: () => [neutral('Not today', 'They leave.')] }],
   },
   {
@@ -339,8 +345,8 @@ export const EVENTS: EventDef[] = [
   },
   {
     id: 'revolt', title: 'Revolt!', art: 'torch', chance: 0.2, repeat: 3,
-    cond: s => player(s).stability <= -2,
-    setup: s => { const ps = provsOf(s, P(s)).filter(p => p.id !== player(s).capital); return ps.length ? { prov: pick(s, ps).id } : null; },
+    cond: s => player(s).stability <= -2 || provsOf(s, P(s)).some(p => p.control < 25),
+    setup: s => { let ps = provsOf(s, P(s)).filter(p => p.id !== player(s).capital && p.control < 25); if (!ps.length) ps = provsOf(s, P(s)).filter(p => p.id !== player(s).capital); return ps.length ? { prov: pick(s, ps).id } : null; },
     text: (s, v) => `Peasants and minor nobles rise in ${s.provinces[v.prov].name}, refusing to pay taxes to a failing crown.`,
     options: [
       { label: 'Crush them', run: (s, v) => {
@@ -351,7 +357,7 @@ export const EVENTS: EventDef[] = [
         const gen = s.characters.find(c => c.role === 'general' && c.mission == null);
         const def = makeSide(P(s), home.map(t => ({ uid: t.uid, type: t.type, vet: t.vet, str: t.str, start: t.str })), gen ? { name: gen.name, skill: gen.skill, traits: gen.traits, uid: gen.uid } : null, prov.fort, true);
         if (!def.units.length) {
-          player(s).gold = Math.max(0, player(s).gold - 30); prov.unrest = 5;
+          player(s).gold = Math.max(0, player(s).gold - 30); prov.control = 10;
           return [bad('No one to stop them', 'The rebels loot the treasury (−30 ducats).', 'torch')];
         }
         push(s, { kind: 'battle', battle: createBattle(s, att, def, prov.id, 'rebels') });
@@ -361,12 +367,26 @@ export const EVENTS: EventDef[] = [
     ],
   },
 
+  {
+    id: 'opportunity', title: 'Fortune Smiles', art: 'star', chance: 0.06, repeat: 3,
+    text: () => 'Merchants, petitioners and adventurers crowd the palace with proposals. Some of them are worth hearing.',
+    options: [{ label: 'Hear them out', run: s => { const names = grantRandomCards(s, 2); return [good('New opportunities', `You gain: ${names.join(', ')}.`, 'star')]; } }],
+  },
+  {
+    id: 'cortes', title: 'The Cortes Meet', art: 'scales', chance: 0.05, repeat: 6,
+    text: () => 'The estates of the realm gather. They will grant the crown a subsidy, or new powers, but not both.',
+    options: [
+      { label: 'Ask for a subsidy', run: s => { const g = 30 + provsOf(s, P(s)).length * 3; player(s).gold += g; return [good('Subsidy granted', `+${g} ducats.`, 'coin')]; } },
+      { label: 'Ask for new powers', run: s => { s.np += 4; return [good('Royal authority', '+4 nation points.', 'crown')]; } },
+    ],
+  },
+
   // ---------- prompted by the AI ----------
   {
     id: 'peace_offer', title: s => 'Peace Offer', art: 'dove', chance: 0,
     text: (s, v) => `${nationName(s, String(v.nation))} sends envoys asking for peace on equal terms.`,
     options: [
-      { label: 'Accept peace', run: (s, v) => { const n = String(v.nation); if (atWar(s, P(s), n)) makePeace(s, P(s), n); return [good('Peace', `The war with ${nationName(s, n)} ends. Ten years of truce.`, 'dove')]; } },
+      { label: 'Accept peace', run: (s, v) => { const n = String(v.nation); const extra = endWar(s, n); if (atWar(s, P(s), n)) makePeace(s, P(s), n); return [good('Peace', `The war with ${nationName(s, n)} ends. Ten years of truce.`, 'dove'), ...extra]; } },
       { label: 'Fight on', run: () => [neutral('The war goes on', 'Your answer is steel.', 'sword')] },
     ],
   },

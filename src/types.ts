@@ -1,7 +1,9 @@
 // Core game state types. Everything the game needs to save lives in GameState.
 
-export type Role = 'general' | 'diplomat' | 'admin';
-export type Rarity = 'common' | 'rare' | 'legendary';
+export type Role = 'general' | 'diplomat' | 'admin' | 'merchant' | 'researcher' | 'explorer' | 'conqueror' | 'colonist';
+export type Cat = 'military' | 'diplomacy' | 'internal' | 'economy' | 'research';
+export const CATS: Cat[] = ['military', 'diplomacy', 'internal', 'economy', 'research'];
+export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 export type Personality = 'expansionist' | 'merchant' | 'cautious' | 'zealot' | 'balanced';
 
 export interface TroopCard {
@@ -29,6 +31,9 @@ export interface Character {
   xp: number;
   mission?: number;
   legendId?: string;
+  ruler?: boolean;     // the monarch, who can also act in their role
+  wins?: number;
+  losses?: number;
 }
 
 export interface HandCard {
@@ -38,10 +43,15 @@ export interface HandCard {
 
 export interface Ruler {
   name: string;
-  traits: string[];
+  traits: string[];   // flavour from history
+  arch: string;       // RulerArch id: what the monarch is good at
+  skill: number;
   from: number;
   to: number;
+  prestigeAtStart?: number;
 }
+
+export interface Heir { name: string; arch: string; skill: number; reign: number; historical?: boolean; traits: string[]; }
 
 export interface Nation {
   id: string;
@@ -72,13 +82,16 @@ export interface Province {
   land: string;       // landmass id
   lon: number;
   lat: number;
-  unrest: number;
+  control: number;    // 0..100: how firmly the crown rules here
+  good: string;       // trade good produced
+  cities: number;     // extra cities founded (each adds building slots)
 }
 
 export type MissionKind =
   | 'conquer' | 'raid'
   | 'relations' | 'trade' | 'alliance' | 'marriage' | 'peace'
-  | 'research' | 'build' | 'develop' | 'tax' | 'progress';
+  | 'research' | 'build' | 'develop' | 'found' | 'tax' | 'progress'
+  | 'explore' | 'colonize' | 'conquista';
 
 export interface Mission {
   id: number;
@@ -91,6 +104,7 @@ export interface Mission {
   total: number;
   progress: number;      // research points accumulated
   bonus: number;         // flat success bonus from cards (0..1)
+  good?: string;         // good to import (trade routes)
 }
 
 export interface Treaty { a: string; b: string; kind: 'trade' | 'alliance' | 'marriage'; since: number; }
@@ -106,7 +120,7 @@ export interface BattleUnit {
   garrison?: boolean;
 }
 
-export interface BattleGeneral { name: string; skill: number; traits: string[]; uid?: number; }
+export interface BattleGeneral { name: string; skill: number; traits: string[]; uid?: number; mult?: number; }
 
 export interface BattleSide {
   nation: string;
@@ -157,13 +171,15 @@ export type Prompt =
   | { kind: 'event'; eventId: string; vars: Record<string, string | number> }
   | { kind: 'battle'; battle: Battle }
   | { kind: 'reveal'; title: string; subtitle?: string; items: RevealItem[] }
-  | { kind: 'draft'; draft: 'levy' | 'pro' | 'court' | 'ambition'; options: DraftOption[] }
+  | { kind: 'draft'; draft: 'buy' | 'court' | 'ambition' | 'gift'; cat?: Cat; options: DraftOption[] }
+  | { kind: 'succession'; heirs: Heir[]; old: string }
   | { kind: 'gameover'; victory: boolean; reason: string };
 
 export type DraftOption =
   | { t: 'troop'; type: string; vet: number }
   | { t: 'equip'; type: string }
   | { t: 'char'; ch: Character }
+  | { t: 'card'; card: string }
   | { t: 'ambition'; id: string };
 
 export interface LogEntry { year: number; text: string; tone: 'good' | 'bad' | 'neutral'; }
@@ -184,8 +200,12 @@ export interface GameState {
   wars: War[];
   truces: Truce[];
   hand: HandCard[];
-  deck: string[];
-  discard: string[];
+  cardAccum: Record<Cat, number>;
+  bought: Record<Cat, number>;      // cards bought this year (price rises)
+  np: number;                       // nation points
+  imports: { good: string; from: string }[];
+  overseas: Record<string, { found: boolean; holder: string | null; colony: number; subdued: boolean }>;
+  stats: Stats;
   troops: TroopCard[];
   equipment: EquipCard[];
   characters: Character[];
@@ -198,6 +218,12 @@ export interface GameState {
   flags: Record<string, number>;
   ambition: string | null;
   ambitionDone: boolean;
-  draftsThisTurn: number;
   over: boolean;
+}
+
+export interface Stats {
+  battles: Record<string, { won: number; lost: number }>;
+  kings: { name: string; arch: string; from: number; to: number; prestige: number }[];
+  fallen: { name: string; role: Role; skill: number; wins: number; losses: number; until: number }[];
+  wars: { won: number; lost: number };
 }

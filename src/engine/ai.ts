@@ -3,9 +3,10 @@ import type { GameState, Nation, TroopCard } from '../types';
 import { TROOPS } from '../data/troops';
 import {
   rand, pick, uid, clamp, provsOf, incomeOf, manpowerGain, manpowerMax, getRel, addRel, atWar, findWar,
-  declareWar, makePeace, inTruce, hasTreaty, alliesOf, enemiesOf, armyPower, log, push, nationName, player, chance,
+  declareWar, makePeace, inTruce, hasTreaty, alliesOf, enemiesOf, armyPower, log, push, nationName, player, chance, traitMult,
 } from './core';
 import { neighbours } from './map';
+import { aiOverseas } from './overseas';
 import { createBattle, makeSide, toBattleUnits, genericGeneral, autoResolve, finishBattle } from './battle';
 
 // When AI nations get each troop type (they lag behind the player's research a little).
@@ -63,7 +64,7 @@ function aiEconomy(s: GameState, n: Nation) {
   // slow growth
   for (const p of provsOf(s, n.id)) if (p.dev < 6 && rand(s) < 0.008) p.dev++;
   // prestige
-  n.prestige += provsOf(s, n.id).length * 0.15;
+  n.prestige += 0.6 + provsOf(s, n.id).length * 0.35;
 }
 
 function weightedPick(s: GameState, items: [string, number][]): string {
@@ -125,7 +126,7 @@ function launchAttackOnPlayer(s: GameState, n: Nation, force: TroopCard[], targe
   const defenders = strongest(home, 8);
   const gen = s.characters.filter(c => c.role === 'general' && c.mission == null).sort((a, b) => b.skill - a.skill)[0];
   const att = makeSide(n.id, toBattleUnits(force), genericGeneral(s), 0, false);
-  const def = makeSide(s.player, toBattleUnits(defenders), gen ? { name: gen.name, skill: gen.skill, traits: gen.traits, uid: gen.uid } : null, prov.fort, true);
+  const def = makeSide(s.player, toBattleUnits(defenders), gen ? { name: gen.name, skill: gen.skill, traits: gen.traits, uid: gen.uid, mult: traitMult(gen) } : null, prov.fort, true);
   if (!def.units.length) {
     // nothing defends it: it falls
     const b = createBattle(s, att, def, target, 'defend');
@@ -184,6 +185,7 @@ function aiDiplomacy(s: GameState, n: Nation) {
 
 export function runAI(s: GameState) {
   attacksOnPlayer = 0;
+  aiOverseas(s);
   const ids = Object.keys(s.nations).filter(id => id !== s.player && s.nations[id].alive);
   ids.sort(() => rand(s) - 0.5);
   for (const id of ids) {

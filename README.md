@@ -13,16 +13,14 @@ Open `dist/index.html` in any browser. The game saves automatically in the brows
 
 ## How it plays
 
-- **Everything is a card.** Troops, equipment, characters, hand cards (decrees, intrigues, fortunes) and history events.
-- **Missions.** Characters carry out missions over several years:
-  - *Generals*: conquer or raid enemy provinces with troop cards (up to skill + 3 troops).
-  - *Diplomats*: embassies, trade treaties, alliances, royal marriages, peace talks. Each has a success chance, and a hidden twist card may flip.
-  - *Administrators*: research, construction, development, tax collection, royal progress.
-- **Drafting.** Levy and professional drafts reveal three face-down cards; you keep one.
-- **Forging.** Merge cards into better troops: Levy + Long Pikes → Pikemen, Pikemen + Arquebusiers → Tercio, Tercio + Muskets → Tercio Viejo. Two identical troops merge into a veteran (+1 star). Research unlocks recipes.
-- **Battles.** Three rounds. Each round both sides play a tactic face-down, then flip. A countered tactic does nothing and its side takes 25% more damage.
-- **History deck.** Real events (Fall of Constantinople, Columbus, the Reformation...) come due in time windows, with outcomes that can branch into alternate history.
-- **Score.** Prestige + 2 × development at 1750, plus a secret Ambition chosen at the start.
+- **Everything is a card.** Five kinds: Military, Diplomacy, Internal, Economy, Research. You draw each at a yearly rate (1.0 base, fractions carry over), raised by buildings, research, cities and your monarch. Spend **nation points** to buy more: three are revealed, you keep one.
+- **Three currencies.** Manpower (1 per troop or person hired), nation points (buy cards), ducats (troop upkeep, building salaries, imported goods).
+- **People** have a rarity: Common, Uncommon, Rare, Epic, Legendary. Rarity sets their skill and how strong their traits are. Roles: general, diplomat, administrator, merchant, researcher. Diplomats can become explorers, generals conquerors, administrators colonists — permanently.
+- **Missions** start from a mission card plus a free person of the right role: conquest, raids, embassies, trade routes (with an imported good), alliances, marriages, peace, research, buildings, development, new cities, voyages, colonies, conquistas.
+- **Provinces** have a settlement (village → town → city → metropolis) and a countryside, each with its own building slots, plus population, development, control and a trade good.
+- **Monarchs.** When a ruler dies you choose one of three heirs. Each kind boosts different card rates, and some can act as a general, diplomat, merchant or researcher.
+- **Forging, battles, history deck**: as before (Levy + Long Pikes → Pikemen, face-down tactics, branching historical events).
+- **Overseas** lands sit off the map: explorers discover them at random, colonists settle them, conquerors subdue native empires. Rival crowns claim lands too.
 
 ## Code
 

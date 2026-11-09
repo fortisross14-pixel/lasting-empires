@@ -1,4 +1,6 @@
-import type { Personality, Ruler } from '../types';
+import type { Personality } from '../types';
+
+interface HistRuler { name: string; traits: string[]; from: number; to: number; }
 
 export interface NationDef {
   id: string; name: string; adj: string; color: string; culture: string; capital: string;
@@ -44,7 +46,7 @@ export const START_REL: [string, string, number][] = [
 ];
 
 // Historical rulers for the playable nations. After the list runs out, rulers are generated.
-export const RULERS: Record<string, Ruler[]> = {
+export const RULERS: Record<string, HistRuler[]> = {
   castile: [
     { name: 'Juan II', traits: ['Weak'], from: 1406, to: 1454 },
     { name: 'Enrique IV', traits: ['Weak', 'Generous'], from: 1454, to: 1474 },
@@ -73,27 +75,37 @@ export const RULERS: Record<string, Ruler[]> = {
   ],
 };
 
-export interface RulerTraitDef { name: string; desc: string; battle?: number; diplo?: number; research?: number; gold?: number; stab?: number; prestige?: number; }
+type Rates = Partial<Record<'military' | 'diplomacy' | 'internal' | 'economy' | 'research', number>>;
 
-export const RULER_TRAITS: Record<string, RulerTraitDef> = {
-  Weak: { name: 'Weak', desc: '−10% diplomatic success, −1 stability on accession', diplo: -0.1, stab: -1 },
-  Able: { name: 'Able', desc: '+1 research per turn on every study', research: 1 },
-  Pious: { name: 'Pious', desc: '+1 stability on accession, +1 prestige a year', stab: 1, prestige: 1 },
-  Warrior: { name: 'Warrior', desc: '+10% battle strength', battle: 0.1 },
-  Cunning: { name: 'Cunning', desc: '+10% diplomatic success', diplo: 0.1 },
-  Generous: { name: 'Generous', desc: '−2 ducats a year, +1 stability on accession', gold: -2, stab: 1 },
-  Ambitious: { name: 'Ambitious', desc: '+5% battle strength, +1 prestige a year', battle: 0.05, prestige: 1 },
-  Patron: { name: 'Patron', desc: '+1 research per turn on every study', research: 1 },
-  Diligent: { name: 'Diligent', desc: '+3 ducats a year', gold: 3 },
-  Reckless: { name: 'Reckless', desc: '+15% battle strength, −1 stability on accession', battle: 0.15, stab: -1 },
-  Idle: { name: 'Idle', desc: '−1 research per turn (minimum 1)', research: -1 },
-  Sickly: { name: 'Sickly', desc: 'Short reign expected', },
-  Reformer: { name: 'Reformer', desc: '+4 ducats a year, +1 research', gold: 4, research: 1 },
-  Magnanimous: { name: 'Magnanimous', desc: '+10% diplomatic success, +1 prestige a year', diplo: 0.1, prestige: 1 },
-  Ruthless: { name: 'Ruthless', desc: '+10% battle strength, −5% diplomatic success', battle: 0.1, diplo: -0.05 },
-  Fortunate: { name: 'Fortunate', desc: '+5 ducats a year', gold: 5 },
-  Unstable: { name: 'Unstable', desc: '−1 stability on accession, −5% diplomacy', stab: -1, diplo: -0.05 },
+export interface RulerArch {
+  id: string; name: string; desc: string; rates: Rates; all?: number; startCards?: number;
+  role?: 'general' | 'diplomat' | 'admin' | 'merchant' | 'researcher';
+  battle?: number; diplo?: number; research?: number; goldPct?: number; np?: number; stab?: number;
+}
+
+// What kind of monarch sits on the throne. Chosen from three heirs at each succession.
+export const RULER_ARCHS: Record<string, RulerArch> = {
+  balanced: { id: 'balanced', name: 'Even-handed', desc: '+0.1 of every card type a year. 2 free cards at the coronation.', rates: {}, all: 0.1, startCards: 2 },
+  martial:  { id: 'martial', name: 'Warrior', desc: '+0.5 Military cards a year, +10% battle strength. Can lead armies as a general.', rates: { military: 0.5 }, role: 'general', battle: 0.1 },
+  merchant: { id: 'merchant', name: 'Merchant', desc: '+0.3 Economy cards a year, +10% income. Can act as a merchant.', rates: { economy: 0.3 }, role: 'merchant', goldPct: 0.1 },
+  diplomat: { id: 'diplomat', name: 'Diplomat', desc: '+0.4 Diplomacy cards a year, +10% diplomatic success. Can go on embassies.', rates: { diplomacy: 0.4 }, role: 'diplomat', diplo: 0.1 },
+  scholar:  { id: 'scholar', name: 'Scholar', desc: '+0.4 Research cards a year, +1 research on every study. Can study as a researcher.', rates: { research: 0.4 }, role: 'researcher', research: 1 },
+  pious:    { id: 'pious', name: 'Pious', desc: '+0.4 Internal cards a year, +1 nation point a year, +1 stability on accession.', rates: { internal: 0.4 }, np: 1, stab: 1 },
+  weak:     { id: 'weak', name: 'Feeble', desc: 'No talents. Favourites rule in the monarch\'s name. −1 stability on accession.', rates: {}, stab: -1 },
 };
+
+export function archFromTraits(traits: string[]): string {
+  for (const t of traits) {
+    if (['Warrior', 'Reckless', 'Ambitious', 'Ruthless'].includes(t)) return 'martial';
+    if (t === 'Pious') return 'pious';
+    if (['Cunning', 'Magnanimous'].includes(t)) return 'diplomat';
+    if (t === 'Patron') return 'scholar';
+    if (['Diligent', 'Fortunate', 'Reformer'].includes(t)) return 'merchant';
+    if (t === 'Able') return 'balanced';
+    if (['Weak', 'Idle', 'Unstable', 'Sickly'].includes(t)) return 'weak';
+  }
+  return 'balanced';
+}
 
 export const RULER_NAMES: Record<string, string[]> = {
   castilian: ['Alfonso', 'Fernando', 'Enrique', 'Juan', 'Pedro', 'Sancho', 'Carlos', 'Felipe', 'Isabel', 'Juana'],

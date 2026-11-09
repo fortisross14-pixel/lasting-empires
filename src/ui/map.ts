@@ -197,7 +197,7 @@ export class MapView {
       c.style.fill = nat?.color ?? '#777';
       c.classList.toggle('mine', p.owner === s.player);
       c.classList.toggle('enemy', p.owner !== s.player && atWar(s, s.player, p.owner));
-      c.classList.toggle('unrest', p.unrest > 0);
+      c.classList.toggle('unrest', p.owner === s.player && p.control < 30);
       const lbl = this.labels[id];
       lbl.textContent = p.name;
       lbl.classList.toggle('cap', nat?.capital === id);

@@ -1,7 +1,7 @@
 // Battles: three rounds, each side commits a face-down tactic, then both flip.
 import type { GameState, Battle, BattleSide, BattleUnit, BattleGeneral, RoundLog, TroopCard } from '../types';
 import { TROOPS, TACTICS } from '../data/troops';
-import { rand, pick, weighted, uid, clamp, hasTech, rulerMod, log, nationName, addRel, player, findWar } from './core';
+import { rand, pick, weighted, uid, clamp, hasTech, rulerMod, log, nationName, addRel, player, findWar, promoteRarity } from './core';
 
 export const breakLevel = (side: BattleSide) => (side.general?.traits.includes('inspiring') ? 0.25 : 0.35);
 export const hp = (side: BattleSide) => side.units.reduce((a, u) => a + u.str, 0);
@@ -95,8 +95,9 @@ function attackOutput(s: GameState, side: BattleSide, round: number, my: Mods): 
     fire += f; melee += m;
   }
   let mult = 1 + 0.07 * (g?.skill ?? 1);
-  if (g?.traits.includes('bold')) melee *= 1.2;
-  if (g?.traits.includes('gunner')) fire *= 1.2;
+  const tm = g?.mult ?? 1;
+  if (g?.traits.includes('bold')) melee *= 1 + 0.2 * tm;
+  if (g?.traits.includes('gunner')) fire *= 1 + 0.2 * tm;
   if (side.player) {
     mult += rulerMod(s, 'battle');
     if (hasTech(s, 'military_drill')) mult += 0.1;
@@ -108,7 +109,7 @@ function applyDamage(s: GameState, target: BattleSide, attacker: BattleSide, out
   const alive = target.units.filter(u => u.str > 0);
   if (!alive.length) return 0;
   let incoming = out.fire * tm.incoming + out.melee * tm.incoming * tm.incomingMelee;
-  if (target.general?.traits.includes('cautious')) incoming *= 0.85;
+  if (target.general?.traits.includes('cautious')) incoming *= 1 - 0.15 * (target.general.mult ?? 1);
   const pool = incoming * 14 * (0.85 + rand(s) * 0.3);
   const weights = alive.map(u => {
     const k = TROOPS[u.type].kind;
@@ -208,7 +209,7 @@ export function transferProvince(s: GameState, provId: string, to: string) {
   const from = p.owner;
   if (from === to) return;
   p.owner = to;
-  p.unrest = p.core === to ? 0 : 3;
+  p.control = p.core === to ? 60 : 25;
   // cancel player missions targeting things that no longer make sense
   if (from === s.player) {
     s.missions = s.missions.filter(m => {
@@ -248,6 +249,12 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
   let good = false;
   let title = '';
 
+  const rec = (n: string, won: boolean) => {
+    if (!s.nations[n]) return;
+    const st = (s.stats.battles[n] ??= { won: 0, lost: 0 });
+    if (won) st.won++; else st.lost++;
+  };
+  rec(b.att.nation, attWon); rec(b.def.nation, !attWon);
   if (!playerInvolved) {
     syncAITroops(s, b.att, attWon); syncAITroops(s, b.def, !attWon);
     if (attWon && b.context === 'conquer') transferProvince(s, b.province, b.att.nation);
@@ -260,7 +267,8 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
   if (b.context === 'rebels' && b.att.player === false) { /* rebels vanish */ }
 
   const gen = pSide.general?.uid != null ? s.characters.find(c => c.uid === pSide.general!.uid) : undefined;
-  if (gen && playerWon) { gen.xp++; if (gen.xp >= 3 && gen.skill < 6) { gen.skill++; gen.xp = 0; lines.push(`${gen.name} gains skill (now ${gen.skill}).`); } }
+  if (gen) { if (playerWon) gen.wins = (gen.wins ?? 0) + 1; else gen.losses = (gen.losses ?? 0) + 1; }
+  if (gen && playerWon) { gen.xp++; if (gen.xp >= 3) { gen.xp = 0; if (promoteRarity(s, gen)) lines.push(`${gen.name} rises to ${gen.rarity}.`); } }
 
   const me = player(s);
   if (b.context === 'conquer') {
@@ -295,8 +303,8 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
       me.stability = clamp(me.stability - 1, -3, 3);
     }
   } else if (b.context === 'rebels') {
-    if (playerWon) { title = 'The revolt is crushed'; me.stability = clamp(me.stability + 1, -3, 3); prov.unrest = 0; good = true; lines.push('Order returns. Stability +1.'); }
-    else { title = 'The rebels triumph'; me.gold = Math.max(0, me.gold - 30); prov.unrest = 5; me.stability = clamp(me.stability - 1, -3, 3); lines.push('The rebels loot the treasury (−30 ducats) and the province defies you.'); }
+    if (playerWon) { title = 'The revolt is crushed'; me.stability = clamp(me.stability + 1, -3, 3); prov.control = Math.max(prov.control, 60); good = true; lines.push('Order returns. Stability +1.'); }
+    else { title = 'The rebels triumph'; me.gold = Math.max(0, me.gold - 30); prov.control = Math.min(prov.control, 10); me.stability = clamp(me.stability - 1, -3, 3); lines.push('The rebels loot the treasury (−30 ducats) and the province defies you.'); }
   }
   if (res.lost.length) lines.push(`Lost: ${res.lost.join(', ')}.`);
   if (res.promoted.length) lines.push(`Veterans: ${res.promoted.join(', ')} gain a star.`);

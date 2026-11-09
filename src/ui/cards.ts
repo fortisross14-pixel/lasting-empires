@@ -1,7 +1,7 @@
 // Card faces for every kind of card in the game.
 import type { TroopCard, EquipCard, Character, GameState } from '../types';
 import { TROOPS, EQUIPMENT, TACTICS } from '../data/troops';
-import { TRAITS } from '../data/characters';
+import { TRAITS, RARITY } from '../data/characters';
 import { CARDS } from '../engine/cards';
 import { roleName } from '../engine/core';
 import { h } from './dom';
@@ -41,26 +41,31 @@ export function equipCard(e: Pick<EquipCard, 'type'>, o: Opts = {}) {
   );
 }
 
+export const ROLE_ICON: Record<string, string> = { general: 'helm', diplomat: 'scroll', admin: 'quill', merchant: 'coin', researcher: 'book', explorer: 'anchor', conqueror: 'lance', colonist: 'tower' };
+
 export function charCard(c: Character, s: GameState, o: Opts = {}) {
-  const roleIcon = c.role === 'general' ? 'helm' : c.role === 'diplomat' ? 'scroll' : 'quill';
   return shell('char', { ...o, cls: `r-${c.rarity} role-${c.role} ${o.cls ?? ''}` },
-    h('div', { class: 'c-top' }, h('span', { class: 'c-role' }, roleName[c.role])),
-    h('div', { class: 'c-art', html: icon(roleIcon, o.small ? 24 : 32) }),
+    h('div', { class: 'c-top' }, h('span', { class: 'c-role' }, c.ruler ? 'Monarch' : roleName[c.role]), h('span', { class: 'c-gem', title: RARITY[c.rarity].name })),
+    h('div', { class: 'c-art', html: icon(ROLE_ICON[c.role] ?? 'crown', o.small ? 24 : 32) }),
     h('div', { class: 'c-name c-person' }, c.name),
-    h('div', { class: 'c-pips', title: `Skill ${c.skill}` }, ...Array.from({ length: 6 }, (_, i) => h('i', { class: i < c.skill ? 'on' : '' }))),
+    h('div', { class: 'c-rarity' }, RARITY[c.rarity].name),
     h('div', { class: 'c-traits' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || '—'),
     o.small ? null : h('div', { class: 'c-age' }, `Age ${s.year - c.born}`),
     c.mission != null ? h('div', { class: 'c-away' }, 'On mission') : null,
   );
 }
 
+const KIND_LABEL: Record<string, string> = { troop: 'Troop', equip: 'Equipment', hire: 'Hire', mission: 'Mission', instant: 'Order' };
+
 export function handCard(id: string, o: Opts = {}) {
   const d = CARDS[id];
-  return shell('hand', { ...o, cls: `cat-${d.cat} ${o.cls ?? ''}` },
-    h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, d.cat)),
+  const t = d.troop ? TROOPS[d.troop] : null;
+  return shell('hand', { ...o, cls: `cat-${d.cat} kind-${d.kind}${d.burden ? ' burden' : ''} ${o.cls ?? ''}` },
+    h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, d.burden ? 'Burden' : KIND_LABEL[d.kind])),
     h('div', { class: 'c-art', html: icon(d.icon, o.small ? 24 : 32) }),
     h('div', { class: 'c-name c-title' }, d.name),
-    o.small ? null : h('div', { class: 'c-text' }, d.text),
+    t ? h('div', { class: 'c-stats' }, h('span', {}, h('b', {}, 'M'), t.melee), h('span', {}, h('b', {}, 'F'), t.fire), h('span', {}, h('b', {}, 'D'), t.def)) : null,
+    o.small || t ? null : h('div', { class: 'c-text' }, d.text),
   );
 }
 
