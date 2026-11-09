@@ -1,4 +1,10 @@
-# Lasting Empires — Design Proposal (v0.2)
+# Lasting Empires — Design Proposal (v0.3)
+
+> **v0.3 changes (prototype built):** one turn = one year (1453–1750). Missions are the core verb:
+> generals lead troop cards on military missions, diplomats sign treaties and trade routes, administrators
+> research, build and develop. Troops are drafted (pick 1 of 3) and forged together into stronger units
+> (Levy + Pikes → Pikemen, Pikemen + Arquebusiers → Tercio). Estates were dropped from the prototype.
+> See README.md for the current rules.
 
 **Grand strategy-lite, card-driven, touch-first, single player vs AI.**
 Alternate real history, nation-focused. Target campaign: 2–3 hours.

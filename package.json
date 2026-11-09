@@ -1,0 +1,27 @@
+{
+  "name": "lasting-empires",
+  "version": "1.0.0",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p .",
+    "sim": "esbuild scripts/sim.ts --bundle --platform=node --outfile=dist/sim.js --log-level=warning && node dist/sim.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fortisross14-pixel/lasting-empires.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fortisross14-pixel/lasting-empires/issues"
+  },
+  "homepage": "https://github.com/fortisross14-pixel/lasting-empires#readme",
+  "devDependencies": {
+    "@types/d3-delaunay": "^6.0.4",
+    "d3-delaunay": "^6.0.4",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.3"
+  },
+  "private": true
+}

@@ -1,0 +1,93 @@
+// Card faces for every kind of card in the game.
+import type { TroopCard, EquipCard, Character, GameState } from '../types';
+import { TROOPS, EQUIPMENT, TACTICS } from '../data/troops';
+import { TRAITS } from '../data/characters';
+import { CARDS } from '../engine/cards';
+import { roleName } from '../engine/core';
+import { h } from './dom';
+import { icon } from './icons';
+
+interface Opts { small?: boolean; selected?: boolean; dim?: boolean; onclick?: (e: Event) => void; badge?: string; cls?: string; }
+
+const stars = (n: number) => (n > 0 ? '★'.repeat(n) : '');
+
+function shell(kind: string, o: Opts, ...kids: (HTMLElement | null)[]) {
+  const el = h('button', {
+    class: `card k-${kind}${o.small ? ' small' : ''}${o.selected ? ' sel' : ''}${o.dim ? ' dim' : ''} ${o.cls ?? ''}`,
+    type: 'button', onclick: o.onclick,
+  }, ...kids);
+  if (o.badge) el.append(h('span', { class: 'c-badge' }, o.badge));
+  return el;
+}
+
+export function troopCard(t: Pick<TroopCard, 'type' | 'vet' | 'str'> & { mission?: number }, o: Opts = {}) {
+  const d = TROOPS[t.type];
+  return shell('troop', { ...o, cls: `tier${d.tier} ${o.cls ?? ''}` },
+    h('div', { class: 'c-top' }, h('span', { class: 'c-name' }, d.name), h('span', { class: 'c-vet' }, stars(t.vet))),
+    h('div', { class: 'c-art', html: icon(d.icon, o.small ? 26 : 34) }),
+    h('div', { class: 'c-stats' },
+      h('span', { title: 'Melee' }, h('b', {}, 'M'), d.melee), h('span', { title: 'Fire' }, h('b', {}, 'F'), d.fire), h('span', { title: 'Defence' }, h('b', {}, 'D'), d.def)),
+    h('div', { class: 'c-bar' }, h('i', { style: `width:${Math.round(t.str)}%` })),
+    t.mission != null ? h('div', { class: 'c-away' }, 'On mission') : null,
+  );
+}
+
+export function equipCard(e: Pick<EquipCard, 'type'>, o: Opts = {}) {
+  const d = EQUIPMENT[e.type];
+  return shell('equip', o,
+    h('div', { class: 'c-top' }, h('span', { class: 'c-name' }, d.name)),
+    h('div', { class: 'c-art', html: icon(d.icon, o.small ? 26 : 34) }),
+    h('div', { class: 'c-text' }, o.small ? 'Equipment' : d.desc),
+  );
+}
+
+export function charCard(c: Character, s: GameState, o: Opts = {}) {
+  const roleIcon = c.role === 'general' ? 'helm' : c.role === 'diplomat' ? 'scroll' : 'quill';
+  return shell('char', { ...o, cls: `r-${c.rarity} role-${c.role} ${o.cls ?? ''}` },
+    h('div', { class: 'c-top' }, h('span', { class: 'c-role' }, roleName[c.role])),
+    h('div', { class: 'c-art', html: icon(roleIcon, o.small ? 24 : 32) }),
+    h('div', { class: 'c-name c-person' }, c.name),
+    h('div', { class: 'c-pips', title: `Skill ${c.skill}` }, ...Array.from({ length: 6 }, (_, i) => h('i', { class: i < c.skill ? 'on' : '' }))),
+    h('div', { class: 'c-traits' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || '—'),
+    o.small ? null : h('div', { class: 'c-age' }, `Age ${s.year - c.born}`),
+    c.mission != null ? h('div', { class: 'c-away' }, 'On mission') : null,
+  );
+}
+
+export function handCard(id: string, o: Opts = {}) {
+  const d = CARDS[id];
+  return shell('hand', { ...o, cls: `cat-${d.cat} ${o.cls ?? ''}` },
+    h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, d.cat)),
+    h('div', { class: 'c-art', html: icon(d.icon, o.small ? 24 : 32) }),
+    h('div', { class: 'c-name c-title' }, d.name),
+    o.small ? null : h('div', { class: 'c-text' }, d.text),
+  );
+}
+
+export function tacticCard(id: string, o: Opts = {}) {
+  const d = TACTICS[id];
+  const ic = { volley: 'gun', charge: 'lance', pike: 'pike', flank: 'boot', hold: 'shield', barrage: 'cannon' }[id] ?? 'sword';
+  return shell('tactic', o,
+    h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, 'Tactic')),
+    h('div', { class: 'c-art', html: icon(ic, o.small ? 26 : 34) }),
+    h('div', { class: 'c-name c-title' }, d.name),
+    h('div', { class: 'c-text' }, d.desc),
+    o.small ? null : h('div', { class: 'c-counter' }, 'Beaten by ' + d.counteredBy.map(c => TACTICS[c].name).join(', ')),
+  );
+}
+
+export function backCard(label: string, o: Opts = {}) {
+  return shell('back', o, h('div', { class: 'c-rose', html: icon('star', o.small ? 26 : 40) }), h('div', { class: 'c-backlabel' }, label));
+}
+
+/** A card that starts face-down and flips over to show `front`. */
+export function flipCard(front: HTMLElement, label = '', big = false) {
+  const wrap = h('div', { class: 'flip' + (big ? ' big' : '') });
+  const inner = h('div', { class: 'flip-in' });
+  const back = backCard(label, { small: !big && front.classList.contains('small') });
+  back.classList.add('flip-back');
+  front.classList.add('flip-front');
+  inner.append(back, front);
+  wrap.append(inner);
+  return { el: wrap, flip: () => wrap.classList.add('flipped') };
+}

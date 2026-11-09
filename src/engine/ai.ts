@@ -1,0 +1,210 @@
+// AI nations: economy, recruiting, upgrades, war and peace.
+import type { GameState, Nation, TroopCard } from '../types';
+import { TROOPS } from '../data/troops';
+import {
+  rand, pick, uid, clamp, provsOf, incomeOf, manpowerGain, manpowerMax, getRel, addRel, atWar, findWar,
+  declareWar, makePeace, inTruce, hasTreaty, alliesOf, enemiesOf, armyPower, log, push, nationName, player, chance,
+} from './core';
+import { neighbours } from './map';
+import { createBattle, makeSide, toBattleUnits, genericGeneral, autoResolve, finishBattle } from './battle';
+
+// When AI nations get each troop type (they lag behind the player's research a little).
+const AI_UPGRADES: [string, string, number][] = [
+  ['levy', 'pikemen', 1465], ['men_at_arms', 'pikemen', 1470], ['crossbow', 'arquebusiers', 1478],
+  ['bombard', 'field_cannon', 1490], ['pikemen', 'tercio', 1508], ['jinetes', 'reiters', 1532],
+  ['knights', 'cuirassiers', 1542], ['arquebusiers', 'musketeers', 1542], ['tercio', 'old_tercio', 1550],
+  ['reiters', 'dragoons', 1600], ['musketeers', 'line_infantry', 1670], ['old_tercio', 'line_infantry', 1680],
+];
+
+function aiRecruitPool(year: number): [string, number][] {
+  const pool: [string, number][] = [['levy', 3], ['crossbow', 2], ['jinetes', 1.5], ['men_at_arms', 1.5], ['knights', 0.7], ['bombard', 0.4]];
+  if (year >= 1465) pool.push(['pikemen', 2]);
+  if (year >= 1478) pool.push(['arquebusiers', 2]);
+  if (year >= 1510) pool.push(['tercio', 0.8]);
+  if (year >= 1545) pool.push(['musketeers', 1.5]);
+  if (year >= 1600) pool.push(['dragoons', 0.6]);
+  if (year >= 1675) pool.push(['line_infantry', 1.5]);
+  return pool;
+}
+
+export function aiArmyCap(s: GameState, n: Nation): number {
+  const ps = provsOf(s, n.id).length;
+  const bonus = n.personality === 'expansionist' ? 2 : n.personality === 'cautious' ? 0 : 1;
+  return Math.round(2 + Math.sqrt(ps) * 2.6 + bonus + (s.year - 1453) / 60);
+}
+
+export const nationPower = (s: GameState, n: string) => armyPower(s.nations[n].army) + provsOf(s, n).reduce((a, p) => a + p.fort * 3, 0);
+export const playerPower = (s: GameState) =>
+  armyPower(s.troops) + provsOf(s, s.player).reduce((a, p) => a + p.fort * 3, 0);
+const powerOf = (s: GameState, n: string) => (n === s.player ? playerPower(s) : nationPower(s, n));
+
+function aiEconomy(s: GameState, n: Nation) {
+  const inc = incomeOf(s, n.id);
+  n.gold += inc.total;
+  n.manpower = Math.min(manpowerMax(s, n.id), n.manpower + manpowerGain(s, n.id));
+  for (const t of n.army) t.str = Math.min(100, t.str + 20);
+  if (n.gold < -20 && n.army.length) { n.army.splice(Math.floor(rand(s) * n.army.length), 1); n.gold += 10; }
+  // recruit
+  const cap = aiArmyCap(s, n);
+  let tries = 2;
+  while (tries-- > 0 && n.army.length < cap) {
+    const type = weightedPick(s, aiRecruitPool(s.year));
+    const cost = 12 + 9 * TROOPS[type].tier;
+    if (n.gold < cost + 10 || n.manpower < 2) break;
+    n.gold -= cost; n.manpower -= 2;
+    n.army.push({ uid: uid(s), type, vet: 0, str: 100 });
+  }
+  // upgrade old units
+  for (const t of n.army) {
+    if (rand(s) > 0.07) continue;
+    const up = AI_UPGRADES.find(([from, , y]) => from === t.type && s.year >= y);
+    if (up) t.type = up[1];
+  }
+  // slow growth
+  for (const p of provsOf(s, n.id)) if (p.dev < 6 && rand(s) < 0.008) p.dev++;
+  // prestige
+  n.prestige += provsOf(s, n.id).length * 0.15;
+}
+
+function weightedPick(s: GameState, items: [string, number][]): string {
+  const total = items.reduce((a, [, w]) => a + w, 0);
+  let r = rand(s) * total;
+  for (const [it, w] of items) if ((r -= w) <= 0) return it;
+  return items[0][0];
+}
+
+function strongest(arr: TroopCard[], n: number): TroopCard[] {
+  return [...arr].sort((a, b) => armyPower([b]) - armyPower([a])).slice(0, n);
+}
+
+/** Pick a province of `enemy` that `n` can reach. */
+function pickTarget(s: GameState, n: string, enemy: string): string | null {
+  const mine = provsOf(s, n).map(p => p.id);
+  const cands = new Set<string>();
+  for (const id of mine) for (const nb of neighbours(id)) if (s.provinces[nb].owner === enemy) cands.add(nb);
+  if (!cands.size) return null;
+  const list = [...cands].map(id => s.provinces[id]);
+  list.sort((a, b) => (b.dev - b.fort * 1.5 + (b.core === n ? 3 : 0)) - (a.dev - a.fort * 1.5 + (a.core === n ? 3 : 0)));
+  return rand(s) < 0.7 ? list[0].id : pick(s, list).id;
+}
+
+let attacksOnPlayer = 0;
+
+function aiWar(s: GameState, n: Nation) {
+  // attack enemies
+  for (const e of enemiesOf(s, n.id)) {
+    if (!s.nations[e]?.alive) continue;
+    if (!n.army.length || rand(s) > 0.4) continue;
+    const target = pickTarget(s, n.id, e);
+    if (!target) continue;
+    const prov = s.provinces[target];
+    const force = strongest(n.army.filter(t => t.str > 40), 6);
+    if (!force.length) continue;
+    if (e === s.player) {
+      if (attacksOnPlayer >= 2) continue;
+      attacksOnPlayer++;
+      launchAttackOnPlayer(s, n, force, target);
+    } else {
+      const defNat = s.nations[e];
+      const att = makeSide(n.id, toBattleUnits(force), genericGeneral(s), 0, false);
+      const def = makeSide(e, toBattleUnits(strongest(defNat.army, 6)), genericGeneral(s), prov.fort, false);
+      const b = createBattle(s, att, def, target, 'conquer');
+      autoResolve(s, b);
+      const before = prov.owner;
+      finishBattle(s, b);
+      if (prov.owner !== before && (before === s.player || hasTreaty(s, s.player, before, 'alliance') || hasTreaty(s, s.player, n.id, 'alliance'))) {
+        log(s, `${n.name} takes ${prov.name} from ${nationName(s, before)}.`, 'neutral');
+      }
+    }
+  }
+}
+
+function launchAttackOnPlayer(s: GameState, n: Nation, force: TroopCard[], target: string) {
+  const prov = s.provinces[target];
+  const home = s.troops.filter(t => t.mission == null && t.str > 0);
+  const defenders = strongest(home, 8);
+  const gen = s.characters.filter(c => c.role === 'general' && c.mission == null).sort((a, b) => b.skill - a.skill)[0];
+  const att = makeSide(n.id, toBattleUnits(force), genericGeneral(s), 0, false);
+  const def = makeSide(s.player, toBattleUnits(defenders), gen ? { name: gen.name, skill: gen.skill, traits: gen.traits, uid: gen.uid } : null, prov.fort, true);
+  if (!def.units.length) {
+    // nothing defends it: it falls
+    const b = createBattle(s, att, def, target, 'defend');
+    b.done = true; b.winner = 'att';
+    const out = finishBattle(s, b);
+    push(s, { kind: 'reveal', title: out.title, subtitle: `${n.name} marches in unopposed`, items: [{ title: prov.name, text: out.lines.join(' '), tone: 'bad', kind: 'sword' }] });
+    return;
+  }
+  const b = createBattle(s, att, def, target, 'defend');
+  push(s, { kind: 'battle', battle: b });
+}
+
+function aiDiplomacy(s: GameState, n: Nation) {
+  // peace between AIs
+  for (const w of s.wars.filter(w => (w.a === n.id || w.b === n.id))) {
+    const other = w.a === n.id ? w.b : w.a;
+    if (other === s.player) {
+      if (s.year - w.since >= 3 && rand(s) < 0.12 && !s.queue.some(q => q.kind === 'event' && q.eventId === 'peace_offer' && q.vars.nation === n.id)) {
+        push(s, { kind: 'event', eventId: 'peace_offer', vars: { nation: n.id } });
+      }
+      continue;
+    }
+    if (n.id < other && s.year - w.since >= 2 && rand(s) < 0.2) makePeace(s, n.id, other);
+  }
+  // declare war
+  const atWarCount = enemiesOf(s, n.id).length;
+  if (atWarCount > 0) return;
+  const base = { expansionist: 0.07, zealot: 0.05, balanced: 0.035, merchant: 0.02, cautious: 0.012 }[n.personality];
+  const size = provsOf(s, n.id).length;
+  if (rand(s) > base / (1 + size / 8)) return;
+  const neigh = new Set<string>();
+  for (const p of provsOf(s, n.id)) for (const nb of neighbours(p.id)) { const o = s.provinces[nb].owner; if (o !== n.id) neigh.add(o); }
+  const myPow = nationPower(s, n.id);
+  const options = [...neigh].filter(t => {
+    if (!s.nations[t]?.alive || inTruce(s, n.id, t) || hasTreaty(s, n.id, t, 'alliance') || hasTreaty(s, n.id, t, 'marriage')) return false;
+    if (t === s.player && s.year < s.startYear + 5) return false;
+    const rel = getRel(s, n.id, t);
+    if (rel > (n.personality === 'expansionist' ? 15 : -10)) return false;
+    const theirPow = powerOf(s, t) + alliesOf(s, t).reduce((a, x) => a + powerOf(s, x) * 0.5, 0);
+    return myPow > theirPow * 1.25;
+  });
+  if (!options.length) return;
+  const t = pick(s, options);
+  declareWar(s, n.id, t);
+  if (t === s.player) {
+    push(s, { kind: 'reveal', title: 'War!', subtitle: `${n.name} declares war on you`, items: [{ title: `${n.adj} heralds arrive`, text: `${n.name} has declared war. Expect attacks on your border provinces. Keep troops at home to defend them.`, tone: 'bad', kind: 'sword' }] });
+    log(s, `${n.name} declares war on you!`, 'bad');
+    // the player's allies may be asked to help: AI allies simply join
+    for (const ally of alliesOf(s, s.player)) {
+      if (!atWar(s, ally, n.id) && rand(s) < 0.7) { declareWar(s, ally, n.id); log(s, `Your ally ${nationName(s, ally)} joins the war.`, 'good'); }
+    }
+  } else if (alliesOf(s, t).includes(s.player)) {
+    push(s, { kind: 'event', eventId: 'call_to_arms', vars: { attacker: n.id, ally: t } });
+  }
+}
+
+export function runAI(s: GameState) {
+  attacksOnPlayer = 0;
+  const ids = Object.keys(s.nations).filter(id => id !== s.player && s.nations[id].alive);
+  ids.sort(() => rand(s) - 0.5);
+  for (const id of ids) {
+    const n = s.nations[id];
+    if (!n.alive) continue;
+    aiEconomy(s, n);
+    aiDiplomacy(s, n);
+    if (n.alive) aiWar(s, n);
+  }
+  // fear of the strong: everyone grows wary of large realms
+  for (const big of Object.values(s.nations)) {
+    if (!big.alive || provsOf(s, big.id).length < 12) continue;
+    for (const o of Object.values(s.nations)) if (o.alive && o.id !== big.id && o.id !== s.player) addRel(s, o.id, big.id, -2);
+  }
+  // relation drift
+  for (const k of Object.keys(s.rel)) {
+    const v = s.rel[k];
+    if (v > 0) s.rel[k] = v - 1; else if (v < 0 && chance(s, 0.5)) s.rel[k] = v + 1;
+  }
+  for (const t of s.treaties) if (t.kind === 'marriage') addRel(s, t.a, t.b, 3);
+  for (const w of s.wars) { void w; }
+  s.truces = s.truces.filter(t => t.until > s.year);
+  void clamp; void atWar; void findWar; void player;
+}
