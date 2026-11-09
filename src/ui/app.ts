@@ -417,7 +417,7 @@ const WIN_TABS: Record<Cat, [string, string][]> = {
   military: [['cards', 'Cards'], ['missions', 'Missions'], ['army', 'Army'], ['navy', 'Navy'], ['wars', 'Wars & battles']],
   diplomacy: [['cards', 'Cards'], ['missions', 'Missions'], ['realms', 'Realms'], ['subjects', 'Subjects']],
   internal: [['cards', 'Cards'], ['missions', 'Missions'], ['core', 'Core'], ['realm', 'Realm'], ['provinces', 'Provinces']],
-  economy: [['cards', 'Cards'], ['missions', 'Missions'], ['goods', 'Trade'], ['ledger', 'Ledger']],
+  economy: [['cards', 'Cards'], ['missions', 'Missions'], ['goods', 'Goods'], ['trade', 'Trade'], ['ledger', 'Ledger']],
   research: [['cards', 'Cards'], ['missions', 'Missions'], ['tech', 'Technologies']],
 };
 function toggleWin(cat: Cat) { if (win?.cat === cat) closeWin(); else openWin(cat); }
@@ -457,7 +457,11 @@ function winSub(cat: Cat) {
 const CAT_ROLES: Record<Cat, Character['role'][]> = {
   military: ['general', 'conqueror', 'admiral'], diplomacy: ['diplomat', 'explorer'], internal: ['admin', 'colonist'], economy: ['merchant'], research: ['researcher'],
 };
-const missionsOfCat = (cat: Cat) => S.missions.filter(m => CAT_ROLES[cat].includes(MISSION_INFO[m.kind].role as Character['role']) || (cat === 'military' && ['conquer', 'raid', 'conquista'].includes(m.kind)));
+/** Missions shown under a menu: by the person sent (a merchant building is Economy), or the mission's own role. */
+const missionsOfCat = (cat: Cat) => S.missions.filter(m => {
+  const r = S.characters.find(c => c.uid === m.char)?.role ?? MISSION_INFO[m.kind].role;
+  return CAT_ROLES[cat].includes(r as Character['role']) || (cat === 'military' && ['conquer', 'raid', 'conquista'].includes(m.kind));
+});
 
 function winTab(cat: Cat, tab: string, body: HTMLElement) {
   if (tab === 'cards') return cardsTab(cat, body);
@@ -474,7 +478,7 @@ function winTab(cat: Cat, tab: string, body: HTMLElement) {
     else if (tab === 'realm') realmTab(body);
     else provincesTab(body);
   } else if (cat === 'economy') {
-    if (tab === 'ledger') ledgerTab(body); else goodsTab(body);
+    if (tab === 'ledger') ledgerTab(body); else if (tab === 'trade') tradeTab(body); else goodsTab(body);
   } else techTab(body);
   void holder;
 }
@@ -494,11 +498,11 @@ function cardsTab(cat: Cat, body: HTMLElement) {
     h('button', { class: 'btn small' + (cv.mode === 'archive' ? ' on' : ''), onclick: () => setMode('archive') }, h('span', { html: icon('book', 14) }), ` Archive (${arch.length})`),
     mil ? h('button', { class: 'btn small' + (cv.mode === 'forge' ? ' on' : ''), onclick: () => setMode('forge') }, h('span', { html: icon('merge', 14) }), ' Forge') : null,
     mil ? h('button', { class: 'btn small' + (cv.mode === 'recipes' ? ' on' : ''), onclick: () => setMode('recipes') }, h('span', { html: icon('list', 14) }), ' Recipes') : null);
-  body.append(h('div', { class: 'cs-head' }, h('b', {}, `${hand.length}/${handLimit(S)} cards in hand`), h('small', { title: rate.parts.map(p => `${p.label} ${signed(p.v)}`).join(', ') }, `+${rate.rate.toFixed(2)} a year · next card ${pct}%`)), bar);
+  body.append(h('div', { class: 'cs-head' }, h('b', {}, `${hand.length} card${hand.length === 1 ? "" : "s"} in hand`), h('small', { title: rate.parts.map(p => `${p.label} ${signed(p.v)}`).join(', ') }, `+${rate.rate.toFixed(2)} a year · next card ${pct}%`)), bar);
   if (cv.mode === 'forge') return forgeView(body);
   if (cv.mode === 'recipes') { body.append(recipeBook(true)); return; }
   if (cv.mode === 'archive') {
-    body.append(h('p', { class: 'muted' }, 'Archived cards do not count against your hand. Bring one back when you have room, or throw it away for half a nation point.'));
+    body.append(h('p', { class: 'muted' }, 'Archived cards are put away to keep your hand tidy. Bring one back when you need it, or throw it away for half a nation point.'));
     if (!arch.length) body.append(h('p', { class: 'muted' }, 'The archive is empty.'));
     const row = h('div', { class: 'cards-row wrap' });
     for (const hc of arch) row.append(h('div', { class: 'arch' }, handCard(hc.card, { small: true }),
@@ -519,13 +523,20 @@ function cardsTab(cat: Cat, body: HTMLElement) {
   }
   const f = cv.filter;
   const show = (id: string) => f === 'all' || f === id;
-  const sec = (title: string, els: HTMLElement[], empty: string) => { body.append(h('h3', {}, title)); body.append(els.length ? h('div', { class: 'cards-row wrap' }, els) : h('p', { class: 'muted' }, empty)); };
+  const sec = (title: string, els: HTMLElement[], empty: string, wide = false) => { body.append(h('h3', {}, title)); body.append(els.length ? h('div', { class: wide ? 'cards-grid' : 'cards-row wrap' }, els) : h('p', { class: 'muted' }, empty)); };
   if (show('hand') || show('equip')) {
     const list = f === 'equip' ? hand.filter(x => CARDS[x.card].kind === 'equip') : hand;
-    sec(f === 'equip' ? 'Equipment' : 'Cards in hand', list.map(c => handCard(c.card, { small: true, badge: CARDS[c.card].permanent ? 'permanent' : undefined, selected: cv.sel.includes(c.uid), dim: cv.mode !== 'select' && !!cardBlocked(S, CARDS[c.card]) && CARDS[c.card].kind !== 'mission', onclick: () => {
-      if (cv.mode === 'select') { cv = { ...cv, sel: cv.sel.includes(c.uid) ? cv.sel.filter(x => x !== c.uid) : [...cv.sel, c.uid] }; renderWin(); return; }
-      openCardModal(c.uid);
-    } })), 'No cards. You draw them each quarter, or buy a pack.');
+    sec(f === 'equip' ? 'Equipment' : 'Cards in hand', stacks(list).map(st => {
+      const chosen = st.uids.filter(u => cv.sel.includes(u)).length;
+      return handCard(st.card, { wide: true, count: st.uids.length, badge: cv.mode === 'select' && chosen ? `${chosen} chosen` : undefined, selected: chosen > 0, dim: cv.mode !== 'select' && !!cardBlocked(S, CARDS[st.card]) && CARDS[st.card].kind !== 'mission', onclick: () => {
+        if (cv.mode === 'select') {
+          // each tap picks one more of the stack; past the last, none
+          const next = st.uids.find(u => !cv.sel.includes(u));
+          cv = { ...cv, sel: next != null ? [...cv.sel, next] : cv.sel.filter(u => !st.uids.includes(u)) }; renderWin(); return;
+        }
+        openCardModal(st.uids[0]);
+      } });
+    }), 'No cards. You draw them each quarter, or buy a pack.', true);
   }
   if (show('people')) {
     const ppl = S.characters.filter(c => CAT_ROLES[cat].includes(c.role));
@@ -561,6 +572,13 @@ function forgeView(body: HTMLElement) {
   body.append(h('details', { class: 'recipes' }, h('summary', {}, 'Recipes you know'), recipeBook(true)));
 }
 
+/** Identical cards shown once, with a count. */
+function stacks(list: { uid: number; card: string }[]) {
+  const out: { card: string; uids: number[] }[] = [];
+  for (const hc of list) { const st = out.find(x => x.card === hc.card); if (st) st.uids.push(hc.uid); else out.push({ card: hc.card, uids: [hc.uid] }); }
+  return out;
+}
+
 /** Choose a person then a mission, or a mission then a person. */
 function missionsTab(cat: Cat, body: HTMLElement) {
   const left = missionsLeft(S);
@@ -586,13 +604,14 @@ function missionsTab(cat: Cat, body: HTMLElement) {
   }
   pcol.append(prow);
   const ccol = h('div', { class: 'mcol' }, h('h3', {}, 'Mission cards'), h('p', { class: 'muted small' }, pp ? `What will ${pp.name.split(' ')[0]} do?` : 'Or tap a card, then a person'));
-  const crow = h('div', { class: 'cards-row wrap' });
+  const crow = h('div', { class: 'cards-grid' });
   if (!cards.length) crow.append(h('p', { class: 'muted' }, 'No mission cards. You draw them each quarter, or buy one in the Cards tab.'));
-  for (const hc of cards) {
+  for (const st of stacks(cards)) {
+    const hc = { uid: st.uids[0], card: st.card };
     const ok = !pp || canDo(pp, hc.card);
-    crow.append(handCard(hc.card, { small: true, badge: CARDS[hc.card].permanent ? 'permanent' : undefined, selected: pc?.uid === hc.uid, dim: !ok, onclick: () => {
+    crow.append(handCard(hc.card, { wide: true, count: st.uids.length, selected: !!pc && st.uids.includes(pc.uid), dim: !ok, onclick: () => {
       if (pp) { if (!ok) return toast(`${pp.name} cannot do that: it needs a ${cardRoles(hc.card).map(r => roleName[r].toLowerCase()).join(' or ')}`, 'bad'); return go(hc.uid, pp.uid); }
-      pick = { card: pc?.uid === hc.uid ? undefined : hc.uid }; renderWin();
+      pick = { card: pc && st.uids.includes(pc.uid) ? undefined : hc.uid }; renderWin();
     } }));
   }
   ccol.append(crow);
@@ -678,11 +697,11 @@ function cardSection(cat: Cat) {
   const pct = Math.round((S.cardAccum[cat] ?? 0) * 100);
   const wrap = h('div', { class: 'cardsec', style: `--cc:${CAT_INFO[cat].color}` });
   wrap.append(h('div', { class: 'cs-head' },
-    h('b', {}, `Your ${CAT_INFO[cat].name.toLowerCase()} cards (${hand.length}/${handLimit(S)})`),
+    h('b', {}, `Your ${CAT_INFO[cat].name.toLowerCase()} cards (${hand.length})`),
     h('small', { title: rate.parts.map(p => `${p.label} ${signed(p.v)}`).join(', ') }, `+${rate.rate.toFixed(2)} a year · next card ${pct}%`)));
   const row = h('div', { class: 'cards-row wrap' });
   if (!hand.length) row.append(h('p', { class: 'muted' }, 'No cards yet. You draw them every year, or buy one below.'));
-  for (const c of hand) row.append(handCard(c.card, { small: true, dim: !!cardBlocked(S, CARDS[c.card]) && CARDS[c.card].kind !== 'mission', onclick: () => openCardModal(c.uid) }));
+  for (const st of stacks(hand)) row.append(handCard(st.card, { small: true, count: st.uids.length, dim: !!cardBlocked(S, CARDS[st.card]) && CARDS[st.card].kind !== 'mission', onclick: () => openCardModal(st.uids[0]) }));
   wrap.append(row);
   const why = buyBlocked(S, cat);
   wrap.append(h('button', { class: 'btn buy' + (why ? ' blocked' : ''), onclick: () => act(() => buyCard(S, cat)) },
@@ -1088,72 +1107,80 @@ function goodsNote(need: Record<string, number>) {
 }
 const f1 = (v: number) => (Math.abs(v) < 0.05 ? '0' : v.toFixed(1));
 
-/** The goods ledger: what you make, use, buy and sell, good by good. */
+/** The goods ledger: what you make, use and have in store, good by good. */
 function goodsTab(body: HTMLElement) {
   const f = quarterFlow(S);
   const need = needs(S);
-  const inc = incomeOf(S, S.player);
   const yr = (r: Record<string, number>, g: string) => (r[g] ?? 0) * 4;
-  body.append(h('div', { class: 'stats' },
-    stat('Sold a year', '+' + inc.goods.toFixed(1)), stat('Bought a year', '−' + inc.imports.toFixed(1)),
-    stat('Trade routes', `${S.routes.length}/${routeCap(S)}`), stat('Trade posts', `${S.posts.length}/${postCap(S)}`)));
-  body.append(h('p', { class: 'muted small' }, 'Provinces make raw goods; Workshops turn them into made goods. Buy what you lack with a Trade Route (quick, but dear) or found a Trade Post first (slower, then much cheaper). Sell your surplus the same way. Full warehouses sell the rest at home for half the price.'));
-
+  const hunger = S.short.food ?? 0;
+  const foodIn = FOOD.reduce((a, g) => a + yr(f.made, g) + yr(f.bought, g), 0);
+  body.append(h('p', { class: hunger >= 0.05 ? 'bad small' : 'muted small' }, `Food: the people eat ${f1(need.food)} a year and your lands and routes bring ${f1(foodIn)}. ` + (hunger >= 0.05 ? `Hunger, ${Math.round(hunger * 100)}% short: unhappy people, fewer recruits.` : 'Three or more kinds of food in store make people happier.')));
   const row = (g: string) => {
     const d = GOODS[g];
     const inflow = yr(f.made, g) + yr(f.bought, g);
     const outflow = yr(f.used, g) + yr(f.input, g) + yr(f.sold, g);
     const net = inflow - outflow;
     const short = d.food ? 0 : S.short[g] ?? 0;
-    const cap = stockCap(outflow);
     const left = net < -0.05 ? Math.floor((S.stock[g] ?? 0) / (-net / 4)) : 99;
     const status = short >= 0.05 ? h('span', { class: 'gchip bad' }, `short ${Math.round(short * 100)}%`)
-      : left < 8 ? h('span', { class: 'gchip warn' }, left <= 0 ? 'runs out now' : `lasts ${left} qtr`)
+      : left < 8 ? h('span', { class: 'gchip warn' }, left <= 0 ? 'runs out' : `lasts ${left} qtr`)
       : (f.overflow[g] ?? 0) > 0 ? h('span', { class: 'gchip over' }, 'surplus')
-      : need[g] ? h('span', { class: 'gchip ok' }, 'enough') : null;
-    const parts = [`stock ${f1(S.stock[g] ?? 0)}/${Math.round(cap)}`];
-    if (inflow) parts.push(`in ${f1(inflow)}`);
-    if (outflow) parts.push(`out ${f1(outflow)}`);
-    return h('div', { class: 'grow-row' + (short >= 0.05 ? ' short' : '') },
-      h('span', { class: 'gico', style: `color:${d.color}`, html: icon(d.icon, 20) }),
-      h('div', { class: 'g-t' }, h('b', {}, d.name, h('small', {}, ` ${price(S, g).toFixed(1)}`)), h('small', {}, parts.join(' · '), ' · ', h('span', { class: net < -0.05 ? 'bad' : net > 0.05 ? 'good' : '' }, `${net > 0 ? '+' : ''}${f1(net)}/yr`))),
-      status,
-      h('div', { class: 'g-acts' },
+      : need[g] ? h('span', { class: 'gchip ok' }, 'enough') : h('span', { class: 'gchip ok' }, net > 0.05 ? 'spare' : '—');
+    const tip = `${d.name}: ${d.desc}${d.recipe ? ` Made from ${Object.entries(d.recipe).map(([i, a]) => `${a} ${GOODS[i].name.toLowerCase()}`).join(' + ')}.` : ''}${d.tech && !canMake(S, g) ? ` Needs ${TECH[d.tech].name}.` : ''} In ${f1(inflow)} a year, out ${f1(outflow)}.`;
+    return h('tr', { class: short >= 0.05 ? 'short' : '' },
+      h('td', { class: 'g-n', onclick: () => toast(tip) }, h('span', { class: 'gico', style: `color:${d.color}`, html: icon(d.icon, 18) }), h('span', {}, d.name, h('small', {}, ` ${price(S, g).toFixed(1)}`))),
+      h('td', { class: 'num' }, f1(S.stock[g] ?? 0)),
+      h('td', { class: 'num ' + (net < -0.05 ? 'dn' : net > 0.05 ? 'up' : 'muted') }, `${net > 0.05 ? '+' : ''}${f1(net)}`),
+      h('td', {}, status),
+      h('td', { class: 'g-acts' },
         h('button', { class: 'btn small ghost', onclick: () => openRouteDialog(g, 'buy') }, 'Buy'),
         h('button', { class: 'btn small ghost', onclick: () => openRouteDialog(g, 'sell') }, 'Sell')));
   };
-  // food is one need, fed by any mix
-  const foodIn = FOOD.reduce((a, g) => a + yr(f.made, g) + yr(f.bought, g), 0);
-  const hunger = S.short.food ?? 0;
-  body.append(h('h3', {}, 'Food'), h('p', { class: hunger >= 0.05 ? 'bad' : 'muted' },
-    `The people eat ${f1(need.food)} a year; your lands and routes bring ${f1(foodIn)}. ` + (hunger >= 0.05 ? `Hunger: ${Math.round(hunger * 100)}% short. Unhappy people, fewer recruits.` : 'Three or more kinds of food in store make people happier.')));
-  const fl = h('div', { class: 'glist' }); for (const g of FOOD) fl.append(row(g)); body.append(fl);
-  body.append(h('h3', {}, 'Raw materials'));
-  const rl = h('div', { class: 'glist' }); for (const g of RAW.filter(g => !GOODS[g].food)) rl.append(row(g)); body.append(rl);
-  body.append(h('h3', {}, 'Made goods'), h('p', { class: 'muted small' }, 'Each is used up by something: buildings, farms and mines, troops, guns, ships, the people, temples and libraries, the court. Tap a name in the map legend for what it does.'));
-  const ml = h('div', { class: 'glist' });
-  for (const g of MADE) { const r = row(g); r.title = GOODS[g].desc; ml.append(r, h('small', { class: 'gdesc' }, GOODS[g].desc + (GOODS[g].recipe ? ` Made from ${Object.entries(GOODS[g].recipe!).map(([i, a]) => `${a} ${GOODS[i].name.toLowerCase()}`).join(' + ')}.` : '') + (GOODS[g].tech && !canMake(S, g) ? ` Needs ${TECH[GOODS[g].tech!].name}.` : ''))); }
-  body.append(ml);
-
-  // workshops
+  const table = (title: string, list: string[]) => {
+    body.append(h('h3', {}, title));
+    body.append(h('table', { class: 'gtable' },
+      h('thead', {}, h('tr', {}, h('th', {}, 'Good'), h('th', { class: 'num' }, 'Stock'), h('th', { class: 'num' }, '± a year'), h('th', {}, ''), h('th', {}, ''))),
+      h('tbody', {}, list.map(row))));
+  };
+  table('Food', FOOD);
+  table('Raw materials', RAW.filter(g => !GOODS[g].food));
+  table('Made goods', MADE);
+  body.append(h('p', { class: 'muted small' }, 'Tap a good for what it does and what it is made from. Price is per load. Full warehouses sell the rest at home for half the price.'));
   body.append(h('h3', {}, 'Workshops'));
   const shops = provsOf(S, S.player).filter(p => workshopCap(S, p) > 0);
-  if (!shops.length) body.append(h('p', { class: 'muted' }, 'No workshops yet. Build one with an Economy building card (any town): it makes 2 loads a year of the good you choose.'));
+  if (!shops.length) body.append(h('p', { class: 'muted' }, 'No workshops yet. Build one with a Guild Charter (Economy) in any town: it makes 2 loads a year of the good you choose.'));
   for (const p of shops) body.append(workshopRow(p, f));
+}
 
-  // routes and posts
-  body.append(h('h3', {}, `Trade routes (${S.routes.length}/${routeCap(S)})`));
-  if (!S.routes.length) body.append(h('p', { class: 'muted' }, 'None. Tap Buy or Sell on a good. A merchant needs one quarter to set a route up.'));
-  for (const r of S.routes) {
+/** Trade: routes, and posts with the routes that run through them. */
+function tradeTab(body: HTMLElement) {
+  const inc = incomeOf(S, S.player);
+  body.append(h('div', { class: 'stats' },
+    stat('Sold a year', '+' + inc.goods.toFixed(1)), stat('Bought a year', '−' + inc.imports.toFixed(1)),
+    stat('Trade routes', `${S.routes.length}/${routeCap(S)}`), stat('Trade posts', `${S.posts.length}/${postCap(S)}`)));
+  body.append(h('p', { class: 'muted small' }, 'A Trade Route takes a merchant one quarter and does not use up a mission. Buying directly is dear; found a Trade Post first and every route with that realm buys at 90% and sells at 120% of the price. Start a route from Buy or Sell in the Goods tab.'));
+  const routeRow = (r: GameState['routes'][number]) => {
     const each = price(S, r.good) * dealFor(S, r.partner, r.dir, r.deal);
-    body.append(h('div', { class: 'grow-row' },
+    return h('div', { class: 'grow-row' },
       h('span', { class: 'gico', style: `color:${GOODS[r.good].color}`, html: icon(GOODS[r.good].icon, 20) }),
-      h('div', { class: 'g-t' }, h('b', {}, `${r.dir === 'buy' ? 'Buy' : 'Sell'} ${r.amount} ${GOODS[r.good].name.toLowerCase()} a year`), h('small', {}, `${r.dir === 'buy' ? 'from' : 'to'} ${nationName(S, r.partner)}${S.posts.some(p => p.nation === r.partner) ? ' (trade post)' : ''} · ${each.toFixed(1)} each · `, h('span', { class: r.dir === 'buy' ? 'bad' : 'good' }, `${r.dir === 'buy' ? '−' : '+'}${(each * r.amount).toFixed(1)}/yr`))),
-      h('div', { class: 'g-acts' }, h('button', { class: 'btn small ghost', onclick: () => confirmBox('Close this route?', 'The merchant comes home. Opening it again takes another mission.', 'Close route', () => act(() => { S.routes = S.routes.filter(x => x !== r); }, 'Route closed')) }, 'Close'))));
-  }
+      h('div', { class: 'g-t' }, h('b', {}, `${r.dir === 'buy' ? 'Buy' : 'Sell'} ${r.amount} ${GOODS[r.good].name.toLowerCase()} a year`), h('small', {}, `${r.dir === 'buy' ? 'from' : 'to'} ${nationName(S, r.partner)} · ${each.toFixed(1)} each · `, h('span', { class: r.dir === 'buy' ? 'bad' : 'good' }, `${r.dir === 'buy' ? '−' : '+'}${(each * r.amount).toFixed(1)}/yr`))),
+      h('div', { class: 'g-acts' }, h('button', { class: 'btn small ghost', onclick: () => confirmBox('Close this route?', 'Opening it again takes a merchant another quarter.', 'Close route', () => act(() => { S.routes = S.routes.filter(x => x !== r); }, 'Route closed')) }, 'Close')));
+  };
+  const pending = S.missions.filter(m => m.kind === 'route' || m.kind === 'post');
+  if (pending.length) { body.append(h('h3', {}, 'Being set up')); for (const m of pending) body.append(missionRow(m)); }
   body.append(h('h3', {}, `Trade posts (${S.posts.length}/${postCap(S)})`));
-  for (const p of S.posts) body.append(h('div', { class: 'grow-row' }, h('span', { class: 'gico', html: icon('anchor', 20) }), h('div', { class: 'g-t' }, h('b', {}, nationName(S, p.nation)), h('small', {}, `since ${p.since} · buy at 90% of the price, sell 20% above · upkeep ${POST_UPKEEP}/yr`))));
-  body.append(actionRow('anchor', 'Found a trade post', `2 quarters next door, up to 6 overseas · makes every route with that realm cheaper, +1 route`, S.posts.length >= postCap(S) ? `You can keep ${postCap(S)} trade post${postCap(S) > 1 ? 's' : ''}` : null, openPostPicker));
+  if (!S.posts.length) body.append(h('p', { class: 'muted' }, 'None yet.'));
+  for (const p of S.posts) {
+    const rs = S.routes.filter(r => r.partner === p.nation);
+    const n = S.nations[p.nation];
+    body.append(h('div', { class: 'post' }, h('div', { class: 'post-h' }, h('span', { class: 'swatch', style: `background:${n?.color}` }), h('b', {}, nationName(S, p.nation)), h('small', {}, ` since ${p.since} · upkeep ${POST_UPKEEP}/yr · ${rs.length} route${rs.length === 1 ? '' : 's'}`)),
+      rs.length ? h('div', { class: 'glist' }, rs.map(routeRow)) : h('p', { class: 'muted small' }, 'No routes through this post yet.')));
+  }
+  body.append(actionRow('anchor', 'Found a trade post', `2 quarters next door, up to 6 overseas · every route with that realm cheaper, +1 route`, S.posts.length >= postCap(S) ? `You can keep ${postCap(S)} trade post${postCap(S) > 1 ? 's' : ''}` : null, openPostPicker));
+  const direct = S.routes.filter(r => !S.posts.some(p => p.nation === r.partner));
+  body.append(h('h3', {}, `Direct routes (${direct.length})`));
+  if (!direct.length) body.append(h('p', { class: 'muted' }, 'None.'));
+  body.append(h('div', { class: 'glist' }, direct.map(routeRow)));
 }
 
 function workshopRow(p: Province, f = quarterFlow(S)) {
@@ -1550,7 +1577,7 @@ function openCardModal(handUid: number) {
     body.append(targets);
     footer.append(playBtn);
   }
-  openModal(h('div', { class: 'mbox narrow' }, h('div', { class: 'center' }, handCard(hc.card)), body, footer));
+  openModal(h('div', { class: 'mbox narrow' }, handCard(hc.card, { wide: true, cls: 'modal-card' }), body, footer));
 }
 
 // ---------- choosing a target on the map ----------

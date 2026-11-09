@@ -972,3 +972,45 @@ ul.traits { margin: 0; padding-left: 18px; }
 }
 .gchip.warn { color: var(--wax); border-color: var(--wax); }
 #legend:not([hidden]) ~ #tracker { display: none; }
+
+/* wide cards: picture on the left, words on the right */
+.cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.card.wide { width: auto; height: auto; min-height: 104px; flex-direction: row; text-align: left; border-radius: 10px; }
+.card.wide .c-art { flex: none; width: 76px; align-self: stretch; color: #f8f0dc; background: var(--band); opacity: 1; }
+.card.wide .c-body { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 0 12px 10px 4px; }
+.card.wide .c-top { justify-content: space-between; }
+.card.wide .c-title { text-align: left; font-size: 15px; padding: 4px 0 2px; }
+.card.wide .c-text { padding: 0; font-size: 12.5px; line-height: 1.3; }
+.card.wide .c-stats { justify-content: flex-start; gap: 10px; padding: 0 0 3px; }
+.card.wide .c-perm { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; opacity: .8; }
+[data-style="chancery"] .card.wide .c-art { margin: 6px 0 13px 6px; border-radius: 0; color: #f4ead8; background: var(--band); }
+[data-style="chancery"] .card.wide .c-top { margin: 6px 0 0; }
+.c-count { position: absolute; right: 12px; bottom: 12px; z-index: 2; background: var(--wax, #8b2e1f); color: #fff; font-weight: 700; font-size: 13px; padding: 2px 8px; border-radius: 12px; font-variant-numeric: tabular-nums; }
+.card.small .c-count { right: 9px; bottom: 9px; font-size: 11px; padding: 1px 6px; }
+.k-hand.cat-military { --band: #6e2b2b; } .k-hand.cat-diplomacy { --band: #2f4f6b; } .k-hand.cat-internal { --band: #3b5a3a; } .k-hand.cat-economy { --band: #6d5a2a; } .k-hand.cat-research { --band: #4d3a62; } .k-hand.cat-culture { --band: #7a3a5a; }
+/* troop cards: total strength and seasoning */
+.c-power { display: flex; justify-content: center; align-items: baseline; gap: 5px; padding: 0 4px 2px; }
+.c-power b { font-size: 17px; font-variant-numeric: tabular-nums; }
+.c-power small { font-size: 10px; color: var(--vellum-muted); font-style: italic; }
+.small .c-power b { font-size: 14px; }
+.small .c-power small { font-size: 9px; }
+.card.small.k-troop { width: calc(var(--scw) + 12px); height: calc(var(--sch) + 16px); }
+/* the small-card title wraps instead of running into the picture */
+.small .c-art svg { max-height: 26px; }
+.card:not(.wide):not(.small) .c-art { min-height: 46px; }
+.card.k-hand:not(.wide) { height: auto; min-height: var(--ch); }
+.card.wide.modal-card { width: 100%; margin-bottom: 10px; cursor: default; }
+.card.small .c-away { inset: 22px 0 auto 0; font-size: 9px; }
+.gtable { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; margin-bottom: 6px; }
+.gtable th { font-weight: 600; font-size: 12px; color: var(--muted); text-align: left; padding: 2px 6px; border-bottom: 1px solid var(--line); }
+.gtable td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.gtable .num { text-align: right; white-space: nowrap; }
+.gtable td.num.up { color: #3c6a45; font-weight: 700; } .gtable td.num.dn { color: var(--wax); font-weight: 700; }
+.gtable .g-n { display: flex; align-items: center; gap: 8px; cursor: help; }
+.gtable .g-n small { color: var(--muted); }
+.gtable tr.short td { background: #9e1f2a10; }
+.gtable .g-acts { display: flex; gap: 2px; justify-content: flex-end; }
+.gtable .g-acts .btn { min-height: 34px; padding: 0 8px; }
+.post { border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin-bottom: 8px; }
+.post-h { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+@media (max-width: 520px) { .gtable .g-n small { display: none; } .gtable td, .gtable th { padding: 4px 3px; } .gtable .g-acts .btn { padding: 0 5px; font-size: 13px; } }

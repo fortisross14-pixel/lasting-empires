@@ -74,11 +74,19 @@ export const alliesOf = (s: GameState, n: string) =>
 export const inTruce = (s: GameState, a: string, b: string) =>
   s.truces.some(t => t.until > s.year && ((t.a === a && t.b === b) || (t.a === b && t.b === a)));
 
+/** Attack cards for a new war. */
+export function grantWarCards(s: GameState, n: number) {
+  for (let i = 0; i < n; i++) s.hand.push({ uid: uid(s), card: 'march_orders' });
+  log(s, `${n} March Orders for the war.`, 'neutral');
+}
+
 export function declareWar(s: GameState, a: string, b: string) {
   if (atWar(s, a, b) || a === b) return;
   breakTreaties(s, a, b);
   addRel(s, a, b, -40);
   s.wars.push({ a, b, since: s.year, gainsA: 0, gainsB: 0 });
+  // marching orders for the player: three to open a war, two to answer one
+  if (a === s.player || b === s.player) grantWarCards(s, a === s.player ? 3 : 2);
   // an attack on a subject is an attack on its overlord, and subjects follow their overlord
   const lord = s.nations[b]?.overlord;
   if (lord && lord !== a && !atWar(s, a, lord)) s.wars.push({ a, b: lord, since: s.year, gainsA: 0, gainsB: 0 });

@@ -31,11 +31,8 @@ export interface HandCardDef {
 }
 
 export const HAND_LIMIT = 7;
-/** Cards you may hold of each kind grow with the realm: 3 for a tiny crown, up to 7 for an empire. */
-export function handLimit(s: GameState): number {
-  const k = provsOf(s, s.player).length;
-  return 3 + (k >= 5 ? 1 : 0) + (k >= 10 ? 1 : 0) + (k >= 16 ? 1 : 0) + (k >= 25 ? 1 : 0);
-}
+/** There is no limit to the cards you hold: the yearly draw and missions a year are the limits. */
+export function handLimit(_s: GameState): number { return Infinity; }
 export const RATE_CAP = 2.5;
 export const CAT_INFO: Record<Cat, { name: string; icon: string; role: Role; color: string }> = {
   military: { name: 'Military', icon: 'sword', role: 'general', color: '#6e2b2b' },

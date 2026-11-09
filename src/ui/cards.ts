@@ -4,28 +4,32 @@ import { TROOPS, EQUIPMENT, TACTICS } from '../data/troops';
 import { TRAITS, RARITY } from '../data/characters';
 import { CORE } from '../data/core';
 import { CARDS } from '../engine/cards';
-import { roleName } from '../engine/core';
+import { roleName, troopPower } from '../engine/core';
 import { h } from './dom';
 import { icon } from './icons';
 
-interface Opts { small?: boolean; selected?: boolean; dim?: boolean; onclick?: (e: Event) => void; badge?: string; cls?: string; }
+interface Opts { small?: boolean; selected?: boolean; dim?: boolean; onclick?: (e: Event) => void; badge?: string; cls?: string; wide?: boolean; count?: number; }
 
 const stars = (n: number) => (n > 0 ? '★'.repeat(n) : '');
 
 function shell(kind: string, o: Opts, ...kids: (HTMLElement | null)[]) {
   const el = h('button', {
-    class: `card k-${kind}${o.small ? ' small' : ''}${o.selected ? ' sel' : ''}${o.dim ? ' dim' : ''} ${o.cls ?? ''}`,
+    class: `card k-${kind}${o.wide ? ' wide' : o.small ? ' small' : ''}${o.selected ? ' sel' : ''}${o.dim ? ' dim' : ''} ${o.cls ?? ''}`,
     type: 'button', onclick: o.onclick,
   }, ...kids);
   if (o.badge) el.append(h('span', { class: 'c-badge' }, o.badge));
+  if ((o.count ?? 1) > 1) el.append(h('span', { class: 'c-count' }, `×${o.count}`));
   return el;
 }
+
+const VET_NAME = ['Recruits', 'Seasoned', 'Veterans', 'Elite'];
 
 export function troopCard(t: Pick<TroopCard, 'type' | 'vet' | 'str'> & { mission?: number; might?: number }, o: Opts = {}) {
   const d = TROOPS[t.type];
   return shell('troop', { ...o, cls: `tier${d.tier} ${o.cls ?? ''}` },
     h('div', { class: 'c-top' }, h('span', { class: 'c-name' }, d.name), h('span', { class: 'c-vet' }, stars(t.vet))),
     h('div', { class: 'c-art', html: icon(d.icon, o.small ? 26 : 34) }),
+    h('div', { class: 'c-power', title: 'Total strength' }, h('b', {}, String(Math.round(troopPower(t)))), h('small', {}, VET_NAME[Math.min(3, t.vet)])),
     (t.might ?? 1) > 1 ? h('div', { class: 'c-might', title: 'Forged: worth this many ordinary companies' }, `×${(t.might ?? 1).toFixed(1)}`) : null,
     h('div', { class: 'c-stats' },
       h('span', { title: 'Melee' }, h('b', {}, 'M'), d.melee), h('span', { title: 'Fire' }, h('b', {}, 'F'), d.fire), h('span', { title: 'Defence' }, h('b', {}, 'D'), d.def)),
@@ -62,6 +66,15 @@ const KIND_LABEL: Record<string, string> = { ship: 'Ship', troop: 'Troop', equip
 export function handCard(id: string, o: Opts = {}) {
   const d = CARDS[id];
   const t = d.troop ? TROOPS[d.troop] : null;
+  if (o.wide) {
+    return shell('hand', { ...o, cls: `cat-${d.cat} kind-${d.kind}${d.burden ? ' burden' : ''} ${o.cls ?? ''}` },
+      h('div', { class: 'c-art', html: icon(d.icon, 34) }),
+      h('div', { class: 'c-body' },
+        h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, d.burden ? 'Burden' : KIND_LABEL[d.kind]), d.permanent ? h('span', { class: 'c-perm' }, 'permanent') : null),
+        h('div', { class: 'c-name c-title' }, d.name),
+        t ? h('div', { class: 'c-stats' }, h('span', {}, h('b', {}, 'M'), t.melee), h('span', {}, h('b', {}, 'F'), t.fire), h('span', {}, h('b', {}, 'D'), t.def), h('span', {}, h('b', {}, 'upkeep'), t.upkeep)) : null,
+        h('div', { class: 'c-text' }, d.text)));
+  }
   return shell('hand', { ...o, cls: `cat-${d.cat} kind-${d.kind}${d.burden ? ' burden' : ''} ${o.cls ?? ''}` },
     h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, d.burden ? 'Burden' : KIND_LABEL[d.kind])),
     h('div', { class: 'c-art', html: icon(d.icon, o.small ? 24 : 32) }),
