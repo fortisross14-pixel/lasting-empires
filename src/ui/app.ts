@@ -52,11 +52,16 @@ export function snapshot() { return S ? { save: JSON.stringify(S) } : {}; }
 // ---------- menu styles ----------
 const STYLE_KEY = 'lasting-empires.style';
 export const STYLES = [
-  { id: 'portolan', name: 'Portolan Chart', desc: 'Dark sea chart, lacquer and gold', sw: ['#152126', '#d6ad55', '#17333b'] },
-  { id: 'manuscript', name: 'Illuminated Manuscript', desc: 'Light vellum, rubric red, ink', sw: ['#f4ead1', '#9a2a1f', '#b9cbc4'] },
+  { id: 'chancery', name: 'Chancery', desc: 'Letters, wax seals and woodcuts', sw: ['#e9e5da', '#9e1f2a', '#2a4b8c'] },
+  { id: 'portolan', name: 'Chart Table', desc: 'Dark sea chart, lacquer and gold', sw: ['#152126', '#d6ad55', '#17333b'] },
   { id: 'heraldic', name: 'Heraldic Court', desc: 'Royal purple, banners, bright gold', sw: ['#1f1638', '#e7b93f', '#1a2546'] },
 ];
-function currentStyle() { try { return localStorage.getItem(STYLE_KEY) ?? 'portolan'; } catch { return 'portolan'; } }
+function currentStyle() {
+  let v: string | null = null;
+  try { v = localStorage.getItem(STYLE_KEY); } catch { /* */ }
+  if (!v || v === 'manuscript') v = 'chancery';
+  return STYLES.some(x => x.id === v) ? v : 'chancery';
+}
 export function applyStyle(id = currentStyle()) {
   if (id === 'portolan') delete document.documentElement.dataset.style; else document.documentElement.dataset.style = id;
 }
@@ -690,6 +695,7 @@ function realmSheet(body: HTMLElement) {
 // ---------- modals ----------
 function openModal(content: HTMLElement) {
   const m = clear($('#modal'));
+  content.prepend(h('div', { class: 'seal', 'aria-hidden': 'true' }, h('i'), h('i'), h('b')));
   m.append(h('div', { class: 'scrim' }), content);
   m.hidden = false;
   modalOpen = true;
@@ -989,7 +995,7 @@ function processQueue() {
 function afterPrompt() { closeModal(); refresh(); setTimeout(processQueue, 60); }
 
 function infoCard(it: RevealItem) {
-  return h('div', { class: `card k-info tone-${it.tone}` },
+  return h('div', { class: `card k-info tone-${it.tone}${/ outcome$/.test(it.title) ? ' is-outcome' : ''}` },
     h('div', { class: 'c-art', html: icon(it.kind ?? 'star', 30) }),
     h('div', { class: 'c-name c-title' }, it.title),
     h('div', { class: 'c-text' }, it.text));

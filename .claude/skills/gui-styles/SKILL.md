@@ -18,8 +18,8 @@ description: Interface rules for Lasting Empires — layout, touch targets, the 
 
 ## Menu styles
 Three styles, switched from the title screen or the realm panel (`data-style` on `<html>`, saved in localStorage):
-- **Portolan Chart** (default, `:root`): dark teal lacquer, gold, Almendra display.
-- **Illuminated Manuscript** (`[data-style="manuscript"]`): light vellum, rubric red accent, IM Fell English, square corners, double rules.
+- **Chancery** (default, `[data-style="chancery"]`): the realm run by letters. Rag paper with laid lines, iron-gall ink, wax red and lapis initials, IM Fell English + Alegreya. No blurred shadows anywhere: cards get a woodcut hatch drawn inside their own box (padding-right/bottom 7px) and an ink frame on `::before` (`--frame` sets its colour). Pop-ups are deckled letters: the wax seal (`.seal`, added by `openModal`) cracks, then the letter unfolds. Outcomes stamp; End Year is a wax seal.
+- **Chart Table** (`:root`, no `data-style`): dark teal lacquer, gold, Almendra display.
 - **Heraldic Court** (`[data-style="heraldic"]`): royal purple, bright gold, Grenze Gotisch, banner-cut tabs and chamfered buttons.
 
 Rules:
