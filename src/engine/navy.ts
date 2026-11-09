@@ -40,17 +40,15 @@ export function makeAdmiral(s: GameState, c: Character) {
   log(s, `${c.name} takes to the sea as an admiral.`, 'good');
 }
 
-/** Play a ship card. The person who fits it out must be an admiral, or a general who becomes one. */
-export function hireShip(s: GameState, handUid: number, charUid: number): string {
+/** Play a ship card. An admiral or general may train the crew (better odds); nobody changes role. */
+export function hireShip(s: GameState, handUid: number, charUid?: number): string {
   const h = s.hand.find(x => x.uid === handUid);
   const def = h && CARDS[h.card];
   if (!def || def.kind !== 'ship') return '!Not a ship card';
-  const c = s.characters.find(x => x.uid === charUid && x.mission == null && (x.role === 'admiral' || x.role === 'general'));
-  if (!c) return '!Choose a free general or admiral';
+  const c = s.characters.find(x => x.uid === charUid && x.mission == null && (x.role === 'admiral' || x.role === 'general')) ?? null;
   const why = shipBlocked(s, def.troop!);
   if (why) return '!' + why;
-  let note = '';
-  if (c.role === 'general') { makeAdmiral(s, c); note = ` ${c.name} is now an admiral.`; }
+  const note = c ? ` Crew trained by ${c.name}.` : '';
   player(s).manpower -= 1;
   player(s).gold -= shipHireCost(s, def.troop!);
   const o = rollOutcome(s, c);

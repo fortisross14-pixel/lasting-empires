@@ -16,10 +16,10 @@ import { EVENT, eventTitle, upcomingHistory } from '../engine/events';
 import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBlocked, troopHireCost, discardCard, HAND_LIMIT, cardFor } from '../engine/cards';
 import {
   MISSION_INFO, DIPLO, missionBlocked, launchMission, cancelMission, diploChance, missionTurns, techCost, researchRate, attackRoute,
-  developCost, foundCost, growCost, importable, cardRole, voyageCost, GRADES,
+  developCost, foundCost, growCost, importable, cardRole, cardRoles, becomesOnMission, voyageCost, GRADES,
 } from '../engine/missions';
 import { buyCard, buyBlocked, hireWithCard, takeDraftOption, mergePreview, doMerge, AMBITIONS } from '../engine/drafts';
-import { regionState, discoverable, exploreChance, colonizeChance, conquistaChance, colonizeBlocked, promote, promoteBlocked, PROMOTION, colonyCost } from '../engine/overseas';
+import { regionState, discoverable, exploreChance, colonizeChance, conquistaChance, colonizeBlocked, PROMOTION, colonyCost } from '../engine/overseas';
 import { playRound, autoResolve, finishBattle, ratio, breakLevel, hp } from '../engine/battle';
 import { getGeo } from '../engine/map';
 import { h, $, clear, sleep, reduced, fmt, signed } from './dom';
@@ -480,7 +480,7 @@ function militarySheet(body: HTMLElement) {
     } })));
   body.append(fl);
   body.append(...peopleSection(['general', 'conqueror'], 'Generals and conquerors'));
-  body.append(...peopleSection(['admiral'], 'Admirals', 'No admirals yet. Fitting out a ship with a general makes them one.'));
+  body.append(...peopleSection(['admiral'], 'Admirals', 'No admirals yet. A general who leads an attack with ships becomes one, for good.'));
   body.append(recipeBook());
   return [sheetHead('Military', `Army power ${Math.round(armyPower(S.troops))}`, CAT_INFO.military.color), body];
 }
@@ -665,7 +665,7 @@ function missionsSheet(body: HTMLElement) {
 function overseasSheet(body: HTMLElement) {
   const exp = cardFor(S, 'explore');
   body.append(actionRow('anchor', 'Voyage of discovery', `An explorer sails out · ${voyageCost(S)} ducats · ${discoverable(S).length} lands within reach`, !exp ? 'Needs a Voyage of Discovery card (Diplomacy)' : missionBlocked(S, 'explore', ''), () => openPlanner('explore', '', undefined, exp!.uid)));
-  body.append(h('p', { class: 'muted' }, 'Explorers, conquerors and colonists come from your diplomats, generals and administrators. Open a person\'s card in the court panels to make them specialise.'));
+  body.append(h('p', { class: 'muted' }, 'Send a diplomat on a voyage and they become an explorer; an administrator who founds a colony becomes a colonist; a general on a conquista becomes a conqueror. For good.'));
   const groups: Record<string, string[]> = {};
   for (const r of Object.values(REGIONS)) (groups[r.where] ??= []).push(r.id);
   for (const [where, ids] of Object.entries(groups)) {
@@ -779,7 +779,6 @@ function confirmBox(title: string, text: string, okLabel: string, ok: () => void
 function charDetail(c: Character) {
   const m = c.mission != null ? S.missions.find(x => x.id === c.mission) : null;
   const to = PROMOTION[c.role];
-  const pw = promoteBlocked(S, c);
   openModal(h('div', { class: 'mbox narrow' },
     h('div', { class: 'center' }, charCard(c, S)),
     h('h2', {}, c.name),
@@ -787,9 +786,7 @@ function charDetail(c: Character) {
     h('ul', { class: 'traits' }, c.traits.map(t => h('li', {}, h('b', {}, TRAITS[t]?.name ?? t), ' ', TRAITS[t]?.desc ?? ''))),
     (c.wins ?? 0) + (c.losses ?? 0) ? h('p', {}, `Battles: ${c.wins ?? 0} won, ${c.losses ?? 0} lost.`) : null,
     m ? h('p', {}, `On a mission: ${missionTitle(m)}, ${m.turnsLeft} year(s) left.`) : null,
-    to ? h('div', { class: 'promo' }, h('b', {}, `Become ${to === 'explorer' ? 'an Explorer' : 'a ' + roleName[to]}`),
-      h('p', { class: 'muted' }, `For lands overseas. Permanent: ${c.name.split(' ')[0]} gets new ${roleName[to].toLowerCase()} traits and can no longer work as a ${roleName[c.role].toLowerCase()}.`),
-      h('button', { class: 'btn' + (pw ? ' blocked' : ''), onclick: () => { if (pw) return toast(pw, 'bad'); closeModal(); confirmBox(`Make ${c.name} ${roleName[to].toLowerCase()}?`, 'There is no going back.', 'Specialise', () => act(() => promote(S, c.uid), `${c.name} is now ${roleName[to].toLowerCase()}`)); } }, pw ?? 'Specialise')) : null,
+    to ? h('p', { class: 'muted promo' }, ({ diplomat: `Send ${c.name.split(' ')[0]} on a Voyage of Discovery and they become an explorer for good.`, general: `Lead an attack with ships to become an admiral, or a conquista to become a conqueror. Both are for good.`, admin: `Send ${c.name.split(' ')[0]} to found a colony and they become a colonist for good.` } as Record<string, string>)[c.role]) : null,
     h('div', { class: 'mrow' },
       h('button', { class: 'btn ghost', onclick: closeModal }, 'Close'),
       !m && !c.ruler ? h('button', { class: 'btn ghost danger', onclick: () => { closeModal(); confirmBox(`Dismiss ${c.name}?`, 'This frees a seat at court.', 'Dismiss', () => act(() => dismissCharacter(S, c.uid))); } }, 'Dismiss') : null)));
@@ -874,18 +871,18 @@ function openCardModal(handUid: number) {
   } else if (def.kind === 'ship') {
     body.append(h('p', {}, `Fit out for 1 manpower and ${shipHireCost(S, def.troop!)} ducats. Upkeep ${TROOPS[def.troop!].upkeep} a year. Carries ${TROOPS[def.troop!].transport} companies. Navy ${S.fleet.length}/${navyCap(S)}.`));
     const crew = S.characters.filter(c => (c.role === 'admiral' || c.role === 'general') && c.mission == null);
-    let csel: Character | null = crew.find(c => c.role === 'admiral') ?? null;
+    let csel: Character | null = crew.find(c => c.role === 'admiral') ?? crew[0] ?? null;
     const cl = h('div', { class: 'cards-row wrap' });
     const note = h('div');
     const drawC = () => {
       clear(cl); clear(note);
-      for (const c of crew) cl.append(charCard(c, S, { small: true, selected: csel?.uid === c.uid, onclick: () => { csel = c; drawC(); } }));
-      if (!crew.length) cl.append(h('p', { class: 'muted' }, 'You need a free general or admiral to command the ship.'));
-      if (csel) note.append(h('small', { class: csel.role === 'general' ? 'bad' : 'muted' }, csel.role === 'general' ? `${csel.name} will become an admiral for good: new sea skills, no more land command.` : `Fitted out by ${csel.name}:`), oddsLine(csel));
+      for (const c of crew) cl.append(charCard(c, S, { small: true, selected: csel?.uid === c.uid, onclick: () => { csel = csel?.uid === c.uid ? null : c; drawC(); } }));
+      if (!crew.length) cl.append(h('p', { class: 'muted' }, 'No free general or admiral: the crew gets Common odds.'));
+      note.append(h('small', { class: 'muted' }, csel ? `Crew trained by ${csel.name}:` : 'Without a trainer:'), oddsLine(csel));
     };
     drawC();
-    body.append(h('h3', {}, 'Choose who commands it'), cl, note);
-    footer.append(h('button', { class: 'btn primary' + (blocked || !crew.length ? ' blocked' : ''), onclick: () => { if (blocked) return toast(blocked, 'bad'); if (!csel) return toast('Choose a general or admiral', 'bad'); done(hireShip(S, handUid, csel.uid)); } }, blocked ?? 'Fit out the ship'));
+    body.append(h('h3', {}, 'Who trains the crew (optional)'), cl, note, h('p', { class: 'muted small' }, 'A general who leads an attack with ships becomes an admiral for good.'));
+    footer.append(h('button', { class: 'btn primary' + (blocked ? ' blocked' : ''), onclick: () => { if (blocked) return toast(blocked, 'bad'); done(hireShip(S, handUid, csel?.uid)); } }, blocked ?? 'Fit out the ship'));
   } else if (def.kind === 'hire') {
     body.append(h('p', {}, `Costs 1 manpower. Three candidates are revealed; you keep one. Court ${courtCount(S)}/${courtCap(S)}.`));
     footer.append(h('button', { class: 'btn primary' + (blocked ? ' blocked' : ''), onclick: () => { if (blocked) return toast(blocked, 'bad'); closeModal(); act(() => hireWithCard(S, handUid)); } }, blocked ?? 'Hire'));
@@ -953,12 +950,13 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
   const card = S.hand.find(x => x.uid === cardUid);
   if (!card) { toast('That card is gone', 'bad'); return; }
   const role = cardRole(card.card);
+  const roles = cardRoles(card.card);
   const info = MISSION_INFO[kind];
-  const chars = S.characters.filter(c => c.role === role);
+  const chars = S.characters.filter(c => roles.includes(c.role) && !(c.ruler && c.role !== role && roles[0] !== 'general'));
   const free = chars.filter(c => c.mission == null);
-  const base = Object.entries(PROMOTION).find(([, v]) => v === role)?.[0];
-  if (!chars.length) { toast(`You have no ${roleName[role].toLowerCase()}. ${base ? `Make one of your ${roleName[base as Character['role']].toLowerCase()}s specialise.` : 'Play a hiring card.'}`, 'bad'); return; }
-  if (!free.length) { toast(`All your ${roleName[role].toLowerCase()}s are busy`, 'bad'); return; }
+  const who = roles.map(r => roleName[r].toLowerCase()).join(' or ');
+  if (!chars.length) { toast(`You need a ${who}. Play a hiring card.`, 'bad'); return; }
+  if (!free.length) { toast(`Every ${who} is busy`, 'bad'); return; }
   const military = kind === 'conquer' || kind === 'raid' || kind === 'conquista';
   let ch = [...free].sort((a, b) => b.skill - a.skill)[0];
   const home = S.troops.filter(t => t.mission == null && t.str >= 30).sort((a, b) => armyPower([b]) - armyPower([a]));
@@ -985,9 +983,12 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
       if (kind === 'explore') sub = `${Math.round(exploreChance(S, c) * 100)}%`;
       if (kind === 'colonize') sub = `${Math.round(colonizeChance(S, target, c) * 100)}%`;
       if (!DIPLO.includes(kind) && kind !== 'explore' && kind !== 'colonize') sub = `${OUTCOME_ODDS[c.rarity][3] + OUTCOME_ODDS[c.rarity][4] < 1 ? '<1' : Math.round(OUTCOME_ODDS[c.rarity][3] + OUTCOME_ODDS[c.rarity][4])}% great`;
+      if (!busy && c.role !== role && role !== 'general') sub = `→ ${roleName[role]}`;
       row.append(charCard(c, S, { small: true, selected: c.uid === ch.uid, dim: busy, badge: busy ? 'busy' : sub, onclick: () => { if (busy) return toast('Busy on another mission'); ch = c; if (military) picked = picked.slice(0, maxTroops()); draw(); } }));
     }
     box.append(row);
+    const turnsInto = becomesOnMission(kind, ch, naval && ships.length > 0);
+    if (turnsInto) box.append(h('p', { class: 'bad' }, `${ch.name} will become ${turnsInto === 'explorer' || turnsInto === 'admiral' ? 'an' : 'a'} ${roleName[turnsInto].toLowerCase()} for good: new skills, no going back.`));
     if (!['conquer', 'raid'].includes(kind)) box.append(h('div', { class: 'oddsbox' }, h('small', { class: 'muted' }, `Outcome odds with a ${RARITY[ch.rarity].name} ${roleName[ch.role].toLowerCase()}:`), oddsLine(ch)));
     const turns = missionTurns(S, kind, ch, target, building);
     const facts: (string | HTMLElement)[] = [`${turns} year${turns > 1 ? 's' : ''}`];

@@ -2,8 +2,8 @@ import { newGame, endTurn, chooseEventOption, playerDeclareWar, ranking, chooseH
 import { EVENT } from '../src/engine/events';
 import { autoResolve, finishBattle } from '../src/engine/battle';
 import { takeDraftOption, doMerge, mergePreview, buyCard, hireWithCard } from '../src/engine/drafts';
-import { launchMission, missionBlocked, importable, cardRole, attackRoute } from '../src/engine/missions';
-import { promote, discoverable } from '../src/engine/overseas';
+import { launchMission, missionBlocked, importable, cardRole, cardRoles, attackRoute } from '../src/engine/missions';
+import { discoverable } from '../src/engine/overseas';
 import { hireShip, transportOf } from '../src/engine/navy';
 import { warScore, peaceTerms, concludePeace, enemyDemands, subjectsOf } from '../src/engine/diplo';
 import { REGIONS } from '../src/data/overseas';
@@ -47,7 +47,7 @@ function botTurn(s: GameState) {
     if (!s.hand.includes(h)) continue;
     const d = CARDS[h.card];
     if (d.kind === 'troop') { const g = free(s, 'general'); if (!cardBlocked(s, d) && me.gold > 30) playCard(s, h.uid, g ? String(g.uid) : ''); continue; }
-    if (d.kind === 'ship') { const g = s.characters.find(c => (c.role === 'admiral' || (c.role === 'general' && s.characters.filter(x => x.role === 'general').length > 1)) && c.mission == null); if (g && !cardBlocked(s, d) && me.gold > 50) hireShip(s, h.uid, g.uid); continue; }
+    if (d.kind === 'ship') { const g = free(s, 'admiral') ?? free(s, 'general'); if (!cardBlocked(s, d) && me.gold > 50) hireShip(s, h.uid, g?.uid); continue; }
     if (d.kind === 'hire') { if (s.characters.filter(c => c.role === d.role).length < 2) { hireWithCard(s, h.uid); resolveQueue(s); } continue; }
     if (d.kind === 'equip') {
       for (const t of s.troops) { const r = mergePreview(s, t.uid, h.uid); if (!('error' in r) && !r.tech && me.gold > r.cost + 20) { doMerge(s, t.uid, h.uid); break; } }
@@ -67,7 +67,7 @@ function botTurn(s: GameState) {
     const role = cardRole(d.id);
     if (kind === 'explore' || kind === 'colonize' || kind === 'conquista') {
       let c = free(s, role);
-      if (!c) { const base = s.characters.find(x => !x.ruler && x.mission == null && ({ explorer: 'diplomat', conqueror: 'general', colonist: 'admin' } as any)[role] === x.role && s.characters.filter(y => y.role === x.role).length > 1); if (base && !promote(s, base.uid)) c = base; }
+      if (!c) c = s.characters.find(x => !x.ruler && x.mission == null && cardRoles(d.id).includes(x.role) && s.characters.filter(y => y.role === x.role).length > 1);
       if (!c) continue;
       if (kind === 'explore') { if (discoverable(s).length && me.gold > 60) launchMission(s, 'explore', c.uid, '', [], undefined, h.uid); continue; }
       const tgt = Object.keys(REGIONS).find(id => !missionBlocked(s, kind, id));
@@ -77,7 +77,7 @@ function botTurn(s: GameState) {
       continue;
     }
     if (kind === 'conquer') {
-      const g = free(s, role); if (!g) continue;
+      const g = free(s, 'admiral') ?? free(s, role); if (!g) continue;
       const en = enemiesOf(s, s.player);
       const targets = Object.values(s.provinces).filter(p => en.includes(p.owner) && !missionBlocked(s, 'conquer', p.id)).sort((a, b) => a.fort - b.fort);
       const home = s.troops.filter(t => t.mission == null && t.str > 40);

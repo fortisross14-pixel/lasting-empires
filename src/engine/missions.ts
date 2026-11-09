@@ -7,13 +7,13 @@ import { RELIGION_NAMES, isAccepted } from './society';
 import { transportOf } from './navy';
 import { colonizeBlocked, conquistaBlocked, discoverable, resolveExplore, resolveColonize, resolveConquista, colonyCost } from './overseas';
 import { GOODS } from '../data/goods';
-import { OUTCOMES } from '../data/characters';
+import { OUTCOMES, RARITY } from '../data/characters';
 import { TECH } from '../data/techs';
 import { BUILDINGS } from '../data/techs';
 import {
   player, provsOf, hasTech, getRel, addRel, addTreaty, hasTreaty, atWar, findWar, makePeace, rulerMod, clamp,
   rand, pick, uid, log, nationName, armyPower, buildingAllowed, push, buildingCost, inflation, ownGoods, traitMult, promoteRarity,
-  rollOutcome, outcomeName, TIERS, tierOf, GROW_DEV, hasCore, rollBest,
+  rollOutcome, outcomeName, TIERS, tierOf, GROW_DEV, hasCore, rollBest, rollTraits,
 } from './core';
 import { getGeo } from './map';
 import { createBattle, makeSide, toBattleUnits, genericGeneral, freeMission, transferProvince } from './battle';
@@ -47,6 +47,32 @@ export const MISSION_INFO: Record<MissionKind, { name: string; role: Role; icon:
 export function cardRole(cardId: string): Role {
   const d = CARDS[cardId];
   return d.agent ?? CAT_INFO[d.cat].role;
+}
+
+const SPECIAL_BASE: Partial<Record<Role, Role>> = { explorer: 'diplomat', colonist: 'admin', conqueror: 'general' };
+
+/** Everyone who may take this card. People of the base role turn into the specialist when sent. */
+export function cardRoles(cardId: string): Role[] {
+  const r = cardRole(cardId);
+  if (r === 'general') return ['general', 'admiral'];
+  const base = SPECIAL_BASE[r];
+  return base ? [r, base] : [r];
+}
+
+/** The role this person takes on for good by going on this mission, if any. */
+export function becomesOnMission(kind: MissionKind, ch: Character, withShips: boolean): Role | null {
+  if (ch.ruler) return null;
+  if (kind === 'explore' && ch.role === 'diplomat') return 'explorer';
+  if (kind === 'colonize' && ch.role === 'admin') return 'colonist';
+  if (kind === 'conquista' && ch.role === 'general') return 'conqueror';
+  if ((kind === 'conquer' || kind === 'raid') && withShips && ch.role === 'general') return 'admiral';
+  return null;
+}
+
+function specialise(s: GameState, ch: Character, role: Role) {
+  ch.role = role;
+  ch.traits = rollTraits(s, role, RARITY[ch.rarity].traits);
+  log(s, `${ch.name} becomes ${role === 'explorer' || role === 'admiral' ? 'an ' + role : 'a ' + role}. There is no going back.`, 'good');
 }
 
 const townSlotsText = (lvl: number) => `${[0, 1, 2, 4, 6][lvl]} town building slots.`;
@@ -271,8 +297,9 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   if (kind === 'build' && cdef.group && BUILDINGS[building!]?.group !== cdef.group) return 'This card builds another kind of building';
   const ch = s.characters.find(c => c.uid === charUid);
   if (!ch || ch.mission != null) return 'Choose a free character';
-  const role = cardRole(cdef.id);
-  if (ch.role !== role) return `Needs a ${role}`;
+  const roles = cardRoles(cdef.id);
+  if (!roles.includes(ch.role)) return `Needs a ${roles.join(' or ')}`;
+  if (ch.ruler && roles[0] !== ch.role && SPECIAL_BASE[roles[0]]) return 'The monarch cannot leave the court for this'; 
   const why = kind === 'colonize' ? colonizeBlocked(s, target, ch) : missionBlocked(s, kind, target, building);
   if (why) return why;
   if ((kind === 'conquer' || kind === 'raid' || kind === 'conquista') && !troopUids.length) return 'Send at least one troop';
@@ -300,6 +327,8 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   for (const t of s.troops) if (troopUids.includes(t.uid)) t.mission = m.id;
   for (const t of s.fleet) if (shipUids.includes(t.uid)) t.mission = m.id;
   if (shipUids.length) m.ships = shipUids;
+  const becomes = becomesOnMission(kind, ch, shipUids.length > 0);
+  if (becomes) specialise(s, ch, becomes);
   if (kind === 'patronage') { m.progress = patronageCost(s); player(s).gold -= m.progress; }
   s.missions.push(m);
   return null;
@@ -381,7 +410,7 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
     if (prov.owner !== s.player && atWar(s, s.player, prov.owner) && m.ships?.length) {
       const enemyFleet = [...(s.nations[prov.owner].fleet ?? [])].sort((a, b) => armyPower([b]) - armyPower([a])).slice(0, 6);
       if (enemyFleet.length) {
-        const adm = s.characters.find(c => c.role === 'admiral' && c.mission == null) ?? ch;
+        const adm = ch;
         const att = makeSide(s.player, toBattleUnits(s.fleet.filter(t => m.ships!.includes(t.uid))), { name: adm.name, skill: adm.skill, traits: adm.traits, uid: adm.uid, mult: traitMult(adm) }, 0, true);
         const def = makeSide(prov.owner, toBattleUnits(enemyFleet), genericGeneral(s), 0, false);
         push(s, { kind: 'battle', battle: createBattle(s, att, def, prov.id, 'sea', m.id, { naval: true, follow: { type: 'land-attack', missionId: m.id } }) });
