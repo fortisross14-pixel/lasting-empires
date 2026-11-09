@@ -1,4 +1,6 @@
 import { newGame, endTurn, chooseEventOption, playerDeclareWar, ranking, chooseHeir, adoptCore, coreBlocked } from '../src/engine/turn';
+if (process.env.NOWARCARDS) (globalThis as { NOWARCARDS?: boolean }).NOWARCARDS = true;
+if (process.env.HANDLIMIT) (globalThis as { HANDLIMIT?: boolean }).HANDLIMIT = true;
 import { EVENT } from '../src/engine/events';
 import { autoResolve, finishBattle } from '../src/engine/battle';
 import { takeDraftOption, doMerge, mergePreview, buyCard, hireWithCard, sellOffices, officeCost } from '../src/engine/drafts';

@@ -87,7 +87,7 @@ export function declareWar(s: GameState, a: string, b: string) {
   addRel(s, a, b, -40);
   s.wars.push({ a, b, since: s.year, gainsA: 0, gainsB: 0 });
   // marching orders for the player: three to open a war, two to answer one
-  if (a === s.player || b === s.player) grantWarCards(s, a === s.player ? 3 : 2);
+  if ((a === s.player || b === s.player) && !(globalThis as { NOWARCARDS?: boolean }).NOWARCARDS) grantWarCards(s, a === s.player ? 3 : 2);
   // an attack on a subject is an attack on its overlord, and subjects follow their overlord
   const lord = s.nations[b]?.overlord;
   if (lord && lord !== a && !atWar(s, a, lord)) s.wars.push({ a, b: lord, since: s.year, gainsA: 0, gainsB: 0 });

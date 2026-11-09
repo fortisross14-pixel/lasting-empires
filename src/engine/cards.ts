@@ -10,7 +10,7 @@ import { largestForeignCulture, CULTURE_NAMES } from './society';
 import { CORE_RATES } from '../data/core';
 import { shipBlocked } from './navy';
 import { shortfallCost, takeGoods, hireNeeds } from './trade';
-import { setCardPool } from './culture';
+import { setCardPool, acceptCap } from './culture';
 import {
   ageId, ageDef, pioneerNow, enemiesOf, player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore,
 } from './core';
@@ -33,7 +33,11 @@ export interface HandCardDef {
 
 export const HAND_LIMIT = 7;
 /** There is no limit to the cards you hold: the yearly draw and missions a year are the limits. */
-export function handLimit(_s: GameState): number { return Infinity; }
+export function handLimit(s: GameState): number {
+  if (!(globalThis as { HANDLIMIT?: boolean }).HANDLIMIT) return Infinity;
+  const k = provsOf(s, s.player).length; // the old limit, kept for balance tests
+  return 3 + (k >= 5 ? 1 : 0) + (k >= 10 ? 1 : 0) + (k >= 16 ? 1 : 0) + (k >= 25 ? 1 : 0);
+}
 export const RATE_CAP = 2.5;
 export const CAT_INFO: Record<Cat, { name: string; icon: string; role: Role; color: string }> = {
   military: { name: 'Military', icon: 'sword', role: 'general', color: '#6e2b2b' },
@@ -136,7 +140,7 @@ add({ id: 'festival', name: 'Royal Festival', cat: 'culture', kind: 'instant', i
   can: s => player(s).gold < Math.round(15 * inflation(s)) ? `Needs ${Math.round(15 * inflation(s))} ducats` : null,
   play: s => { player(s).gold -= Math.round(15 * inflation(s)); s.flags.festival_until = s.year + 5; return 'Bells, bonfires and bullfights: happiness +8 for 5 years'; } });
 add({ id: 'charter', name: 'Charter of Privileges', cat: 'culture', kind: 'instant', icon: 'scroll', text: 'Accept the largest foreign culture in your realm. Its people stop feeling like outsiders.', weight: s => (provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? 0.6 : 0),
-  can: s => (provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? null : 'Every culture is already accepted'),
+  can: s => (!provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? 'Every culture is already accepted' : s.accepted.length >= acceptCap(s) ? `You can embrace ${acceptCap(s)} cultures (more with a bigger realm)` : null),
   play: s => { const c = largestForeignCulture(s)!; s.accepted.push(c); return `${CULTURE_NAMES[c] ?? c} culture is accepted`; } });
 add({ id: 'tolerance', name: 'Edict of Tolerance', cat: 'culture', kind: 'instant', icon: 'dove', text: 'For 20 years, other faiths are less unhappy. The Papacy disapproves (−20).', weight: s => (provsOf(s, s.player).some(p => p.religion !== s.stateReligion) ? 0.6 : 0),
   play: s => { s.flags.tolerance_until = s.year + 20; addRel(s, s.player, 'papacy', -20); return 'Other faiths may worship in peace'; } });
