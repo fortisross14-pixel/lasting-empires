@@ -5,11 +5,12 @@ import { TROOPS, EQUIPMENT, COUNTER_TEXT } from '../data/troops';
 import { TECHS, TECH, BUILDINGS, type TechTrack } from '../data/techs';
 import { TRAITS, RARITY, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
 import { GOODS } from '../data/goods';
-import { eraOf } from '../data/eras';
+import { AGE_TECH, ERA, PIONEER_YEARS } from '../data/eras';
+import { ageOf, nextAge } from '../engine/ages';
 import { REGIONS, HOME_REGIONS, NATIVE_EMPIRES } from '../data/overseas';
 import { NO_STATE } from '../data/nations';
 import {
-  player, push, provsOf, incomeOf, playerManpower, getRel, atWar, hasTreaty, enemiesOf, alliesOf, armyPower,
+  player, push, pioneerNow, provsOf, incomeOf, playerManpower, getRel, atWar, hasTreaty, enemiesOf, alliesOf, armyPower,
   armyCap, courtCap, courtCount, provinceIncome, buildingAllowed, buildingCost, roleName, nationName, inTruce,
   tierOf, TIERS, population, townSlots, ruralSlots, builtAt, ownGoods, colonyGoods, coreSlots,
 } from '../engine/core';
@@ -275,8 +276,12 @@ function act(fn: () => string | null | void, okMsg?: string) {
 
 // ---------- top bar ----------
 function showEra() {
-  const e = eraOf(S.year);
-  push(S, { kind: 'reveal', title: e.name, subtitle: `${e.from}–${e.to}`, items: [{ title: 'This age', text: e.text, tone: 'neutral', kind: 'star' }, ...e.effects.map(x => ({ title: 'Effect', text: x, tone: 'good' as const, kind: e.icon }))] });
+  const e = ageOf(S), next = nextAge(S);
+  const who = S.age?.pioneer ? (S.age.pioneer === S.player ? 'You opened it' : `Opened by ${nationName(S, S.age.pioneer)}`) : 'The world begins here';
+  const items: RevealItem[] = [{ title: `Since ${S.age?.since ?? S.startYear}`, text: `${e.text} ${who}.`, tone: 'neutral', kind: 'star' }, ...e.effects.map(x => ({ title: 'This age', text: x, tone: 'good' as const, kind: e.icon }))];
+  if (pioneerNow(S)) items.push({ title: 'Pioneer', text: `+0.4 ${e.focus} cards a year until ${(S.age?.since ?? 0) + PIONEER_YEARS}.`, tone: 'good', kind: 'crown' });
+  if (next) items.push({ title: `Next: ${next.name}`, text: `${next.opens?.how ?? ''} The realm that opens it gains prestige, nation points, 2 ${next.focus} cards and a ${PIONEER_YEARS}-year bonus.`, tone: 'neutral', kind: next.icon });
+  push(S, { kind: 'reveal', title: e.name, subtitle: 'The ages open by research and events, not by the calendar', items });
   processQueue();
 }
 
@@ -289,7 +294,7 @@ function renderTop() {
     h('button', { class: 'crest', onclick: () => toggleSheet('realm'), style: `--nc:${me.color}` },
       h('span', { class: 'np-shield sm' }, me.name[0]),
       h('span', { class: 'crest-t' }, h('b', {}, me.name), h('small', {}, me.ruler.name))),
-    h('button', { class: 'year', title: eraOf(S.year).name, onclick: () => showEra() }, h('span', { class: 'year-n' }, String(S.year)), h('small', {}, eraOf(S.year).name.replace('Age of ', ''))),
+    h('button', { class: 'year', title: ageOf(S).name, onclick: () => showEra() }, h('span', { class: 'year-n' }, String(S.year)), h('small', {}, ageOf(S).name.replace('Age of ', ''))),
     h('div', { class: 'res' },
       chip('coin', fmt(me.gold), signed(inc.total), 'Ducats', inc.total < 0 ? 'bad' : ''),
       chip('people', String(Math.floor(me.manpower)), '+' + mp.gain.toFixed(1), 'Manpower'),
@@ -771,7 +776,7 @@ function researchSheet(body: HTMLElement) {
       const cost = techCost(S, t.id);
       col.append(h('button', { class: `tech${known ? ' known' : m ? ' active' : why ? ' locked' : ''}`, onclick: () => (known ? toast(t.desc) : m ? toast(`Being studied: ${m.turnsLeft} year(s) left`) : why ? toast(why, 'bad') : !card ? toast(`Needs a ${label} treatise card`, 'bad') : openPlanner('research', t.id, undefined, card.uid)) },
         h('span', { class: 'tech-t' }, h('b', {}, t.name), h('small', {}, known ? 'Known' : m ? `${Math.floor(m.progress)}/${cost} · ${m.turnsLeft} yr` : `${t.year} · ${cost} pts${t.year > S.year ? ' (ahead of its time)' : ''}`)),
-        h('span', { class: 'tech-d' }, t.desc)));
+        h('span', { class: 'tech-d' }, t.desc), AGE_TECH[t.id] ? h('span', { class: 'tech-age' }, `Opens the ${ERA[AGE_TECH[t.id]].name} for the whole world`) : null));
     }
     wrap.append(col);
   }

@@ -226,6 +226,7 @@ export interface GameState {
   accepted: string[];               // accepted cultures
   stateReligion: string;
   happiness: number;                // national, 0..100 (cached each year)
+  age?: { id: string; since: number; pioneer?: string }; // the current age and who opened it
   coreChanged: number;              // year of the last change
   troops: TroopCard[];
   equipment: EquipCard[];

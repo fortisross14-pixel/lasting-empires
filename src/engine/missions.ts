@@ -1,5 +1,5 @@
 // Missions: characters (and troops) sent to do things over several years.
-import { eraOf } from '../data/eras';
+import { onTech } from './ages';
 import type { GameState, Mission, MissionKind, RevealItem, Character, Role } from '../types';
 import { CARDS, drawCat, CAT_INFO } from './cards';
 import { vassalizeBlocked, integrateBlocked, makeSubject, integrate } from './diplo';
@@ -13,7 +13,7 @@ import { TECH } from '../data/techs';
 import { BUILDINGS } from '../data/techs';
 import {
   player, provsOf, hasTech, getRel, addRel, addTreaty, hasTreaty, atWar, findWar, makePeace, rulerMod, clamp,
-  rand, pick, uid, log, nationName, armyPower, buildingAllowed, push, buildingCost, inflation, ownGoods, traitMult, promoteRarity,
+  ageId, rand, pick, uid, log, nationName, armyPower, buildingAllowed, push, buildingCost, inflation, ownGoods, traitMult, promoteRarity,
   rollOutcome, outcomeName, TIERS, tierOf, GROW_DEV, hasCore, rollBest, rollTraits,
 } from './core';
 import { getGeo } from './map';
@@ -278,6 +278,7 @@ export function missionBlocked(s: GameState, kind: MissionKind, target: string, 
     return null;
   }
   if (kind === 'explore') {
+    if (ageId(s) === 'reconquest') return 'The Age of Discovery has not begun: research Ocean Navigation, or wait for another realm to';
     if (!discoverable(s).length) return 'There is nothing left you can reach (Ocean Navigation opens farther seas)';
     if (player(s).gold < voyageCost(s)) return `Needs ${voyageCost(s)} ducats`;
     return null;
@@ -412,6 +413,7 @@ function finish(s: GameState, m: Mission) { freeMission(s, m.id); s.missions = s
 function completeResearch(s: GameState, m: Mission, ch: Character) {
   const t = TECH[m.target];
   s.techs.push(t.id);
+  onTech(s, t.id);
   player(s).prestige += 1;
   if (t.id === 'bureaucracy' || t.id === 'absolutism') player(s).stability = clamp(player(s).stability + 1, -3, 3);
   if (t.id === 'star_forts') { const cap = s.provinces[player(s).capital]; if (cap && cap.owner === s.player) cap.fort = Math.min(3, cap.fort + 1); }
@@ -654,7 +656,7 @@ function resolveOther(s: GameState, m: Mission, ch: Character) {
     const prov = s.provinces[m.target];
     if (prov.owner !== s.player) { finish(s, m); return; }
     let o = rollOutcome(s, ch);
-    if (o === 0 && m.kind === 'convert' && eraOf(s.year).id === 'reformation' && rand(s) < 0.4) o = 1;
+    if (o === 0 && m.kind === 'convert' && ageId(s) === 'reformation' && rand(s) < 0.4) o = 1;
     const items: RevealItem[] = [];
     if (o === 0) {
       prov.control = Math.max(0, prov.control - 15);

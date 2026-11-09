@@ -2,7 +2,8 @@
 import { GOODS } from '../data/goods';
 import { initKnownWorld } from './overseas';
 import { poolFor } from '../data/names';
-import { eraOf, ERAS } from '../data/eras';
+import { yearlyAges } from './ages';
+import { eraOfYear } from '../data/eras';
 import type { GameState, Nation, Ruler, RevealItem, Heir, Character } from '../types';
 import { CATS } from '../types';
 import { NATIONS, START_REL, RULERS, RULER_NAMES, RULER_ARCHS, archFromTraits } from '../data/nations';
@@ -11,7 +12,7 @@ import { BUILDINGS } from '../data/techs';
 import { CORE } from '../data/core';
 import {
   rand, pick, randInt, uid, clamp, player, provsOf, incomeOf, log, push, addRel, playerManpower, initialSettlement, grade,
-  addTreaty, hasTech, genCharacter, declareWar, nationName, atWar, getRel, hasGood, armyPower, hasCore, coreSlots, hasTreaty,
+  addTreaty, hasTech, genCharacter, declareWar, nationName, atWar, getRel, hasGood, armyPower, hasCore, coreSlots, hasTreaty, ageId,
 } from './core';
 import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS } from './cards';
 import { advanceMissions } from './missions';
@@ -307,11 +308,7 @@ export function endTurn(s: GameState): YearReport | null {
   yearlyFleet(s);
   yearlySociety(s);
   s.year++;
-  const era = eraOf(s.year);
-  if (era.from === s.year && ERAS[0] !== era) {
-    push(s, { kind: 'reveal', title: era.name, subtitle: `${era.from}–${era.to}`, items: [{ title: 'A new age begins', text: era.text, tone: 'neutral', kind: 'star' }, ...era.effects.map(e => ({ title: 'This age', text: e, tone: 'good' as const, kind: era.icon }))] });
-    log(s, `The ${era.name} begins.`, 'neutral');
-  }
+  yearlyAges(s);
   characterAging(s);
   successionCheck(s);
   rollEvents(s);
@@ -349,7 +346,7 @@ export function warCost(s: GameState, target: string): number {
   if (s.flags['claim_' + target]) return 0;
   const allied = s.treaties.some(t => (t.kind === 'alliance' || t.kind === 'marriage') && ((t.a === s.player && t.b === target) || (t.b === s.player && t.a === target)));
   let c = allied ? 2 : 1;
-  if (eraOf(s.year).id === 'reconquest' && s.provinces[s.nations[target]?.capital]?.religion !== s.stateReligion) c -= 1;
+  if (ageId(s) === 'reconquest' && s.provinces[s.nations[target]?.capital]?.religion !== s.stateReligion) c -= 1;
   if (hasCore(s, 'expansion')) c -= 1;
   if (hasCore(s, 'consolidation')) c += 1;
   return Math.max(0, c);
@@ -393,6 +390,7 @@ export function dropCore(s: GameState, id: string): string | null {
 export function migrate(s: GameState): GameState {
   s.core ??= []; s.coreChanged ??= -99; s.overseas ??= {}; s.imports ??= [];
   s.fleet ??= []; s.accepted ??= [];
+  s.age ??= { id: eraOfYear(s.year).id, since: s.year };
   for (const n of Object.values(s.nations)) n.fleet ??= [];
   initSociety(s);
   for (const p of Object.values(s.provinces)) { p.settlement ??= 0; p.grades ??= {}; }

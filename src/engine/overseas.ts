@@ -1,12 +1,11 @@
 // Lands beyond the sea: discovery, colonies and conquest, and the people who specialise in them.
 import type { GameState, Character, RevealItem, Role } from '../types';
 import { REGIONS, HOME_REGIONS, WORLD_VIEW, NATIVE_EMPIRES, COLONIAL_AI, type RegionDef } from '../data/overseas';
-import { eraOf } from '../data/eras';
 import { KNOWN_REGIONS } from '../data/provinces';
 import { NO_STATE } from '../data/nations';
 import { GOODS } from '../data/goods';
 import { RARITY } from '../data/characters';
-import { player, provsOf, hasTech, rand, clamp, armyPower, rollTraits, traitMult, inflation, log, nationName, weighted, hasCore } from './core';
+import { ageId, player, provsOf, hasTech, rand, clamp, armyPower, rollTraits, traitMult, inflation, log, nationName, weighted, hasCore } from './core';
 import { getGeo, neighbours } from './map';
 import { transferProvince } from './battle';
 
@@ -31,13 +30,13 @@ export const provKnown = (s: GameState, provId: string) => regionKnown(s, provRe
 
 /** Regions an explorer could find next. */
 export function discoverable(s: GameState): RegionDef[] {
+  if (ageId(s) === 'reconquest') return [];
   const all = [...new Set(getGeo().seeds.map(x => x.region))];
   const linked = (r: string) => getGeo().seeds.some(x => x.region === r && neighbours(x.id).some(nb => regionKnown(s, provRegion(nb))));
   return all.filter(id => !regionKnown(s, id)).map(regionDef).filter(r => {
     const near = linked(r.id);
     if (!near && r.needs && !r.needs.some(n => regionKnown(s, n))) return false;
     const dist = near ? 1 : r.dist;
-    if (dist >= 2 && !hasTech(s, 'navigation') && s.year < 1480) return false;
     if (dist >= 3 && !hasTech(s, 'navigation')) return false;
     return true;
   });
@@ -55,7 +54,7 @@ export function exploreChance(s: GameState, ch: Character): number {
   if (ch.traits.includes('navigator')) p += 0.15 * traitMult(ch);
   if (hasTech(s, 'navigation')) p += 0.15;
   if (hasCore(s, 'sea')) p += 0.15;
-  if (eraOf(s.year).id === 'discovery') p += 0.1;
+  if (ageId(s) === 'discovery') p += 0.1;
   return clamp(p, 0.1, 0.95);
 }
 
@@ -65,12 +64,13 @@ const touches = (s: GameState, id: string, n = s.player) => neighbours(id).some(
 /** Can the player's ships reach this province across the ocean? */
 export function oceanReach(s: GameState, id: string): boolean {
   if (!getGeo().coastal[id] || !provKnown(s, id) || !hasCoast(s)) return false;
+  if (ageId(s) === 'reconquest') return false; // no ocean crossings before the Age of Discovery
   const r = regionDef(provRegion(id));
   if (r.dist >= 2 && !hasTech(s, 'navigation')) return false;
   return true;
 }
 
-export const colonyCost = (s: GameState) => Math.round(40 * inflation(s) * (eraOf(s.year).id === 'discovery' ? 0.75 : 1));
+export const colonyCost = (s: GameState) => Math.round(40 * inflation(s) * (ageId(s) === 'discovery' ? 0.75 : 1));
 
 export function colonizeBlocked(s: GameState, id: string, ch?: Character): string | null {
   const p = s.provinces[id];
@@ -90,7 +90,7 @@ export function colonizeChance(s: GameState, id: string, ch: Character): number 
   let c = 0.6 + ch.skill * 0.06 - (p?.dev ?? 1) * 0.06;
   if (ch.traits.includes('settler')) c += 0.15 * traitMult(ch);
   if (ch.traits.includes('missionary')) c += 0.1 * traitMult(ch);
-  if (eraOf(s.year).id === 'discovery') c += 0.1;
+  if (ageId(s) === 'discovery') c += 0.1;
   return clamp(c, 0.1, 0.95);
 }
 
@@ -206,7 +206,8 @@ export function aiOverseas(s: GameState) {
     if (id === s.player || !n?.alive || n.overlord || s.year < from || !hasCoast(s, id)) continue;
     if (rand(s) > 0.05) continue;
     const age = s.year - from;
-    const reach = (r: string) => { const d = REGIONS[r]?.dist ?? 1; return d === 1 || (d === 2 && age > 10) || (d === 3 && age > 30); };
+    const open = ageId(s) !== 'reconquest' ? s.year - (s.age?.since ?? s.year) : -1;
+    const reach = (r: string) => { const d = REGIONS[r]?.dist ?? 1; return d === 1 || (open >= 0 && ((d === 2 && open > 3) || (d === 3 && open > 20))); };
     const mine = new Set(provsOf(s, id).map(p => provRegion(p.id)));
     const opts = free.filter(p => p.owner === NO_STATE && getGeo().coastal[p.id] && reach(provRegion(p.id)))
       .map(p => [p, (mine.has(provRegion(p.id)) ? 4 : 1) * (touches(s, p.id, id) ? 3 : 1)] as [typeof p, number]);

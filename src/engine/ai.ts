@@ -48,7 +48,7 @@ function aiEconomy(s: GameState, n: Nation) {
   n.manpower = Math.min(manpowerMax(s, n.id), n.manpower + manpowerGain(s, n.id));
   for (const t of n.army) t.str = Math.min(100, t.str + 20);
   // AI realms slowly develop their land, the way a player would
-  for (const p of provsOf(s, n.id)) if (p.dev < 8 && rand(s) < 0.012 + (n.personality === 'merchant' ? 0.003 : 0)) p.dev++;
+  for (const p of provsOf(s, n.id)) if (p.dev < 8 && rand(s) < 0.007 + (n.personality === 'merchant' ? 0.002 : 0)) p.dev++;
   if (n.gold < -20 && n.army.length) { n.army.splice(Math.floor(rand(s) * n.army.length), 1); n.gold += 10; }
   // recruit
   const cap = aiArmyCap(s, n);

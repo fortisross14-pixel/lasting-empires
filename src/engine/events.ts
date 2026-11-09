@@ -9,6 +9,7 @@ import {
 import { addCard, grantRandomCards } from './cards';
 import { endWar } from './missions';
 import { regionState } from './overseas';
+import { ageOf, ageReached, openAge } from './ages';
 import { unionClaim, subjectsOf, makeSubject } from './diplo';
 import { happinessOf, CULTURE_NAMES } from './society';
 import { getGeo } from './map';
@@ -150,6 +151,7 @@ export const EVENTS: EventDef[] = [
         if (rand(s) < p) {
           s.flags.new_world = 1; s.flags.new_world_income = 2; player(s).prestige += 15;
           regionState(s, 'caribbean').found = true;
+          openAge(s, 'discovery', P(s)); // a voyage like this opens the age, if no one has yet
           addCards(s, 'treasure_fleet', 1); addCards(s, 'conquistadors', 1); addCard(s, 'colonial_charter'); addCard(s, 'conquista');
           if (!s.usedLegends.includes('columbus')) { s.usedLegends.push('columbus'); s.characters.push({ uid: uid(s), name: 'Cristóbal Colón', role: 'explorer', skill: 5, traits: ['navigator', 'survivor'], born: s.year - 40, dies: 1506, rarity: 'legendary', xp: 0, legendId: 'columbus' }); }
           return [good('Land beyond the Ocean!', 'Colón finds the Antilles, the door to a New World. Prestige +15, and he joins your court as an explorer. Settle it with colonists, or send conquerors.', 'anchor')];
@@ -214,7 +216,8 @@ export const EVENTS: EventDef[] = [
     ],
   },
   {
-    id: 'reformation', history: true, title: 'The Reformation', art: 'book', window: [1517, 1532], chance: 0.3,
+    id: 'reformation', title: 'The Reformation', art: 'book', chance: 0.5,
+    cond: s => ageReached(s, 'reformation') && s.stateReligion === 'catholic',
     text: () => 'A German monk has nailed his theses to a church door. Printed pamphlets spread his ideas faster than any preacher. Unrest stirs everywhere.',
     options: [
       { label: 'Defend the faith (−30 ducats)', can: s => player(s).gold < 30 ? 'Needs 30 ducats' : null, run: s => { player(s).gold -= 30; stab(s, 1); player(s).prestige += 10; addRel(s, P(s), 'papacy', 20); return [good('Champion of Rome', 'Stability +1, prestige +10, Papacy +20.', 'church')]; } },
@@ -414,6 +417,16 @@ export const EVENTS: EventDef[] = [
     ],
   },
 
+  // ---------- ages opened by events ----------
+  {
+    id: 'reformer', title: 'A Reformer at Court', art: 'book', chance: 0.12, repeat: 4,
+    cond: s => ageOf(s).id === 'discovery' && s.techs.includes('printing') && s.stateReligion === 'catholic' && s.year >= 1490,
+    text: () => 'A learned monk, armed with your printing presses, preaches against the sale of indulgences and the wealth of Rome. The bishops demand his head. Thousands come to hear him.',
+    options: [
+      { label: 'Protect him', hint: 'Opens the Age of Reformation for the whole world; you are its pioneer', run: s => { stab(s, -1); addRel(s, P(s), 'papacy', -30); openAge(s, 'reformation', P(s)); return [good('The world will change', 'You open the Age of Reformation. Stability −1, the Pope is furious (−30).', 'book')]; } },
+      { label: 'Hand him to the Church', run: s => { addRel(s, P(s), 'papacy', 10); return [neutral('Silenced', 'For now. Papacy +10. Another prince may not be so obedient.', 'church')]; } },
+    ],
+  },
   // ---------- the world reacts: proposals from other crowns ----------
   {
     id: 'ai_alliance', title: s => 'An Offer of Alliance', art: 'hands', chance: 0.12, repeat: 5,
@@ -468,8 +481,8 @@ export const EVENTS: EventDef[] = [
   },
   // ---------- the realm reacts to how you rule ----------
   {
-    id: 'protestant_minority', title: 'The New Faith Spreads', art: 'church', chance: 0.15, repeat: 12, window: [1520, 1700],
-    cond: s => s.stateReligion === 'catholic' && provsOf(s, P(s)).some(p => p.religion === 'catholic' && p.settlement >= 2),
+    id: 'protestant_minority', title: 'The New Faith Spreads', art: 'church', chance: 0.15, repeat: 12,
+    cond: s => ageReached(s, 'reformation') && s.stateReligion === 'catholic' && provsOf(s, P(s)).some(p => p.religion === 'catholic' && p.settlement >= 2),
     setup: s => { const ps = provsOf(s, P(s)).filter(p => p.religion === s.stateReligion && p.settlement >= 2); return ps.length ? { prov: pick(s, ps).id } : null; },
     text: (s, v) => `Preachers of the new faith fill the squares of ${s.provinces[v.prov].name}. Printers spread their pamphlets faster than your bishops can burn them.`,
     options: [

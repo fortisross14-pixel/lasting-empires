@@ -840,3 +840,5 @@ ul.traits { margin: 0; padding-left: 18px; }
 #map .prov.picked { fill-opacity: 1; stroke: var(--gold-2); stroke-width: 2.4; }
 [data-style="chancery"] #map .prov.picked { stroke: var(--wax); }
 [data-style="chancery"] .pick-top, [data-style="chancery"] .pick-feat, [data-style="chancery"] .pick-panel { background: var(--panel); border-color: var(--text); }
+.tech-age { font-size: 12px; color: var(--gold-2); font-weight: 700; }
+[data-style="chancery"] .tech-age { color: var(--wax); }

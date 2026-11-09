@@ -1,5 +1,5 @@
 // World provinces in 1453. One line each:
-// id;Name;owner;development;fort;lon;lat;raw material;discovery region
+// id;Name;owner;development;fort;lon;lat;raw material;discovery region[;culture]
 // Regions marked as known at the start are listed in KNOWN_REGIONS.
 
 export const KNOWN_REGIONS = ['europe', 'north_africa', 'middle_east', 'atlantic', 'russia', 'central_asia'];
@@ -375,12 +375,13 @@ newzealand;New Zealand;natives;1;0;175.0;-39.0;timber;oceania
 
 export interface ProvinceSeed {
   id: string; name: string; owner: string; dev: number; fort: number; lon: number; lat: number; good: string; region: string;
+  culture?: string; // optional: overrides the owner's culture
 }
 
 export function parseTable(t: string): ProvinceSeed[] {
   return t.trim().split('\n').filter(l => l.trim() && !l.startsWith('#')).map(l => {
-    const [id, name, owner, dev, fort, lon, lat, good, region] = l.split(';');
-    return { id, name, owner, dev: +dev, fort: +fort, lon: +lon, lat: +lat, good, region };
+    const [id, name, owner, dev, fort, lon, lat, good, region, culture] = l.split(';').map(x => x.trim());
+    return { id, name, owner, dev: +dev, fort: +fort, lon: +lon, lat: +lat, good, region, ...(culture ? { culture } : {}) };
   });
 }
 

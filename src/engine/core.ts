@@ -1,6 +1,6 @@
 // Shared helpers: RNG, lookups, relations, treaties, wars, logging.
 import { poolFor } from '../data/names';
-import { eraOf } from '../data/eras';
+import { eraOfYear, ERA, PIONEER_YEARS } from '../data/eras';
 import type { GameState, Nation, TroopCard, Character, Role, LogEntry, Prompt, Rarity, Province } from '../types';
 import { TROOPS } from '../data/troops';
 import { BUILDINGS, TECH } from '../data/techs';
@@ -30,6 +30,12 @@ export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.mi
 
 // ---------- lookups ----------
 export const player = (s: GameState): Nation => s.nations[s.player];
+/** The current age (opened by research or events). */
+export const ageId = (s: GameState) => s.age?.id ?? eraOfYear(s.year).id;
+/** The age's own data. */
+export const ageDef = (s: GameState) => ERA[ageId(s)];
+/** The player opened the current age not long ago. */
+export const pioneerNow = (s: GameState) => s.age?.pioneer === s.player && s.year < (s.age?.since ?? 0) + PIONEER_YEARS;
 export const provsOf = (s: GameState, n: string) => Object.values(s.provinces).filter(p => p.owner === n);
 export const hasTech = (s: GameState, t: string) => s.techs.includes(t);
 export const nationName = (s: GameState, n: string) => s.nations[n]?.name ?? n;
@@ -192,7 +198,7 @@ export interface IncomeBreakdown {
 /** Running a realm costs more than it grows: courts, officials, garrisons. */
 export function administration(s: GameState, n: string) {
   const k = provsOf(s, n).length;
-  return 0.14 * Math.pow(k, 1.45) * inflation(s) * (eraOf(s.year).id === 'absolutism' ? 0.85 : 1);
+  return 0.14 * Math.pow(k, 1.45) * inflation(s) * (ageId(s) === 'absolutism' ? 0.85 : 1);
 }
 
 export function salaries(s: GameState, n: string) {

@@ -24,7 +24,7 @@ export const TECHS: TechDef[] = [
   { id: 'guilds', name: 'Guilds', track: 'economy', year: 1453, cost: 6, desc: 'Build Workshops (forge equipment). +0.2 Economy cards a year.' },
   { id: 'printing', name: 'Printing Press', track: 'economy', year: 1460, cost: 9, desc: 'Build Universities. +0.2 Research cards a year.' },
   { id: 'banking', name: 'Banking', track: 'economy', year: 1470, cost: 12, desc: '+10% income. Build Banks.' },
-  { id: 'navigation', name: 'Ocean Navigation', track: 'economy', year: 1480, cost: 12, desc: 'Build Harbours (+2 ducats in coastal provinces). Opens overseas ventures.' },
+  { id: 'navigation', name: 'Ocean Navigation', track: 'economy', year: 1480, cost: 12, desc: 'Build Harbours (+2 ducats in coastal provinces). Voyages to the farthest seas. The first realm to learn it opens the Age of Discovery.' },
   { id: 'manufactories', name: 'Manufactories', track: 'economy', year: 1530, cost: 18, req: ['guilds', 'banking'], desc: 'Build Manufactories: +5 ducats each.' },
   { id: 'mercantilism', name: 'Mercantilism', track: 'economy', year: 1600, cost: 22, req: ['manufactories'], desc: 'Trade treaties are worth 50% more.' },
 

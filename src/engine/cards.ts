@@ -1,5 +1,4 @@
 // Cards are the actions of the game. Five kinds, each drawn at its own yearly rate.
-import { eraOf } from '../data/eras';
 import { happinessOf } from './society';
 import { getGeo } from './map';
 import type { GameState, Cat, Role, MissionKind } from '../types';
@@ -11,7 +10,7 @@ import { largestForeignCulture, CULTURE_NAMES } from './society';
 import { CORE_RATES } from '../data/core';
 import { shipBlocked } from './navy';
 import {
-  player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore,
+  ageId, ageDef, pioneerNow, player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore,
 } from './core';
 
 export type CardTarget = 'none' | 'nation' | 'mission' | 'troop';
@@ -93,7 +92,7 @@ add({ id: 'trade_route', name: 'Trade Route', cat: 'diplomacy', kind: 'mission',
 add({ id: 'alliance_pact', name: 'Alliance Pact', cat: 'diplomacy', kind: 'mission', missions: ['alliance'], icon: 'hands', text: 'Seek an alliance. They will join your wars.', weight: () => 1.2 });
 add({ id: 'marriage', name: 'Royal Marriage', cat: 'diplomacy', kind: 'mission', missions: ['marriage'], icon: 'ring', text: 'Join the royal houses: relations grow every year.', weight: () => 1 });
 add({ id: 'peace_envoy', name: 'Peace Envoy', cat: 'diplomacy', kind: 'mission', missions: ['peace'], icon: 'dove', text: 'Negotiate an end to a war.', weight: s => (s.wars.some(w => w.a === s.player || w.b === s.player) ? 2 : 0.6) });
-add({ id: 'expedition', name: 'Voyage of Discovery', cat: 'diplomacy', kind: 'mission', missions: ['explore'], agent: 'explorer', icon: 'anchor', text: 'An explorer sails into the unknown. What they find is up to fate.', weight: () => 0.9 });
+add({ id: 'expedition', name: 'Voyage of Discovery', cat: 'diplomacy', kind: 'mission', missions: ['explore'], agent: 'explorer', icon: 'anchor', text: 'An explorer sails into the unknown. What they find is up to fate.', weight: s => (ageId(s) === 'reconquest' ? 0 : 0.9) });
 add({ id: 'fealty', name: 'Demand Fealty', cat: 'diplomacy', kind: 'mission', missions: ['vassalize'], icon: 'crown', text: 'Make a much weaker crown your vassal.', weight: () => 0.7 });
 add({ id: 'integration', name: 'Integration Treaty', cat: 'diplomacy', kind: 'mission', missions: ['integrate'], icon: 'hands', text: 'Fold a loyal vassal or union crown into the realm.', weight: s => (Object.values(s.nations).some(n => n.overlord === s.player) ? 1.2 : 0.1) });
 add({ id: 'spy_network', name: 'Spy Network', cat: 'diplomacy', kind: 'instant', target: 'nation', icon: 'eye', text: 'Reveal a nation\'s army for 10 years. Missions against it get +10%.', weight: () => 1,
@@ -222,8 +221,9 @@ export function cardRates(s: GameState): Record<Cat, { rate: number; parts: Rate
     if (c === 'economy' && hasGood(s, 'salt')) parts.push({ label: 'Salt', v: 0.1 });
     const core = (s.core ?? []).reduce((a, id) => a + (CORE_RATES[id]?.[c] ?? 0), 0);
     if (core) parts.push({ label: 'Core cards', v: core });
-    const era = eraOf(s.year);
+    const era = ageDef(s);
     if (era.rates?.[c]) parts.push({ label: era.name, v: era.rates[c]! });
+    if (pioneerNow(s) && era.focus === c) parts.push({ label: 'Pioneer of the age', v: 0.4 });
     if (player(s).stability <= -2) parts.push({ label: 'Unrest', v: -0.2 });
     out[c] = { rate: Math.min(RATE_CAP, Math.max(0.2, parts.reduce((a, p) => a + p.v, 0))), parts };
   }
@@ -240,7 +240,7 @@ export function npRate(s: GameState): { rate: number; parts: RatePart[] } {
   if (arch?.np) parts.push({ label: 'Monarch', v: arch.np });
   if (hasGood(s, 'wine')) parts.push({ label: 'Wine', v: 0.5 });
   if (hasTech(s, 'councils')) parts.push({ label: 'Royal Councils', v: 1 });
-  if (eraOf(s.year).id === 'absolutism') parts.push({ label: 'Absolutism', v: 1 });
+  if (ageId(s) === 'absolutism') parts.push({ label: 'Absolutism', v: 1 });
   if (hasCore(s, 'traditional')) parts.push({ label: 'Traditional', v: 1 });
   if (hasCore(s, 'open')) parts.push({ label: 'Open-minded', v: -0.5 });
   const st = player(s).stability;

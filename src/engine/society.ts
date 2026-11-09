@@ -1,8 +1,7 @@
 // Culture, faith, art and the happiness of the people, which moves stability.
 import type { GameState, Province } from '../types';
 import { BUILDINGS } from '../data/techs';
-import { player, provsOf, clamp, rand, hasCore, hasGood, log, population } from './core';
-import { eraOf } from '../data/eras';
+import { player, provsOf, clamp, rand, hasCore, hasGood, log, population, ageId } from './core';
 import { NATIONS, NO_STATE } from '../data/nations';
 import { getGeo } from './map';
 
@@ -47,6 +46,7 @@ export function initSociety(s: GameState) {
   const seeds = Object.fromEntries(getGeo().seeds.map(x => [x.id, x]));
   for (const p of Object.values(s.provinces)) {
     const def = NATIONS.find(n => n.id === p.core);
+    p.culture ??= seeds[p.id]?.culture as string;
     if (p.core === NO_STATE) {
       const region = seeds[p.id]?.region ?? 'europe';
       p.culture ??= NATIVE_OVERRIDE[p.id] ?? CULTURE_OVERRIDE[p.id] ?? NATIVE_BY_REGION[region] ?? 'native';
@@ -73,7 +73,7 @@ export function happinessOf(s: GameState, p: Province): { value: number; parts: 
     let v = -18;
     if ((s.flags.tolerance_until ?? 0) > s.year) v += 10;
     if (hasCore(s, 'open')) v += 6;
-    if (eraOf(s.year).id === 'reformation') v -= 4;
+    if (ageId(s) === 'reformation') v -= 4;
     parts.push({ label: `${RELIGION_NAMES[p.religion] ?? p.religion} minority`, v });
   }
   parts.push(isAccepted(s, p.culture) ? { label: `${CULTURE_NAMES[p.culture] ?? p.culture} culture`, v: 5 } : { label: `Foreign culture (${CULTURE_NAMES[p.culture] ?? p.culture})`, v: -12 });
@@ -118,7 +118,7 @@ export function yearlySociety(s: GameState) {
   for (const p of provsOf(s, s.player)) p.control = clamp(p.control + (happinessOf(s, p).value - 50) / 25, 0, 100);
   let artGain = 0;
   for (const p of provsOf(s, s.player)) for (const b of p.buildings) artGain += ({ university: 0.5, temple: 0.3, library: 0.3 } as Record<string, number>)[b] ?? 0;
-  s.art = clamp(s.art * 0.985 + artGain * (eraOf(s.year).id === 'enlightenment' ? 1.5 : 1), 0, 100);
+  s.art = clamp(s.art * 0.985 + artGain * (ageId(s) === 'enlightenment' ? 1.5 : 1), 0, 100);
   s.taxBurden = Math.max(0, s.taxBurden - 3);
   for (const p of Object.values(s.provinces)) if (p.favor) p.favor = p.favor > 1 ? p.favor - 1 : undefined;
   void BUILDINGS;
