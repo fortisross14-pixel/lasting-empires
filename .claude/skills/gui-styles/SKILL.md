@@ -27,6 +27,11 @@ Rules:
 - Cards keep their vellum faces in every style: they are physical objects on the table. Only the chrome around them changes.
 - New fonts must be added to the Google Fonts link in `scripts/build.mjs` with a fallback stack.
 
+## Related skills
+- `frontend-design`: use for any new visual direction or a fourth menu style (token plan first, one bold element, no templated defaults).
+- `ux-audit`: run Nielsen's heuristics on a changed screen or flow before shipping it.
+- `web-design-guidelines`: check changed UI files against the pinned rules (accessibility, focus, touch, animation).
+
 ## Testing screens
 - `npm run build`, then drive `dist/index.html` with Playwright (preinstalled; `require('playwright')`). Click through prompts, open each tab, screenshot, and check `pageerror` is empty and `document.documentElement.scrollWidth <= innerWidth`.
 - Publish the artifact from `dist/lasting-empires.html`; GitHub Pages serves the root `index.html` written by the build.

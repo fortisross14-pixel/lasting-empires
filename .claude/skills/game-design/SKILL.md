@@ -27,6 +27,10 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 - Watch: player rank spread, nations alive at the end, gold hoarding, hand sizes, settlement growth, veteran troops.
 - Balance is tuned late; prefer adding levers (costs, weights, rates in data files) over hard-coding numbers in logic.
 
+## Related skills
+- `game-design-principles`: general theory (core loop, player motivation, flow, pacing). Check new mechanics against the 30-second loop and the reward schedules there.
+- `web-games`: browser constraints (pause when the tab is hidden, audio after the first tap, small startup payload).
+
 ## Checklist for a new mechanic
 1. Data in `src/data`, rules in `src/engine`, typed in `src/types.ts`, migration in `migrate()`.
 2. A card (or a reason it is not card-driven).
