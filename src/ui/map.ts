@@ -271,6 +271,23 @@ export class MapView {
       pin.append(svgEl('path', { d: `M0 -21 l2.4 4.8 5.2 .7 -3.8 3.6 .9 5.2 -4.7 -2.5 -4.7 2.5 .9 -5.2 -3.8 -3.6 5.2 -.7 Z`, class: 'capmark' + (n.id === s.player && !this.revealAll ? ' mine' : '') }));
       this.marks.append(pin);
     }
+    // armies: yours always; others where your spies are watching
+    const stacks: Record<string, { n: number; mine: boolean; color: string }> = {};
+    const add = (loc: string | undefined, mine: boolean, color: string) => { if (!loc) return; const k = (mine ? 'm:' : 'e:') + loc; (stacks[k] ??= { n: 0, mine, color }).n++; };
+    for (const t of s.troops) if (!t.moving && t.mission == null) add(t.loc, true, s.nations[s.player].color);
+    for (const n of Object.values(s.nations)) if (n.alive && n.id !== s.player && (n.spiedUntil ?? 0) > s.year) for (const t of n.army) add(t.loc, false, n.color);
+    for (const [k, st] of Object.entries(stacks)) {
+      const loc = k.slice(2), prov = loc.replace('base:', '');
+      if (!g.center[prov]) continue;
+      const [x, y] = g.center[prov];
+      const pin = svgEl('g', { 'data-x': x, 'data-y': y });
+      const gEl = svgEl('g', { class: 'army' + (st.mine ? ' mine' : ' foe'), transform: `translate(${st.mine ? -16 : 16} 6)` });
+      gEl.append(svgEl('rect', { x: -11, y: -9, width: 22, height: 18, rx: 2, style: `fill:${st.color}` }));
+      const t = svgEl('text', { x: 0, y: 4, class: 'army-n' }); t.textContent = String(st.n);
+      gEl.append(t);
+      pin.append(gEl);
+      this.marks.append(pin);
+    }
     const counts: Record<string, number> = {};
     for (const m of s.missions) {
       const prov = s.provinces[m.target] ? m.target : DIPLO_TARGET(s, m.target);

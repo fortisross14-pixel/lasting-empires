@@ -1,6 +1,8 @@
 // Battles: three rounds, each side commits a face-down tactic, then both flip.
 import { rebelsTake } from './realm';
 import { siegeAftermath } from './history';
+import { campLost } from './army';
+import { addInfamy } from './coalition';
 import type { GameState, Battle, BattleSide, BattleUnit, BattleGeneral, RoundLog, TroopCard, BattleRecord } from '../types';
 import { TROOPS, TACTICS } from '../data/troops';
 import { rand, pick, weighted, uid, clamp, hasTech, rulerMod, log, nationName, addRel, player, findWar, promoteRarity, hasCore, alliesOf, enemiesOf, troopPower } from './core';
@@ -240,7 +242,7 @@ export function transferProvince(s: GameState, provId: string, to: string) {
     });
   }
   const w = findWar(s, from, to);
-  if (w) { if (w.a === to) w.gainsA++; else w.gainsB++; }
+  if (w) { if (w.a === to) w.gainsA++; else w.gainsB++; addInfamy(s, to, provId); }
   const fromNat = s.nations[from];
   if (fromNat && fromNat.capital === provId) {
     const rest = Object.values(s.provinces).filter(x => x.owner === from).sort((a, b) => b.dev - a.dev);
@@ -351,6 +353,11 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
       lines.push(`Your soldiers return with ${loot} ducats of plunder.`);
       good = true;
     } else { title = `Raid on ${prov.name} repulsed`; lines.push('The raiders are driven off.'); }
+  } else if (b.context === 'defend' && b.camp) {
+    title = playerWon ? 'The camp holds' : 'The camp is overrun';
+    good = playerWon;
+    if (playerWon) lines.push('The attack on the half-built base is beaten off. It will be ready next quarter.');
+    else { campLost(s, b.province); lines.push('Your army falls back home.'); }
   } else if (b.context === 'defend' && b.siege) {
     title = playerWon ? 'Constantinople holds!' : 'Constantinople has fallen';
     good = playerWon;

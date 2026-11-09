@@ -4,6 +4,8 @@ import { player, provsOf, rand, clamp, uid, push, log, declareWar, nationName, a
 import { getGeo } from './map';
 import { happinessOf, CULTURE_NAMES, RELIGION_NAMES } from './society';
 import { RARITY } from '../data/characters';
+import { BUILDINGS } from '../data/techs';
+import { buildingAllowed } from './core';
 import { makeSide, createBattle, toBattleUnits, genericGeneral, finishBattle } from './battle';
 
 // ---------- rank ----------
@@ -83,19 +85,32 @@ export function yearlyViceroys(s: GameState, q: number) {
     v.provinces = v.provinces.filter(id => s.provinces[id]?.owner === s.player);
     if (!ch || v.provinces.length === 0) { s.viceroys = s.viceroys.filter(x => x !== v); continue; }
     const k = ch.skill;
+    const focus = viceroyFocus(ch.role);
     for (const id of v.provinces) {
       const p = s.provinces[id];
-      p.control = clamp(p.control + k * 1.5, 0, 100);
-      p.favor = Math.min(30, (p.favor ?? 0) + k / 2);
-      if (p.dev < 8 && rand(s) < 0.02 * k) p.dev++;
+      p.control = clamp(p.control + k * (focus === 'order' ? 2 : 1), 0, 100);
+      if (focus === 'order' && p.dev < 8 && rand(s) < 0.025 * k) p.dev++;
+      if (focus === 'order') p.favor = Math.min(30, (p.favor ?? 0) + k / 2);
+      if (focus === 'people') p.favor = Math.min(30, (p.favor ?? 0) + k);
+      if (focus === 'arms' && p.fort < 2 && rand(s) < 0.02 * k) p.fort++;
+      if (focus === 'trade' && rand(s) < 0.03 * k) {
+        const opt = ['market', 'farm', 'mine', 'fishery', 'pasture'].find(b => buildingAllowed(s, id, b) === null);
+        if (opt) { p.buildings.push(opt); log(s, `${ch.name} builds a ${BUILDINGS[opt].name.toLowerCase()} in ${p.name}.`, 'good'); }
+      }
     }
-    // loyalty: able, long-serving viceroys far from a weak crown start to dream of a throne
-    v.loyalty = clamp(v.loyalty + me.stability * 1.5 + (me.prestige > 100 ? 2 : 0) - Math.max(0, k - 3) * 2.5 - (s.year - v.since > 15 ? 2 : 0) + (k <= 2 ? 3 : 0), 0, 100);
+    if (focus === 'arms') me.manpower += k * 0.4;
+    if (focus === 'trade') me.gold += Math.round(k * v.provinces.length * 0.5);
+    if (focus === 'learning') { const m = s.missions.find(x => x.kind === 'research'); if (m) m.progress += k; }
+    // loyalty: a big, unhappy viceroyalty under a weak crown drifts away; an able viceroy more so
+    const terr = v.provinces.map(id => s.provinces[id]);
+    const happy = terr.reduce((a, p) => a + happinessOf(s, p).value, 0) / terr.length;
+    const power = terr.reduce((a, p) => a + p.dev, 0);
+    v.loyalty = clamp(v.loyalty + me.stability * 1.5 + (happy - 50) / 8 - power / 25 - Math.max(0, k - 3) + (me.prestige > 100 ? 1.5 : 0), 0, 100);
     if (v.loyalty < 40 && !s.flags['vwarn_' + v.char]) {
       s.flags['vwarn_' + v.char] = 1;
       push(s, { kind: 'reveal', title: 'Whispers from the viceroyalty', items: [{ title: ch.name, text: `Your viceroy in ${s.provinces[v.seat].name} keeps a court of his own. Loyalty ${Math.round(v.loyalty)}. Raise stability, or recall him before it is too late.`, tone: 'bad', kind: 'eye' }] });
     }
-    if (v.loyalty < 20 && k >= 4 && rand(s) < 0.35) viceroyRebels(s, v, ch);
+    if (v.loyalty < 20 && (k >= 4 || power >= 15) && rand(s) < 0.35) viceroyRebels(s, v, ch);
   }
 }
 
@@ -108,6 +123,18 @@ function viceroyRebels(s: GameState, v: NonNullable<GameState['viceroys']>[numbe
   push(s, { kind: 'reveal', title: 'A viceroy crowns himself', subtitle: `${ch.name} rises against you`, items: [{ title: n.name, text: `${ch.name} declares ${v.provinces.length} provinces independent and is at war with you. Win them back, or make peace and let them go.`, tone: 'bad', kind: 'crown' }] });
   log(s, `${ch.name} declares independence as ruler of the ${n.name}.`, 'bad');
 }
+
+/** What a viceroy's training makes the viceroyalty good at. */
+export type ViceroyFocus = 'arms' | 'order' | 'trade' | 'people' | 'learning';
+export const viceroyFocus = (role: Character['role']): ViceroyFocus =>
+  role === 'general' || role === 'conqueror' || role === 'admiral' ? 'arms' : role === 'merchant' ? 'trade' : role === 'diplomat' || role === 'explorer' ? 'people' : role === 'researcher' ? 'learning' : 'order';
+export const FOCUS_TEXT: Record<ViceroyFocus, string> = {
+  arms: 'A soldier: forts, firm control and manpower for the crown',
+  order: 'An administrator: control, contentment and growth',
+  trade: 'A merchant: markets, farms and mines, and ducats each year',
+  people: 'A diplomat: the people are happier',
+  learning: 'A scholar: helps whatever you are researching',
+};
 
 // ---------- new realms born in play (rebels, breakaway viceroyalties) ----------
 const PALETTE = ['#7a4e8c', '#3f7a6a', '#a0522d', '#5a6e9c', '#8c7a3f', '#9c3f5a', '#4f8c4a', '#6a5a4a'];

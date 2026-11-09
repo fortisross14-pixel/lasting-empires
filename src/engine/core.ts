@@ -1,6 +1,6 @@
 // Shared helpers: RNG, lookups, relations, treaties, wars, logging.
 import { poolFor } from '../data/names';
-import { eraOfYear, ERA, PIONEER_YEARS } from '../data/eras';
+import { eraOfYear, ERA, ERAS, PIONEER_YEARS } from '../data/eras';
 import type { GameState, Nation, TroopCard, Character, Role, LogEntry, Prompt, Rarity, Province } from '../types';
 import { TROOPS } from '../data/troops';
 import { BUILDINGS, TECH } from '../data/techs';
@@ -32,6 +32,10 @@ export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.mi
 export const player = (s: GameState): Nation => s.nations[s.player];
 /** The current age (opened by research or events). */
 export const ageId = (s: GameState) => s.age?.id ?? eraOfYear(s.year).id;
+/** 0 for the first age, up to 4 for the Enlightenment. */
+export const ageIndex = (s: GameState) => Math.max(0, ERAS.findIndex(e => e.id === ageId(s)));
+/** Running the state costs more in each new age: bigger courts, more officials. */
+export const AGE_STATE_COST = [1, 1.15, 1.35, 1.6, 1.85];
 /** The age's own data. */
 export const ageDef = (s: GameState) => ERA[ageId(s)];
 /** The player opened the current age not long ago. */
@@ -113,7 +117,7 @@ export const armyPower = (arr: { type: string; vet: number; str: number; might?:
 /** Prices rise over the centuries. */
 export const inflation = (s: GameState) => 1 + Math.max(0, s.year - 1453) / 160;
 
-export const buildingCost = (s: GameState, b: string) => Math.round(BUILDINGS[b].cost * inflation(s) * (hasGood(s, 'timber') ? 0.85 : 1));
+export const buildingCost = (s: GameState, b: string) => Math.round(BUILDINGS[b].cost * inflation(s) * (1 + 0.15 * ageIndex(s)) * (hasGood(s, 'timber') ? 0.85 : 1));
 
 export function upkeepOf(s: GameState, arr: TroopCard[]): number {
   const mult = (hasTech(s, 'standing_army') ? 0.8 : 1) * (0.7 + 0.3 * inflation(s));
@@ -198,7 +202,7 @@ export interface IncomeBreakdown {
 /** Running a realm costs more than it grows: courts, officials, garrisons. */
 export function administration(s: GameState, n: string) {
   const k = provsOf(s, n).length;
-  return 0.14 * Math.pow(k, 1.45) * inflation(s) * (ageId(s) === 'absolutism' ? 0.85 : 1);
+  return 0.14 * Math.pow(k, 1.45) * inflation(s) * AGE_STATE_COST[ageIndex(s)] * (ageId(s) === 'absolutism' ? 0.85 : 1);
 }
 
 export function salaries(s: GameState, n: string) {

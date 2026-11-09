@@ -1,5 +1,6 @@
 // Missions: characters (and troops) sent to do things over several years.
 import { onTech } from './ages';
+import { troopsNear, travel, locOf, bySea, nearestGarrison, baseFor, buildBase } from './army';
 import { missionsLeft, missionCap, rankOf } from './realm';
 import type { GameState, Mission, MissionKind, RevealItem, Character, Role } from '../types';
 import { CARDS, drawCat, CAT_INFO } from './cards';
@@ -22,6 +23,7 @@ import { createBattle, makeSide, toBattleUnits, genericGeneral, freeMission, tra
 
 export const MISSION_INFO: Record<MissionKind, { name: string; role: Role; icon: string; verb: string }> = {
   conquer: { name: 'Conquest', role: 'general', icon: 'sword', verb: 'Conquer' },
+  base: { name: 'Invasion Base', role: 'general', icon: 'tower', verb: 'Set up a base to strike' },
   raid: { name: 'Raid', role: 'general', icon: 'torch', verb: 'Raid' },
   relations: { name: 'Embassy', role: 'diplomat', icon: 'scroll', verb: 'Improve relations with' },
   trade: { name: 'Trade Treaty', role: 'diplomat', icon: 'coin', verb: 'Sign a trade treaty with' },
@@ -124,24 +126,15 @@ export function researchRate(s: GameState, ch: Character, track?: string): numbe
   return Math.max(1, Math.round(r * 10) / 10);
 }
 
-/** Which provinces can launch an attack on this province, and how long it takes. */
+/** Can the player strike this province, and how? Troops must stand within a quarter's march (a garrison or a base). */
 export function attackRoute(s: GameState, target: string): { turns: number; naval: boolean } | null {
-  const g = getGeo();
-  const mine = provsOf(s, s.player).map(p => p.id);
-  if (mine.some(id => g.adj[id].includes(target))) return { turns: 1, naval: false };
-  const sources = mine.filter(id => g.sea[id].includes(target));
-  if (!sources.length) {
-    // a long ocean voyage to a coast you have charted
-    if (!oceanReach(s, target)) return null;
-    let t = 3 + (hasCore(s, 'land') ? 1 : 0) - (hasCore(s, 'sea') ? 1 : 0);
-    if (provsOf(s, s.player).some(p => p.buildings.includes('harbour'))) t -= 1;
-    return { turns: Math.max(2, t), naval: true };
-  }
-  const harbour = sources.some(id => s.provinces[id].buildings.includes('harbour'));
-  let t = harbour ? 1 : 2;
-  if (hasCore(s, 'sea')) t -= 1;
-  if (hasCore(s, 'land')) t += 1;
-  return { turns: Math.max(1, t), naval: true };
+  const near = troopsNear(s, s.player, target);
+  if (!near.length) return null;
+  const best = Math.min(...near.map(t => travel(locOf(s, t), target)));
+  const naval = near.every(t => bySea(locOf(s, t), target));
+  let turns = Math.max(1, best);
+  if (naval && hasCore(s, 'land')) turns += 1;
+  return { turns, naval };
 }
 
 /** Years a religious or cultural mission takes, by the administrator's rarity. */
@@ -155,6 +148,7 @@ export const graceCost = (s: GameState) => Math.round(20 * inflation(s));
 export function missionTurns(s: GameState, kind: MissionKind, ch: Character, target: string, building?: string): number {
   switch (kind) {
     case 'conquer': case 'raid': return attackRoute(s, target)?.turns ?? 2;
+    case 'base': { const ng = nearestGarrison(s, target); return Math.max(1, (ng?.t ?? 3) - 1); }
     case 'research': return Math.max(1, Math.ceil(techCost(s, target) / (researchRate(s, ch, TECH[target]?.track) / 4)));
     case 'build': {
       const b = BUILDINGS[building!];
@@ -213,12 +207,22 @@ export function diploChance(s: GameState, kind: MissionKind, ch: Character, targ
 /** Returns a reason the mission cannot be launched, or null. */
 export function missionBlocked(s: GameState, kind: MissionKind, target: string, building?: string): string | null {
   const me = s.player;
+  if (kind === 'base') {
+    const p = s.provinces[target];
+    if (!p || p.owner === me) return 'Choose an enemy province';
+    if (!atWar(s, me, p.owner)) return `You are not at war with ${nationName(s, p.owner)}`;
+    if (baseFor(s, target)) return 'You already have a base within reach';
+    const ng = nearestGarrison(s, target);
+    if (ng && ng.t <= 1) return 'Close enough already: attack directly';
+    if (s.missions.some(m => m.kind === 'base')) return 'An invasion base is already being prepared';
+    return null;
+  }
   if (kind === 'conquer' || kind === 'raid') {
     const p = s.provinces[target];
     if (!p || p.owner === me) return 'Choose a foreign province';
     if (p.owner === NO_STATE) return 'No state rules here: send a colonist instead';
     if (!atWar(s, me, p.owner)) return `You are not at war with ${nationName(s, p.owner)}`;
-    if (!attackRoute(s, target)) return 'Too far: no border or sea route';
+    if (!attackRoute(s, target)) { const ng = nearestGarrison(s, target); return ng && ng.t >= 2 ? `Too far: your nearest troops are ${ng.t} quarters away. Set up an invasion base first (March Orders → Invasion base).` : 'No free troops within a quarter\'s march. Move troops to a garrison nearby.'; }
     if (s.missions.some(m => (m.kind === 'conquer' || m.kind === 'raid') && m.target === target)) return 'An army is already marching there';
     return null;
   }
@@ -329,15 +333,21 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   if (ch.ruler && roles[0] !== ch.role && SPECIAL_BASE[roles[0]]) return 'The monarch cannot leave the court for this'; 
   const why = kind === 'colonize' ? colonizeBlocked(s, target, ch) : missionBlocked(s, kind, target, building);
   if (why) return why;
-  if ((kind === 'conquer' || kind === 'raid' || kind === 'conquista') && !troopUids.length) return 'Send at least one troop';
-  if ((kind === 'conquer' || kind === 'raid') && attackRoute(s, target)?.naval) {
+  if ((kind === 'conquer' || kind === 'raid' || kind === 'conquista' || kind === 'base') && !troopUids.length) return 'Send at least one troop';
+  const sent = s.troops.filter(t => troopUids.includes(t.uid));
+  if ((kind === 'conquer' || kind === 'raid') && sent.some(t => travel(locOf(s, t), target) > 1)) return 'Some of these troops are too far away';
+  if (sent.some(t => t.moving)) return 'Some of these troops are on the march';
+  const overSea = sent.filter(t => bySea(locOf(s, t), target)).length;
+  if ((kind === 'conquer' || kind === 'raid' || kind === 'base') && overSea) {
     const cap = transportOf(s, shipUids, ch);
-    if (cap < troopUids.length) return `By sea: your ships carry ${cap} companies, you are sending ${troopUids.length}`;
+    if (cap < overSea) return `By sea: your ships carry ${cap} companies, you are sending ${overSea} over water`;
   }
   const m: Mission = {
     id: uid(s), kind, char: charUid, troops: troopUids, target, building,
     turnsLeft: missionTurns(s, kind, ch, target, building), total: 0, progress: 0, bonus: 0, good,
   };
+  if (kind === 'conquer' || kind === 'raid') m.turnsLeft = Math.max(1, ...sent.map(t => travel(locOf(s, t), target)));
+  if (kind === 'base') m.turnsLeft = Math.max(1, Math.max(...sent.map(t => travel(locOf(s, t), target))) - 1);
   s.hand = s.hand.filter(h => h.uid !== cardUid);
   m.total = m.turnsLeft;
   if (kind === 'build') {
@@ -434,6 +444,16 @@ function completeResearch(s: GameState, m: Mission, ch: Character) {
 }
 
 function resolveMission(s: GameState, m: Mission, ch: Character) {
+  if (m.kind === 'base') {
+    const p = s.provinces[m.target];
+    if (!p || p.owner === s.player || !atWar(s, s.player, p.owner)) { finish(s, m); return; }
+    const ships = m.ships ?? [];
+    for (const t of s.fleet) if (ships.includes(t.uid)) delete t.mission;
+    buildBase(s, m.target, m.troops, ships, ch.uid);
+    s.missions = s.missions.filter(x => x.id !== m.id);
+    ch.mission = -2; // stays with the camp until it is ready
+    return;
+  }
   const me = player(s);
   if (m.kind === 'conquer' || m.kind === 'raid') {
     const prov = s.provinces[m.target];
@@ -470,7 +490,7 @@ export function landPhase(s: GameState, missionId: number) {
     const troops = s.troops.filter(t => m.troops.includes(t.uid));
     if (!troops.length) { finish(s, m); return; }
     const att = makeSide(s.player, toBattleUnits(troops), { name: ch.name, skill: ch.skill, traits: ch.traits, uid: ch.uid, mult: traitMult(ch) }, 0, true);
-    const defUnits = [...enemy.army].sort((a, b) => armyPower([b]) - armyPower([a])).slice(0, m.kind === 'raid' ? 3 : 6);
+    const defUnits = [...troopsNear(s, enemy.id, prov.id)].sort((a, b) => armyPower([b]) - armyPower([a])).slice(0, m.kind === 'raid' ? 4 : 8);
     const fort = m.kind === 'raid' ? Math.max(0, prov.fort - 1) : prov.fort;
     if (!defUnits.length && fort === 0) {
       // undefended: walks in

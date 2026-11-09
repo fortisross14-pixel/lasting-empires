@@ -34,7 +34,9 @@ import { navyCap, transportOf, hireShip, shipHireCost } from '../engine/navy';
 import { warScore, peaceTerms, enemyDemands, concludePeace, subjectsOf, integrateBlocked, vassalizeBlocked, tributeShare } from '../engine/diplo';
 import { happinessOf, moodName, CULTURE_NAMES, RELIGION_NAMES, isAccepted } from '../engine/society';
 import { MapView, MAP_MODES, legendFor } from './map';
-import { rankOf, nextRank, missionCap, missionsLeft, VICEROY_COST, viceroyBlocked, territoryOf, appointViceroy, recallViceroy } from '../engine/realm';
+import { scenarioCastilePortugal } from '../engine/scenarios';
+import { troopsNear, setDefence, garrisons, moveTroops, travel, locOf, nearestGarrison, baseFor } from '../engine/army';
+import { rankOf, nextRank, missionCap, missionsLeft, VICEROY_COST, viceroyBlocked, territoryOf, appointViceroy, recallViceroy, viceroyFocus, FOCUS_TEXT } from '../engine/realm';
 
 const KEY = 'lasting-empires.save.v2';
 let S: GameState;
@@ -56,7 +58,8 @@ const RARITY_ORDER_I = (c: Character) => ['common', 'uncommon', 'rare', 'epic', 
 const SLOTS = [1, 2, 3];
 const slotKey = (n: number) => `lasting-empires.slot.${n}`;
 let slot = 1;
-let pendingNation: string | null = null; // chosen on the title screen while every slot is full
+let pendingNation: string | null = null;
+let wantTutorial = true; // chosen on the title screen while every slot is full
 function save() { try { localStorage.setItem(slotKey(slot), JSON.stringify(S)); } catch { /* storage may be blocked */ } }
 function loadSlot(n: number): GameState | null {
   try {
@@ -74,7 +77,7 @@ function migrateOldSave() {
     if (old) localStorage.removeItem(KEY);
   } catch { /* */ }
 }
-function startIn(n: number, s: GameState) { slot = n; pendingNation = null; start(s); save(); }
+function startIn(n: number, s: GameState) { slot = n; pendingNation = null; if (s.tutorial == null) s.tutorial = wantTutorial ? 0 : -1; start(s); save(); }
 export function snapshot() { return S ? { save: JSON.stringify(S), slot } : {}; }
 
 // ---------- menu styles ----------
@@ -182,6 +185,7 @@ function showPicker(initial = 'castile') {
           h('b', {}, n.name), h('span', { class: 'np-diff ' + d.cls }, d.label),
           h('small', {}, `${ps.length} province${ps.length > 1 ? 's' : ''} · capital ${cap?.name ?? '?'} · ${RELIGION_NAMES[cap?.religion ?? ''] ?? ''} · ${CULTURE_NAMES[n.culture]}`),
           h('small', { class: 'muted' }, def.blurb ?? (near.size ? `Neighbours: ${[...near].slice(0, 5).map(o => preview.nations[o].name).join(', ')}.` : 'No neighbours by land.')))),
+      h('label', { class: 'tutopt' }, h('input', { type: 'checkbox', id: 'tutcheck', checked: wantTutorial ? true : undefined, onchange: (e: Event) => { wantTutorial = (e.target as HTMLInputElement).checked; } }), 'Show me how to play'),
       h('button', { class: 'btn primary', onclick: () => chooseNation(id) }, `Play as ${n.name}`));
   };
   mv.onSelect = pid => { if (pid) { const o = preview.provinces[pid].owner; if (o === NO_STATE) { mv.select(null); toast('Unclaimed land: no state to play here', 'bad'); } else select(o); } };
@@ -201,6 +205,9 @@ function showTitle() {
       SLOTS.some(n => loadSlot(n)) || pendingNation ? h('h2', { class: 'pick-h' }, 'Campaigns') : null,
       SLOTS.some(n => loadSlot(n)) || pendingNation ? slotsSection() : null,
       h('button', { class: 'btn primary wide newgame', onclick: () => showPicker() }, 'Start a new game'),
+      h('details', { class: 'howto' }, h('summary', {}, 'Test scenarios'),
+        h('p', { class: 'muted' }, 'Ready-made games to try a system quickly. They use a free campaign slot.'),
+        h('button', { class: 'btn wide', onclick: () => { const free = SLOTS.find(n => !loadSlot(n)) ?? (window.confirm('All slots are full. Replace slot 3?') ? 3 : 0); if (free) startIn(free, scenarioCastilePortugal()); } }, 'Battles: Castile at war with Portugal, summer 1467')),
       h('details', { class: 'howto' },
         h('summary', {}, 'How to play'),
         h('ul', {},
@@ -261,10 +268,38 @@ function renderLegend() {
     h('button', { class: 'lg-x', 'aria-label': 'Back to realms', onclick: () => { map.setMode('political', S); renderLegend(); }, html: icon('close', 14) }));
 }
 
+// ---------- tutorial: a few notes from the chancellor in the first game ----------
+interface TutStep { title: string; text: string; done?: () => boolean; next?: boolean; }
+const TUTORIAL: TutStep[] = [
+  { title: 'Welcome, Majesty', text: 'One turn is one quarter of a year. Everything you do starts with a card: you draw them each quarter in five kinds. Let me show you around.', next: true },
+  { title: 'Your treasury', text: 'At the top: ducats, manpower (1 per troop or person you hire), nation points (to buy cards), stability and the people\'s happiness. Tap the year to see the current age.', next: true },
+  { title: 'Open a menu', text: 'The five menus are at the bottom. Open Internal.', done: () => win?.cat === 'internal' },
+  { title: 'Cards', text: 'The Cards tab shows what you hold: cards and people. Buy a pack with nation points (3 revealed, you keep 1), or archive cards you do not need now.', next: true },
+  { title: 'Missions', text: 'Open the Missions tab. Tap a person, then a mission card, or the other way round. The better the person, the better the outcome.', done: () => win?.tab === 'missions' },
+  { title: 'Send someone out', text: 'Start a mission now if you have a card for it. It takes a few quarters. You can start only so many missions a year; a bigger realm can start more.', done: () => S.missions.length > 0, next: true },
+  { title: 'Armies', text: 'Open Military. Troops stand in your capital or in provinces with Barracks, and only those within a quarter\'s march can fight. Cards → Forge merges two companies into a stronger one.', done: () => win?.cat === 'military' },
+  { title: 'The map', text: 'Close the menu and tap any province for its details and actions. "Map: Realms" at the bottom right switches to culture, religion, raw materials, happiness or population.', next: true },
+  { title: 'End the turn', text: 'Press End Turn at the bottom right. Every winter you get the year\'s report: money, cards, battles and missions.', done: () => (S.quarter ?? 0) !== 0 || S.year !== S.startYear },
+  { title: 'Rule well', text: 'Ages open by research, rivals form coalitions if you conquer too fast, and unhappy provinces may rise. The Chronicle (top right) shows the rankings. Good luck.', next: true },
+];
+function renderTutorial() {
+  let el = document.getElementById('tut');
+  const i = S.tutorial ?? -1;
+  if (i < 0 || i >= TUTORIAL.length) { el?.remove(); return; }
+  const st = TUTORIAL[i];
+  if (st.done?.()) { S.tutorial = i + 1; return renderTutorial(); }
+  if (!el) { el = h('div', { id: 'tut', role: 'note' }); document.getElementById('app')!.append(el); }
+  clear(el).append(h('small', {}, `Chancellor's note ${i + 1}/${TUTORIAL.length}`), h('b', {}, st.title), h('p', {}, st.text),
+    h('div', { class: 'tut-acts' },
+      h('button', { class: 'btn ghost small', onclick: () => { S.tutorial = -1; renderTutorial(); save(); } }, 'Skip tutorial'),
+      st.next ? h('button', { class: 'btn primary small', onclick: () => { S.tutorial = i + 1; renderTutorial(); save(); } }, i === TUTORIAL.length - 1 ? 'Finish' : 'Next') : null));
+}
+
 function refresh() {
   renderTop(); renderTabs(); map.render(S); renderTimeline(); renderTracker(); renderLegend();
   if (sheet) renderSheet();
   if (win) renderWin();
+  renderTutorial();
   save();
 }
 
@@ -368,6 +403,8 @@ function renderTracker() {
 
 // ---------- sheets ----------
 const SEASONS = ['Spring', 'Summer', 'Autumn', 'Winter'];
+/** A garrison or base as the player reads it. */
+const placeName = (loc: string) => (loc.startsWith('base:') ? `Camp near ${S.provinces[loc.slice(5)]?.name ?? ''}` : S.provinces[loc]?.name ?? loc);
 /** Turns are quarters: show them as quarters, or years when long. */
 const qLabel = (n: number) => (n >= 8 ? `${Math.round(n / 4)} yr` : `${n} q`);
 const qText = (n: number) => (n >= 8 ? `${Math.round(n / 4)} years` : `${n} quarter${n > 1 ? 's' : ''}`);
@@ -734,8 +771,14 @@ function provinceSheet(id: string, body: HTMLElement) {
       const card = cardFor(S, 'conquer');
       body.append(h('h3', {}, 'At war'));
       const block = !card ? 'Needs a March Orders card (Military)' : null;
-      body.append(actionRow('sword', `Conquer ${p.name}`, route ? `${route.naval ? 'By sea' : 'Over land'} · ${route.turns} yr march` : 'No route', block ?? missionBlocked(S, 'conquer', id), () => openPlanner('conquer', id, undefined, card!.uid)));
-      body.append(actionRow('torch', `Raid ${p.name}`, 'Plunder ducats, take no land', block ?? missionBlocked(S, 'raid', id), () => openPlanner('raid', id, undefined, card!.uid)));
+      if (route || baseFor(S, id)) {
+        body.append(actionRow('sword', `Conquer ${p.name}`, route ? `${route.naval ? 'By sea' : 'Over land'} · ${qText(route.turns)} · ${troopsNear(S, S.player, id).length} of your companies within reach` : 'From your base', block ?? missionBlocked(S, 'conquer', id), () => openPlanner('conquer', id, undefined, card!.uid)));
+        body.append(actionRow('torch', `Raid ${p.name}`, 'Plunder ducats, take no land', block ?? missionBlocked(S, 'raid', id), () => openPlanner('raid', id, undefined, card!.uid)));
+      } else {
+        const ng = nearestGarrison(S, id);
+        body.append(actionRow('tower', `Invasion base near ${p.name}`, `Your nearest troops are ${ng ? qText(ng.t) : 'far'} away. A general sets up a camp first: half strength for a quarter, then strike at full strength.`, block ?? missionBlocked(S, 'base', id), () => openPlanner('base', id, undefined, card!.uid)));
+      }
+      if ((S.nations[p.owner].spiedUntil ?? 0) > S.year) body.append(h('p', { class: 'muted' }, `Spies report ${troopsNear(S, p.owner, id).length} enemy companies within a quarter of ${p.name}.`));
     }
     body.append(actionRow('hands', owner.name, `Relations ${getRel(S, S.player, p.owner)} · open diplomacy`, null, () => openSheet('nation', p.owner)));
     if (!war) body.append(declareWarRow(p.owner));
@@ -795,21 +838,32 @@ function diploHint(k: MissionKind) {
 
 // ---------- category panels ----------
 function armyTab(body: HTMLElement) {
-  body.append(h('p', { class: 'muted' }, 'Tap a troop to select it (to disband it). To merge troops, use Cards → Forge.'));
+  const gs = garrisons(S);
+  body.append(h('p', { class: 'muted' }, 'Troops stand in the capital, in provinces with Barracks, or at an invasion base. Only troops within a quarter\'s march can attack or defend a province. Tap troops to select them, then move them.'));
   body.append(h('h3', {}, `Armies (${S.troops.length}/${armyCap(S)}) · upkeep ${incomeOf(S, S.player).upkeep.toFixed(1)} a year`));
-  const tr = h('div', { class: 'cards-grid' });
-  [...S.troops].sort((a, b) => TROOPS[b.type].tier - TROOPS[a.type].tier || b.vet - a.vet).forEach(t =>
-    tr.append(troopCard(t, { small: true, selected: forge.includes(t.uid), onclick: () => {
-      if (t.mission != null) return toast('This troop is away on a mission');
-      forge = forge.includes(t.uid) ? forge.filter(x => x !== t.uid) : [...forge.slice(-1), t.uid];
-      renderWin();
-    } })));
-  body.append(tr);
-  if (forge.length === 1) {
-    const t = S.troops.find(x => x.uid === forge[0]);
-    if (t) body.append(h('button', { class: 'btn ghost danger', onclick: () => confirmBox(`Disband ${TROOPS[t.type].name}?`, 'The troop is removed for good.', 'Disband', () => { forge = []; act(() => disbandTroop(S, t.uid)); }) }, 'Disband selected troop'));
+  const sel = forge.filter(u => S.troops.some(t => t.uid === u));
+  const toggle = (uid: number) => { forge = forge.includes(uid) ? forge.filter(x => x !== uid) : [...forge, uid]; renderWin(); };
+  const groups: [string, typeof S.troops][] = gs.map(g => [g, S.troops.filter(t => t.loc === g && !t.moving)]);
+  const moving = S.troops.filter(t => t.moving), away = S.troops.filter(t => t.mission != null && !t.moving);
+  for (const [g, ts] of groups) {
+    body.append(h('div', { class: 'garrison' }, h('b', {}, placeName(g)), h('small', {}, `${g === player(S).capital ? 'capital · ' : g.startsWith('base:') ? '' : 'barracks · '}${ts.filter(t => t.mission == null).length} companies · power ${Math.round(armyPower(ts.filter(t => t.mission == null)))}`)));
+    const row = h('div', { class: 'cards-row wrap' });
+    if (!ts.length) row.append(h('p', { class: 'muted' }, 'Empty.'));
+    for (const t of ts) row.append(troopCard(t, { small: true, selected: sel.includes(t.uid), dim: t.mission != null, onclick: () => t.mission != null ? toast('Away on a mission') : toggle(t.uid) }));
+    body.append(row);
   }
-  body.append(recipeBook());
+  if (moving.length) {
+    body.append(h('h3', {}, 'On the march'));
+    body.append(h('div', { class: 'cards-row wrap' }, moving.map(t => troopCard(t, { small: true, badge: `${placeName(t.moving!.to)} · ${t.moving!.eta} q` }))));
+  }
+  if (away.length) body.append(h('p', { class: 'muted' }, `${away.length} companies are away on missions.`));
+  if (sel.length) {
+    const from = S.troops.find(t => t.uid === sel[0])!;
+    body.append(h('div', { class: 'mcap' }, h('b', {}, `${sel.length} selected · move to:`),
+      h('div', { class: 'targets' }, gs.filter(g => g !== from.loc).map(g => { const q = travel(locOf(S, from), g); return h('button', { class: 'tchip', onclick: () => { const ids = [...sel]; forge = []; act(() => moveTroops(S, ids, g), q ? `On the march: ${qText(q)}` : 'Moved'); } }, `${placeName(g)} · ${q ? qText(q) : 'now'}`); }),
+        sel.length === 1 ? h('button', { class: 'btn ghost danger small', onclick: () => confirmBox(`Disband ${TROOPS[from.type].name}?`, 'The troop is removed for good.', 'Disband', () => { forge = []; act(() => disbandTroop(S, from.uid)); }) }, 'Disband') : null)));
+  }
+  if (gs.length < 2) body.append(h('p', { class: 'muted' }, 'Build Barracks in a province (Internal) to station troops there, for example near a frontier or overseas.'));
 }
 
 function navyTab(body: HTMLElement) {
@@ -867,7 +921,7 @@ function realmTab(body: HTMLElement) {
   for (const v of S.viceroys ?? []) {
     const c = S.characters.find(x => x.uid === v.char);
     body.append(h('div', { class: 'vrow' }, c ? charCard(c, S, { small: true }) : null,
-      h('div', { class: 'a-t' }, h('b', {}, `${c?.name ?? '?'} · Viceroy of ${S.provinces[v.seat]?.name}`), h('small', {}, `${v.provinces.length} provinces · since ${v.since}`),
+      h('div', { class: 'a-t' }, h('b', {}, `${c?.name ?? '?'} · Viceroy of ${S.provinces[v.seat]?.name}`), h('small', {}, `${v.provinces.length} provinces · since ${v.since}${c ? ' · ' + FOCUS_TEXT[viceroyFocus(c.role)] : ''}`),
         h('div', { class: 'ctl' }, h('span', {}, 'Loyalty'), h('span', { class: 'ctl-bar' }, h('i', { style: `width:${v.loyalty}%`, class: v.loyalty < 40 ? 'low' : '' })), h('b', {}, `${Math.round(v.loyalty)}`))),
       h('button', { class: 'btn small', onclick: () => confirmBox('Recall the viceroy?', v.loyalty < 40 ? 'They are disloyal: stability falls by 1.' : 'They return to court.', 'Recall', () => act(() => recallViceroy(S, v.char))) }, 'Recall')));
   }
@@ -880,7 +934,8 @@ function realmTab(body: HTMLElement) {
       body.append(h('p', { class: 'muted' }, 'Name a viceroy: choose a seat, then a person.'));
       let seat = pick.card != null ? null : seats[0].id;
       const sel = h('div', { class: 'targets' }, seats.map(p => h('button', { class: 'tchip' + (p.id === seat ? ' sel' : ''), onclick: (e: Event) => { seat = p.id; (e.currentTarget as HTMLElement).parentElement!.querySelectorAll('.tchip').forEach(x => x.classList.remove('sel')); (e.currentTarget as HTMLElement).classList.add('sel'); } }, `${p.name} (${territoryOf(S, p.id).length} provinces)`)));
-      const pr = h('div', { class: 'cards-row wrap' }, free.map(c => charCard(c, S, { small: true, badge: `skill ${c.skill}`, onclick: () => seat && confirmBox(`Make ${c.name} viceroy?`, `${c.name} will govern ${territoryOf(S, seat).length} provinces from ${S.provinces[seat].name} for good. ${c.skill >= 5 ? 'Very able: watch their loyalty.' : ''}`, 'Appoint', () => act(() => appointViceroy(S, seat!, c.uid), 'Viceroy appointed')) })));
+      body.append(h('p', { class: 'muted small' }, 'The person shapes the viceroyalty: a general (forts, manpower), an administrator (control, growth), a merchant (buildings, ducats), a diplomat (happiness), a researcher (research). A big, unhappy viceroyalty, or a very able viceroy under a weak crown, may break away.'));
+      const pr = h('div', { class: 'cards-row wrap' }, free.map(c => charCard(c, S, { small: true, badge: viceroyFocus(c.role), onclick: () => seat && confirmBox(`Make ${c.name} viceroy?`, `${c.name} will govern ${territoryOf(S, seat).length} provinces from ${S.provinces[seat].name} for good. ${c.skill >= 5 ? 'Very able: watch their loyalty.' : ''}`, 'Appoint', () => act(() => appointViceroy(S, seat!, c.uid), 'Viceroy appointed')) })));
       body.append(sel, pr);
     }
   }
@@ -1204,11 +1259,21 @@ function missionTargets(handUid: number): TargetRow[] {
   const kind = d.missions![0];
   const rows: TargetRow[] = [];
   if (kind === 'conquer') {
+    const far: TargetRow[] = [];
     for (const p of Object.values(S.provinces)) {
-      if (p.owner === S.player || !atWar(S, S.player, p.owner) || !attackRoute(S, p.id)) continue;
-      rows.push({ label: p.name, sub: `${nationName(S, p.owner)} · fort ${p.fort} · dev ${p.dev}`, color: S.nations[p.owner].color,
+      if (p.owner === S.player || !atWar(S, S.player, p.owner) || !provKnown(S, p.id)) continue;
+      const route = attackRoute(S, p.id);
+      const foes = troopsNear(S, p.owner, p.id).length;
+      const intel = (S.nations[p.owner].spiedUntil ?? 0) > S.year ? ` · ${foes} enemy companies nearby` : '';
+      if (route) rows.push({ label: p.name, sub: `${nationName(S, p.owner)} · fort ${p.fort} · dev ${p.dev} · ${route.naval ? 'by sea' : 'by land'}, ${qText(route.turns)}${intel}`, color: S.nations[p.owner].color,
         acts: [{ label: 'Conquer', kind: 'conquer', target: p.id, why: missionBlocked(S, 'conquer', p.id) }, { label: 'Raid', kind: 'raid', target: p.id, why: missionBlocked(S, 'raid', p.id) }] });
+      else {
+        const ng = nearestGarrison(S, p.id);
+        if (ng && ng.t >= 2 && !baseFor(S, p.id)) far.push({ label: p.name, sub: `${nationName(S, p.owner)} · ${ng.t} quarters from ${placeName(ng.at)} · needs a base first${intel}`, color: S.nations[p.owner].color,
+          acts: [{ label: 'Invasion base', kind: 'base', target: p.id, why: missionBlocked(S, 'base', p.id) }] });
+      }
     }
+    rows.push(...far.slice(0, 12));
   } else if (DIPLO.includes(kind)) {
     for (const n of Object.values(S.nations).filter(n => n.alive && n.id !== S.player)) {
       const why = missionBlocked(S, kind, n.id);
@@ -1362,13 +1427,13 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
   const who = roles.map(r => roleName[r].toLowerCase()).join(' or ');
   if (!chars.length) { toast(`You need a ${who}. Play a hiring card.`, 'bad'); return; }
   if (!free.length) { toast(`Every ${who} is busy`, 'bad'); return; }
-  const military = kind === 'conquer' || kind === 'raid' || kind === 'conquista';
+  const military = kind === 'conquer' || kind === 'raid' || kind === 'conquista' || kind === 'base';
   let ch = free.find(c => c.uid === preferChar) ?? [...free].sort((a, b) => b.skill - a.skill)[0];
   preferChar = null;
-  const home = S.troops.filter(t => t.mission == null && t.str >= 30).sort((a, b) => armyPower([b]) - armyPower([a]));
+  const home = (kind === 'conquer' || kind === 'raid' ? troopsNear(S, S.player, target) : S.troops.filter(t => t.mission == null && !t.moving)).filter(t => t.str >= 30).sort((a, b) => armyPower([b]) - armyPower([a]));
   const maxTroops = () => ch.skill + 3;
   let picked: number[] = military ? home.slice(0, maxTroops()).map(t => t.uid) : [];
-  const naval = (kind === 'conquer' || kind === 'raid') && !!attackRoute(S, target)?.naval;
+  const naval = ((kind === 'conquer' || kind === 'raid') && !!attackRoute(S, target)?.naval) || (kind === 'base' && home.some(t => travel(locOf(S, t), target) >= 1 && S.provinces[target] && getGeo().land[S.provinces[target].id] !== getGeo().land[locOf(S, t).replace('base:', '')]));
   const harbourShips = S.fleet.filter(t => t.mission == null && t.str >= 30);
   let ships: number[] = naval ? harbourShips.map(t => t.uid) : [];
   const goods = kind === 'trade' ? importable(S, target) : [];
@@ -1421,8 +1486,8 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
     if (military) {
       box.append(h('h3', {}, `Troops (${picked.length}/${maxTroops()})`));
       const tr = h('div', { class: 'cards-row wrap' });
-      if (!home.length) tr.append(h('p', { class: 'muted' }, 'No troops at home. Hire some with Military troop cards.'));
-      for (const t of home) tr.append(troopCard(t, { small: true, selected: picked.includes(t.uid), onclick: () => {
+      if (!home.length) tr.append(h('p', { class: 'muted' }, kind === 'conquer' || kind === 'raid' ? 'No free troops within a quarter\'s march of here.' : 'No free troops.'));
+      for (const t of home) tr.append(troopCard(t, { small: true, badge: placeName(locOf(S, t)), selected: picked.includes(t.uid), onclick: () => {
         if (picked.includes(t.uid)) picked = picked.filter(x => x !== t.uid);
         else if (picked.length < maxTroops()) picked = [...picked, t.uid]; else toast(`${ch.name} can lead ${maxTroops()} troops`);
         draw();
@@ -1438,7 +1503,9 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
         const foeFleet = S.nations[S.provinces[target].owner].fleet ?? [];
         facts.push(foeFleet.length ? `Their fleet (${foeFleet.length} ships) may intercept: a sea battle comes first` : 'No enemy fleet seen');
       }
-      if (kind === 'conquista') facts.push(`${Math.round(conquistaChance(S, target, ch, picked) * 100)}% chance against the ${nationName(S, S.provinces[target].owner)}`);
+      if (kind === 'base') facts.push(`Marches ${qText(missionTurns(S, 'base', ch, target))} to a camp near ${S.provinces[target].name}; then one quarter at half strength while it is built, and the enemy is warned`);
+      if (kind === 'base') { /* no odds: the attack comes later */ }
+      else if (kind === 'conquista') facts.push(`${Math.round(conquistaChance(S, target, ch, picked) * 100)}% chance against the ${nationName(S, S.provinces[target].owner)}`);
       else {
         const prov = S.provinces[target];
         const enemy = S.nations[prov.owner];
@@ -1556,6 +1623,7 @@ function processQueue() {
   else if (p.kind === 'battle') showBattle(p.battle);
   else if (p.kind === 'succession') showSuccession(p.heirs, p.old);
   else if (p.kind === 'peace') showPeace(p.enemy, p.offered);
+  else if (p.kind === 'incoming') showIncoming(p.id);
   else if (p.kind === 'gameover') showGameOver(p.victory, p.reason);
 }
 function afterPrompt() { closeModal(); refresh(); setTimeout(processQueue, 60); }
@@ -1698,7 +1766,7 @@ function showBattle(b: Battle) {
       slotMe.append(tacticCard(last.mine, { small: true, cls: last.myC ? 'countered' : '' }));
     } else if (!b.done) {
       slotFoe.append(b.scout ? tacticCard(b.enemyNext, { small: true, cls: 'scouted' }) : backCard('?', { small: true }));
-      slotMe.append(h('div', { class: 'slot-empty' }, 'Your tactic'));
+      slotMe.append(backCard('?', { small: true }));
     }
     box.append(h('div', { class: 'b-mid' }, slotFoe, h('div', { class: 'vs' }, last ? h('div', { class: 'dmg' },
       h('span', { class: 'good' }, `You deal ${last.dmgThem}`), h('span', { class: 'bad' }, `You take ${last.dmgMe}`),
@@ -1711,18 +1779,56 @@ function showBattle(b: Battle) {
         h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: () => { S.queue.shift(); afterPrompt(); } }, 'Continue')));
       return;
     }
-    if (last) { box.append(h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: () => draw() }, 'Next round'))); return; }
-    box.append(h('p', { class: 'muted center' }, b.scout ? 'Your scouts have seen the enemy\'s plan.' : 'Choose a tactic. The enemy has already chosen theirs, face-down.'));
-    box.append(h('div', { class: 'cards-row center' }, b.options.map(t => tacticCard(t, { onclick: () => commit(t) }))));
-    box.append(h('p', { class: 'muted small center' }, COUNTER_TEXT));
-    box.append(h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: () => { autoResolve(S, b); draw(); } }, 'Auto-resolve')));
+    // the generals fight it out: you watch
+    box.append(h('p', { class: 'muted center' }, me.general ? `${me.general.name} commands. Each round both sides commit a tactic.` : 'No general: your captains do what they can.'));
+    box.append(h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: () => { stop = true; autoResolve(S, b); draw(); } }, 'Skip to the result')));
+    if (!stop) timer = setTimeout(() => commit(), reduced() ? 300 : 1700);
   };
-  const commit = (t: string) => {
+  let stop = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  void timer;
+  const commit = () => {
+    if (b.done || !document.body.contains(box)) return;
     const beforeMe = hp(me), beforeFoe = hp(foe);
-    const lg = playRound(S, b, t);
+    const lg = playRound(S, b, null);
     const att = b.playerSide === 'att';
     draw({ mine: att ? lg.attTactic : lg.defTactic, theirs: att ? lg.defTactic : lg.attTactic, myC: att ? lg.attCountered : lg.defCountered, theirC: att ? lg.defCountered : lg.attCountered, dmgMe: Math.round(beforeMe - hp(me)), dmgThem: Math.round(beforeFoe - hp(foe)) });
     box.querySelectorAll('.slot .card').forEach(c => c.classList.add('slam'));
+  };
+  draw();
+  openModal(box);
+}
+
+/** An enemy army is on its way: choose who defends. The battle comes next quarter and plays itself. */
+function showIncoming(id: number) {
+  const inc = S.incoming?.find(x => x.id === id);
+  const done = () => { S.queue.shift(); afterPrompt(); };
+  if (!inc) return done();
+  const n = S.nations[inc.nation], prov = S.provinces[inc.target];
+  const force = n.army.filter(t => inc.force.includes(t.uid));
+  const spied = (n.spiedUntil ?? 0) > S.year;
+  const near = troopsNear(S, S.player, prov.id);
+  let picked = near.map(t => t.uid);
+  const gens = S.characters.filter(c => (c.role === 'general' || c.role === 'conqueror' || (c.ruler && RULER_ARCHS[player(S).ruler.arch]?.role === 'general')) && c.mission == null);
+  let gen: number | undefined = [...gens].sort((a, b) => b.skill - a.skill)[0]?.uid;
+  const box = h('div', { class: 'mbox planner' });
+  const draw = () => {
+    clear(box);
+    const mine = armyPower(S.troops.filter(t => picked.includes(t.uid))), theirs = armyPower(force);
+    box.append(h('h2', {}, `${n.name} marches on ${prov.name}`), h('p', { class: 'muted' }, `They arrive when you end this turn, with ${spied ? force.length : `about ${Math.max(1, force.length - 1)}–${force.length + 2}`} companies. Choose who stands to meet them; the battle then plays itself.`));
+    if (spied) box.append(h('div', { class: 'cards-row wrap' }, force.map(t => troopCard(t, { small: true }))));
+    box.append(h('h3', {}, 'General'));
+    const gr = h('div', { class: 'cards-row wrap' });
+    if (!gens.length) gr.append(h('p', { class: 'muted' }, 'No free general: your captains lead.'));
+    for (const c of gens) gr.append(charCard(c, S, { small: true, selected: gen === c.uid, onclick: () => { gen = gen === c.uid ? undefined : c.uid; draw(); } }));
+    box.append(gr);
+    box.append(h('h3', {}, `Troops within reach (${picked.length}/${near.length})`));
+    const tr = h('div', { class: 'cards-row wrap' });
+    if (!near.length) tr.append(h('p', { class: 'bad' }, 'None of your troops can get there in time. The walls and local militia must hold. Move troops to a garrison nearby for next time.'));
+    for (const t of near) tr.append(troopCard(t, { small: true, selected: picked.includes(t.uid), onclick: () => { picked = picked.includes(t.uid) ? picked.filter(x => x !== t.uid) : [...picked, t.uid]; draw(); } }));
+    box.append(tr);
+    box.append(h('div', { class: 'facts' }, h('span', { class: 'fact' }, `Your strength ${Math.round(mine)} + fort ${prov.fort}`), h('span', { class: 'fact' }, `Theirs ${spied ? Math.round(theirs) : `~${Math.round(theirs * 0.8)}–${Math.round(theirs * 1.25)}`}`)));
+    box.append(h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: () => { setDefence(S, id, picked, gen); closeModal(); done(); } }, 'Hold the line')));
   };
   draw();
   openModal(box);

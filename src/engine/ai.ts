@@ -7,6 +7,7 @@ import {
 } from './core';
 import { neighbours } from './map';
 import { aiOverseas, revealBorders } from './overseas';
+import { troopsNear, announceAttack, aiRedeploy } from './army';
 import { NO_STATE } from '../data/nations';
 import { getGeo } from './map';
 import { warScore } from './diplo';
@@ -117,13 +118,17 @@ function aiWar(s: GameState, n: Nation) {
     const target = pickTarget(s, n.id, e);
     if (!target) continue;
     const prov = s.provinces[target];
+    if (e === s.player) {
+      // only the armies standing within a quarter's march can strike, and the player sees them coming
+      const near = strongest(troopsNear(s, n.id, target).filter(t => t.str > 40), 8);
+      if (!near.length || attacksOnPlayer >= 1 || s.incoming?.some(x => x.nation === n.id)) continue;
+      attacksOnPlayer++;
+      announceAttack(s, n.id, target, near);
+      continue;
+    }
     const force = strongest(n.army.filter(t => t.str > 40), 6);
     if (!force.length) continue;
-    if (e === s.player) {
-      if (attacksOnPlayer >= 1) continue;
-      attacksOnPlayer++;
-      launchAttackOnPlayer(s, n, force, target);
-    } else {
+    {
       const defNat = s.nations[e];
       const att = makeSide(n.id, toBattleUnits(force), genericGeneral(s), 0, false);
       const def = makeSide(e, toBattleUnits(strongest(defNat.army, 6)), genericGeneral(s), prov.fort, false);
@@ -276,6 +281,7 @@ export function runAI(s: GameState, q = 3) {
     aiEconomy(s, n);
     aiDiplomacy(s, n);
     aiAlliances(s, n);
+    aiRedeploy(s, n.id);
     if (n.alive) aiWar(s, n);
   }
   if (q !== 3) return;

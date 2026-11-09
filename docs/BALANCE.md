@@ -28,6 +28,8 @@ World of 663 provinces (Ming 62, Ottomans 13): the score now weighs growth since
 
 Quarterly turns, 702 provinces, civil wars and viceroys (current): `reasonable` survived 9/9, top 3 in 3, first in 2; `greedy` survived 6/6, top 3 in 3, first in 2; `passive` never top 3. AI development about +1 every 8 years per realm; AI prestige settles around 60–130; tribal realms do not settle empty land. Risings: below 25% happiness, about 1–3% a quarter per province, at most one every 6 years per province, local militia always defend. Siege of Constantinople (auto-resolved, 300 runs): start army 0%, with Giustiniani 1%, plus church union 9%, plus Venice and Genoa as allies 47%, plus 3 more companies 94%.
 
+Armies with locations, announced attacks, invasion bases and coalitions (current): `reasonable` 9 runs top 3 in 4, first in 2 (later 6 runs: top 3 in 2, first in 2); `greedy` now meets coalitions (top 3 in 1–2 of 3–6). No AI runaway in a 300-year world run (largest: Ming 63 provinces); coalition wars fired against France and Bornu.
+
 ## Levers (where to tune)
 
 - **Income:** `provinceIncome`, `tradeValue` (1 + 0.07 × partner development, capped at 4, each extra route ×0.8), building gold in `src/data/techs.ts`, settlement tiers (`TIERS`), price level (income follows 70% of inflation).

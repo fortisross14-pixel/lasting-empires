@@ -10,7 +10,7 @@ import { largestForeignCulture, CULTURE_NAMES } from './society';
 import { CORE_RATES } from '../data/core';
 import { shipBlocked } from './navy';
 import {
-  ageId, ageDef, pioneerNow, player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore,
+  ageId, ageDef, pioneerNow, enemiesOf, player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore,
 } from './core';
 
 export type CardTarget = 'none' | 'nation' | 'mission' | 'troop';
@@ -67,7 +67,7 @@ for (const e of Object.values(EQUIPMENT)) {
     weight: s => (techOk(s, e.tech) ? (e.id === 'banner' ? 0.6 : e.tech ? 1.8 : 1.2) : 0) });
 }
 add({ id: 'hire_general', name: 'Recruit a General', cat: 'military', kind: 'hire', role: 'general', icon: 'helm', text: 'Meet three captains, keep one. Costs 1 manpower.', weight: () => 1.1 });
-add({ id: 'march_orders', name: 'March Orders', cat: 'military', kind: 'mission', missions: ['conquer', 'raid'], icon: 'sword', text: 'Send a general and troops to conquer or raid an enemy province.', weight: () => 2.6 });
+add({ id: 'march_orders', name: 'March Orders', cat: 'military', kind: 'mission', missions: ['conquer', 'raid', 'base'], icon: 'sword', text: 'Send a general and troops to conquer or raid an enemy province within a quarter\'s march, or to set up an invasion base near a far one.', weight: () => 2.6 });
 add({ id: 'forced_march', name: 'Forced March', cat: 'military', kind: 'instant', target: 'mission', icon: 'boot', text: 'A mission takes 1 year less (minimum 1).', weight: () => 0.9,
   targetOk: (s, t) => { const m = s.missions.find(x => String(x.id) === t); return !!m && m.turnsLeft > 1 && m.kind !== 'research'; },
   play: (s, t) => { s.missions.find(x => String(x.id) === t)!.turnsLeft--; return 'The mission speeds up'; } });
@@ -94,8 +94,10 @@ add({ id: 'marriage', name: 'Royal Marriage', cat: 'diplomacy', kind: 'mission',
 add({ id: 'peace_envoy', name: 'Peace Envoy', cat: 'diplomacy', kind: 'mission', missions: ['peace'], icon: 'dove', text: 'Negotiate an end to a war.', weight: s => (s.wars.some(w => w.a === s.player || w.b === s.player) ? 2 : 0.6) });
 add({ id: 'expedition', name: 'Voyage of Discovery', cat: 'diplomacy', kind: 'mission', missions: ['explore'], agent: 'explorer', icon: 'anchor', text: 'An explorer sails into the unknown. What they find is up to fate.', weight: s => (ageId(s) === 'reconquest' ? 0 : 0.9) });
 add({ id: 'fealty', name: 'Demand Fealty', cat: 'diplomacy', kind: 'mission', missions: ['vassalize'], icon: 'crown', text: 'Make a much weaker crown your vassal.', weight: () => 0.7 });
+add({ id: 'scouts', name: 'Spy Troop Positions', cat: 'military', kind: 'instant', target: 'nation', icon: 'eye', text: 'Scouts find where a realm\'s armies stand, and how strong they are, for 2 years. Strike where they are weak.', weight: s => (enemiesOf(s, s.player).length ? 1.5 : 0.4),
+  targetOk: (s, t) => t !== s.player && !!s.nations[t]?.alive, play: (s, t) => { s.nations[t].spiedUntil = Math.max(s.nations[t].spiedUntil ?? 0, s.year + 2); return `Scouts report where the ${s.nations[t].adj} armies stand`; } });
 add({ id: 'integration', name: 'Integration Treaty', cat: 'diplomacy', kind: 'mission', missions: ['integrate'], icon: 'hands', text: 'Fold a loyal vassal or union crown into the realm.', weight: s => (Object.values(s.nations).some(n => n.overlord === s.player) ? 1.2 : 0.1) });
-add({ id: 'spy_network', name: 'Spy Network', cat: 'diplomacy', kind: 'instant', target: 'nation', icon: 'eye', text: 'Reveal a nation\'s army for 10 years. Missions against it get +10%.', weight: () => 1,
+add({ id: 'spy_network', name: 'Spy Network', cat: 'diplomacy', kind: 'instant', target: 'nation', icon: 'eye', text: 'Reveal a nation\'s army and where it stands for 10 years. Missions against it get +10%.', weight: () => 1,
   targetOk: (s, t) => t !== s.player, play: (s, t) => { s.nations[t].spiedUntil = s.year + 10; return `Your agents report from ${nationName(s, t)}`; } });
 add({ id: 'royal_feast', name: 'Royal Feast', cat: 'diplomacy', kind: 'instant', target: 'nation', icon: 'cup', text: 'Pay 10 ducats: relations +25 with a nation.', weight: () => 1,
   can: s => player(s).gold < 10 ? 'Needs 10 ducats' : null, targetOk: (s, t) => t !== s.player,

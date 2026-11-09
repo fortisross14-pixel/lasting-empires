@@ -4,6 +4,8 @@ import { initKnownWorld } from './overseas';
 import { poolFor } from '../data/names';
 import { yearlyAges } from './ages';
 import { scriptedHistory } from './history';
+import { yearlyCoalitions } from './coalition';
+import { settleArmies, resolveIncoming, quarterlyMarch, quarterlyBases } from './army';
 import { yearlyViceroys, quarterlyUnrest } from './realm';
 import { eraOfYear } from '../data/eras';
 import type { GameState, Nation, Ruler, RevealItem, Heir, Character } from '../types';
@@ -172,6 +174,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   me.ruler.from = r.from;
   for (const c of CATS) { drawCat(s, c); drawCat(s, c); }
   addCard(s, 'eq_plate');
+  settleArmies(s);
   push(s, { kind: 'draft', draft: 'ambition', options: ambitionOptions(s) });
   rollEvents(s);
   log(s, `${me.ruler.name} rules ${me.name}. It is the spring of ${START_YEAR}.`);
@@ -333,9 +336,13 @@ export function endTurn(s: GameState): YearReport | null {
   const q = s.quarter;
   if (q === 0 || !s.turnLog || s.turnLog.year !== s.year) s.turnLog = { year: s.year, quarter: q, battles: [], done: [], gold: 0, np: 0, cards: {} };
   if (q === 0) { s.bought = { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 }; s.launched = 0; }
+  settleArmies(s);
+  resolveIncoming(s);
   const before = s.missions.map(m => ({ id: m.id, kind: m.kind, target: m.target }));
   advanceMissions(s);
   for (const m of before) if (!s.missions.some(x => x.id === m.id)) s.turnLog.done.push({ kind: m.kind, title: `${MISSION_INFO[m.kind].name}${s.provinces[m.target] ? ' · ' + s.provinces[m.target].name : s.nations[m.target] ? ' · ' + s.nations[m.target].name : ''}`, ok: true });
+  quarterlyMarch(s);
+  quarterlyBases(s);
   runAI(s, q);
   playerEconomy(s);
   yearlyViceroys(s, q);
@@ -348,6 +355,7 @@ export function endTurn(s: GameState): YearReport | null {
     yearlyPlayer(s);
     yearlyStrain(s);
     yearlySubjects(s);
+    yearlyCoalitions(s);
     yearlyFleet(s);
     yearlySociety(s);
     s.year++;
@@ -437,6 +445,7 @@ export function migrate(s: GameState): GameState {
   s.core ??= []; s.coreChanged ??= -99; s.overseas ??= {}; s.imports ??= [];
   s.fleet ??= []; s.accepted ??= [];
   s.age ??= { id: eraOfYear(s.year).id, since: s.year };
+  settleArmies(s);
   for (const n of Object.values(s.nations)) n.fleet ??= [];
   initSociety(s);
   for (const p of Object.values(s.provinces)) { p.settlement ??= 0; p.grades ??= {}; }

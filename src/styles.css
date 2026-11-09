@@ -910,3 +910,17 @@ ul.traits { margin: 0; padding-left: 18px; }
 .arch { display: flex; flex-direction: column; gap: 4px; align-items: center; }
 .c-might { position: absolute; right: 4px; top: 26px; font-size: 11px; font-weight: 800; padding: 1px 4px; background: var(--wax, #9e1f2a); color: #fff; }
 .small .c-might { top: 20px; font-size: 9.5px; }
+.garrison { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-top: 8px; }
+.garrison b { font-family: var(--f-title); font-size: 17px; }
+.garrison small { color: var(--muted); }
+#map .army rect { stroke: #241c17; stroke-width: 1.5; }
+#map .army.foe rect { stroke-dasharray: 3 2; }
+#map .army-n { font-size: 11px; font-weight: 800; text-anchor: middle; fill: #fff; stroke: #241c17; stroke-width: 2; paint-order: stroke; }
+/* tutorial note */
+#tut { position: absolute; z-index: 45; left: max(10px, env(safe-area-inset-left, 0px)); bottom: calc(var(--tabs) + 64px); width: min(380px, calc(100% - 20px)); background: #fffdf6; border: 1.5px solid var(--text); box-shadow: 5px 5px 0 rgba(36, 28, 23, .2); padding: 12px 14px; display: grid; gap: 4px; }
+#tut small { color: var(--wax, #9e1f2a); font-variant: small-caps; letter-spacing: .05em; }
+#tut b { font-family: var(--f-title); font-size: 18px; }
+#tut p { margin: 0; font-size: 14.5px; line-height: 1.45; }
+.tut-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.tutopt { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+.tutopt input { width: 20px; height: 20px; }

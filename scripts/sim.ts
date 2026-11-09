@@ -12,6 +12,7 @@ import { CARDS, playCard, cardBlocked, buyCost } from '../src/engine/cards';
 import { neighbours } from '../src/engine/map';
 import { CATS, type GameState } from '../src/types';
 import { NATIONS } from '../src/data/nations';
+import { troopsNear } from '../src/engine/army';
 import { happinessOf } from '../src/engine/society';
 import { appointViceroy, viceroyBlocked } from '../src/engine/realm';
 
@@ -84,9 +85,10 @@ function botTurn(s: GameState) {
       const g = free(s, 'admiral') ?? free(s, role); if (!g) continue;
       const en = enemiesOf(s, s.player);
       const targets = Object.values(s.provinces).filter(p => en.includes(p.owner) && !missionBlocked(s, 'conquer', p.id)).sort((a, b) => a.fort - b.fort);
-      const home = s.troops.filter(t => t.mission == null && t.str > 40);
-      if (targets.length && home.length >= 4) {
-        const t0 = targets[0]; const troops = home.slice(0, Math.min(g.skill + 3, Math.ceil(home.length * 0.6))).map(t => t.uid);
+      const t0 = targets[0];
+      const home = t0 ? troopsNear(s, s.player, t0.id).filter(t => t.str > 40) : [];
+      if (targets.length && home.length >= 3) {
+        const troops = home.slice(0, Math.min(g.skill + 3, Math.ceil(home.length * 0.6))).map(t => t.uid);
         const ships = attackRoute(s, t0.id)?.naval ? s.fleet.filter(f => f.mission == null).map(f => f.uid) : [];
         launchMission(s, 'conquer', g.uid, t0.id, troops.slice(0, ships.length ? Math.max(1, transportOf(s, ships)) : troops.length), undefined, h.uid, undefined, ships);
       }

@@ -13,6 +13,8 @@ export interface TroopCard {
   str: number;    // 0..100 strength
   mission?: number;
   might?: number; // a forged company is worth this many ordinary ones (1 by default)
+  loc?: string;   // where it stands: a province id, or 'base:<province>' for an invasion base
+  moving?: { to: string; eta: number }; // marching to another garrison
 }
 
 export interface EquipCard {
@@ -101,7 +103,7 @@ export type MissionKind =
   | 'relations' | 'trade' | 'alliance' | 'marriage' | 'peace'
   | 'research' | 'build' | 'develop' | 'found' | 'grow' | 'tax' | 'progress'
   | 'explore' | 'colonize' | 'conquista'
-  | 'vassalize' | 'integrate' | 'patronage' | 'convert' | 'assimilate' | 'grace';
+  | 'vassalize' | 'integrate' | 'patronage' | 'convert' | 'assimilate' | 'grace' | 'base';
 
 export interface Mission {
   id: number;
@@ -153,6 +155,8 @@ export interface RoundLog {
   dmgToDef: number;
 }
 
+export interface Incoming { id: number; nation: string; target: string; force: number[]; due: number; defenders?: number[]; general?: number; chosen?: boolean; }
+export interface Base { target: string; troops: number[]; char: number; ships: number[]; ready: boolean; since: number; }
 export interface Viceroy { char: number; seat: string; provinces: string[]; loyalty: number; since: number; }
 export interface BattleRecord {
   year: number; quarter: number; province: string; att: string; def: string;
@@ -171,6 +175,7 @@ export interface Battle {
   playerSide: 'att' | 'def';
   context: 'conquer' | 'defend' | 'raid' | 'rebels' | 'sea';
   siege?: boolean; // the great siege of Constantinople
+  camp?: boolean;  // an attack on a half-built invasion base
   rebel?: { cause: string; name: string; adj: string }; // a rising: if it wins, a civil war
   naval?: boolean;
   follow?: { type: 'land-attack' | 'land-defend'; missionId?: number; nation?: string; force?: number[] };
@@ -198,6 +203,7 @@ export type Prompt =
   | { kind: 'draft'; draft: 'buy' | 'court' | 'ambition' | 'gift'; cat?: Cat; options: DraftOption[] }
   | { kind: 'succession'; heirs: Heir[]; old: string }
   | { kind: 'peace'; enemy: string; offered: boolean }
+  | { kind: 'incoming'; id: number }
   | { kind: 'gameover'; victory: boolean; reason: string };
 
 export type DraftOption =
@@ -243,6 +249,9 @@ export interface GameState {
   age?: { id: string; since: number; pioneer?: string };
   launched?: number;                // missions started this year (capped by realm rank)
   viceroys?: Viceroy[];
+  incoming?: Incoming[];            // enemy armies on the march against you
+  bases?: Base[];                   // your invasion bases
+  tutorial?: number;                // step of the tutorial, -1 when done
   turnLog?: TurnLog;                // what happened this turn, for the report
   battleLog?: BattleRecord[];       // the player's battles, newest last // the current age and who opened it
   coreChanged: number;              // year of the last change
