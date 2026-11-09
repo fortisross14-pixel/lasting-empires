@@ -8,13 +8,16 @@ import { BUILDINGS } from '../data/techs';
 import { CORE } from '../data/core';
 import {
   rand, pick, randInt, uid, clamp, player, provsOf, incomeOf, log, push, addRel, playerManpower, initialSettlement, grade,
-  addTreaty, hasTech, genCharacter, declareWar, nationName, atWar, getRel, hasGood, armyPower, hasCore, coreSlots,
+  addTreaty, hasTech, genCharacter, declareWar, nationName, atWar, getRel, hasGood, armyPower, hasCore, coreSlots, hasTreaty,
 } from './core';
 import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS } from './cards';
 import { advanceMissions } from './missions';
 import { runAI } from './ai';
 import { rollEvents, EVENT } from './events';
 import { AMBITIONS, ambitionOptions } from './drafts';
+import { START_FLEETS, yearlyFleet } from './navy';
+import { initSociety, yearlySociety } from './society';
+import { yearlySubjects, unionClaim } from './diplo';
 
 export const SAVE_VERSION = 2;
 
@@ -96,7 +99,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
     nations: {}, provinces: {}, rel: {}, treaties: [], wars: [], truces: [], hand: [],
     cardAccum: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 },
     bought: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 },
-    np: 3, imports: [], overseas: {}, core: [], coreChanged: -99, stats: { battles: {}, kings: [], fallen: [], wars: { won: 0, lost: 0 } },
+    np: 3, imports: [], overseas: {}, core: [], coreChanged: -99, fleet: [], art: 5, taxBurden: 0, accepted: [], stateReligion: 'catholic', happiness: 55, stats: { battles: {}, kings: [], fallen: [], wars: { won: 0, lost: 0 } },
     troops: [], equipment: [], characters: [], missions: [], techs: [], firedEvents: [], usedLegends: [], queue: [],
     log: [], flags: {}, ambition: null, ambitionDone: false, over: false,
   };
@@ -105,12 +108,13 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
       id: d.id, name: d.name, adj: d.adj, color: d.color, culture: d.culture, capital: d.capital, gold: d.gold,
       manpower: 10, stability: 1, prestige: 0, personality: d.personality, alive: true,
       army: d.id === nationId ? [] : d.army.map(type => ({ uid: s.nextUid++, type, vet: 0, str: 100 })),
+      fleet: d.id === nationId ? [] : (START_FLEETS[d.id] ?? []).map(type => ({ uid: s.nextUid++, type, vet: 0, str: 100 })),
       ruler: { name: '', traits: [], arch: 'balanced', skill: 2, from: 1453, to: 1453 },
     };
     s.nations[d.id] = n;
   }
   for (const [id, name, owner, dev, fort, land, lon, lat] of PROVINCES) {
-    s.provinces[id] = { id, name, owner, core: owner, dev, fort, buildings: [], land, lon, lat, control: 80, good: PROVINCE_GOODS[id] ?? 'grain', settlement: initialSettlement(dev, NATIONS.some(n => n.capital === id)), grades: {} };
+    s.provinces[id] = { id, name, owner, core: owner, dev, fort, buildings: [], land, lon, lat, control: 80, good: PROVINCE_GOODS[id] ?? 'grain', settlement: initialSettlement(dev, NATIONS.some(n => n.capital === id)), grades: {}, culture: undefined as unknown as string, religion: undefined as unknown as string };
   }
   for (const n of Object.values(s.nations)) if (n.id !== nationId) n.ruler = initialRuler(s, n.id);
   for (const [a, b, v] of START_REL) addRel(s, a, b, v);
@@ -126,6 +130,8 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   const def = NATIONS.find(d => d.id === nationId)!;
   me.manpower = 5;
   s.troops = def.army.map(type => ({ uid: uid(s), type, vet: 0, str: 100 }));
+  s.fleet = (START_FLEETS[nationId] ?? []).map(type => ({ uid: uid(s), type, vet: 0, str: 100 }));
+  initSociety(s);
   s.characters = [
     genCharacter(s, 'general', me.culture, 1),
     genCharacter(s, 'diplomat', me.culture, 1),
@@ -157,6 +163,10 @@ function successionCheck(s: GameState) {
   me.ruler.to = 9999; // until the heir is chosen
   for (const n of Object.values(s.nations)) {
     if (n.id === s.player || s.year < n.ruler.to) continue;
+    if (n.alive && n.id !== 'papacy' && hasTreaty(s, s.player, n.id, 'marriage') && getRel(s, s.player, n.id) >= 30 && !n.overlord && !atWar(s, s.player, n.id) && rand(s) < 0.06 && unionClaim(s, n.id)) {
+      push(s, { kind: 'reveal', title: `The crown of ${n.name} passes to your house`, subtitle: 'A royal marriage bears fruit', items: [{ title: 'Personal union', text: `${n.name} keeps its own laws but now shares your monarch. It pays 40% of its income and fights at your side. After 15 years you may integrate it.`, tone: 'good', kind: 'crown' }] });
+      log(s, `${n.name} enters a personal union with your crown.`, 'good');
+    }
     n.ruler = { name: genRulerName(s, n.id), traits: [], arch: pick(s, Object.keys(RULER_ARCHS)), skill: randInt(s, 1, 5), from: s.year, to: s.year + randInt(s, 10, 30) };
   }
 }
@@ -264,6 +274,9 @@ export function endTurn(s: GameState): YearReport | null {
   advanceMissions(s);
   runAI(s);
   playerEconomy(s);
+  yearlySubjects(s);
+  yearlyFleet(s);
+  yearlySociety(s);
   s.year++;
   characterAging(s);
   successionCheck(s);
@@ -285,6 +298,7 @@ export function endTurn(s: GameState): YearReport | null {
 // ---------- player actions ----------
 export function playerDeclareWar(s: GameState, target: string): string | null {
   if (atWar(s, s.player, target)) return 'Already at war';
+  if (s.nations[target]?.overlord === s.player) return 'You cannot attack your own subject';
   if (s.truces.some(t => t.until > s.year && ((t.a === s.player && t.b === target) || (t.b === s.player && t.a === target)))) return 'A truce is in force';
   const claim = s.flags['claim_' + target];
   const allied = s.treaties.some(t => (t.kind === 'alliance' || t.kind === 'marriage') && ((t.a === s.player && t.b === target) || (t.b === s.player && t.a === target)));
@@ -343,6 +357,9 @@ export function dropCore(s: GameState, id: string): string | null {
 /** Fill in fields added after a save was made. */
 export function migrate(s: GameState): GameState {
   s.core ??= []; s.coreChanged ??= -99; s.overseas ??= {}; s.imports ??= [];
+  s.fleet ??= []; s.accepted ??= [];
+  for (const n of Object.values(s.nations)) n.fleet ??= [];
+  initSociety(s);
   for (const p of Object.values(s.provinces)) { p.settlement ??= 0; p.grades ??= {}; }
   return s;
 }

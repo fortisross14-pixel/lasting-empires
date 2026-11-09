@@ -78,7 +78,8 @@ export interface MergeResult { out: string; vet: number; cost: number; tech?: st
 
 /** a and b are troop uids or equipment-card uids from the hand. */
 export function mergePreview(s: GameState, aUid: number, bUid: number): MergeResult | { error: string } {
-  const ta = s.troops.find(t => t.uid === aUid), tb = s.troops.find(t => t.uid === bUid);
+  const find = (u: number) => s.troops.find(t => t.uid === u) ?? s.fleet.find(t => t.uid === u);
+  const ta = find(aUid), tb = find(bUid);
   const eqType = (u: number) => { const h = s.hand.find(x => x.uid === u); return h && CARDS[h.card].kind === 'equip' ? CARDS[h.card].equip : undefined; };
   const ea = eqType(aUid), eb = eqType(bUid);
   const A = ta?.type ?? ea, B = tb?.type ?? eb;
@@ -109,12 +110,14 @@ export function doMerge(s: GameState, aUid: number, bUid: number): string | null
   if (res.tech) return 'Research needed first';
   if (player(s).gold < res.cost) return `Needs ${res.cost} ducats`;
   const parts = [aUid, bUid];
-  const strs = s.troops.filter(t => parts.includes(t.uid)).map(t => t.str);
+  const isShip = TROOPS[res.out].kind === 'ship';
+  const strs = [...s.troops, ...s.fleet].filter(t => parts.includes(t.uid)).map(t => t.str);
   const str = Math.round(strs.reduce((a, b) => a + b, 0) / strs.length);
   player(s).gold -= res.cost;
   s.troops = s.troops.filter(t => !parts.includes(t.uid));
+  s.fleet = s.fleet.filter(t => !parts.includes(t.uid));
   s.hand = s.hand.filter(h => !parts.includes(h.uid));
-  s.troops.push({ uid: uid(s), type: res.out, vet: res.vet, str: Math.max(str, 60) });
+  (isShip ? s.fleet : s.troops).push({ uid: uid(s), type: res.out, vet: res.vet, str: Math.max(str, 60) });
   log(s, `Forged a new unit: ${TROOPS[res.out].name}${res.vet ? ' ' + '★'.repeat(res.vet) : ''}.`, 'good');
   return null;
 }

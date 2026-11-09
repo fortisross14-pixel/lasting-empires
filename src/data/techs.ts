@@ -15,6 +15,8 @@ export const TECHS: TechDef[] = [
   { id: 'star_forts', name: 'Star Forts', track: 'military', year: 1500, cost: 14, req: ['bronze_cannon'], desc: 'Fortresses can reach level 3. +1 fort in your capital.' },
   { id: 'wheellock', name: 'Wheellock', track: 'military', year: 1520, cost: 16, req: ['firearms'], desc: 'Pistols: Jinetes → Reiters, Knights → Cuirassiers.' },
   { id: 'musket', name: 'Musket', track: 'military', year: 1530, cost: 18, req: ['firearms'], desc: 'Arquebusiers → Musketeers, Tercio → Tercio Viejo.' },
+  { id: 'naval_gunnery', name: 'Naval Gunnery', track: 'military', year: 1540, cost: 16, req: ['bronze_cannon'], desc: 'Build Galleons. Carrack + Bronze Casting → Galleon.' },
+  { id: 'ship_of_line', name: 'Ship of the Line', track: 'military', year: 1650, cost: 24, req: ['naval_gunnery'], desc: 'Build Ships of the Line. +1 navy size.' },
   { id: 'standing_army', name: 'Standing Army', track: 'military', year: 1560, cost: 18, req: ['tercio_doctrine'], desc: '+3 army size, troop upkeep −20%, +0.2 Military cards a year.' },
   { id: 'military_drill', name: 'Military Drill', track: 'military', year: 1590, cost: 22, req: ['standing_army'], desc: 'Reiters + Muskets → Dragoons. +10% battle strength.' },
   { id: 'bayonet', name: 'Bayonet', track: 'military', year: 1660, cost: 26, req: ['musket', 'military_drill'], desc: 'Musketeers + Bayonets → Line Infantry.' },

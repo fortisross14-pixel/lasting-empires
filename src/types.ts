@@ -1,6 +1,6 @@
 // Core game state types. Everything the game needs to save lives in GameState.
 
-export type Role = 'general' | 'diplomat' | 'admin' | 'merchant' | 'researcher' | 'explorer' | 'conqueror' | 'colonist';
+export type Role = 'general' | 'diplomat' | 'admin' | 'merchant' | 'researcher' | 'explorer' | 'conqueror' | 'colonist' | 'admiral';
 export type Cat = 'military' | 'diplomacy' | 'internal' | 'economy' | 'research';
 export const CATS: Cat[] = ['military', 'diplomacy', 'internal', 'economy', 'research'];
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
@@ -66,6 +66,10 @@ export interface Nation {
   prestige: number;
   personality: Personality;
   army: TroopCard[];  // used by AI nations
+  fleet: TroopCard[]; // ships (AI nations)
+  overlord?: string;  // this crown is a subject of another
+  subject?: 'vassal' | 'union';
+  subjectSince?: number;
   alive: boolean;
   ruler: Ruler;
   spiedUntil?: number;
@@ -84,6 +88,8 @@ export interface Province {
   lat: number;
   control: number;    // 0..100: how firmly the crown rules here
   good: string;       // trade good produced
+  culture: string;
+  religion: string;
   settlement: number; // 0 none, 1 village, 2 town, 3 city, 4 metropolis
   grades: Record<string, number>; // building quality multiplier (Shoddy 0.75 … Wonder 2)
 }
@@ -92,13 +98,15 @@ export type MissionKind =
   | 'conquer' | 'raid'
   | 'relations' | 'trade' | 'alliance' | 'marriage' | 'peace'
   | 'research' | 'build' | 'develop' | 'found' | 'grow' | 'tax' | 'progress'
-  | 'explore' | 'colonize' | 'conquista';
+  | 'explore' | 'colonize' | 'conquista'
+  | 'vassalize' | 'integrate' | 'patronage' | 'convert' | 'assimilate';
 
 export interface Mission {
   id: number;
   kind: MissionKind;
   char: number;          // character uid
   troops: number[];      // troop uids
+  ships?: number[];      // ship uids (sea routes)
   target: string;        // province id, nation id or tech id
   building?: string;
   turnsLeft: number;
@@ -109,7 +117,7 @@ export interface Mission {
 }
 
 export interface Treaty { a: string; b: string; kind: 'trade' | 'alliance' | 'marriage'; since: number; }
-export interface War { a: string; b: string; since: number; gainsA: number; gainsB: number; }
+export interface War { a: string; b: string; since: number; gainsA: number; gainsB: number; winsA?: number; winsB?: number; }
 export interface Truce { a: string; b: string; until: number; }
 
 export interface BattleUnit {
@@ -150,7 +158,9 @@ export interface Battle {
   round: number;          // rounds completed
   logs: RoundLog[];
   playerSide: 'att' | 'def';
-  context: 'conquer' | 'defend' | 'raid' | 'rebels';
+  context: 'conquer' | 'defend' | 'raid' | 'rebels' | 'sea';
+  naval?: boolean;
+  follow?: { type: 'land-attack' | 'land-defend'; missionId?: number; nation?: string; force?: number[] };
   missionId?: number;
   done: boolean;
   winner?: 'att' | 'def';
@@ -174,6 +184,7 @@ export type Prompt =
   | { kind: 'reveal'; title: string; subtitle?: string; items: RevealItem[] }
   | { kind: 'draft'; draft: 'buy' | 'court' | 'ambition' | 'gift'; cat?: Cat; options: DraftOption[] }
   | { kind: 'succession'; heirs: Heir[]; old: string }
+  | { kind: 'peace'; enemy: string; offered: boolean }
   | { kind: 'gameover'; victory: boolean; reason: string };
 
 export type DraftOption =
@@ -208,6 +219,12 @@ export interface GameState {
   overseas: Record<string, { found: boolean; holder: string | null; colony: number; subdued: boolean }>;
   stats: Stats;
   core: string[];                   // adopted core cards
+  fleet: TroopCard[];               // the player's ships
+  art: number;                      // 0..100 patronage of the arts
+  taxBurden: number;                // 0..30, decays each year
+  accepted: string[];               // accepted cultures
+  stateReligion: string;
+  happiness: number;                // national, 0..100 (cached each year)
   coreChanged: number;              // year of the last change
   troops: TroopCard[];
   equipment: EquipCard[];

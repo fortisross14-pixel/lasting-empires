@@ -768,3 +768,14 @@ ul.traits { margin: 0; padding-left: 18px; }
 [data-style="chancery"] .yearflash { background: radial-gradient(circle, #e9e5dacc, transparent 60%); }
 [data-style="chancery"] .yearflash span { font-family: var(--f-title); color: var(--wax); text-shadow: none; border: 6px double var(--wax); border-radius: 50%; padding: 18px 26px; transform: rotate(-8deg); animation: stamp .6s cubic-bezier(.5, 0, .7, 1.6) both; font-size: clamp(48px, 11vw, 96px); }
 [data-style="chancery"] .yearflash small { margin-top: 14px; font-style: italic; }
+
+/* subjects, peace table, mood */
+#map .prov.subject { stroke: var(--me); stroke-width: 2.2; stroke-dasharray: 6 3; fill-opacity: .85; }
+.mood { display: flex; flex-direction: column; gap: 8px; }
+.mood-h { display: flex; justify-content: space-between; align-items: baseline; }
+.term { text-align: left; cursor: pointer; }
+.term .chk { width: 22px; height: 22px; border: 1.5px solid var(--line); display: grid; place-items: center; font-weight: 800; color: var(--gold); flex: none; }
+.term.on .chk { border-color: var(--gold); }
+.term.blocked { opacity: .5; }
+.term .cost { font-variant-numeric: tabular-nums; color: var(--muted); }
+.mbox.peace { width: min(520px, 100%); }

@@ -196,6 +196,7 @@ export class MapView {
       const nat = s.nations[p.owner];
       c.style.fill = nat?.color ?? '#777';
       c.classList.toggle('mine', p.owner === s.player);
+      c.classList.toggle('subject', nat?.overlord === s.player);
       c.classList.toggle('enemy', p.owner !== s.player && atWar(s, s.player, p.owner));
       c.classList.toggle('unrest', p.owner === s.player && p.control < 30);
       const lbl = this.labels[id];

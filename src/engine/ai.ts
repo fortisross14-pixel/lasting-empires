@@ -7,6 +7,7 @@ import {
 } from './core';
 import { neighbours } from './map';
 import { aiOverseas } from './overseas';
+import { getGeo } from './map';
 import { createBattle, makeSide, toBattleUnits, genericGeneral, autoResolve, finishBattle } from './battle';
 
 // When AI nations get each troop type (they lag behind the player's research a little).
@@ -55,6 +56,14 @@ function aiEconomy(s: GameState, n: Nation) {
     n.gold -= cost; n.manpower -= 2;
     n.army.push({ uid: uid(s), type, vet: 0, str: 100 });
   }
+  // navy
+  n.fleet ??= [];
+  const coastal = provsOf(s, n.id).filter(p => getGeo().coastal[p.id]).length;
+  if (coastal && n.fleet.length < 1 + Math.floor(coastal / 2) && n.gold > 45 && rand(s) < 0.12) {
+    const type = s.year >= 1650 ? 'man_of_war' : s.year >= 1545 ? 'galleon' : s.year >= 1490 && rand(s) < 0.5 ? 'carrack' : 'galley';
+    n.gold -= 30; n.fleet.push({ uid: uid(s), type, vet: 0, str: 100 });
+  }
+  for (const t of n.fleet) t.str = Math.min(100, t.str + 20);
   // upgrade old units
   for (const t of n.army) {
     if (rand(s) > 0.07) continue;
@@ -121,6 +130,23 @@ function aiWar(s: GameState, n: Nation) {
 }
 
 function launchAttackOnPlayer(s: GameState, n: Nation, force: TroopCard[], target: string) {
+  const byLand = provsOf(s, n.id).some(p => getGeo().adj[p.id].includes(target));
+  const home = s.fleet.filter(t => t.mission == null && t.str > 20);
+  if (!byLand && home.length && (n.fleet ?? []).length) {
+    const adm = s.characters.filter(c => c.role === 'admiral' && c.mission == null).sort((a, b) => b.skill - a.skill)[0];
+    const att = makeSide(n.id, toBattleUnits(strongest(n.fleet, 6)), genericGeneral(s), 0, false);
+    const def = makeSide(s.player, toBattleUnits(strongest(home, 8)), adm ? { name: adm.name, skill: adm.skill, traits: adm.traits, uid: adm.uid, mult: traitMult(adm) } : null, 0, true);
+    push(s, { kind: 'battle', battle: createBattle(s, att, def, target, 'sea', undefined, { naval: true, follow: { type: 'land-defend', nation: n.id, force: force.map(t => t.uid) } }) });
+    return;
+  }
+  landDefence(s, n.id, force.map(t => t.uid), target);
+}
+
+/** An enemy army lands or marches on one of your provinces. */
+export function landDefence(s: GameState, nationId: string, forceUids: number[], target: string) {
+  const n = s.nations[nationId];
+  const force = n.army.filter(t => forceUids.includes(t.uid));
+  if (!force.length) return;
   const prov = s.provinces[target];
   const home = s.troops.filter(t => t.mission == null && t.str > 0);
   const defenders = strongest(home, 8);
@@ -145,7 +171,7 @@ function aiDiplomacy(s: GameState, n: Nation) {
     const other = w.a === n.id ? w.b : w.a;
     if (other === s.player) {
       if (s.year - w.since >= 3 && rand(s) < 0.12 && !s.queue.some(q => q.kind === 'event' && q.eventId === 'peace_offer' && q.vars.nation === n.id)) {
-        push(s, { kind: 'event', eventId: 'peace_offer', vars: { nation: n.id } });
+        push(s, { kind: 'peace', enemy: n.id, offered: true });
       }
       continue;
     }
@@ -153,7 +179,7 @@ function aiDiplomacy(s: GameState, n: Nation) {
   }
   // declare war
   const atWarCount = enemiesOf(s, n.id).length;
-  if (atWarCount > 0) return;
+  if (atWarCount > 0 || n.overlord) return;
   const base = { expansionist: 0.07, zealot: 0.05, balanced: 0.035, merchant: 0.02, cautious: 0.012 }[n.personality];
   const size = provsOf(s, n.id).length;
   if (rand(s) > base / (1 + size / 8)) return;
@@ -162,6 +188,7 @@ function aiDiplomacy(s: GameState, n: Nation) {
   const myPow = nationPower(s, n.id);
   const options = [...neigh].filter(t => {
     if (!s.nations[t]?.alive || inTruce(s, n.id, t) || hasTreaty(s, n.id, t, 'alliance') || hasTreaty(s, n.id, t, 'marriage')) return false;
+    if (s.nations[t].overlord === n.id || n.overlord === t) return false;
     if (t === s.player && s.year < s.startYear + 5) return false;
     const rel = getRel(s, n.id, t);
     if (rel > (n.personality === 'expansionist' ? 15 : -10)) return false;

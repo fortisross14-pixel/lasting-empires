@@ -18,6 +18,11 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 - UI: `src/ui/*` — reads state, calls engine functions, never mutates state directly except through engine calls.
 - New saved fields must be added to `GameState` in `src/types.ts`, initialised in `newGame`, and filled in by `migrate()` in `src/engine/turn.ts` so old saves keep working.
 
+## Systems map
+- Navy: `src/engine/navy.ts` (ships live in `s.fleet` / `nation.fleet`; ship cards have kind `ship`; hiring with a general makes an admiral). Sea battles reuse `battle.ts` with `naval: true` and a `follow` step (land attack or land defence).
+- Peace and subjects: `src/engine/diplo.ts` (war score from `War.gains*` and `wins*`; terms spend score; `overlord`/`subject` on `Nation`).
+- Society: `src/engine/society.ts` (province `culture`/`religion`, `happinessOf`, yearly stability drift; `s.art`, `s.taxBurden`, `s.accepted`).
+
 ## Card rates
 - Each category draws `1 + bonuses` cards a year; fractions carry over (`cardAccum`). Add bonuses through `cardRates` parts (buildings, research, monarch, cities, goods, core cards) so the breakdown stays visible to the player.
 - Hand limit is 6 per category; `addCard` respects it unless forced (burdens).

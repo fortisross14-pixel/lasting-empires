@@ -42,7 +42,7 @@ export function equipCard(e: Pick<EquipCard, 'type'>, o: Opts = {}) {
   );
 }
 
-export const ROLE_ICON: Record<string, string> = { general: 'helm', diplomat: 'scroll', admin: 'quill', merchant: 'coin', researcher: 'book', explorer: 'anchor', conqueror: 'lance', colonist: 'tower' };
+export const ROLE_ICON: Record<string, string> = { general: 'helm', diplomat: 'scroll', admin: 'quill', merchant: 'coin', researcher: 'book', explorer: 'anchor', conqueror: 'lance', colonist: 'tower', admiral: 'ship' };
 
 export function charCard(c: Character, s: GameState, o: Opts = {}) {
   return shell('char', { ...o, cls: `r-${c.rarity} role-${c.role} ${o.cls ?? ''}` },
@@ -56,7 +56,7 @@ export function charCard(c: Character, s: GameState, o: Opts = {}) {
   );
 }
 
-const KIND_LABEL: Record<string, string> = { troop: 'Troop', equip: 'Equipment', hire: 'Hire', mission: 'Mission', instant: 'Order' };
+const KIND_LABEL: Record<string, string> = { ship: 'Ship', troop: 'Troop', equip: 'Equipment', hire: 'Hire', mission: 'Mission', instant: 'Order' };
 
 export function handCard(id: string, o: Opts = {}) {
   const d = CARDS[id];
@@ -72,7 +72,7 @@ export function handCard(id: string, o: Opts = {}) {
 
 export function tacticCard(id: string, o: Opts = {}) {
   const d = TACTICS[id];
-  const ic = { volley: 'gun', charge: 'lance', pike: 'pike', flank: 'boot', hold: 'shield', barrage: 'cannon' }[id] ?? 'sword';
+  const ic = { volley: 'gun', charge: 'lance', pike: 'pike', flank: 'boot', hold: 'shield', barrage: 'cannon', broadside: 'cannon', board: 'sword', line: 'ship', gauge: 'twist' }[id] ?? 'sword';
   return shell('tactic', o,
     h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, 'Tactic')),
     h('div', { class: 'c-art', html: icon(ic, o.small ? 26 : 34) }),

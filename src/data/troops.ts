@@ -1,6 +1,6 @@
 // Troops, equipment, merge recipes and battle tactics.
 
-export type TroopKind = 'inf' | 'cav' | 'shot' | 'art';
+export type TroopKind = 'inf' | 'cav' | 'shot' | 'art' | 'ship';
 
 export interface TroopType {
   id: string; name: string; kind: TroopKind;
@@ -11,6 +11,7 @@ export interface TroopType {
   icon: string; desc: string;
   siege?: number;
   pike?: boolean;       // enables Pike Wall
+  transport?: number;   // ships: companies carried by sea
 }
 
 export const TROOPS: Record<string, TroopType> = {
@@ -31,6 +32,13 @@ export const TROOPS: Record<string, TroopType> = {
   old_tercio:  { id: 'old_tercio', name: 'Tercio Viejo', kind: 'inf', melee: 7, fire: 6, def: 8, upkeep: 3.5, tier: 5, tech: 'musket', draftable: false, icon: 'tercio', desc: 'Veteran tercio with musket sleeves. Almost unbreakable.', pike: true },
   dragoons:    { id: 'dragoons', name: 'Dragoons', kind: 'cav', melee: 4, fire: 4, def: 4, upkeep: 2.2, tier: 4, tech: 'military_drill', draftable: false, icon: 'horse', desc: 'Mounted musketeers. Ride fast, fight on foot.' },
   line_infantry:{ id: 'line_infantry', name: 'Line Infantry', kind: 'shot', melee: 5, fire: 7, def: 5, upkeep: 2.6, tier: 5, tech: 'bayonet', draftable: false, icon: 'gun', desc: 'Flintlocks with bayonets. Pike and shot in one man.' },
+  // ships: melee = boarding, fire = guns, def = hull
+  galley:      { id: 'galley', name: 'Galley', kind: 'ship', melee: 4, fire: 1, def: 3, upkeep: 0.8, tier: 1, draftable: true, icon: 'ship', desc: 'Oared warship of the Mediterranean. Rams and boards.', transport: 2 },
+  caravel:     { id: 'caravel', name: 'Caravel', kind: 'ship', melee: 1, fire: 2, def: 2, upkeep: 0.6, tier: 1, draftable: true, icon: 'ship', desc: 'Small, fast and handy against the wind.', transport: 1 },
+  carrack:     { id: 'carrack', name: 'Carrack', kind: 'ship', melee: 2, fire: 3, def: 4, upkeep: 1.2, tier: 2, tech: 'navigation', draftable: true, icon: 'ship', desc: 'High-sided ocean ship. Carries many soldiers.', transport: 4 },
+  galleass:    { id: 'galleass', name: 'Galleass', kind: 'ship', melee: 4, fire: 4, def: 5, upkeep: 1.6, tier: 3, tech: 'bronze_cannon', draftable: false, icon: 'ship', desc: 'A great galley bristling with guns.', transport: 3 },
+  galleon:     { id: 'galleon', name: 'Galleon', kind: 'ship', melee: 3, fire: 5, def: 6, upkeep: 1.8, tier: 3, tech: 'naval_gunnery', draftable: true, icon: 'ship', desc: 'Gun-armed ocean warship and treasure carrier.', transport: 4 },
+  man_of_war:  { id: 'man_of_war', name: 'Ship of the Line', kind: 'ship', melee: 3, fire: 8, def: 8, upkeep: 2.6, tier: 4, tech: 'ship_of_line', draftable: true, icon: 'ship', desc: 'Three decks of guns. Rules the sea.', transport: 3 },
   garrison:    { id: 'garrison', name: 'Garrison', kind: 'inf', melee: 1, fire: 2, def: 3, upkeep: 0, tier: 1, draftable: false, icon: 'tower', desc: 'Defenders of the walls.' },
   rebels:      { id: 'rebels', name: 'Rebels', kind: 'inf', melee: 2, fire: 0, def: 1, upkeep: 0, tier: 1, draftable: false, icon: 'spear', desc: 'Angry peasants.' },
 };
@@ -69,10 +77,12 @@ export const RECIPES: Recipe[] = [
   { a: 'tercio', b: 'musket', out: 'old_tercio', tech: 'musket', cost: 30 },
   { a: 'reiters', b: 'musket', out: 'dragoons', tech: 'military_drill', cost: 20 },
   { a: 'musketeers', b: 'bayonet', out: 'line_infantry', tech: 'bayonet', cost: 25 },
+  { a: 'galley', b: 'bronze', out: 'galleass', tech: 'bronze_cannon', cost: 20 },
+  { a: 'carrack', b: 'bronze', out: 'galleon', tech: 'naval_gunnery', cost: 25 },
   { a: 'pikemen', b: 'musketeers', out: 'line_infantry', tech: 'bayonet', cost: 20 },
 ];
 
-export interface TacticDef { id: string; name: string; desc: string; counteredBy: string[]; needs?: 'cav' | 'shot' | 'art' | 'pike'; }
+export interface TacticDef { id: string; name: string; desc: string; counteredBy: string[]; needs?: 'cav' | 'shot' | 'art' | 'pike'; naval?: boolean; }
 
 export const TACTICS: Record<string, TacticDef> = {
   volley:  { id: 'volley', name: 'Volley Fire', desc: 'Fire ×1.7', counteredBy: ['charge'], needs: 'shot' },
@@ -81,6 +91,10 @@ export const TACTICS: Record<string, TacticDef> = {
   flank:   { id: 'flank', name: 'Flanking March', desc: 'Melee ×1.5', counteredBy: ['hold'] },
   hold:    { id: 'hold', name: 'Hold the Line', desc: 'All damage taken ×0.7', counteredBy: ['barrage'] },
   barrage: { id: 'barrage', name: 'Bombardment', desc: 'Artillery fire ×2.5', counteredBy: ['charge'], needs: 'art' },
+  broadside: { id: 'broadside', name: 'Broadside', desc: 'Guns ×1.7', counteredBy: ['board'], naval: true },
+  board:     { id: 'board', name: 'Grapple and Board', desc: 'Boarding ×1.8', counteredBy: ['line'], naval: true },
+  line:      { id: 'line', name: 'Line of Battle', desc: 'Damage taken ×0.6', counteredBy: ['gauge'], naval: true },
+  gauge:     { id: 'gauge', name: 'Weather Gauge', desc: 'All ×1.3', counteredBy: ['broadside'], naval: true },
 };
 
 export const COUNTER_TEXT = 'A countered tactic does nothing, and its side takes 25% more damage.';

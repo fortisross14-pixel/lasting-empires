@@ -4,13 +4,15 @@ import { CATS } from '../types';
 import { TROOPS, EQUIPMENT } from '../data/troops';
 import { TECH, TECHS, BUILDINGS, TECH_RATES, type TechTrack, type BuildingGroup } from '../data/techs';
 import { RULER_ARCHS } from '../data/nations';
+import { largestForeignCulture, CULTURE_NAMES } from './society';
 import { CORE_RATES } from '../data/core';
+import { shipBlocked } from './navy';
 import {
   player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore,
 } from './core';
 
 export type CardTarget = 'none' | 'nation' | 'mission' | 'troop';
-export type CardKind = 'troop' | 'equip' | 'hire' | 'mission' | 'instant';
+export type CardKind = 'troop' | 'ship' | 'equip' | 'hire' | 'mission' | 'instant';
 
 export interface HandCardDef {
   id: string; name: string; cat: Cat; kind: CardKind; text: string; icon: string;
@@ -43,9 +45,14 @@ const add = (d: HandCardDef) => { CARDS[d.id] = d; };
 
 // ---------- military ----------
 const TROOP_WEIGHT: Record<string, number> = { levy: 4, crossbow: 3, jinetes: 2.5, men_at_arms: 2, knights: 1, bombard: 1, pikemen: 2.5, arquebusiers: 2.5 };
-for (const t of Object.values(TROOPS).filter(t => t.draftable)) {
+for (const t of Object.values(TROOPS).filter(t => t.draftable && t.kind !== 'ship')) {
   add({ id: 'hire_' + t.id, name: t.name, cat: 'military', kind: 'troop', troop: t.id, icon: t.icon, text: t.desc,
     weight: s => (techOk(s, t.tech) ? TROOP_WEIGHT[t.id] ?? 1 : 0) });
+}
+const SHIP_WEIGHT: Record<string, number> = { galley: 1.4, caravel: 1.2, carrack: 1.2, galleon: 1.2, man_of_war: 1 };
+for (const t of Object.values(TROOPS).filter(t => t.draftable && t.kind === 'ship')) {
+  add({ id: 'ship_' + t.id, name: t.name, cat: 'military', kind: 'ship', troop: t.id, icon: t.icon, text: `${t.desc} Carries ${t.transport} companies.`,
+    weight: s => (techOk(s, t.tech) && provsOf(s, s.player).some(p => p.buildings.includes('harbour') || ['lisbon', 'seville', 'catalonia', 'valencia', 'genoa', 'venice', 'naples', 'porto', 'algarve', 'galicia', 'biscay', 'majorca', 'sicily'].includes(p.id)) ? SHIP_WEIGHT[t.id] ?? 1 : 0) });
 }
 for (const e of Object.values(EQUIPMENT)) {
   add({ id: 'eq_' + e.id, name: e.name, cat: 'military', kind: 'equip', equip: e.id, icon: e.icon, text: e.desc,
@@ -78,6 +85,8 @@ add({ id: 'alliance_pact', name: 'Alliance Pact', cat: 'diplomacy', kind: 'missi
 add({ id: 'marriage', name: 'Royal Marriage', cat: 'diplomacy', kind: 'mission', missions: ['marriage'], icon: 'ring', text: 'Join the royal houses: relations grow every year.', weight: () => 1 });
 add({ id: 'peace_envoy', name: 'Peace Envoy', cat: 'diplomacy', kind: 'mission', missions: ['peace'], icon: 'dove', text: 'Negotiate an end to a war.', weight: s => (s.wars.some(w => w.a === s.player || w.b === s.player) ? 2 : 0.6) });
 add({ id: 'expedition', name: 'Voyage of Discovery', cat: 'diplomacy', kind: 'mission', missions: ['explore'], agent: 'explorer', icon: 'anchor', text: 'An explorer sails into the unknown. What they find is up to fate.', weight: () => 0.9 });
+add({ id: 'fealty', name: 'Demand Fealty', cat: 'diplomacy', kind: 'mission', missions: ['vassalize'], icon: 'crown', text: 'Make a much weaker crown your vassal.', weight: () => 0.7 });
+add({ id: 'integration', name: 'Integration Treaty', cat: 'diplomacy', kind: 'mission', missions: ['integrate'], icon: 'hands', text: 'Fold a loyal vassal or union crown into the realm.', weight: s => (Object.values(s.nations).some(n => n.overlord === s.player) ? 1.2 : 0.1) });
 add({ id: 'spy_network', name: 'Spy Network', cat: 'diplomacy', kind: 'instant', target: 'nation', icon: 'eye', text: 'Reveal a nation\'s army for 10 years. Missions against it get +10%.', weight: () => 1,
   targetOk: (s, t) => t !== s.player, play: (s, t) => { s.nations[t].spiedUntil = s.year + 10; return `Your agents report from ${nationName(s, t)}`; } });
 add({ id: 'royal_feast', name: 'Royal Feast', cat: 'diplomacy', kind: 'instant', target: 'nation', icon: 'cup', text: 'Pay 10 ducats: relations +25 with a nation.', weight: () => 1,
@@ -100,6 +109,17 @@ add({ id: 'found_settlement', name: 'Found a Settlement', cat: 'internal', kind:
 add({ id: 'grow_settlement', name: 'Grow your Settlement', cat: 'internal', kind: 'mission', missions: ['grow'], icon: 'tower', text: 'Grow a village to a town, a town to a city, a city to a metropolis.', weight: () => 1.3 });
 add({ id: 'royal_progress', name: 'Royal Progress', cat: 'internal', kind: 'mission', missions: ['progress'], icon: 'crown', text: 'Tour the realm: stability +1, prestige +2, control +10 everywhere.', weight: () => 1.2 });
 add({ id: 'colonial_charter', name: 'Colonial Charter', cat: 'internal', kind: 'mission', missions: ['colonize'], agent: 'colonist', icon: 'tower', text: 'A colonist settles a discovered land (1 manpower).', weight: s => (Object.values(s.overseas).some(o => o.found) ? 1.2 : 0.15) });
+add({ id: 'patronage', name: 'Patronage of the Arts', cat: 'internal', kind: 'mission', missions: ['patronage'], icon: 'star', text: 'Commission painters, poets and builders. Raises the arts, which make the people happier.', weight: () => 1.3 });
+add({ id: 'religious_mission', name: 'Religious Mission', cat: 'internal', kind: 'mission', missions: ['convert'], icon: 'church', text: 'Preachers convert a province to your faith.', weight: s => (provsOf(s, s.player).some(p => p.religion !== s.stateReligion) ? 1.3 : 0.1) });
+add({ id: 'assimilation', name: 'Cultural Integration', cat: 'internal', kind: 'mission', missions: ['assimilate'], icon: 'scroll', text: 'Bring a province of foreign culture into your ways.', weight: s => (provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? 1.1 : 0.1) });
+add({ id: 'festival', name: 'Royal Festival', cat: 'internal', kind: 'instant', icon: 'cup', text: 'Pay 15 ducats: happiness +8 for 5 years.', weight: () => 0.9,
+  can: s => player(s).gold < Math.round(15 * inflation(s)) ? `Needs ${Math.round(15 * inflation(s))} ducats` : null,
+  play: s => { player(s).gold -= Math.round(15 * inflation(s)); s.flags.festival_until = s.year + 5; return 'Bells, bonfires and bullfights: happiness +8 for 5 years'; } });
+add({ id: 'charter', name: 'Charter of Privileges', cat: 'internal', kind: 'instant', icon: 'scroll', text: 'Accept the largest foreign culture in your realm. Its people stop feeling like outsiders.', weight: s => (provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? 0.6 : 0),
+  can: s => (provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? null : 'Every culture is already accepted'),
+  play: s => { const c = largestForeignCulture(s)!; s.accepted.push(c); return `${CULTURE_NAMES[c] ?? c} culture is accepted`; } });
+add({ id: 'tolerance', name: 'Edict of Tolerance', cat: 'internal', kind: 'instant', icon: 'dove', text: 'For 20 years, other faiths are less unhappy. The Papacy disapproves (−20).', weight: s => (provsOf(s, s.player).some(p => p.religion !== s.stateReligion) ? 0.6 : 0),
+  play: s => { s.flags.tolerance_until = s.year + 20; addRel(s, s.player, 'papacy', -20); return 'Other faiths may worship in peace'; } });
 add({ id: 'harvest', name: 'Bountiful Harvest', cat: 'internal', kind: 'instant', icon: 'wheat', text: 'Stability +1, manpower +2.', weight: () => 1,
   play: s => { stab(s, 1); player(s).manpower += 2; return 'Stability +1, manpower +2'; } });
 add({ id: 'sermon', name: 'Inspired Sermon', cat: 'internal', kind: 'instant', icon: 'church', text: 'Stability +1, prestige +3.', weight: () => 1,
@@ -124,7 +144,7 @@ add({ id: 'guild_charter', name: 'Guild Charter', cat: 'economy', kind: 'mission
 add({ id: 'tax_farm', name: 'Tax Farmers', cat: 'economy', kind: 'mission', missions: ['tax'], icon: 'coin', text: 'A merchant collects extra taxes (1 year).', weight: () => 1.4 });
 add({ id: 'irrigation', name: 'Irrigation', cat: 'economy', kind: 'mission', missions: ['develop'], icon: 'wheat', text: 'Develop a province: +1 development.', weight: () => 1 });
 add({ id: 'levy_tax', name: 'Extraordinary Levy', cat: 'economy', kind: 'instant', icon: 'coin', text: 'Gain 6 + 2 per province in ducats. Stability −1.', weight: () => 1.2,
-  play: s => { const g = Math.round((6 + 2 * provsOf(s, s.player).length) * inflation(s)); player(s).gold += g; stab(s, -1); return `+${g} ducats, stability −1`; } });
+  play: s => { const g = Math.round((6 + 2 * provsOf(s, s.player).length) * inflation(s)); player(s).gold += g; stab(s, -1); s.taxBurden = Math.min(30, s.taxBurden + 10); return `+${g} ducats, stability −1, taxes weigh on the people`; } });
 add({ id: 'windfall', name: 'Silver Windfall', cat: 'economy', kind: 'instant', icon: 'coin', text: 'Gain 35 ducats.', weight: () => 0.9,
   play: s => { const g = Math.round(35 * inflation(s)); player(s).gold += g; return `+${g} ducats`; } });
 add({ id: 'trade_fair', name: 'Trade Fair', cat: 'economy', kind: 'instant', icon: 'scales', text: 'Gain 8 ducats per trade treaty, and 5 more.', weight: () => 1,
@@ -252,6 +272,7 @@ export function cardBlocked(s: GameState, def: HandCardDef): string | null {
     return null;
   }
   if (def.kind === 'hire') return player(s).manpower < 1 ? 'Needs 1 manpower' : null;
+  if (def.kind === 'ship') return shipBlocked(s, def.troop!);
   if (def.kind === 'equip') return s.troops.some(t => t.mission == null) ? null : 'No troop at home to equip';
   if (def.kind === 'mission') return null;
   if (def.can) { const r = def.can(s); if (r) return r; }

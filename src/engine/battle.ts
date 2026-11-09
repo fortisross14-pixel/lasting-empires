@@ -2,6 +2,8 @@
 import type { GameState, Battle, BattleSide, BattleUnit, BattleGeneral, RoundLog, TroopCard } from '../types';
 import { TROOPS, TACTICS } from '../data/troops';
 import { rand, pick, weighted, uid, clamp, hasTech, rulerMod, log, nationName, addRel, player, findWar, promoteRarity, hasCore } from './core';
+import { landPhase } from './missions';
+import { landDefence } from './ai';
 
 export const breakLevel = (side: BattleSide) => (side.general?.traits.includes('inspiring') ? 0.25 : 0.35);
 export const hp = (side: BattleSide) => side.units.reduce((a, u) => a + u.str, 0);
@@ -18,17 +20,18 @@ export function makeSide(nation: string, units: BattleUnit[], general: BattleGen
 }
 
 export function createBattle(s: GameState, att: BattleSide, def: BattleSide, province: string,
-  context: Battle['context'], missionId?: number): Battle {
+  context: Battle['context'], missionId?: number, opts: { naval?: boolean; follow?: Battle['follow'] } = {}): Battle {
   const b: Battle = {
     id: uid(s), att, def, province, round: 0, logs: [], playerSide: att.player ? 'att' : 'def',
-    context, missionId, done: false, options: [], enemyNext: 'hold', scout: false, ambush: false,
+    context, missionId, done: false, options: [], enemyNext: 'hold', scout: false, ambush: false, naval: !!opts.naval, follow: opts.follow,
   };
   if ((att.player || def.player) && (s.flags.ambush ?? 0) > 0) { b.ambush = true; s.flags.ambush = 0; }
   prepareRound(s, b);
   return b;
 }
 
-export function available(side: BattleSide): string[] {
+export function available(side: BattleSide, naval = false): string[] {
+  if (naval) return ['broadside', 'board', 'line', 'gauge'];
   const alive = side.units.filter(u => u.str > 0 && !u.garrison);
   const t = ['flank', 'hold'];
   if (alive.some(u => TROOPS[u.type].fire >= 2) || side.units.some(u => u.garrison && u.str > 0)) t.push('volley');
@@ -38,7 +41,8 @@ export function available(side: BattleSide): string[] {
   return t;
 }
 
-function aiPick(s: GameState, me: BattleSide, foe: BattleSide): string {
+function aiPick(s: GameState, me: BattleSide, foe: BattleSide, naval = false): string {
+  if (naval) return pick(s, available(me, true));
   const opts = available(me);
   const foeAlive = foe.units.filter(u => u.str > 0);
   const foeCav = foeAlive.filter(u => TROOPS[u.type].kind === 'cav').length / Math.max(1, foeAlive.length);
@@ -57,12 +61,12 @@ function aiPick(s: GameState, me: BattleSide, foe: BattleSide): string {
 export function prepareRound(s: GameState, b: Battle) {
   const me = b.playerSide === 'att' ? b.att : b.def;
   const foe = b.playerSide === 'att' ? b.def : b.att;
-  const opts = available(me);
+  const opts = available(me, b.naval);
   // shuffle and take 3
   const shuffled = [...opts].sort(() => rand(s) - 0.5);
   b.options = shuffled.slice(0, 3);
-  b.enemyNext = aiPick(s, foe, me);
-  b.scout = b.ambush || (b.round === 0 && !!me.general?.traits.includes('cunning'));
+  b.enemyNext = aiPick(s, foe, me, b.naval);
+  b.scout = b.ambush || (b.round === 0 && !!(me.general?.traits.includes('cunning') || me.general?.traits.includes('weather')));
 }
 
 interface Mods { fire: number; melee: number; cav: number; art: number; incoming: number; incomingMelee: number; }
@@ -76,12 +80,16 @@ function mods(tac: string, countered: boolean): Mods {
   if (tac === 'barrage') m.art = 2.5;
   if (tac === 'pike') m.incomingMelee = 0.5;
   if (tac === 'hold') m.incoming = 0.7;
+  if (tac === 'broadside') m.fire = 1.7;
+  if (tac === 'board') m.melee = 1.8;
+  if (tac === 'line') m.incoming = 0.6;
+  if (tac === 'gauge') { m.fire = 1.3; m.melee = 1.3; }
   return m;
 }
 
 const ROUND_MULT = [{ fire: 1, melee: 0.4 }, { fire: 0.6, melee: 1 }, { fire: 0.5, melee: 1.1 }];
 
-function attackOutput(s: GameState, side: BattleSide, round: number, my: Mods): { fire: number; melee: number } {
+function attackOutput(s: GameState, side: BattleSide, round: number, my: Mods, naval = false): { fire: number; melee: number } {
   let fire = 0, melee = 0;
   const g = side.general;
   for (const u of side.units) {
@@ -98,11 +106,13 @@ function attackOutput(s: GameState, side: BattleSide, round: number, my: Mods): 
   const tm = g?.mult ?? 1;
   if (g?.traits.includes('bold')) melee *= 1 + 0.2 * tm;
   if (g?.traits.includes('gunner')) fire *= 1 + 0.2 * tm;
+  if (g?.traits.includes('sea_dog')) fire *= 1 + 0.2 * tm;
+  if (g?.traits.includes('boarder')) melee *= 1 + 0.2 * tm;
   if (side.player) {
     mult += rulerMod(s, 'battle');
     if (hasTech(s, 'military_drill')) mult += 0.1;
-    if (hasCore(s, 'land')) mult += 0.1;
-    if (hasCore(s, 'sea')) mult -= 0.05;
+    if (naval) { if (hasCore(s, 'sea')) mult += 0.15; if (hasCore(s, 'land')) mult -= 0.05; }
+    else { if (hasCore(s, 'land')) mult += 0.1; if (hasCore(s, 'sea')) mult -= 0.05; }
   }
   return { fire: fire * mult, melee: melee * mult };
 }
@@ -151,8 +161,8 @@ export function playRound(s: GameState, b: Battle, playerTactic: string | null):
   const defCountered = TACTICS[defTac].counteredBy.includes(attTac);
   const am = mods(attTac, attCountered), dm = mods(defTac, defCountered);
   const ef = effectiveFort(b);
-  const attOut = attackOutput(s, b.att, r, am);
-  const defOut = attackOutput(s, b.def, r, dm);
+  const attOut = attackOutput(s, b.att, r, am, b.naval);
+  const defOut = attackOutput(s, b.def, r, dm, b.naval);
   const dmgToDef = applyDamage(s, b.def, b.att, attOut, dm, ef);
   const dmgToAtt = applyDamage(s, b.att, b.def, defOut, am, 0);
   const lg: RoundLog = { round: r + 1, attTactic: attTac, defTactic: defTac, attCountered, defCountered, dmgToAtt, dmgToDef };
@@ -181,11 +191,11 @@ function syncPlayerTroops(s: GameState, side: BattleSide, won: boolean): { lost:
   const lost: string[] = [], promoted: string[] = [];
   for (const u of side.units) {
     if (u.garrison) continue;
-    const card = s.troops.find(t => t.uid === u.uid);
+    const card = s.troops.find(t => t.uid === u.uid) ?? s.fleet.find(t => t.uid === u.uid);
     if (!card) continue;
     let str = u.str;
     if (!won) str *= 0.85;
-    if (str < 8) { lost.push(TROOPS[card.type].name); s.troops = s.troops.filter(t => t.uid !== card.uid); continue; }
+    if (str < 8) { lost.push(TROOPS[card.type].name); s.troops = s.troops.filter(t => t.uid !== card.uid); s.fleet = s.fleet.filter(t => t.uid !== card.uid); continue; }
     card.str = Math.round(str);
     if (won && card.vet < 3 && rand(s) < 0.25) { card.vet++; promoted.push(TROOPS[card.type].name); }
   }
@@ -197,11 +207,11 @@ function syncAITroops(s: GameState, side: BattleSide, won: boolean) {
   if (!nat) return;
   for (const u of side.units) {
     if (u.garrison) continue;
-    const card = nat.army.find(t => t.uid === u.uid);
+    const card = nat.army.find(t => t.uid === u.uid) ?? (nat.fleet ?? []).find(t => t.uid === u.uid);
     if (!card) continue;
     let str = u.str;
     if (!won) str *= 0.85;
-    if (str < 8) nat.army = nat.army.filter(t => t.uid !== card.uid);
+    if (str < 8) { nat.army = nat.army.filter(t => t.uid !== card.uid); nat.fleet = (nat.fleet ?? []).filter(t => t.uid !== card.uid); }
     else { card.str = Math.round(str); if (won && card.vet < 3 && rand(s) < 0.15) card.vet++; }
   }
 }
@@ -237,6 +247,7 @@ export function transferProvince(s: GameState, provId: string, to: string) {
 
 export function freeMission(s: GameState, missionId: number) {
   for (const t of s.troops) if (t.mission === missionId) delete t.mission;
+  for (const t of s.fleet ?? []) if (t.mission === missionId) delete t.mission;
   for (const c of s.characters) if (c.mission === missionId) delete c.mission;
 }
 
@@ -258,6 +269,8 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
     if (won) st.won++; else st.lost++;
   };
   rec(b.att.nation, attWon); rec(b.def.nation, !attWon);
+  const war = findWar(s, b.att.nation, b.def.nation);
+  if (war) { const aWon = war.a === b.att.nation ? attWon : !attWon; if (aWon) war.winsA = (war.winsA ?? 0) + 1; else war.winsB = (war.winsB ?? 0) + 1; }
   if (!playerInvolved) {
     syncAITroops(s, b.att, attWon); syncAITroops(s, b.def, !attWon);
     if (attWon && b.context === 'conquer') transferProvince(s, b.province, b.att.nation);
@@ -274,7 +287,26 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
   if (gen && playerWon) { gen.xp++; if (gen.xp >= 3) { gen.xp = 0; if (promoteRarity(s, gen)) lines.push(`${gen.name} rises to ${gen.rarity}.`); } }
 
   const me = player(s);
-  if (b.context === 'conquer') {
+  if (b.context === 'sea') {
+    const where = prov.name;
+    title = playerWon ? `Victory at sea off ${where}` : `Defeat at sea off ${where}`;
+    good = playerWon;
+    if (playerWon) me.prestige += 3;
+    if (b.follow?.type === 'land-attack') {
+      if (playerWon) {
+        lines.push('The fleet clears the way. The army goes ashore.');
+        if (res.lost.length) lines.push(`Lost: ${res.lost.join(', ')}.`);
+        log(s, title, 'good');
+        landPhase(s, b.follow.missionId!);
+        return { title, lines, good };
+      }
+      lines.push('The landing is called off. The army sails home.');
+      for (const t of s.troops) if (t.mission === b.missionId) t.str = Math.max(30, t.str - 15);
+    } else if (b.follow?.type === 'land-defend') {
+      if (playerWon) lines.push('The enemy fleet is scattered before it can land.');
+      else { lines.push('Enemy troops are coming ashore.'); landDefence(s, b.follow.nation!, b.follow.force ?? [], b.province); }
+    }
+  } else if (b.context === 'conquer') {
     if (playerWon) {
       title = `${prov.name} is taken!`;
       transferProvince(s, b.province, s.player);

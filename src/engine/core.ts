@@ -68,6 +68,14 @@ export function declareWar(s: GameState, a: string, b: string) {
   breakTreaties(s, a, b);
   addRel(s, a, b, -40);
   s.wars.push({ a, b, since: s.year, gainsA: 0, gainsB: 0 });
+  // an attack on a subject is an attack on its overlord, and subjects follow their overlord
+  const lord = s.nations[b]?.overlord;
+  if (lord && lord !== a && !atWar(s, a, lord)) s.wars.push({ a, b: lord, since: s.year, gainsA: 0, gainsB: 0 });
+  for (const x of Object.values(s.nations)) {
+    if (!x.alive || x.id === b) continue;
+    if (x.overlord === a && !atWar(s, x.id, b)) s.wars.push({ a: x.id, b, since: s.year, gainsA: 0, gainsB: 0 });
+    if (x.overlord === b && x.id !== a && !atWar(s, a, x.id)) s.wars.push({ a, b: x.id, since: s.year, gainsA: 0, gainsB: 0 });
+  }
   // allies of the defender may join
   for (const ally of alliesOf(s, b)) {
     if (ally === a || atWar(s, ally, a)) continue;
@@ -192,6 +200,8 @@ export function incomeOf(s: GameState, n: string): IncomeBreakdown {
     other += s.flags.new_world_income ?? 0;
     other += s.flags.spice_income ?? 0;
     if (hasTech(s, 'banking')) provinces *= 1.1;
+    provinces *= 0.9 + (s.happiness ?? 50) / 500;
+    for (const x of Object.values(s.nations)) if (x.alive && x.overlord === n) other += provsOf(s, x.id).reduce((a, p) => a + p.dev * 0.6, 0) * (x.subject === 'union' ? 0.4 : 0.25);
     provinces *= 1 + rulerMod(s, 'goldPct');
     other -= s.hand.filter(h => h.card === 'debt').length * 2;
     if (hasGood(s, 'oil')) goods += 2;
@@ -208,7 +218,7 @@ export function incomeOf(s: GameState, n: string): IncomeBreakdown {
     other += s.flags['ai_bonus_' + n] ?? 0;
   }
   const stabMult = 1 + 0.06 * nat.stability;
-  const upkeep = n === s.player ? upkeepOf(s, s.troops) : nat.army.reduce((a, t) => a + TROOPS[t.type].upkeep, 0) * 0.8;
+  const upkeep = n === s.player ? upkeepOf(s, s.troops) + upkeepOf(s, s.fleet ?? []) : nat.army.reduce((a, t) => a + TROOPS[t.type].upkeep, 0) * 0.8;
   const total = (provinces + trade + goods + other) * stabMult - upkeep - sal - imp;
   return { provinces, trade, goods, other, upkeep, salaries: sal, imports: imp, total, stabMult };
 }
@@ -271,7 +281,7 @@ export function promoteRarity(s: GameState, c: Character): boolean {
 
 export const roleName: Record<Role, string> = {
   general: 'General', diplomat: 'Diplomat', admin: 'Administrator', merchant: 'Merchant', researcher: 'Researcher',
-  explorer: 'Explorer', conqueror: 'Conqueror', colonist: 'Colonist',
+  explorer: 'Explorer', conqueror: 'Conqueror', colonist: 'Colonist', admiral: 'Admiral',
 };
 
 /** Building slots in the town (by settlement size) and in the countryside (by development). */

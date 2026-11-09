@@ -1,5 +1,7 @@
 # Gameplay audit
 
+> **Done since this audit:** fleets and sea battles (1), peace terms and war score (2), vassals and personal unions (5), religion, culture, art and happiness feeding stability (6). Population stays a derived number by design.
+
 Based on the code, nine full bot campaigns (`npm run sim`) and play-throughs at tablet and phone sizes. Ordered by impact on the game; effort is a rough guess (S = a day, M = a few days, L = a week or more).
 
 ## 1. Systems that are missing

@@ -2,6 +2,9 @@
 import type { GameState, Mission, MissionKind, RevealItem, Character, Role } from '../types';
 import { CARDS, drawCat, CAT_INFO } from './cards';
 import { REGIONS } from '../data/overseas';
+import { vassalizeBlocked, integrateBlocked, makeSubject, integrate } from './diplo';
+import { RELIGION_NAMES, isAccepted } from './society';
+import { transportOf } from './navy';
 import { colonizeBlocked, conquistaBlocked, discoverable, resolveExplore, resolveColonize, resolveConquista, colonyCost } from './overseas';
 import { GOODS } from '../data/goods';
 import { OUTCOMES } from '../data/characters';
@@ -33,6 +36,11 @@ export const MISSION_INFO: Record<MissionKind, { name: string; role: Role; icon:
   explore: { name: 'Voyage of Discovery', role: 'explorer', icon: 'anchor', verb: 'Sail into the unknown' },
   colonize: { name: 'Colony', role: 'colonist', icon: 'tower', verb: 'Settle' },
   conquista: { name: 'Conquista', role: 'conqueror', icon: 'sword', verb: 'Conquer' },
+  vassalize: { name: 'Demand Fealty', role: 'diplomat', icon: 'crown', verb: 'Demand fealty from' },
+  integrate: { name: 'Integration', role: 'diplomat', icon: 'hands', verb: 'Integrate' },
+  patronage: { name: 'Patronage', role: 'admin', icon: 'star', verb: 'Commission works of art for' },
+  convert: { name: 'Religious Mission', role: 'admin', icon: 'church', verb: 'Convert' },
+  assimilate: { name: 'Cultural Integration', role: 'admin', icon: 'scroll', verb: 'Integrate the people of' },
 };
 
 /** Who can carry out a mission started by this card. */
@@ -60,9 +68,11 @@ export function importable(s: GameState, partner: string): string[] {
   return [...theirs].filter(g => !mine.has(g) && !s.imports.some(i => i.good === g));
 }
 
+export const patronageCost = (s: GameState) => Math.round(45 * inflation(s));
+
 export const voyageCost = (s: GameState) => Math.round(30 * inflation(s));
 
-export const DIPLO: MissionKind[] = ['relations', 'trade', 'alliance', 'marriage', 'peace'];
+export const DIPLO: MissionKind[] = ['relations', 'trade', 'alliance', 'marriage', 'peace', 'vassalize', 'integrate'];
 
 export function techCost(s: GameState, techId: string): number {
   const t = TECH[techId];
@@ -111,6 +121,11 @@ export function missionTurns(s: GameState, kind: MissionKind, ch: Character, tar
     case 'explore': return Math.max(2, 3 - (ch.traits.includes('cartographer') ? 1 : 0));
     case 'colonize': return 4;
     case 'conquista': return 3;
+    case 'vassalize': return 2;
+    case 'integrate': return 5;
+    case 'patronage': return 2;
+    case 'convert': return 4;
+    case 'assimilate': return 5;
     case 'develop': return 3;
     case 'found': return 3;
     case 'grow': return 3;
@@ -126,7 +141,7 @@ export function missionTurns(s: GameState, kind: MissionKind, ch: Character, tar
 export function diploChance(s: GameState, kind: MissionKind, ch: Character, target: string, bonus = 0): number {
   const rel = getRel(s, s.player, target);
   const nat = s.nations[target];
-  let p = ({ relations: 0.75, trade: 0.55, marriage: 0.45, alliance: 0.4, peace: 0.35 } as Record<string, number>)[kind] ?? 0.5;
+  let p = ({ relations: 0.75, trade: 0.55, marriage: 0.45, alliance: 0.4, peace: 0.35, vassalize: 0.35, integrate: 0.55 } as Record<string, number>)[kind] ?? 0.5;
   p += ch.skill * 0.06 + rel / 250 + bonus + rulerMod(s, 'diplo');
   if (ch.traits.includes('silver')) p += 0.1 * traitMult(ch);
   if (kind === 'marriage' && ch.traits.includes('matchmaker')) p += 0.2 * traitMult(ch);
@@ -224,6 +239,21 @@ export function missionBlocked(s: GameState, kind: MissionKind, target: string, 
     if (player(s).gold < voyageCost(s)) return `Needs ${voyageCost(s)} ducats`;
     return null;
   }
+  if (kind === 'vassalize') return vassalizeBlocked(s, target);
+  if (kind === 'integrate') return integrateBlocked(s, target);
+  if (kind === 'patronage') {
+    if (player(s).gold < patronageCost(s)) return `Needs ${patronageCost(s)} ducats`;
+    if (s.missions.some(m => m.kind === 'patronage')) return 'Artists are already at work';
+    return null;
+  }
+  if (kind === 'convert' || kind === 'assimilate') {
+    const p = s.provinces[target];
+    if (p?.owner !== me) return 'Choose one of your provinces';
+    if (kind === 'convert' && p.religion === s.stateReligion) return `Already ${RELIGION_NAMES[p.religion]}`;
+    if (kind === 'assimilate' && isAccepted(s, p.culture)) return 'Their culture is already accepted';
+    if (s.missions.some(m => m.kind === kind && m.target === target)) return 'Already under way';
+    return null;
+  }
   if (kind === 'colonize') return colonizeBlocked(s, target);
   if (kind === 'conquista') return conquistaBlocked(s, target);
   if (kind === 'tax' || kind === 'progress') {
@@ -233,7 +263,7 @@ export function missionBlocked(s: GameState, kind: MissionKind, target: string, 
   return null;
 }
 
-export function launchMission(s: GameState, kind: MissionKind, charUid: number, target: string, troopUids: number[], building?: string, cardUid?: number, good?: string): string | null {
+export function launchMission(s: GameState, kind: MissionKind, charUid: number, target: string, troopUids: number[], building?: string, cardUid?: number, good?: string, shipUids: number[] = []): string | null {
   const card = s.hand.find(h => h.uid === cardUid);
   const cdef = card && CARDS[card.card];
   if (!cdef || !cdef.missions?.includes(kind)) return 'You need a card for this mission';
@@ -246,6 +276,10 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   const why = kind === 'colonize' ? colonizeBlocked(s, target, ch) : missionBlocked(s, kind, target, building);
   if (why) return why;
   if ((kind === 'conquer' || kind === 'raid' || kind === 'conquista') && !troopUids.length) return 'Send at least one troop';
+  if ((kind === 'conquer' || kind === 'raid') && attackRoute(s, target)?.naval) {
+    const cap = transportOf(s, shipUids, ch);
+    if (cap < troopUids.length) return `By sea: your ships carry ${cap} companies, you are sending ${troopUids.length}`;
+  }
   const m: Mission = {
     id: uid(s), kind, char: charUid, troops: troopUids, target, building,
     turnsLeft: missionTurns(s, kind, ch, target, building), total: 0, progress: 0, bonus: 0, good,
@@ -264,6 +298,9 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   if (kind === 'grow') { m.progress = growCost(s, target); player(s).gold -= m.progress; }
   ch.mission = m.id;
   for (const t of s.troops) if (troopUids.includes(t.uid)) t.mission = m.id;
+  for (const t of s.fleet) if (shipUids.includes(t.uid)) t.mission = m.id;
+  if (shipUids.length) m.ships = shipUids;
+  if (kind === 'patronage') { m.progress = patronageCost(s); player(s).gold -= m.progress; }
   s.missions.push(m);
   return null;
 }
@@ -341,6 +378,31 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
   const me = player(s);
   if (m.kind === 'conquer' || m.kind === 'raid') {
     const prov = s.provinces[m.target];
+    if (prov.owner !== s.player && atWar(s, s.player, prov.owner) && m.ships?.length) {
+      const enemyFleet = [...(s.nations[prov.owner].fleet ?? [])].sort((a, b) => armyPower([b]) - armyPower([a])).slice(0, 6);
+      if (enemyFleet.length) {
+        const adm = s.characters.find(c => c.role === 'admiral' && c.mission == null) ?? ch;
+        const att = makeSide(s.player, toBattleUnits(s.fleet.filter(t => m.ships!.includes(t.uid))), { name: adm.name, skill: adm.skill, traits: adm.traits, uid: adm.uid, mult: traitMult(adm) }, 0, true);
+        const def = makeSide(prov.owner, toBattleUnits(enemyFleet), genericGeneral(s), 0, false);
+        push(s, { kind: 'battle', battle: createBattle(s, att, def, prov.id, 'sea', m.id, { naval: true, follow: { type: 'land-attack', missionId: m.id } }) });
+        return;
+      }
+    }
+    landPhase(s, m.id);
+    return;
+  }
+  return resolveOther(s, m, ch);
+}
+
+/** The land part of a conquest or raid (after any sea battle). */
+export function landPhase(s: GameState, missionId: number) {
+  const m = s.missions.find(x => x.id === missionId);
+  if (!m) return;
+  const ch = s.characters.find(c => c.uid === m.char);
+  const me = player(s);
+  if (!ch) { cancelMission(s, m.id); return; }
+  {
+    const prov = s.provinces[m.target];
     if (prov.owner === s.player || !atWar(s, s.player, prov.owner)) {
       push(s, { kind: 'reveal', title: 'Army returns', items: [{ title: prov.name, text: 'The war there is over. Your army comes home.', tone: 'neutral', kind: 'sword' }] });
       finish(s, m); return;
@@ -368,10 +430,14 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
       finish(s, m); return;
     }
     const def = makeSide(enemy.id, toBattleUnits(defUnits), genericGeneral(s), fort, false);
-    const b = createBattle(s, att, def, prov.id, m.kind, m.id);
+    const b = createBattle(s, att, def, prov.id, m.kind as 'conquer' | 'raid', m.id);
     push(s, { kind: 'battle', battle: b });
     return;
   }
+}
+
+function resolveOther(s: GameState, m: Mission, ch: Character) {
+  const me = player(s);
 
   if (DIPLO.includes(m.kind)) {
     const target = m.target;
@@ -405,7 +471,9 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
         }
         case 'alliance': addTreaty(s, s.player, target, 'alliance'); addRel(s, s.player, target, 15); me.prestige += 3; items.push({ title: 'Alliance sealed', text: `${tname} will stand with you in war.`, tone: 'good', kind: 'hands' }); break;
         case 'marriage': addTreaty(s, s.player, target, 'marriage'); addRel(s, s.player, target, 20); me.prestige += 4; items.push({ title: 'A royal wedding', text: `The houses of ${me.name} and ${tname} are joined. Relations improve every year.`, tone: 'good', kind: 'ring' }); break;
-        case 'peace': items.push(...endWar(s, target)); makePeace(s, s.player, target); items.push({ title: 'Peace', text: `The war with ${tname} is over. A ten-year truce begins.`, tone: 'good', kind: 'dove' }); break;
+        case 'peace': s.queue.push({ kind: 'peace', enemy: target, offered: false }); items.push({ title: 'They will talk', text: `${tname} agrees to come to the table. Set the terms next.`, tone: 'good', kind: 'dove' }); break;
+        case 'vassalize': makeSubject(s, target, 'vassal'); me.prestige += 6; items.push({ title: `${tname} bends the knee`, text: 'A new vassal: it pays tribute and joins your wars.', tone: 'good', kind: 'crown' }); break;
+        case 'integrate': integrate(s, target); me.prestige += 8; items.push({ title: `${tname} joins the realm`, text: 'Its provinces are now yours. Their culture may be foreign: watch their happiness.', tone: 'good', kind: 'hands' }); break;
       }
       const o = rollOutcome(s, ch);
       if (o >= 2) {
@@ -501,6 +569,36 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
     finish(s, m); return;
   }
 
+  if (m.kind === 'patronage') {
+    const o = rollOutcome(s, ch);
+    const gain = [3, 8, 12, 18, 30][o];
+    s.art = Math.min(100, s.art + gain);
+    me.prestige += [0, 1, 2, 4, 10][o];
+    const works = ['a modest altarpiece', 'a fine chapel', 'a celebrated cycle of frescoes', 'a famous palace', 'a masterpiece the world will remember'];
+    const items: RevealItem[] = [outcomeItem(o, `Your artists produce ${works[o]}. Arts +${gain}.`)];
+    gainXp(s, ch, items);
+    push(s, { kind: 'reveal', title: 'Patronage of the Arts', items });
+    finish(s, m); return;
+  }
+
+  if (m.kind === 'convert' || m.kind === 'assimilate') {
+    const prov = s.provinces[m.target];
+    if (prov.owner !== s.player) { finish(s, m); return; }
+    const o = rollOutcome(s, ch);
+    const items: RevealItem[] = [];
+    if (o === 0) {
+      prov.control = Math.max(0, prov.control - 15);
+      items.push(outcomeItem(o, m.kind === 'convert' ? 'The preachers are driven out. Control −15.' : 'The people resist. Control −15.'));
+    } else {
+      if (m.kind === 'convert') prov.religion = s.stateReligion; else prov.culture = player(s).culture === 'aragonese' ? (prov.culture === 'catalan' ? 'catalan' : 'aragonese') : s.accepted[0];
+      if (o >= 3) { prov.control = Math.min(100, prov.control + 15); me.stability = clamp(me.stability + 1, -3, 3); }
+      items.push(outcomeItem(o, m.kind === 'convert' ? `${prov.name} turns to the ${RELIGION_NAMES[s.stateReligion]} faith${o >= 3 ? ', peacefully: control +15, stability +1' : ''}.` : `The people of ${prov.name} adopt your ways${o >= 3 ? ' gladly: control +15, stability +1' : ''}.`));
+    }
+    gainXp(s, ch, items);
+    push(s, { kind: 'reveal', title: MISSION_INFO[m.kind].name, items });
+    finish(s, m); return;
+  }
+
   if (m.kind === 'tax') {
     const dev = provsOf(s, s.player).reduce((a, p) => a + p.dev, 0);
     let g = 4 * ch.skill + dev * 0.5;
@@ -509,7 +607,8 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
     const o = rollOutcome(s, ch);
     g = Math.round(g * OUTCOMES[o].mult);
     me.gold += g;
-    const items: RevealItem[] = [outcomeItem(o, `${ch.name} collects ${g} ducats.`)];
+    s.taxBurden = Math.min(30, s.taxBurden + 6);
+    const items: RevealItem[] = [outcomeItem(o, `${ch.name} collects ${g} ducats. The people feel it.`)];
     if (o === 0 && rand(s) < 0.6) { me.stability = clamp(me.stability - 1, -3, 3); items.push({ title: 'Grumbling', text: 'The collectors were heavy-handed. Stability −1.', tone: 'bad', kind: 'twist' }); }
     gainXp(s, ch, items);
     push(s, { kind: 'reveal', title: 'Tax Collection', items });

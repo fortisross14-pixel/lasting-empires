@@ -9,6 +9,8 @@ import {
 import { addCard, grantRandomCards } from './cards';
 import { endWar } from './missions';
 import { regionState } from './overseas';
+import { unionClaim } from './diplo';
+import { happinessOf } from './society';
 import { getGeo } from './map';
 import { createBattle, makeSide, genericGeneral, transferProvince } from './battle';
 import { courtOptions } from './drafts';
@@ -106,10 +108,10 @@ export const EVENTS: EventDef[] = [
         const p = clamp(0.55 + getRel(s, 'castile', 'aragon') / 200, 0.3, 0.85);
         if (rand(s) < p) {
           const name = s.nations[other].name;
-          annexNation(s, other);
+          unionClaim(s, other);
           player(s).prestige += 25;
           log(s, `The crowns of Castile and Aragon are united!`, 'good');
-          return [good('The Crowns are United!', `${name} joins your realm: all its provinces, treasury and army are now yours. Prestige +25.`, 'crown')];
+          return [good('The Crowns are United!', `${name} enters a personal union with your crown: one monarch, two kingdoms. It pays 40% of its income and fights at your side. After 15 years you may integrate it fully. Prestige +25.`, 'crown')];
         }
         addTreaty(s, 'castile', 'aragon', 'marriage'); addRel(s, 'castile', 'aragon', 20);
         return [bad('The Cortes refuse', 'The nobles will not accept a foreign king. A marriage alliance is signed instead.', 'ring')];
@@ -209,7 +211,13 @@ export const EVENTS: EventDef[] = [
     text: () => 'A German monk has nailed his theses to a church door. Printed pamphlets spread his ideas faster than any preacher. Unrest stirs everywhere.',
     options: [
       { label: 'Defend the faith (−30 ducats)', can: s => player(s).gold < 30 ? 'Needs 30 ducats' : null, run: s => { player(s).gold -= 30; stab(s, 1); player(s).prestige += 10; addRel(s, P(s), 'papacy', 20); return [good('Champion of Rome', 'Stability +1, prestige +10, Papacy +20.', 'church')]; } },
-      { label: 'Tolerate the reformers', run: s => { stab(s, -1); s.flags.reform_research = 1; addRel(s, P(s), 'papacy', -25); return [neutral('New ideas', 'Every study gains +1 research a year. Stability −1, Papacy −25.', 'book')]; } },
+      { label: 'Tolerate the reformers', run: s => {
+        stab(s, -1); s.flags.reform_research = 1; addRel(s, P(s), 'papacy', -25);
+        const ps = provsOf(s, P(s)).filter(p => p.religion === 'catholic').sort(() => rand(s) - 0.5).slice(0, 2);
+        for (const p of ps) p.religion = 'protestant';
+        for (const p of provsOf(s, 'france')) if (rand(s) < 0.3) p.religion = 'protestant';
+        return [neutral('New ideas', 'Every study gains +1 research a year. Stability −1, Papacy −25.', 'book'), bad('Protestant towns', ps.length ? `${ps.map(p => p.name).join(' and ')} turn Protestant. Their people will be unhappy under a Catholic crown.` : 'No province turns yet.', 'church')];
+      } },
     ],
   },
   {
@@ -345,7 +353,7 @@ export const EVENTS: EventDef[] = [
   },
   {
     id: 'revolt', title: 'Revolt!', art: 'torch', chance: 0.2, repeat: 3,
-    cond: s => player(s).stability <= -2 || provsOf(s, P(s)).some(p => p.control < 25),
+    cond: s => player(s).stability <= -2 || provsOf(s, P(s)).some(p => p.control < 25 || happinessOf(s, p).value < 25),
     setup: s => { let ps = provsOf(s, P(s)).filter(p => p.id !== player(s).capital && p.control < 25); if (!ps.length) ps = provsOf(s, P(s)).filter(p => p.id !== player(s).capital); return ps.length ? { prov: pick(s, ps).id } : null; },
     text: (s, v) => `Peasants and minor nobles rise in ${s.provinces[v.prov].name}, refusing to pay taxes to a failing crown.`,
     options: [
