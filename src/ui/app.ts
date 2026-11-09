@@ -241,7 +241,8 @@ function start(s: GameState) {
     h('div', { id: 'toast', role: 'status', 'aria-live': 'polite' }),
   );
   map = new MapView($('#board'));
-  map.onSelect = id => { if (id) openSheet('province', id); else if (sheet?.kind === 'province') closeSheet(); };
+  map.onPick = onMapPick;
+  map.onSelect = id => { if (pickHand != null) { if (id) toast('Hold your finger on the province to choose it'); return; } if (id) openSheet('province', id); else if (sheet?.kind === 'province') closeSheet(); };
   document.documentElement.style.setProperty('--me', player(S).color);
   refresh();
   requestAnimationFrame(() => map.focus(provsOf(S, S.player).map(p => p.id), 120));
@@ -419,6 +420,7 @@ const WIN_TABS: Record<Cat, [string, string][]> = {
 };
 function toggleWin(cat: Cat) { if (win?.cat === cat) closeWin(); else openWin(cat); }
 function openWin(cat: Cat, tab = win?.cat === cat ? win.tab : 'cards') {
+  if (pickHand != null) stopMapPick();
   if (sheet) { sheet = null; $('#sheet').hidden = true; }
   if (win?.cat !== cat) { pick = {}; cv = { filter: 'all', mode: 'browse', sel: [] }; }
   win = { cat, tab };
@@ -1253,7 +1255,7 @@ function charDetail(c: Character) {
 interface TargetRow { label: string; sub: string; color?: string; acts: { label: string; kind: MissionKind; target: string; building?: string; why: string | null }[]; }
 
 /** Targets a mission card can be used on. */
-function missionTargets(handUid: number): TargetRow[] {
+function missionTargets(handUid: number, all = false): TargetRow[] {
   const hc = S.hand.find(x => x.uid === handUid)!;
   const d = CARDS[hc.card];
   const kind = d.missions![0];
@@ -1273,7 +1275,7 @@ function missionTargets(handUid: number): TargetRow[] {
           acts: [{ label: 'Invasion base', kind: 'base', target: p.id, why: missionBlocked(S, 'base', p.id) }] });
       }
     }
-    rows.push(...far.slice(0, 12));
+    rows.push(...(all ? far : far.slice(0, 12)));
   } else if (DIPLO.includes(kind)) {
     for (const n of Object.values(S.nations).filter(n => n.alive && n.id !== S.player)) {
       const why = missionBlocked(S, kind, n.id);
@@ -1381,6 +1383,9 @@ function openCardModal(handUid: number) {
         h('div', { class: 'r-acts' }, r.acts.map(a => h('button', { class: 'btn small' + (a.why ? ' blocked' : ''), title: a.why ?? '', onclick: () => { if (a.why) return toast(a.why, 'bad'); closeModal(); openPlanner(a.kind, a.target, a.building, handUid); } }, a.label)))));
     }
     body.append(list);
+    if (def.missions![0] === 'conquer' && rows.length) {
+      body.insertBefore(h('button', { class: 'btn pickmap', onclick: () => { closeModal(); startMapPick(handUid); } }, '🗺 Select province on the map'), list);
+    }
   } else {
     let target = '';
     const targets = h('div', { class: 'targets' });
@@ -1413,6 +1418,55 @@ function openCardModal(handUid: number) {
     footer.append(playBtn);
   }
   openModal(h('div', { class: 'mbox narrow' }, h('div', { class: 'center' }, handCard(hc.card)), body, footer));
+}
+
+// ---------- choosing a target on the map ----------
+let pickHand: number | null = null;
+
+/** Hold (touch) or click (mouse) an enemy province to pick it as the target of an attack card. */
+function startMapPick(handUid: number) {
+  const rows = missionTargets(handUid, true);
+  const ids = rows.flatMap(r => r.acts.map(a => a.target));
+  pickHand = handUid;
+  if (win) closeWin();
+  closeSheet();
+  map.setPick(true, ids);
+  // frame the targets that can be reached now (the far ones are a base away) together with home
+  const near = rows.filter(r => r.acts.some(a => a.kind !== 'base')).flatMap(r => r.acts.map(a => a.target));
+  map.focus([...new Set(near.length ? near : ids)].concat(provsOf(S, S.player).map(p => p.id)), 60);
+  document.getElementById('pickbar')?.remove();
+  const touch = matchMedia('(pointer: coarse)').matches;
+  document.body.append(h('div', { id: 'pickbar' },
+    h('span', {}, h('b', {}, 'Pick a target: '), touch ? 'hold a highlighted province.' : 'click a highlighted province.'),
+    h('button', { class: 'btn small ghost', onclick: stopMapPick }, 'Cancel')));
+}
+
+function stopMapPick() {
+  pickHand = null;
+  map.setPick(false);
+  document.getElementById('pickbar')?.remove();
+}
+
+function onMapPick(id: string) {
+  if (pickHand == null) return;
+  const handUid = pickHand;
+  if (!S.hand.some(x => x.uid === handUid)) { stopMapPick(); return; }
+  const p = S.provinces[id];
+  const row = missionTargets(handUid, true).find(r => r.acts.some(a => a.target === id));
+  if (!row) {
+    const why = !p ? 'Not a province' : p.owner === S.player ? `${p.name} is already yours` : !provKnown(S, id) ? 'You have not mapped that land' : !atWar(S, S.player, p.owner) ? `You are not at war with ${nationName(S, p.owner)}` : `${p.name} is out of reach`;
+    toast(why, 'bad');
+    return;
+  }
+  const acts = row.acts.filter(a => a.target === id);
+  openModal(h('div', { class: 'mbox narrow' },
+    h('h2', {}, row.label), h('p', { class: 'muted' }, row.sub),
+    h('div', { class: 'mrow' },
+      h('button', { class: 'btn ghost', onclick: closeModal }, 'Back to map'),
+      acts.map(a => h('button', { class: 'btn primary' + (a.why ? ' blocked' : ''), title: a.why ?? '', onclick: () => {
+        if (a.why) return toast(a.why, 'bad');
+        closeModal(); stopMapPick(); openPlanner(a.kind, a.target, a.building, handUid);
+      } }, a.why ? `${a.label}: ${a.why}` : a.label)))));
 }
 
 // ---------- mission planner ----------
@@ -1535,6 +1589,7 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
 
 // ---------- end turn & prompt queue ----------
 async function onEndTurn() {
+  if (pickHand != null) stopMapPick();
   if (modalOpen) return;
   if (S.queue.length) { processQueue(); return; }
   const rep = endTurn(S);

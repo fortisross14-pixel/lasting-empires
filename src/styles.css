@@ -924,3 +924,13 @@ ul.traits { margin: 0; padding-left: 18px; }
 .tut-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 .tutopt { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
 .tutopt input { width: 20px; height: 20px; }
+
+/* choosing an attack target on the map */
+#map.picking .prov { fill-opacity: .12; }
+#map.picking .prov.mine { fill-opacity: .4; }
+#map.picking .prov.target { fill-opacity: 1; stroke: var(--wax); stroke-width: 3; stroke-dasharray: none; animation: target-pulse 1.4s ease-in-out infinite; cursor: crosshair; }
+@keyframes target-pulse { 50% { stroke-opacity: .35; } }
+#pickbar { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 64px); transform: translateX(-50%); z-index: 30; display: flex; gap: 12px; align-items: center; justify-content: space-between;
+  width: min(520px, calc(100vw - 32px)); box-sizing: border-box; padding: 10px 14px; border-radius: 12px; background: var(--panel); color: var(--text); box-shadow: 0 6px 24px rgba(0,0,0,.3); border: 1px solid var(--wax, #8b2e1f); font-size: 14px; }
+#pickbar button { flex: none; min-height: 40px; }
+.btn.pickmap { width: 100%; margin: 4px 0 10px; }

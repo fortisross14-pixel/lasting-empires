@@ -47,6 +47,12 @@ export class MapView {
   marks: SVGGElement;
   selected: string | null = null;
   onSelect: (id: string | null) => void = () => {};
+  /** target picking: hold (touch) or click (mouse) a province to choose it */
+  pickMode = false;
+  targets = new Set<string>();
+  onPick: (id: string) => void = () => {};
+  private holdTimer = 0;
+  private held = false;
   private pointers = new Map<number, { x: number; y: number }>();
   private moved = 0;
   private pinchStart: { d: number; vb: { x: number; y: number; w: number; h: number }; cx: number; cy: number } | null = null;
@@ -167,6 +173,16 @@ export class MapView {
       svg.setPointerCapture(e.pointerId);
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       this.moved = 0;
+      this.held = false;
+      clearTimeout(this.holdTimer);
+      if (this.pickMode && e.pointerType === 'touch' && this.pointers.size === 1) {
+        const x = e.clientX, y = e.clientY;
+        this.holdTimer = window.setTimeout(() => {
+          if (this.moved > 6 || this.pointers.size !== 1) return;
+          const id = this.idAt(x, y);
+          if (id) { this.held = true; navigator.vibrate?.(30); this.onPick(id); }
+        }, 450);
+      }
       if (this.pointers.size === 2) {
         const [a, b] = [...this.pointers.values()];
         const c = this.toMap((a.x + b.x) / 2, (a.y + b.y) / 2);
@@ -182,6 +198,7 @@ export class MapView {
         const { scale } = this.toMap(0, 0);
         const dx = cur.x - prev.x, dy = cur.y - prev.y;
         this.moved += Math.abs(dx) + Math.abs(dy);
+        if (this.moved > 6) clearTimeout(this.holdTimer);
         if (this.moved > 6) { this.vb.x -= dx * scale; this.vb.y -= dy * scale; this.clampVb(); this.apply(); }
       } else if (this.pointers.size === 2 && this.pinchStart) {
         this.moved = 99;
@@ -198,10 +215,11 @@ export class MapView {
       const was = this.pointers.size;
       this.pointers.delete(e.pointerId);
       if (this.pointers.size < 2) this.pinchStart = null;
+      clearTimeout(this.holdTimer);
+      if (this.held) { this.held = false; return; }
       if (was === 1 && this.moved <= 6 && e.type === 'pointerup') {
-        const hit = document.elementFromPoint(e.clientX, e.clientY);
-        const target = hit?.closest?.('[data-id]') as SVGElement | null;
-        const id = target?.getAttribute('data-id') ?? null;
+        const id = this.idAt(e.clientX, e.clientY);
+        if (this.pickMode && e.pointerType !== 'touch') { if (id) this.onPick(id); return; }
         this.select(id);
         this.onSelect(id);
       }
@@ -235,6 +253,19 @@ export class MapView {
       this.svg.querySelector('defs')!.append(pat);
     }
     return id;
+  }
+
+  private idAt(x: number, y: number): string | null {
+    const hit = document.elementFromPoint(x, y);
+    const target = hit?.closest?.('[data-id]') as SVGElement | null;
+    return target?.getAttribute('data-id') ?? null;
+  }
+
+  setPick(on: boolean, targets: Iterable<string> = []) {
+    this.pickMode = on;
+    this.targets = new Set(on ? targets : []);
+    this.svg.classList.toggle('picking', on);
+    for (const [id, c] of Object.entries(this.cells)) c.classList.toggle('target', this.targets.has(id));
   }
 
   setMode(mode: MapMode, s: GameState) { this.mode = mode; this.svg.dataset.mode = mode; this.render(s); }
