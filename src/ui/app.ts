@@ -45,16 +45,30 @@ void vassalizeBlocked;
 const RARITY_ORDER_I = (c: Character) => ['common', 'uncommon', 'rare', 'epic', 'legendary'].indexOf(c.rarity);
 
 // ---------- persistence ----------
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { /* storage may be blocked */ } }
-function loadSave(): GameState | null {
+// Three save slots. The old single save moves into slot 1 the first time.
+const SLOTS = [1, 2, 3];
+const slotKey = (n: number) => `lasting-empires.slot.${n}`;
+let slot = 1;
+let pendingNation: string | null = null; // chosen on the title screen while every slot is full
+function save() { try { localStorage.setItem(slotKey(slot), JSON.stringify(S)); } catch { /* storage may be blocked */ } }
+function loadSlot(n: number): GameState | null {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(slotKey(n));
     if (!raw) return null;
     const s = JSON.parse(raw) as GameState;
     return s.version === SAVE_VERSION ? migrate(s) : null;
   } catch { return null; }
 }
-export function snapshot() { return S ? { save: JSON.stringify(S) } : {}; }
+function clearSlot(n: number) { try { localStorage.removeItem(slotKey(n)); } catch { /* */ } }
+function migrateOldSave() {
+  try {
+    const old = localStorage.getItem(KEY);
+    if (old && !localStorage.getItem(slotKey(1))) localStorage.setItem(slotKey(1), old);
+    if (old) localStorage.removeItem(KEY);
+  } catch { /* */ }
+}
+function startIn(n: number, s: GameState) { slot = n; pendingNation = null; start(s); save(); }
+export function snapshot() { return S ? { save: JSON.stringify(S), slot } : {}; }
 
 // ---------- menu styles ----------
 const STYLE_KEY = 'lasting-empires.style';
@@ -80,29 +94,61 @@ function stylePicker(onChange: () => void) {
 }
 
 // ---------- shell ----------
-export function boot(data: { save?: string }) {
+export function boot(data: { save?: string; slot?: number }) {
   applyStyle();
   clear($('#app'));
   let restored: GameState | null = null;
   if (data?.save) { try { restored = JSON.parse(data.save); } catch { /* ignore */ } }
-  if (restored && !restored.over && restored.version === SAVE_VERSION) { start(migrate(restored)); return; }
+  if (restored && !restored.over && restored.version === SAVE_VERSION) { slot = data.slot ?? 1; start(migrate(restored)); return; }
   showTitle();
 }
 
+function slotsSection() {
+  const saves = SLOTS.map(n => ({ n, s: loadSlot(n) }));
+  const box = h('div', { class: 'slots' });
+  if (pendingNation) box.append(h('p', { class: 'slot-note' }, `All three slots are full. Choose one to replace with a new ${NATIONS.find(x => x.id === pendingNation)?.name} campaign, or delete one.`,
+    h('button', { class: 'btn ghost small', onclick: () => { pendingNation = null; showTitle(); } }, 'Cancel')));
+  for (const { n, s } of saves) {
+    const me = s?.nations[s.player];
+    const card = h('div', { class: 'slot-card' + (s ? '' : ' empty'), style: me ? `--nc:${me.color}` : '' },
+      h('span', { class: 'np-shield sm' }, me ? me.name[0] : String(n)),
+      h('div', { class: 'slot-t' }, h('b', {}, me ? `${me.name}, ${s!.year}` : `Slot ${n}`),
+        h('small', { class: 'muted' }, s ? `${me!.ruler.name} · ${provsOf(s, s.player).length} provinces${s.over ? ' · finished' : ''}` : 'Empty')));
+    const acts = h('div', { class: 'slot-acts' });
+    if (pendingNation) acts.append(h('button', { class: 'btn primary small', onclick: () => {
+      const go = () => startIn(n, newGame(pendingNation!));
+      if (window.confirm(`Replace ${me?.name ?? 'this'} campaign in slot ${n}? It cannot be recovered.`)) go();
+    } }, 'Replace'));
+    else if (s && !s.over) acts.append(h('button', { class: 'btn primary small', onclick: () => startIn(n, s) }, 'Continue'));
+    if (s) acts.append(h('button', { class: 'btn ghost small', 'aria-label': `Delete slot ${n}`, onclick: () => { if (window.confirm(`Delete the ${me?.name} campaign in slot ${n}?`)) { clearSlot(n); showTitle(); } } }, 'Delete'));
+    card.append(acts);
+    box.append(card);
+  }
+  return box;
+}
+
+function chooseNation(id: string) {
+  const free = SLOTS.find(n => !loadSlot(n));
+  if (free) { startIn(free, newGame(id)); return; }
+  pendingNation = id; showTitle();
+  document.querySelector('.slots')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 function showTitle() {
+  migrateOldSave();
   const root = clear($('#app'));
-  const saved = loadSave();
   root.append(h('div', { class: 'title-screen' },
     h('div', { class: 'title-inner' },
       h('p', { class: 'eyebrow' }, 'Anno Domini 1453 – 1750'),
       h('h1', { class: 'title' }, 'Lasting Empires'),
       h('p', { class: 'lede' }, 'Every action is a card. Gather Military, Diplomacy, Internal, Economy and Research cards each year, then send your people on missions. One turn is one year.'),
-      saved && !saved.over ? h('button', { class: 'btn primary wide', onclick: () => start(saved) }, `Continue as ${saved.nations[saved.player].name}, ${saved.year}`) : null,
+      h('h2', { class: 'pick-h' }, 'Campaigns'),
+      slotsSection(),
       h('h2', { class: 'pick-h' }, 'Menu style'),
       stylePicker(showTitle),
       h('h2', { class: 'pick-h' }, 'Choose your crown'),
       h('div', { class: 'nation-picks' }, NATIONS.filter(n => n.playable).map(n =>
-        h('button', { class: 'nation-pick', style: `--nc:${n.color}`, onclick: () => start(newGame(n.id)) },
+        h('button', { class: 'nation-pick', style: `--nc:${n.color}`, onclick: () => chooseNation(n.id) },
           h('span', { class: 'np-shield' }, n.name[0]),
           h('span', { class: 'np-name' }, n.name),
           h('span', { class: 'np-diff' }, n.id === 'castile' ? 'Strong start' : n.id === 'aragon' ? 'Balanced' : 'Hard start'),
@@ -797,7 +843,7 @@ function realmSheet(body: HTMLElement) {
     stat('Court', `${courtCount(S)}/${courtCap(S)}`), stat('Provinces', provsOf(S, S.player).length)));
   body.append(h('p', { class: 'muted' }, 'Stability from −3 to +3 changes income by 6% a step and nation points by 0.5. At −2 or lower, revolts break out and you draw fewer cards.'));
   body.append(h('h3', {}, 'Menu style'), stylePicker(() => refresh()));
-  body.append(h('button', { class: 'btn ghost', onclick: () => confirmBox('Leave this campaign?', 'It stays saved. You can continue it from the title screen.', 'Back to title', () => { closeModal(); showTitle(); }) }, 'Back to title screen'));
+  body.append(h('button', { class: 'btn ghost', onclick: () => confirmBox('Leave this campaign?', `It stays saved in slot ${slot}. You can continue it from the title screen.`, 'Back to title', () => { closeModal(); showTitle(); }) }, 'Back to title screen'));
   return [sheetHead(me.name, `${me.ruler.name} · ${S.year}`, me.color), body];
 }
 
@@ -1358,5 +1404,5 @@ function showGameOver(victory: boolean, reason: string) {
     h('h2', {}, victory ? 'A lasting empire' : 'The end of an age'), h('p', {}, reason),
     h('ol', { class: 'rank' }, r.slice(0, 8).map(x => h('li', { class: x.id === S.player ? 'me' : '' }, h('span', {}, x.name), h('b', {}, String(x.score))))),
     h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: () => { S.queue.shift(); closeModal(); refresh(); } }, 'Look at the map'),
-      h('button', { class: 'btn primary', onclick: () => { S.queue.shift(); closeModal(); try { localStorage.removeItem(KEY); } catch { /* */ } showTitle(); } }, 'New campaign'))));
+      h('button', { class: 'btn primary', onclick: () => { S.queue.shift(); closeModal(); clearSlot(slot); showTitle(); } }, 'New campaign'))));
 }

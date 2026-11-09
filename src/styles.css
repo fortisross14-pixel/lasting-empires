@@ -807,3 +807,15 @@ ul.traits { margin: 0; padding-left: 18px; }
 @media (max-width: 640px) { .reveal-row .k-event .c-title, [data-style="chancery"] .reveal-row .k-event .c-title { font-size: 12px; padding-bottom: 6px; } .reveal-row .k-event .c-art { padding: 4px 0 0; } .reveal-row .k-event .c-art svg { width: 28px; height: 28px; } }
 .reveal-row .k-event .c-title { flex: none; }
 @media (max-width: 640px) { [data-style] .reveal-row .k-event .c-text { font-size: 10.5px; line-height: 1.25; } }
+
+/* ---------- save slots ---------- */
+.slots { display: grid; gap: 8px; }
+.slot-note { margin: 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; color: var(--gold-2); }
+.slot-card { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); border-left: 4px solid var(--nc, var(--line)); }
+.slot-card.empty { opacity: .65; border-style: dashed; }
+.slot-card .np-shield { grid-row: auto; background: var(--nc, var(--line)); }
+.slot-t { display: flex; flex-direction: column; min-width: 0; }
+.slot-t b { font-family: var(--f-title); font-size: 17px; }
+.slot-acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+[data-style="chancery"] .slot-card { border-radius: 0; background: var(--panel); border: 1.5px solid var(--text); border-left: 6px solid var(--nc, var(--text)); }
+[data-style="heraldic"] .slot-card { border-radius: 0; }
