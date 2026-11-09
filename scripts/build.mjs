@@ -15,4 +15,5 @@ const standalone = `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"
 mkdirSync('dist', { recursive: true });
 writeFileSync('dist/lasting-empires.html', artifact);
 writeFileSync('dist/index.html', standalone);
+writeFileSync('index.html', standalone); // served by GitHub Pages from the repo root
 console.log('built', (artifact.length / 1024).toFixed(0) + ' KB');

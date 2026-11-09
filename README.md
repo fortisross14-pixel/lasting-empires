@@ -30,3 +30,7 @@ Open `dist/index.html` in any browser. The game saves automatically in the brows
 - `src/engine`: pure game rules (seeded RNG, no DOM). `turn.ts` runs a year; `ai.ts` runs rival nations.
 - `src/ui`: map, cards, panels and modals.
 - `scripts/sim.ts`: headless bot that plays full campaigns, for balance and crash testing.
+
+## GitHub Pages
+
+`npm run build` also writes `index.html` at the repo root. In the repo's Settings → Pages, choose **Deploy from a branch**, branch `main`, folder `/ (root)`. Rebuild and commit `index.html` after code changes.
