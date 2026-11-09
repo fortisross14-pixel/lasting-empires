@@ -172,7 +172,7 @@ export function provinceIncome(s: GameState, id: string): number {
   const g = getGeo();
   let v = p.dev * 0.6 + (g.coastal[id] ? 0.4 : 0);
   // towns without building materials fall into disrepair
-  const repair = p.owner === s.player ? 1 - 0.3 * (s.short?.materials ?? 0) : 1;
+  const repair = p.owner === s.player ? 1 - 0.15 * (s.short?.materials ?? 0) : 1;
   for (const b of p.buildings) v += (BUILDINGS[b]?.gold ?? 0) * grade(p, b) * extractMult(p, b) * (BUILDINGS[b]?.site === 'town' ? repair : 1);
   if (s.player === p.owner && hasCore(s, 'agrarian')) for (const b of ['farm', 'pasture']) if (p.buildings.includes(b)) v += (BUILDINGS[b].gold ?? 0) * 0.5 * grade(p, b);
   v += TIERS[tierOf(p)].gold;

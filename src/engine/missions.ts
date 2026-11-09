@@ -342,7 +342,7 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   if (!cdef || !cdef.missions?.includes(kind)) return 'You need a card for this mission';
   if (kind === 'research' && cdef.track && TECH[target]?.track !== cdef.track) return 'This card studies another field';
   if (kind === 'build' && cdef.group && BUILDINGS[building!]?.group !== cdef.group) return 'This card builds another kind of building';
-  if (missionsLeft(s) <= 0) return `No missions left this year: a ${rankOf(s).name} can start ${missionCap(s)} a year`;
+  if (kind !== 'route' && missionsLeft(s) <= 0) return `No missions left this year: a ${rankOf(s).name} can start ${missionCap(s)} a year`;
   const ch = s.characters.find(c => c.uid === charUid);
   if (!ch || ch.mission != null) return 'Choose a free character';
   const roles = cardRoles(cdef.id);
@@ -385,7 +385,7 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   if (kind === 'found') { m.progress = foundCost(s); player(s).gold -= m.progress; }
   if (kind === 'grow') { m.progress = growCost(s, target); player(s).gold -= m.progress; }
   ch.mission = m.id;
-  s.launched = (s.launched ?? 0) + 1;
+  if (kind !== 'route') s.launched = (s.launched ?? 0) + 1; // a trade route is a quick errand: it does not use up a yearly mission
   for (const t of s.troops) if (troopUids.includes(t.uid)) t.mission = m.id;
   for (const t of s.fleet) if (shipUids.includes(t.uid)) t.mission = m.id;
   if (shipUids.length) m.ships = shipUids;

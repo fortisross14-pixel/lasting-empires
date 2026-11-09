@@ -1651,7 +1651,7 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
     const facts: (string | HTMLElement)[] = [qText(turns)];
     if (DIPLO.includes(kind)) facts.push(`${Math.round(diploChance(S, kind, ch, target) * 100)}% chance`, `Journey ${envoyCost(S, target)} ducats · back at court ${qText(Math.max(1, envoyTravel(S, target)))} after`, CARDS[card.card].permanent ? 'The card stays in your hand' : 'The card is used up');
     if (kind === 'research') facts.push(`${researchRate(S, ch, TECH[target]?.track)} research a year · ${techCost(S, target)} needed`);
-    facts.push(`Missions left this year: ${missionsLeft(S)}`);
+    facts.push(kind === 'route' ? 'A quick errand: does not use up one of the year\'s missions' : `Missions left this year: ${missionsLeft(S)}`);
     if (kind === 'build') facts.push(`${buildingCost(S, building!)} ducats now · salary ${BUILDINGS[building!].salary} a year`);
     const pg = projectGoods(kind, building);
     for (const [g, n] of Object.entries(pg)) {
