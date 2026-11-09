@@ -1,8 +1,8 @@
 // Core game state types. Everything the game needs to save lives in GameState.
 
-export type Role = 'general' | 'diplomat' | 'admin' | 'merchant' | 'researcher' | 'explorer' | 'conqueror' | 'colonist' | 'admiral';
-export type Cat = 'military' | 'diplomacy' | 'internal' | 'economy' | 'research';
-export const CATS: Cat[] = ['military', 'diplomacy', 'internal', 'economy', 'research'];
+export type Role = 'general' | 'diplomat' | 'admin' | 'merchant' | 'researcher' | 'explorer' | 'conqueror' | 'colonist' | 'admiral' | 'courtier' | 'priest' | 'artist' | 'leader';
+export type Cat = 'military' | 'diplomacy' | 'internal' | 'economy' | 'research' | 'culture';
+export const CATS: Cat[] = ['military', 'diplomacy', 'internal', 'economy', 'research', 'culture'];
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 export type Personality = 'expansionist' | 'merchant' | 'cautious' | 'zealot' | 'balanced';
 
@@ -106,7 +106,7 @@ export type MissionKind =
   | 'relations' | 'trade' | 'alliance' | 'marriage' | 'peace'
   | 'research' | 'build' | 'develop' | 'found' | 'grow' | 'tax' | 'progress'
   | 'explore' | 'colonize' | 'conquista'
-  | 'vassalize' | 'integrate' | 'patronage' | 'convert' | 'assimilate' | 'grace' | 'base' | 'route' | 'post';
+  | 'vassalize' | 'integrate' | 'patronage' | 'convert' | 'assimilate' | 'grace' | 'base' | 'route' | 'post' | 'artwork' | 'pilgrimage' | 'accept';
 
 export interface Mission {
   id: number;
@@ -124,6 +124,9 @@ export interface Mission {
   dir?: 'buy' | 'sell';  // trade routes
   amount?: number;       // trade routes: loads a year
 }
+
+/** A work of art. Its happiness fades to nothing by `until`; it pays ducats until `goldUntil`. */
+export interface Artwork { id: number; name: string; genre: string; quality: number; year: number; artist: string; culture: string; happy: number; until: number; gold: number; goldUntil: number; }
 
 /** A standing trade route: buys or sells loads of one good every quarter. */
 export interface TradeRoute { id: number; good: string; dir: 'buy' | 'sell'; partner: string; amount: number; since: number; deal: number; }
@@ -250,6 +253,8 @@ export interface GameState {
   stock: Record<string, number>;    // loads in the warehouses
   short: Record<string, number>;    // share of last year's need that went unmet (0..1)
   routes: TradeRoute[];
+  works?: Artwork[];                // works of art made for the crown
+  giftYear?: number;                // last year a gift went to your church
   posts: TradePost[];
   tradeYear?: { bought: number; sold: number; local: number; market: number }; // ducats over the last four quarters
   overseas: Record<string, { found: boolean; holder: string | null; colony: number; subdued: boolean }>;

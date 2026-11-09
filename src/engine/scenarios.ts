@@ -34,7 +34,7 @@ export function scenarioCastilePortugal(): GameState {
   s.characters.push(g1, g2);
   // cards to play with
   s.hand = s.hand.filter(h => h.card === 'debt');
-  for (const c of ['peace_envoy', 'merchant_route', 'trading_post', 'march_orders', 'march_orders', 'march_orders', 'scouts', 'spy_network', 'hire_men_at_arms']) addCard(s, c, true);
+  for (const c of ['peace_envoy', 'merchant_route', 'trading_post', 'patronage', 'holy_see', 'march_orders', 'march_orders', 'march_orders', 'scouts', 'spy_network', 'hire_men_at_arms']) addCard(s, c, true);
   // the war
   if (!atWar(s, 'castile', 'portugal')) declareWar(s, 'castile', 'portugal');
   const pt = s.nations.portugal;

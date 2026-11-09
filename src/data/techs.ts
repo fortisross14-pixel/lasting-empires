@@ -44,16 +44,17 @@ export interface BuildingDef {
   id: string; name: string; group: BuildingGroup; site: 'town' | 'rural'; cost: number; turns: number; tech?: string; desc: string;
   salary: number;               // ducats a year
   gold?: number; coastal?: boolean; icon: string;
-  rates?: Partial<Record<'military' | 'diplomacy' | 'internal' | 'economy' | 'research', number>>;
+  rates?: Partial<Record<'military' | 'diplomacy' | 'internal' | 'economy' | 'research' | 'culture', number>>;
   control?: number;             // control gained per year in this province
   np?: number;                  // nation points a year
   match?: string[];             // raw materials that double its output
 }
 
 export const BUILDINGS: Record<string, BuildingDef> = {
-  temple: { id: 'temple', name: 'Temple', group: 'internal', site: 'town', cost: 40, turns: 3, salary: 0.5, icon: 'church', control: 3, rates: { internal: 0.2 }, desc: '+0.2 Internal cards, +3 control a year, +1 stability when finished.' },
-  library: { id: 'library', name: 'Library', group: 'internal', site: 'town', cost: 35, turns: 2, salary: 0.5, icon: 'book', rates: { research: 0.2 }, desc: '+0.2 Research cards a year.' },
-  university: { id: 'university', name: 'University', group: 'internal', site: 'town', cost: 60, turns: 4, tech: 'printing', salary: 1, icon: 'book', rates: { research: 0.3 }, desc: '+0.3 Research cards, +1 research on every study.' },
+  temple: { id: 'temple', name: 'Temple', group: 'internal', site: 'town', cost: 40, turns: 3, salary: 0.5, icon: 'church', control: 3, rates: { internal: 0.2, culture: 0.15 }, desc: '+0.2 Internal and +0.15 People cards, +3 control a year, +1 stability when finished.' },
+  library: { id: 'library', name: 'Library', group: 'internal', site: 'town', cost: 35, turns: 2, salary: 0.5, icon: 'book', rates: { research: 0.2, culture: 0.1 }, desc: '+0.2 Research and +0.1 People cards a year. Shows 1 work of art.' },
+  university: { id: 'university', name: 'University', group: 'internal', site: 'town', cost: 60, turns: 4, tech: 'printing', salary: 1, icon: 'book', rates: { research: 0.3, culture: 0.1 }, desc: '+0.3 Research and +0.1 People cards, +1 research on every study. Shows 2 works of art.' },
+  museum: { id: 'museum', name: 'Museum', group: 'internal', site: 'town', cost: 70, turns: 3, tech: 'enlightened', salary: 1, icon: 'star', rates: { culture: 0.3 }, desc: 'Shows 4 works of art: visitors pay for the best of them. +0.3 People cards a year.' },
   barracks: { id: 'barracks', name: 'Barracks', group: 'internal', site: 'town', cost: 40, turns: 3, salary: 1, icon: 'banner', rates: { military: 0.2 }, desc: '+0.2 Military cards, +0.5 manpower a year, +1 army size.' },
   fortress: { id: 'fortress', name: 'Fortress', group: 'internal', site: 'town', cost: 50, turns: 3, salary: 1, icon: 'tower', desc: '+1 fort level (maximum 2, or 3 with Star Forts).' },
   courthouse: { id: 'courthouse', name: 'Courthouse', group: 'internal', site: 'town', cost: 45, turns: 3, salary: 0.8, icon: 'scales', control: 5, np: 0.5, rates: { internal: 0.1 }, desc: '+5 control a year, +0.5 nation points, +0.1 Internal cards.' },
@@ -72,7 +73,7 @@ export const BUILDINGS: Record<string, BuildingDef> = {
 };
 
 /** Card-rate bonuses from research. */
-export const TECH_RATES: Record<string, Partial<Record<'military' | 'diplomacy' | 'internal' | 'economy' | 'research', number>>> = {
+export const TECH_RATES: Record<string, Partial<Record<'military' | 'diplomacy' | 'internal' | 'economy' | 'research' | 'culture', number>>> = {
   guilds: { economy: 0.2 }, printing: { research: 0.2 }, chancery: { diplomacy: 0.2 }, bureaucracy: { internal: 0.2 },
   standing_army: { military: 0.2 }, enlightened: { internal: 0.2, research: 0.2 }, banking: { economy: 0.1 }, embassies: { diplomacy: 0.1 }, councils: { internal: 0.1 },
 };

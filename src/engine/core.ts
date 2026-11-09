@@ -6,6 +6,7 @@ import { TROOPS } from '../data/troops';
 import { BUILDINGS, TECH } from '../data/techs';
 import { RULER_ARCHS } from '../data/nations';
 import { tradeIncome } from './trade';
+import { artGold } from './culture';
 import { TRAITS, FIRST_NAMES, SURNAMES, RARITY, RARITY_ORDER, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
 import { getGeo, neighbours } from './map';
 
@@ -236,6 +237,7 @@ export function incomeOf(s: GameState, n: string): IncomeBreakdown {
     provinces *= 1 + rulerMod(s, 'goldPct');
     other -= s.hand.filter(h => h.card === 'debt').length * 2;
     other += colonyIncome(s);
+    const ag = artGold(s); other += ag.fees + ag.visitors;
     const t = tradeIncome(s);
     goods += t.sold + t.local;
     imp = t.bought + t.posts;
@@ -316,6 +318,7 @@ export function promoteRarity(s: GameState, c: Character): boolean {
 export const roleName: Record<Role, string> = {
   general: 'General', diplomat: 'Diplomat', admin: 'Administrator', merchant: 'Merchant', researcher: 'Researcher',
   explorer: 'Explorer', conqueror: 'Conqueror', colonist: 'Colonist', admiral: 'Admiral',
+  courtier: 'Courtier', priest: 'Churchman', artist: 'Artist', leader: 'Cultural Leader',
 };
 
 /** Building slots in the town (by settlement size) and in the countryside (by development). */

@@ -5,6 +5,8 @@ import { TROOPS, EQUIPMENT, COUNTER_TEXT } from '../data/troops';
 import { TECHS, TECH, BUILDINGS, type TechTrack } from '../data/techs';
 import { TRAITS, RARITY, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
 import { GOODS, FOOD, RAW, MADE } from '../data/goods';
+import { GENRES, QUALITY } from '../data/culture';
+import { churchHead, churchRel, churchMood, giftCost, giftBlocked, sendGift, artHappy, artGold, displayed, displaySlots, museumsOpen, artCost, acceptBlocked, acceptCap, cultureRows, religionRows, cultureName } from '../engine/culture';
 import { hireNeeds, quarterFlow, needs, partners, routeBlocked, postBlocked, routeCap, postCap, postTurns, postCost, distanceTo, price, canMake, workshopCap, provinceOutput, sideOutput, dealFor, merchantFactor, POST_UPKEEP, MAX_ROUTE, materialsFor, stockCap } from '../engine/trade';
 import { AGE_TECH, ERA, PIONEER_YEARS } from '../data/eras';
 import { ageOf, nextAge } from '../engine/ages';
@@ -20,7 +22,7 @@ import { EVENT, eventTitle, upcomingHistory } from '../engine/events';
 import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBlocked, troopHireCost, discardCard, handLimit, cardFor, archiveCards, restoreCard, dropArchived } from '../engine/cards';
 import {
   MISSION_INFO, DIPLO, missionBlocked, launchMission, cancelMission, diploChance, missionTurns, techCost, researchRate, attackRoute,
-  developCost, foundCost, growCost, projectGoods, projectShortfall, cardRole, cardRoles, becomesOnMission, voyageCost, GRADES,
+  developCost, foundCost, growCost, projectGoods, projectShortfall, pilgrimageCost, cardRole, cardRoles, becomesOnMission, voyageCost, GRADES,
   graceCost, envoyCost, envoyTravel,
 } from '../engine/missions';
 import { buyCard, buyBlocked, hireWithCard, takeDraftOption, mergePreview, doMerge, AMBITIONS, officeCost, sellOffices } from '../engine/drafts';
@@ -33,7 +35,7 @@ import { troopCard, charCard, handCard, tacticCard, backCard, flipCard, coreCard
 import { AXES, CORE } from '../data/core';
 import { navyCap, transportOf, hireShip, shipHireCost } from '../engine/navy';
 import { warScore, peaceTerms, enemyDemands, concludePeace, subjectsOf, integrateBlocked, vassalizeBlocked, tributeShare } from '../engine/diplo';
-import { happinessOf, moodName, CULTURE_NAMES, RELIGION_NAMES, isAccepted } from '../engine/society';
+import { happinessOf, moodName, CULTURE_NAMES, RELIGION_NAMES, isAccepted, nationalHappiness } from '../engine/society';
 import { MapView, MAP_MODES, legendFor } from './map';
 import { scenarioCastilePortugal } from '../engine/scenarios';
 import { troopsNear, setDefence, garrisons, moveTroops, travel, locOf, nearestGarrison, baseFor } from '../engine/army';
@@ -418,6 +420,7 @@ const WIN_TABS: Record<Cat, [string, string][]> = {
   diplomacy: [['cards', 'Cards'], ['missions', 'Missions'], ['realms', 'Realms'], ['subjects', 'Subjects']],
   internal: [['cards', 'Cards'], ['missions', 'Missions'], ['core', 'Core'], ['realm', 'Realm'], ['provinces', 'Provinces']],
   economy: [['cards', 'Cards'], ['missions', 'Missions'], ['goods', 'Goods'], ['trade', 'Trade'], ['ledger', 'Ledger']],
+  culture: [['cards', 'Cards'], ['missions', 'Missions'], ['cultures', 'Cultures'], ['religion', 'Religion'], ['arts', 'Arts']],
   research: [['cards', 'Cards'], ['missions', 'Missions'], ['tech', 'Technologies']],
 };
 function toggleWin(cat: Cat) { if (win?.cat === cat) closeWin(); else openWin(cat); }
@@ -452,10 +455,11 @@ function winSub(cat: Cat) {
   if (cat === 'diplomacy') return `${alliesOf(S, S.player).length} allies · ${enemiesOf(S, S.player).length} wars · ${subjectsOf(S).length} subjects`;
   if (cat === 'internal') return `${rankOf(S).name} · ${provsOf(S, S.player).length} provinces · missions this year ${S.launched ?? 0}/${missionCap(S)}`;
   if (cat === 'economy') return `${signed(incomeOf(S, S.player).total)} ducats a year`;
+  if (cat === 'culture') return `Happiness ${nationalHappiness(S)}% · ${cultureRows(S).length} peoples · ${(S.works ?? []).length} works of art · church ${Math.round(churchRel(S))}`;
   return `${S.techs.length} of ${TECHS.length} technologies known`;
 }
 const CAT_ROLES: Record<Cat, Character['role'][]> = {
-  military: ['general', 'conqueror', 'admiral'], diplomacy: ['diplomat', 'explorer'], internal: ['admin', 'colonist'], economy: ['merchant'], research: ['researcher'],
+  military: ['general', 'conqueror', 'admiral'], diplomacy: ['diplomat', 'explorer'], internal: ['admin', 'colonist'], economy: ['merchant'], research: ['researcher'], culture: ['courtier', 'priest', 'artist', 'leader'],
 };
 /** Missions shown under a menu: by the person sent (a merchant building is Economy), or the mission's own role. */
 const missionsOfCat = (cat: Cat) => S.missions.filter(m => {
@@ -479,6 +483,8 @@ function winTab(cat: Cat, tab: string, body: HTMLElement) {
     else provincesTab(body);
   } else if (cat === 'economy') {
     if (tab === 'ledger') ledgerTab(body); else if (tab === 'trade') tradeTab(body); else goodsTab(body);
+  } else if (cat === 'culture') {
+    if (tab === 'religion') religionTab(body); else if (tab === 'arts') artsTab(body); else culturesTab(body);
   } else techTab(body);
   void holder;
 }
@@ -1244,6 +1250,75 @@ function openPostPicker() {
     list, h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: closeModal }, 'Close'))));
 }
 
+// ---------- People: cultures, religion, arts ----------
+function culturesTab(body: HTMLElement) {
+  const rows = cultureRows(S);
+  body.append(h('p', { class: 'muted small' }, `Embraced cultures count as your own people; others are unhappy (−12) until a cultural leader embraces them (${S.accepted.length}/${acceptCap(S)} embraced) or integrates their provinces one by one.`));
+  body.append(h('table', { class: 'gtable' },
+    h('thead', {}, h('tr', {}, h('th', {}, 'People'), h('th', { class: 'num' }, 'Provinces'), h('th', { class: 'num' }, 'People'), h('th', { class: 'num' }, 'Happy'), h('th', {}, ''))),
+    h('tbody', {}, rows.map(r => h('tr', {},
+      h('td', {}, h('b', {}, cultureName(r.culture)), r.accepted ? h('small', { class: 'muted' }, ' · your own') : null),
+      h('td', { class: 'num' }, String(r.provinces)), h('td', { class: 'num' }, `${(r.people / 1000).toFixed(0)}k`),
+      h('td', { class: 'num ' + (r.happy < 35 ? 'dn' : r.happy >= 60 ? 'up' : '') }, `${r.happy}%`),
+      h('td', { class: 'g-acts' }, r.accepted ? null : peopleAction('accept', r.culture, 'Embrace')))))));
+  body.append(h('h3', {}, 'What makes them happy'));
+  const hp = nationalHappiness(S);
+  body.append(h('p', {}, `Across the realm ${hp}% (${moodName(hp)}). Works of art add ${artHappy(S).toFixed(1)} everywhere now; Royal Grace and Integration work province by province.`));
+  const worst = [...provsOf(S, S.player)].map(p => ({ p, v: happinessOf(S, p).value })).sort((a, b) => a.v - b.v).slice(0, 5);
+  for (const { p, v } of worst) body.append(h('div', { class: 'ctl' }, h('span', {}, `${p.name} (${cultureName(p.culture)})`), h('span', { class: 'ctl-bar' }, h('i', { style: `width:${v}%`, class: v < 35 ? 'low' : '' })), h('b', {}, `${v}%`)));
+}
+
+/** A shortcut from a People tab to the planner, if you hold the card. */
+function peopleAction(kind: MissionKind, target: string, label: string) {
+  const card = cardFor(S, kind);
+  const why = !card ? `Needs a ${kind === 'accept' ? 'Embrace a Culture' : kind === 'pilgrimage' ? 'Mission to the Church' : kind === 'convert' ? 'Religious Mission' : 'Work of Art'} card` : missionBlocked(S, kind, target);
+  return h('button', { class: 'btn small ghost' + (why ? ' blocked' : ''), title: why ?? '', onclick: () => (why ? toast(why, 'bad') : openPlanner(kind, target, undefined, card!.uid)) }, label);
+}
+
+function religionTab(body: HTMLElement) {
+  const head = churchHead(S), rel = churchRel(S), mood = churchMood(S);
+  body.append(h('div', { class: 'stats' }, stat('State faith', RELIGION_NAMES[S.stateReligion] ?? S.stateReligion), stat('Leaders', head.name), stat('Their favour', `${Math.round(rel)}`), stat('Standing', mood === 'blessed' ? 'Blessed' : mood === 'censured' ? 'Censured' : 'Tolerated')));
+  body.append(h('div', { class: 'ctl' }, h('span', {}, 'Favour'), h('span', { class: 'ctl-bar' }, h('i', { style: `width:${(rel + 100) / 2}%`, class: rel <= -40 ? 'low' : '' })), h('b', {}, `${Math.round(rel)}`)));
+  body.append(h('p', { class: 'muted small' }, `At 50 or more you are blessed: +3 happiness in provinces of your faith and +1 prestige a year, and at 80 they may send missionaries. At −40 or less you are censured: −5 happiness there and stability may fall. Favour drifts back towards 20${S.stateReligion === 'catholic' ? ' (your standing with the Papal States)' : ''}. Converting provinces and sacred art please them.`));
+  body.append(actionRow('coin', 'Send a gift', `${giftCost(S)} ducats · favour +10 · once a year`, giftBlocked(S), () => act(() => { const r = sendGift(S); if (r) toast(r, 'bad'); }, 'Gift sent')));
+  body.append(actionRow('church', 'Mission to the Church', `A churchman wins favour: +3 to +40 · ${pilgrimageCost(S)} ducats`, !cardFor(S, 'pilgrimage') ? 'Needs a Mission to the Church card' : missionBlocked(S, 'pilgrimage', ''), () => openPlanner('pilgrimage', '', undefined, cardFor(S, 'pilgrimage')!.uid)));
+  body.append(h('h3', {}, 'Faiths of the realm'));
+  body.append(h('table', { class: 'gtable' },
+    h('thead', {}, h('tr', {}, h('th', {}, 'Faith'), h('th', { class: 'num' }, 'Provinces'), h('th', { class: 'num' }, 'People'), h('th', { class: 'num' }, 'Happy'), h('th', {}, ''))),
+    h('tbody', {}, religionRows(S).map(r => h('tr', {},
+      h('td', {}, h('b', {}, RELIGION_NAMES[r.religion] ?? r.religion), r.religion === S.stateReligion ? h('small', { class: 'muted' }, ' · state faith') : null),
+      h('td', { class: 'num' }, String(r.provinces)), h('td', { class: 'num' }, `${(r.people / 1000).toFixed(0)}k`),
+      h('td', { class: 'num ' + (r.happy < 35 ? 'dn' : r.happy >= 60 ? 'up' : '') }, `${r.happy}%`),
+      h('td', { class: 'g-acts' }, r.religion === S.stateReligion ? null : h('small', { class: 'muted' }, 'convert province by province')))))));
+  const others = provsOf(S, S.player).filter(p => p.religion !== S.stateReligion).slice(0, 8);
+  if (others.length) {
+    body.append(h('h3', {}, 'Provinces of other faiths'));
+    for (const p of others) body.append(h('div', { class: 'grow-row' }, h('span', { class: 'gico', html: icon('church', 18) }), h('div', { class: 'g-t' }, h('b', {}, p.name), h('small', {}, `${RELIGION_NAMES[p.religion] ?? p.religion} · happiness ${happinessOf(S, p).value}%`)), h('div', { class: 'g-acts' }, peopleAction('convert', p.id, 'Convert'))));
+  }
+}
+
+function artsTab(body: HTMLElement) {
+  const works = [...(S.works ?? [])].sort((a, b) => b.year - a.year);
+  const g = artGold(S);
+  body.append(h('div', { class: 'stats' }, stat('Works', String(works.length)), stat('Happiness now', '+' + artHappy(S).toFixed(1)), stat('Ducats a year', (g.fees + g.visitors).toFixed(1)), stat('On show', `${displayed(S).length}/${displaySlots(S)}`)));
+  body.append(h('p', { class: 'muted small' }, `An artist makes one work per mission. Quality is the outcome: the better it is, the longer it cheers the people; admired works pay fees for a few years, celebrated ones bring a free card of their kind and masterpieces may carry a famous name. Libraries show 1 work, universities 2, museums 4; ${museumsOpen(S) ? 'in this Age of Enlightenment visitors pay for them.' : 'from the Age of Enlightenment visitors will pay to see them.'}`));
+  body.append(h('h3', {}, 'Commission a work'));
+  const list = h('div', { class: 'tlist' });
+  for (const gd of Object.values(GENRES)) list.append(h('div', { class: 'trow' }, h('span', { class: 'gico', html: icon(gd.icon, 20) }), h('div', { class: 'a-t' }, h('b', {}, gd.name), h('small', {}, `${artCost(S, gd.id)} ducats · ${gd.desc}`)), h('div', { class: 'r-acts' }, peopleAction('artwork', gd.id, 'Commission'))));
+  body.append(list);
+  body.append(h('h3', {}, `The crown's collection (${works.length})`));
+  if (!works.length) body.append(h('p', { class: 'muted' }, 'Nothing yet. Invite an artist or send a courtier with a Commission card.'));
+  const shown = new Set(displayed(S).map(w => w.id));
+  const now = S.year + (S.quarter ?? 0) / 4;
+  for (const w of works.slice(0, 40)) {
+    const left = Math.max(0, w.until - now);
+    const q = QUALITY[w.quality];
+    body.append(h('div', { class: 'grow-row work q' + w.quality }, h('span', { class: 'gico', html: icon(GENRES[w.genre]?.icon ?? 'star', 20) }),
+      h('div', { class: 'g-t' }, h('b', {}, w.name), h('small', {}, `${q.name} ${GENRES[w.genre]?.name.toLowerCase() ?? ''} · ${w.artist}, ${Math.floor(w.year)}${left > 0 ? ` · +${(w.happy * Math.min(1, left / Math.max(0.25, w.until - w.year))).toFixed(1)} happiness, ${left >= 1 ? Math.ceil(left) + ' yr' : 'fading'}` : ''}${w.goldUntil > S.year ? ` · ${w.gold} ducats/yr to ${w.goldUntil}` : ''}`)),
+      shown.has(w.id) ? h('span', { class: 'gchip over' }, 'on show') : null));
+  }
+}
+
 function techTab(body: HTMLElement) {
   const tracks: [TechTrack, string][] = [['military', 'Military'], ['economy', 'Economy'], ['state', 'Statecraft']];
   const wrap = h('div', { class: 'tech-cols' });
@@ -1402,7 +1477,7 @@ function charDetail(c: Character) {
     h('ul', { class: 'traits' }, c.traits.map(t => h('li', {}, h('b', {}, TRAITS[t]?.name ?? t), ' ', TRAITS[t]?.desc ?? ''))),
     (c.wins ?? 0) + (c.losses ?? 0) ? h('p', {}, `Battles: ${c.wins ?? 0} won, ${c.losses ?? 0} lost.`) : null,
     m ? h('p', {}, `On a mission: ${missionTitle(m)}, ${m.turnsLeft} year(s) left.`) : null,
-    to ? h('p', { class: 'muted promo' }, ({ diplomat: `Send ${c.name.split(' ')[0]} on a Voyage of Discovery and they become an explorer for good.`, general: `Lead an attack with ships to become an admiral, or a conquista to become a conqueror. Both are for good.`, admin: `Send ${c.name.split(' ')[0]} to found a colony and they become a colonist for good.` } as Record<string, string>)[c.role]) : null,
+    to ? h('p', { class: 'muted promo' }, ({ diplomat: `Send ${c.name.split(' ')[0]} on a Voyage of Discovery and they become an explorer for good.`, general: `Lead an attack with ships to become an admiral, or a conquista to become a conqueror. Both are for good.`, admin: `Send ${c.name.split(' ')[0]} to found a colony and they become a colonist for good.`, courtier: `The first mission decides: a Religious Mission or Mission to the Church makes a churchman, a Work of Art an artist, Royal Grace, Integration or Embrace a Culture a cultural leader. For good.` } as Record<string, string>)[c.role]) : null,
     h('div', { class: 'mrow' },
       h('button', { class: 'btn ghost', onclick: closeModal }, 'Close'),
       !m && !c.ruler ? h('button', { class: 'btn ghost danger', onclick: () => { closeModal(); confirmBox(`Dismiss ${c.name}?`, 'This frees a seat at court.', 'Dismiss', () => act(() => dismissCharacter(S, c.uid))); } }, 'Dismiss') : null)));
@@ -1449,6 +1524,12 @@ function missionTargets(handUid: number, all = false): TargetRow[] {
     for (const p of provsOf(S, S.player).sort((a, b) => happinessOf(S, a).value - happinessOf(S, b).value)) {
       rows.push({ label: p.name, sub: `happiness ${happinessOf(S, p).value}%${p.favor ? ` · favour ${Math.round(p.favor)}` : ''}`, acts: [{ label: 'Grace', kind, target: p.id, why: missionBlocked(S, kind, p.id) }] });
     }
+  } else if (kind === 'artwork') {
+    for (const g of Object.values(GENRES)) rows.push({ label: g.name, sub: `${artCost(S, g.id)} ducats · ${g.desc}`, acts: [{ label: 'Commission', kind, target: g.id, why: missionBlocked(S, 'artwork', g.id) }] });
+  } else if (kind === 'pilgrimage') {
+    rows.push({ label: churchHead(S).name, sub: `in ${churchHead(S).seat} · favour now ${Math.round(churchRel(S))} · ${pilgrimageCost(S)} ducats`, acts: [{ label: 'Send', kind, target: '', why: missionBlocked(S, 'pilgrimage', '') }] });
+  } else if (kind === 'accept') {
+    for (const r of cultureRows(S).filter(r => !r.accepted)) rows.push({ label: cultureName(r.culture), sub: `${r.provinces} province${r.provinces > 1 ? 's' : ''} · ${(r.people / 1000).toFixed(0)}k people · happiness ${r.happy}%`, acts: [{ label: 'Embrace', kind, target: r.culture, why: acceptBlocked(S, r.culture) }] });
   } else if (kind === 'convert' || kind === 'assimilate') {
     for (const p of provsOf(S, S.player)) {
       const why = missionBlocked(S, kind, p.id);
@@ -1652,7 +1733,7 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
   let ships: number[] = naval ? harbourShips.map(t => t.uid) : [];
   const good: string | undefined = trade?.good;
 
-  const tname = S.provinces[target]?.name ?? S.nations[target]?.name ?? TECH[target]?.name ?? 'the realm';
+  const tname = kind === 'artwork' ? GENRES[target]?.name.toLowerCase() ?? 'a work' : kind === 'accept' ? `${cultureName(target)} people` : kind === 'pilgrimage' ? churchHead(S).name : S.provinces[target]?.name ?? S.nations[target]?.name ?? TECH[target]?.name ?? 'the realm';
   const box = h('div', { class: 'mbox planner' });
   const draw = () => {
     clear(box);
@@ -1680,9 +1761,10 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
     if (kind === 'research') facts.push(`${researchRate(S, ch, TECH[target]?.track)} research a year · ${techCost(S, target)} needed`);
     facts.push(kind === 'route' ? 'A quick errand: does not use up one of the year\'s missions' : `Missions left this year: ${missionsLeft(S)}`);
     if (kind === 'build') facts.push(`${buildingCost(S, building!)} ducats now · salary ${BUILDINGS[building!].salary} a year`);
-    const pg = projectGoods(kind, building);
+    const pgKey = kind === 'artwork' ? target : building;
+    const pg = projectGoods(kind, pgKey);
     for (const [g, n] of Object.entries(pg)) {
-      const have = S.stock[g] ?? 0, extra = projectShortfall(S, kind, building);
+      const have = S.stock[g] ?? 0, extra = projectShortfall(S, kind, pgKey);
       facts.push(h('span', { class: have >= n ? '' : 'bad' }, `Uses ${n} ${GOODS[g].name.toLowerCase()} (you have ${have.toFixed(1)})${have >= n ? '' : ` · the rest bought at double price: +${extra} ducats`}`));
     }
     if (kind === 'route' && trade) {
@@ -1690,6 +1772,9 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
       const each = price(S, trade.good) * d;
       facts.push(`${trade.dir === 'buy' ? 'Buys' : 'Sells'} ${trade.amount} ${GOODS[trade.good].name.toLowerCase()} a year at ${each.toFixed(1)} each (${Math.round(d * 100)}% of the market price)`, `${trade.dir === 'buy' ? 'Costs' : 'Earns'} ${(each * trade.amount).toFixed(1)} ducats a year, every quarter, until you close it`, `Trade routes ${S.routes.length}/${routeCap(S)}`);
     }
+    if (kind === 'artwork') facts.push(`${artCost(S, target)} ducats now`, 'Forgettable +1 happiness for a year · Fine +2 for 2 years · Admired +3 for 3, 2 ducats a year · Celebrated +5 for 5, 4 ducats a year, a free card · Masterpiece +6 for 8, 6 ducats a year, 2 cards');
+    if (kind === 'pilgrimage') facts.push(`${pilgrimageCost(S)} ducats now · favour +3 to +40 by outcome · now ${Math.round(churchRel(S))}`);
+    if (kind === 'accept') facts.push(`Then ${cultureName(target)} provinces lose the −12 for a foreign culture · embraced ${S.accepted.length}/${acceptCap(S)}`);
     if (kind === 'post') facts.push(`${postCost(S, target)} ducats now · upkeep ${POST_UPKEEP} a year`, `Routes with ${nationName(S, target)} then buy at 90% of the market price and sell 20% above it`, `Trade posts ${S.posts.length}/${postCap(S)}`);
     if (kind === 'develop') facts.push(`${developCost(S, target)} ducats now`);
     if (kind === 'found') facts.push(`${foundCost(S)} ducats now · Poor/Standard: village · Good: town · Great/Exceptional: city`);

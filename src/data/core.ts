@@ -31,7 +31,7 @@ export const CORE: Record<string, CoreDef> = {
 };
 
 /** Card-rate bonuses from core cards. */
-export const CORE_RATES: Record<string, Partial<Record<'military' | 'diplomacy' | 'internal' | 'economy' | 'research', number>>> = {
+export const CORE_RATES: Record<string, Partial<Record<'military' | 'diplomacy' | 'internal' | 'economy' | 'research' | 'culture', number>>> = {
   land: { military: 0.2 }, sea: { diplomacy: 0.1, economy: 0.1 }, expansion: { military: 0.2, internal: -0.1 },
   consolidation: { internal: 0.3 }, open: { research: 0.3 }, mercantile: { economy: 0.3 },
 };

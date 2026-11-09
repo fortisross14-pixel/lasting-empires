@@ -1,5 +1,6 @@
 // New game setup, the yearly turn, and player actions that touch several systems.
 import { GOODS, OLD_GOODS } from '../data/goods';
+import { yearlyChurch } from './culture';
 import { settleGoods, checkTrade, startStock, GUN_TROOPS } from './trade';
 import { initKnownWorld } from './overseas';
 import { poolFor } from '../data/names';
@@ -110,8 +111,8 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   const s: GameState = {
     version: SAVE_VERSION, seed, rng: seed, nextUid: 1, year: START_YEAR, quarter: 0, startYear: START_YEAR, endYear: 1750, player: nationId,
     nations: {}, provinces: {}, rel: {}, treaties: [], wars: [], truces: [], hand: [],
-    cardAccum: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 },
-    bought: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 },
+    cardAccum: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0, culture: 0 },
+    bought: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0, culture: 0 },
     np: 3, imports: [], stock: {}, short: {}, routes: [], posts: [], overseas: {}, core: [], coreChanged: -99, fleet: [], art: 5, taxBurden: 0, accepted: [], stateReligion: 'catholic', happiness: 55, stats: { battles: {}, kings: [], fallen: [], wars: { won: 0, lost: 0 } },
     troops: [], equipment: [], characters: [], missions: [], techs: [], firedEvents: [], usedLegends: [], queue: [],
     log: [], flags: {}, ambition: null, ambitionDone: false, over: false,
@@ -164,6 +165,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
     genCharacter(s, 'admin', me.culture, 1),
     genCharacter(s, 'merchant', me.culture, 1),
     genCharacter(s, 'researcher', me.culture, 1),
+    genCharacter(s, 'courtier', me.culture, 1),
   ];
   if (nationId === 'portugal' && !s.usedLegends.includes('henry')) {
     s.usedLegends.push('henry');
@@ -347,7 +349,7 @@ export function endTurn(s: GameState): YearReport | null {
   s.quarter ??= 0;
   const q = s.quarter;
   if (q === 0 || !s.turnLog || s.turnLog.year !== s.year) s.turnLog = { year: s.year, quarter: q, battles: [], done: [], gold: 0, np: 0, cards: {} };
-  if (q === 0) { s.bought = { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 }; s.launched = 0; }
+  if (q === 0) { s.bought = { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0, culture: 0 }; s.launched = 0; }
   settleArmies(s);
   resolveIncoming(s);
   quarterlyReturns(s); // envoys already riding home get closer before new results come in
@@ -371,6 +373,7 @@ export function endTurn(s: GameState): YearReport | null {
     yearlyCoalitions(s);
     yearlyFleet(s);
     yearlySociety(s);
+    yearlyChurch(s);
     s.year++;
     yearlyAges(s);
     characterAging(s);
@@ -471,6 +474,9 @@ export function migrate(s: GameState): GameState {
     if (!s.hand.some(h => h.card === 'trading_post')) addCard(s, 'trading_post', true);
   }
   s.routes ??= []; s.posts ??= []; s.short ??= {};
+  // the People menu arrived: a sixth kind of card and a courtier to start with
+  s.cardAccum.culture ??= 0; s.bought.culture ??= 0; s.works ??= [];
+  if (!s.characters.some(c => ['courtier', 'priest', 'artist', 'leader'].includes(c.role))) s.characters.push(genCharacter(s, 'courtier', player(s).culture, 1));
   return s;
 }
 

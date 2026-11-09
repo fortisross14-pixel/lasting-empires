@@ -10,6 +10,7 @@ import { largestForeignCulture, CULTURE_NAMES } from './society';
 import { CORE_RATES } from '../data/core';
 import { shipBlocked } from './navy';
 import { shortfallCost, takeGoods, hireNeeds } from './trade';
+import { setCardPool } from './culture';
 import {
   ageId, ageDef, pioneerNow, enemiesOf, player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore,
 } from './core';
@@ -40,11 +41,13 @@ export const CAT_INFO: Record<Cat, { name: string; icon: string; role: Role; col
   internal: { name: 'Internal', icon: 'crown', role: 'admin', color: '#4d3a62' },
   economy: { name: 'Economy', icon: 'coin', role: 'merchant', color: '#6d5a2a' },
   research: { name: 'Research', icon: 'book', role: 'researcher', color: '#3c6a45' },
+  culture: { name: 'People', icon: 'people', role: 'courtier', color: '#7a3a5a' },
 };
 
 const stab = (s: GameState, d: number) => { const p = player(s); p.stability = clamp(p.stability + d, -3, 3); };
 const techOk = (s: GameState, t?: string) => !t || hasTech(s, t);
 const never = () => 0;
+setCardPool((s, cat) => Object.fromEntries(Object.values(CARDS).filter(c => c.cat === cat && !c.burden && !c.permanent && c.weight(s) > 0).map(c => [c.id, true as const])));
 const trackOpen = (s: GameState, t: TechTrack) => (TECHS.some(x => x.track === t && !s.techs.includes(x.id)) ? 1.8 : 0);
 
 export const CARDS: Record<string, HandCardDef> = {};
@@ -120,17 +123,22 @@ add({ id: 'found_settlement', name: 'Found a Settlement', cat: 'internal', kind:
 add({ id: 'grow_settlement', name: 'Grow your Settlement', cat: 'internal', kind: 'mission', missions: ['grow'], icon: 'tower', text: 'Grow a village to a town, a town to a city, a city to a metropolis.', weight: () => 1.3 });
 add({ id: 'royal_progress', name: 'Royal Progress', cat: 'internal', kind: 'mission', missions: ['progress'], icon: 'crown', text: 'Tour the realm: stability +1, prestige +2, control +10 everywhere.', weight: () => 1.2 });
 add({ id: 'colonial_charter', name: 'Colonial Charter', cat: 'internal', kind: 'mission', missions: ['colonize'], agent: 'colonist', icon: 'tower', text: 'A colonist settles a discovered land (1 manpower).', weight: s => (Object.values(s.overseas).some(o => o.found) ? 1.2 : 0.15) });
-add({ id: 'patronage', name: 'Patronage of the Arts', cat: 'internal', kind: 'mission', missions: ['patronage'], icon: 'star', text: 'Commission painters, poets and builders. Raises the arts, which make the people happier.', weight: () => 1.3 });
-add({ id: 'religious_mission', name: 'Religious Mission', cat: 'internal', kind: 'mission', missions: ['convert'], icon: 'church', text: 'Preachers convert a province to your faith.', weight: s => (provsOf(s, s.player).some(p => p.religion !== s.stateReligion) ? 1.3 : 0.1) });
-add({ id: 'royal_grace', name: 'Royal Grace', cat: 'internal', kind: 'mission', missions: ['grace'], icon: 'mood', text: 'An administrator wins the hearts of one province. A better one is faster and kinder.', weight: s => (provsOf(s, s.player).some(p => happinessOf(s, p).value < 50) ? 1.3 : 0.5) });
-add({ id: 'assimilation', name: 'Cultural Integration', cat: 'internal', kind: 'mission', missions: ['assimilate'], icon: 'scroll', text: 'Bring a province of foreign culture into your ways.', weight: s => (provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? 1.1 : 0.1) });
-add({ id: 'festival', name: 'Royal Festival', cat: 'internal', kind: 'instant', icon: 'cup', text: 'Pay 15 ducats: happiness +8 for 5 years.', weight: () => 0.9,
+add({ id: 'patronage', name: 'Commission a Work of Art', cat: 'culture', agent: 'artist', kind: 'mission', missions: ['artwork'], icon: 'quill', text: 'An artist makes a painting, poem, treatise or monument. The better the work, the longer it cheers the people; the best pay ducats, bring prestige and a free card.', weight: () => 1.3 });
+add({ id: 'religious_mission', name: 'Religious Mission', cat: 'culture', agent: 'priest', kind: 'mission', missions: ['convert'], icon: 'church', text: 'Preachers convert a province to your faith.', weight: s => (provsOf(s, s.player).some(p => p.religion !== s.stateReligion) ? 1.3 : 0.1) });
+add({ id: 'royal_grace', name: 'Royal Grace', cat: 'culture', agent: 'leader', kind: 'mission', missions: ['grace'], icon: 'mood', text: 'A cultural leader wins the hearts of one province. A better one is faster and kinder.', weight: s => (provsOf(s, s.player).some(p => happinessOf(s, p).value < 50) ? 1.3 : 0.5) });
+add({ id: 'assimilation', name: 'Cultural Integration', cat: 'culture', agent: 'leader', kind: 'mission', missions: ['assimilate'], icon: 'scroll', text: 'Bring a province of foreign culture into your ways.', weight: s => (provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? 1.1 : 0.1) });
+add({ id: 'hire_courtier', name: 'Invite a Courtier', cat: 'culture', kind: 'hire', role: 'courtier', icon: 'people', text: 'Meet three courtiers, keep one. Their first mission makes them a churchman, an artist or a cultural leader for good. Costs 1 manpower.', weight: () => 1.1 });
+add({ id: 'hire_artist', name: 'Invite an Artist', cat: 'culture', kind: 'hire', role: 'artist', icon: 'quill', text: 'Meet three painters, poets and builders, keep one. Costs 1 manpower.', weight: () => 0.6 });
+add({ id: 'hire_priest', name: 'Call a Churchman', cat: 'culture', kind: 'hire', role: 'priest', icon: 'church', text: 'Meet three clerics, keep one. Costs 1 manpower.', weight: () => 0.6 });
+add({ id: 'holy_see', name: 'Mission to the Church', cat: 'culture', agent: 'priest', kind: 'mission', missions: ['pilgrimage'], icon: 'church', text: 'A churchman wins the favour of your faith\'s leaders. Blessed realms are happier and more prestigious; censured ones lose stability.', weight: () => 1 });
+add({ id: 'embrace_culture', name: 'Embrace a Culture', cat: 'culture', agent: 'leader', kind: 'mission', missions: ['accept'], icon: 'people', text: 'A cultural leader makes a people of your realm one of your own: no more foreign-culture unhappiness.', weight: s => (provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? 0.9 : 0.1) });
+add({ id: 'festival', name: 'Royal Festival', cat: 'culture', kind: 'instant', icon: 'cup', text: 'Pay 15 ducats: happiness +8 for 5 years.', weight: () => 0.9,
   can: s => player(s).gold < Math.round(15 * inflation(s)) ? `Needs ${Math.round(15 * inflation(s))} ducats` : null,
   play: s => { player(s).gold -= Math.round(15 * inflation(s)); s.flags.festival_until = s.year + 5; return 'Bells, bonfires and bullfights: happiness +8 for 5 years'; } });
-add({ id: 'charter', name: 'Charter of Privileges', cat: 'internal', kind: 'instant', icon: 'scroll', text: 'Accept the largest foreign culture in your realm. Its people stop feeling like outsiders.', weight: s => (provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? 0.6 : 0),
+add({ id: 'charter', name: 'Charter of Privileges', cat: 'culture', kind: 'instant', icon: 'scroll', text: 'Accept the largest foreign culture in your realm. Its people stop feeling like outsiders.', weight: s => (provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? 0.6 : 0),
   can: s => (provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? null : 'Every culture is already accepted'),
   play: s => { const c = largestForeignCulture(s)!; s.accepted.push(c); return `${CULTURE_NAMES[c] ?? c} culture is accepted`; } });
-add({ id: 'tolerance', name: 'Edict of Tolerance', cat: 'internal', kind: 'instant', icon: 'dove', text: 'For 20 years, other faiths are less unhappy. The Papacy disapproves (−20).', weight: s => (provsOf(s, s.player).some(p => p.religion !== s.stateReligion) ? 0.6 : 0),
+add({ id: 'tolerance', name: 'Edict of Tolerance', cat: 'culture', kind: 'instant', icon: 'dove', text: 'For 20 years, other faiths are less unhappy. The Papacy disapproves (−20).', weight: s => (provsOf(s, s.player).some(p => p.religion !== s.stateReligion) ? 0.6 : 0),
   play: s => { s.flags.tolerance_until = s.year + 20; addRel(s, s.player, 'papacy', -20); return 'Other faiths may worship in peace'; } });
 add({ id: 'harvest', name: 'Bountiful Harvest', cat: 'internal', kind: 'instant', icon: 'wheat', text: 'Stability +1, manpower +2.', weight: () => 1,
   play: s => { stab(s, 1); player(s).manpower += 2; return 'Stability +1, manpower +2'; } });

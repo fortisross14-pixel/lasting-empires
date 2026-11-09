@@ -126,7 +126,11 @@ function botTurn(s: GameState) {
       const t = TECHS.find(t => t.track === d.track && !missionBlocked(s, 'research', t.id));
       if (t) launchMission(s, 'research', r.uid, t.id, [], undefined, h.uid);
     } else {
-      const a = free(s, role); if (!a) continue;
+      const a = free(s, role) ?? s.characters.filter(c => !c.ruler && c.mission == null && cardRoles(d.id).includes(c.role)).sort((x, y) => y.skill - x.skill)[0]; if (!a) continue;
+      if (process.env.NOCULTURE && d.cat === 'culture') continue;
+      if (kind === 'artwork') { if (me.gold > 60) { const gs = ['sacred', 'portrait', 'epic', 'treatise', 'monument']; launchMission(s, 'artwork', a.uid, gs[Math.floor(R() * gs.length)], [], undefined, h.uid); } continue; }
+      if (kind === 'accept') { const c = provsOf(s, s.player).map(p => p.culture).find(c => !missionBlocked(s, 'accept', c)); if (c) launchMission(s, 'accept', a.uid, c, [], undefined, h.uid); continue; }
+      if (kind === 'pilgrimage') { if (me.gold > 50) launchMission(s, 'pilgrimage', a.uid, '', [], undefined, h.uid); continue; }
       if (kind === 'build') {
         let opts = Object.values(BUILDINGS).filter(b => b.group === d.group).map(b => b.id);
         // short of made goods: a workshop first
@@ -191,6 +195,7 @@ for (const n of (MODE === 'big' ? ['castile'] : PICK)) for (let seed = 1; seed <
   if (process.env.DUMP) { const c: Record<string, number> = {}; for (const h of s.hand) c[h.card] = (c[h.card] ?? 0) + 1; console.log('  hand', n, JSON.stringify(c), 'gold', Math.round(player(s).gold), 'income', JSON.stringify(incomeOf(s, n), (k, v) => typeof v === 'number' ? Math.round(v * 10) / 10 : v)); }
   const f = snap(s); f.year = s.year; f.provs = provsOf(s, n).length; finals.push(f);
   if (process.env.GOODSLOG) { const t = incomeOf(s, n); console.log('  goods', n, seed, s.year, 'short', JSON.stringify(Object.fromEntries(Object.entries(s.short).filter(([, v]) => v > 0.05))), 'routes', s.routes.map(r => r.dir + ':' + r.good + '>' + r.partner).join(','), 'posts', s.posts.map(p => p.nation).join(','), 'workshops', provsOf(s, n).filter(p => p.make && (p.buildings.includes('workshop') || p.buildings.includes('manufactory'))).map(p => p.make).join(','), 'trade+', t.goods.toFixed(1), 'trade-', t.imports.toFixed(1), 'total', t.total.toFixed(1)); }
+  if (process.env.GOODSLOG) console.log('  culture', n, seed, 'works', (s.works ?? []).length, 'best', (s.works ?? []).filter(w => w.quality >= 3).map(w => w.name).slice(0, 4).join('; '), 'accepted', s.accepted.length, 'church', Math.round(s.flags['faith_' + s.stateReligion] ?? (s.rel['papacy'] ? 0 : 0)), 'people', s.characters.filter(c => ['courtier', 'priest', 'artist', 'leader'].includes(c.role)).map(c => c.role).join(','));
   if (process.env.TOP) console.log('  top', n, seed, ranking(s).slice(0, 4).map(r => r.name + ':' + r.score + '(' + provsOf(s, r.id).length + 'p,' + Math.round(s.nations[r.id].prestige) + 'pr)').join(' '));
   if (process.env.CIVIL) { const hs = provsOf(s, s.player).map(p => happinessOf(s, p).value); console.log('  happy', n, 'provs', hs.length, 'min', Math.min(...hs), 'under30', hs.filter(h => h < 30).length, 'under40', hs.filter(h => h < 40).length, 'vblock', viceroyBlocked(s, provsOf(s, s.player).filter(p => p.id !== player(s).capital)[0]?.id ?? '')); }
   if (process.env.CIVIL) console.log('  civil', n, seed, s.log.filter(l => /Civil war|joins the|rising|crowns himself|declares independence|breaks away/i.test(l.text)).map(l => l.year + ' ' + l.text).slice(0, 8).join(' | '), 'viceroys', (s.viceroys ?? []).length);

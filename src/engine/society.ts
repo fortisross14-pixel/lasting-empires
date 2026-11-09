@@ -1,5 +1,6 @@
 // Culture, faith, art and the happiness of the people, which moves stability.
 import { FOOD } from '../data/goods';
+import { artHappy, churchHappy } from './culture';
 import type { GameState, Province } from '../types';
 import { BUILDINGS } from '../data/techs';
 import { player, provsOf, clamp, rand, hasCore, hasGood, log, population, ageId } from './core';
@@ -126,7 +127,13 @@ export function happinessOf(s: GameState, p: Province): { value: number; parts: 
   }
   parts.push(isAccepted(s, p.culture) ? { label: `${CULTURE_NAMES[p.culture] ?? p.culture} culture`, v: 5 } : { label: `Foreign culture (${CULTURE_NAMES[p.culture] ?? p.culture})`, v: -12 });
   const art = Math.round(s.art * 0.15);
-  if (art) parts.push({ label: 'Arts', v: art });
+  if (art) parts.push({ label: 'Learning', v: art });
+  if (p.owner === s.player) {
+    const works = Math.round(artHappy(s));
+    if (works) parts.push({ label: 'Works of art', v: works });
+    const ch = churchHappy(s, p.religion);
+    if (ch) parts.push({ label: ch > 0 ? 'Blessed by the church' : 'Censured by the church', v: ch });
+  }
   let local = 0;
   for (const b of p.buildings) local += { temple: 5, university: 3, market: 2, farm: 2, courthouse: 1 }[b] ?? 0;
   if (local) parts.push({ label: 'Buildings', v: local });

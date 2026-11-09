@@ -257,7 +257,7 @@ export const RULERS: Record<string, HistRuler[]> = {
   ],
 };
 
-type Rates = Partial<Record<'military' | 'diplomacy' | 'internal' | 'economy' | 'research', number>>;
+type Rates = Partial<Record<'military' | 'diplomacy' | 'internal' | 'economy' | 'research' | 'culture', number>>;
 
 export interface RulerArch {
   id: string; name: string; desc: string; rates: Rates; all?: number; startCards?: number;

@@ -10,6 +10,8 @@ import { transportOf } from './navy';
 import { colonizeBlocked, conquistaBlocked, discoverable, resolveExplore, resolveColonize, resolveConquista, colonyCost, colonizeTurns, oceanReach } from './overseas';
 import { NO_STATE } from '../data/nations';
 import { GOODS } from '../data/goods';
+import { GENRES, QUALITY } from '../data/culture';
+import { artCost, createWork, addChurchRel, churchRel, churchHead, acceptBlocked, cultureName } from './culture';
 import { routeBlocked, postBlocked, postTurns, postCost, POST_UPKEEP, dealFor, merchantFactor, price, supplies, routeCap, shortfallCost, takeGoods, materialsFor, defaultMake } from './trade';
 import { OUTCOMES, RARITY } from '../data/characters';
 import { TECH } from '../data/techs';
@@ -43,12 +45,15 @@ export const MISSION_INFO: Record<MissionKind, { name: string; role: Role; icon:
   conquista: { name: 'Conquista', role: 'conqueror', icon: 'sword', verb: 'Conquer' },
   vassalize: { name: 'Demand Fealty', role: 'diplomat', icon: 'crown', verb: 'Demand fealty from' },
   integrate: { name: 'Integration', role: 'diplomat', icon: 'hands', verb: 'Integrate' },
-  patronage: { name: 'Patronage', role: 'admin', icon: 'star', verb: 'Commission works of art for' },
-  convert: { name: 'Religious Mission', role: 'admin', icon: 'church', verb: 'Convert' },
-  grace: { name: 'Royal Grace', role: 'admin', icon: 'mood', verb: 'Win the hearts of' },
-  assimilate: { name: 'Cultural Integration', role: 'admin', icon: 'scroll', verb: 'Integrate the people of' },
+  patronage: { name: 'Patronage', role: 'artist', icon: 'star', verb: 'Commission works of art for' },
+  convert: { name: 'Religious Mission', role: 'priest', icon: 'church', verb: 'Convert' },
+  grace: { name: 'Royal Grace', role: 'leader', icon: 'mood', verb: 'Win the hearts of' },
+  assimilate: { name: 'Cultural Integration', role: 'leader', icon: 'scroll', verb: 'Integrate the people of' },
   route: { name: 'Trade Route', role: 'merchant', icon: 'coin', verb: 'Open a trade route with' },
   post: { name: 'Trade Post', role: 'merchant', icon: 'anchor', verb: 'Open a trade post in' },
+  artwork: { name: 'Work of Art', role: 'artist', icon: 'quill', verb: 'Create' },
+  pilgrimage: { name: 'Mission to the Church', role: 'priest', icon: 'church', verb: 'Win the favour of' },
+  accept: { name: 'Embrace a Culture', role: 'leader', icon: 'people', verb: 'Embrace the' },
 };
 
 /** Goods a project uses up when it starts. */
@@ -58,6 +63,7 @@ export function projectGoods(kind: MissionKind, building?: string): Record<strin
   if (kind === 'found') return { materials: 3 };
   if (kind === 'grow') return { materials: 4 };
   if (kind === 'patronage') return { arts: 2 };
+  if (kind === 'artwork') return building === 'monument' ? { arts: 1, materials: 3 } : { arts: 2 };
   return {};
 }
 /** Ducats to buy what the warehouses lack for a project. */
@@ -69,7 +75,7 @@ export function cardRole(cardId: string): Role {
   return d.agent ?? CAT_INFO[d.cat].role;
 }
 
-const SPECIAL_BASE: Partial<Record<Role, Role>> = { explorer: 'diplomat', colonist: 'admin', conqueror: 'general' };
+const SPECIAL_BASE: Partial<Record<Role, Role>> = { explorer: 'diplomat', colonist: 'admin', conqueror: 'general', priest: 'courtier', artist: 'courtier', leader: 'courtier' };
 
 /** Everyone who may take this card. People of the base role turn into the specialist when sent. */
 export function cardRoles(cardId: string): Role[] {
@@ -86,6 +92,11 @@ export function becomesOnMission(kind: MissionKind, ch: Character, withShips: bo
   if (kind === 'colonize' && ch.role === 'admin') return 'colonist';
   if (kind === 'conquista' && ch.role === 'general') return 'conqueror';
   if ((kind === 'conquer' || kind === 'raid') && withShips && ch.role === 'general') return 'admiral';
+  if (ch.role === 'courtier') {
+    if (kind === 'convert' || kind === 'pilgrimage') return 'priest';
+    if (kind === 'artwork' || kind === 'patronage') return 'artist';
+    if (kind === 'assimilate' || kind === 'grace' || kind === 'accept') return 'leader';
+  }
   return null;
 }
 
@@ -110,6 +121,7 @@ export const growCost = (s: GameState, prov: string) => Math.round((40 + 30 * (s
 /** Goods a trade partner can sell you that you do not have. */
 
 export const patronageCost = (s: GameState) => Math.round(45 * inflation(s));
+export const pilgrimageCost = (s: GameState) => Math.round(20 * inflation(s));
 
 export const voyageCost = (s: GameState) => Math.round(30 * inflation(s));
 
@@ -171,13 +183,16 @@ export function missionTurns(s: GameState, kind: MissionKind, ch: Character, tar
     case 'vassalize': return 4;
     case 'integrate': return 12;
     case 'patronage': return 4;
-    case 'convert': return RARITY_YEARS[ch.rarity] * 3;
+    case 'convert': return Math.max(2, RARITY_YEARS[ch.rarity] * 3 - (ch.traits.includes('zealous') ? 2 : 0));
     case 'assimilate': return (RARITY_YEARS[ch.rarity] + 1) * 3;
     case 'grace': return Math.max(2, RARITY_YEARS[ch.rarity]);
     case 'develop': case 'found': case 'grow': return 8;
     case 'tax': return 2;
     case 'progress': return 4;
     case 'route': return 1;
+    case 'artwork': return Math.max(1, Math.round((target === 'monument' ? 8 : 4) / (ch.traits.includes('prolific') ? 2 : 1)));
+    case 'pilgrimage': return 2;
+    case 'accept': return Math.max(2, RARITY_YEARS[ch.rarity]);
     case 'post': return postTurns(s, target);
     default: {
       // the journey out, then talks; the envoy comes home afterwards
@@ -221,6 +236,16 @@ export function diploChance(s: GameState, kind: MissionKind, ch: Character, targ
 export function missionBlocked(s: GameState, kind: MissionKind, target: string, building?: string): string | null {
   const me = s.player;
   if (kind === 'post') return postBlocked(s, target);
+  if (kind === 'artwork') {
+    if (!GENRES[target]) return 'Choose a kind of work';
+    const cost = artCost(s, target) + projectShortfall(s, 'artwork', target);
+    return player(s).gold < cost ? `Needs ${cost} ducats` : null;
+  }
+  if (kind === 'pilgrimage') {
+    if (s.missions.some(m => m.kind === 'pilgrimage')) return 'A churchman is already on the way';
+    return player(s).gold < pilgrimageCost(s) ? `Needs ${pilgrimageCost(s)} ducats` : null;
+  }
+  if (kind === 'accept') return acceptBlocked(s, target);
   if (kind === 'route') { const n = s.nations[target]; return !n?.alive ? 'Choose a realm' : atWar(s, me, target) ? `You are at war with ${n.name}` : null; }
   if (kind === 'base') {
     const p = s.provinces[target];
@@ -365,8 +390,11 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   };
   if (kind === 'route') { m.dir = trade!.dir; m.amount = trade!.amount; }
   if (kind === 'post') { m.progress = postCost(s, target); player(s).gold -= m.progress; }
-  const extra = projectShortfall(s, kind, building);
-  takeGoods(s, projectGoods(kind, building));
+  const pgKey = kind === 'artwork' ? target : building;
+  const extra = projectShortfall(s, kind, pgKey);
+  takeGoods(s, projectGoods(kind, pgKey));
+  if (kind === 'artwork') { m.progress = artCost(s, target); player(s).gold -= m.progress; }
+  if (kind === 'pilgrimage') { m.progress = pilgrimageCost(s); player(s).gold -= m.progress; }
   player(s).gold -= extra;
   if (kind === 'conquer' || kind === 'raid') m.turnsLeft = Math.max(1, ...sent.map(t => travel(locOf(s, t), target)));
   if (kind === 'base') m.turnsLeft = Math.max(1, Math.max(...sent.map(t => travel(locOf(s, t), target))) - 1);
@@ -399,7 +427,7 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
 export function cancelMission(s: GameState, id: number) {
   const m = s.missions.find(x => x.id === id);
   if (!m) return;
-  if (['build', 'develop', 'found', 'grow', 'colonize', 'explore', 'post'].includes(m.kind) && m.progress) player(s).gold += Math.round(m.progress / 2);
+  if (['build', 'develop', 'found', 'grow', 'colonize', 'explore', 'post', 'artwork'].includes(m.kind) && m.progress) player(s).gold += Math.round(m.progress / 2);
   freeMission(s, id);
   s.missions = s.missions.filter(x => x.id !== id);
 }
@@ -721,6 +749,44 @@ function resolveOther(s: GameState, m: Mission, ch: Character) {
     finish(s, m); return;
   }
 
+  if (m.kind === 'artwork') {
+    const genre = m.target;
+    const twice = (ch.traits.includes('painter') && (genre === 'sacred' || genre === 'portrait')) || (ch.traits.includes('poet') && (genre === 'epic' || genre === 'treatise')) || (ch.traits.includes('builder') && genre === 'monument');
+    const o = twice || hasCore(s, 'consolidation') ? rollBest(s, ch) : rollOutcome(s, ch);
+    const items: RevealItem[] = [outcomeItem(o, `${GENRES[genre].name}: ${QUALITY[o].name.toLowerCase()}.`), ...createWork(s, ch, genre, o)];
+    gainXp(s, ch, items);
+    push(s, { kind: 'reveal', title: 'A Work of Art', subtitle: ch.name, items });
+    finish(s, m); return;
+  }
+
+  if (m.kind === 'pilgrimage') {
+    const o = rollOutcome(s, ch);
+    let gain = [3, 10, 15, 25, 40][o];
+    if (ch.traits.includes('curial')) gain = Math.round(gain * 1.5);
+    addChurchRel(s, gain);
+    if (o >= 3) me.prestige += 3;
+    const items: RevealItem[] = [outcomeItem(o, `${churchHead(s).name} receives ${ch.name}: favour +${gain}${o >= 3 ? ', prestige +3' : ''}. Standing now ${Math.round(churchRel(s))}.`)];
+    gainXp(s, ch, items);
+    push(s, { kind: 'reveal', title: 'Mission to the Church', items });
+    finish(s, m); return;
+  }
+
+  if (m.kind === 'accept') {
+    const c = m.target;
+    const o = rollOutcome(s, ch);
+    const items: RevealItem[] = [];
+    if (o === 0 && !ch.traits.includes('tolerant')) items.push(outcomeItem(o, `Old prejudices win: the ${cultureName(c)} stay outsiders for now.`));
+    else {
+      if (!s.accepted.includes(c)) s.accepted.push(c);
+      if (o >= 3 || ch.traits.includes('humanist')) me.stability = clamp(me.stability + 1, -3, 3);
+      if (o >= 3) me.prestige += 3;
+      items.push(outcomeItem(Math.max(1, o), `The ${cultureName(c)} are now one of the realm's own peoples: no more foreign-culture unhappiness for them${o >= 3 || ch.traits.includes('humanist') ? ', stability +1' : ''}.`));
+    }
+    gainXp(s, ch, items);
+    push(s, { kind: 'reveal', title: 'Embrace a Culture', items });
+    finish(s, m); return;
+  }
+
   if (m.kind === 'patronage') {
     const o = rollOutcome(s, ch);
     const gain = [3, 8, 12, 18, 30][o];
@@ -737,7 +803,7 @@ function resolveOther(s: GameState, m: Mission, ch: Character) {
     const prov = s.provinces[m.target];
     if (prov.owner !== s.player) { finish(s, m); return; }
     const o = rollOutcome(s, ch);
-    const gain = GRACE_GAIN[o];
+    const gain = Math.round(GRACE_GAIN[o] * (ch.traits.includes('orator') ? 1.5 : 1));
     prov.favor = Math.min(30, (prov.favor ?? 0) + gain);
     if (o >= 3) prov.control = Math.min(100, prov.control + 10);
     const how = ['A cold welcome', 'Alms and a feast', 'A royal charter of privileges', 'Bread, wine and a new bridge', 'A visit the people will tell their grandchildren about'];
@@ -752,12 +818,13 @@ function resolveOther(s: GameState, m: Mission, ch: Character) {
     if (prov.owner !== s.player) { finish(s, m); return; }
     let o = rollOutcome(s, ch);
     if (o === 0 && m.kind === 'convert' && ageId(s) === 'reformation' && rand(s) < 0.4) o = 1;
+    if (o === 0 && m.kind === 'assimilate' && ch.traits.includes('tolerant')) o = 1;
     const items: RevealItem[] = [];
     if (o === 0) {
-      prov.control = Math.max(0, prov.control - 15);
+      if (!ch.traits.includes('beloved')) prov.control = Math.max(0, prov.control - 15);
       items.push(outcomeItem(o, m.kind === 'convert' ? 'The preachers are driven out. Control −15.' : 'The people resist. Control −15.'));
     } else {
-      if (m.kind === 'convert') prov.religion = s.stateReligion; else prov.culture = player(s).culture === 'aragonese' ? (prov.culture === 'catalan' ? 'catalan' : 'aragonese') : s.accepted[0];
+      if (m.kind === 'convert') { prov.religion = s.stateReligion; addChurchRel(s, 4); } else prov.culture = player(s).culture === 'aragonese' ? (prov.culture === 'catalan' ? 'catalan' : 'aragonese') : s.accepted[0];
       if (o >= 3) { prov.control = Math.min(100, prov.control + 15); me.stability = clamp(me.stability + 1, -3, 3); }
       items.push(outcomeItem(o, m.kind === 'convert' ? `${prov.name} turns to the ${RELIGION_NAMES[s.stateReligion]} faith${o >= 3 ? ', peacefully: control +15, stability +1' : ''}.` : `The people of ${prov.name} adopt your ways${o >= 3 ? ' gladly: control +15, stability +1' : ''}.`));
     }

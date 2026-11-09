@@ -44,6 +44,18 @@ export const RARITY_ORDER: Rarity[] = ['common', 'uncommon', 'rare', 'epic', 'le
 export interface TraitDef { id: string; name: string; role: Role | 'any'; desc: string; }
 
 export const TRAITS: Record<string, TraitDef> = {
+  refined:    { id: 'refined', name: 'Refined', role: 'courtier', desc: '+0.5 prestige a year at court' },
+  pious:      { id: 'pious', name: 'Pious', role: 'courtier', desc: '+2 a year with your church' },
+  zealous:    { id: 'zealous', name: 'Zealous', role: 'priest', desc: 'Conversions take 2 quarters less' },
+  beloved:    { id: 'beloved', name: 'Beloved Pastor', role: 'priest', desc: 'A failed conversion costs no control' },
+  curial:     { id: 'curial', name: 'Friend of the Curia', role: 'priest', desc: 'Missions to the church win 50% more favour' },
+  painter:    { id: 'painter', name: 'Painter', role: 'artist', desc: 'Sacred paintings and portraits: rolls twice, keeps the better' },
+  poet:       { id: 'poet', name: 'Poet', role: 'artist', desc: 'Epics and treatises: rolls twice, keeps the better' },
+  builder:    { id: 'builder', name: 'Master Builder', role: 'artist', desc: 'Monuments: rolls twice, keeps the better' },
+  prolific:   { id: 'prolific', name: 'Prolific', role: 'artist', desc: 'Works take half as long' },
+  orator:     { id: 'orator', name: 'Orator', role: 'leader', desc: 'Royal Grace wins 50% more happiness' },
+  tolerant:   { id: 'tolerant', name: 'Tolerant', role: 'leader', desc: 'Integration never fails outright' },
+  humanist:   { id: 'humanist', name: 'Humanist', role: 'leader', desc: 'Embracing a culture also gives +1 stability' },
   bold:       { id: 'bold', name: 'Bold', role: 'general', desc: 'Melee +20%' },
   gunner:     { id: 'gunner', name: 'Gunner', role: 'general', desc: 'Fire +20%' },
   cautious:   { id: 'cautious', name: 'Cautious', role: 'general', desc: 'Damage taken −15%' },
@@ -87,6 +99,16 @@ export interface LegendDef {
 
 // Legendary characters can appear in court drafts during their lifetime.
 export const LEGENDS: LegendDef[] = [
+  { id: 'leonardo', name: 'Leonardo da Vinci', role: 'artist', skill: 6, traits: ['painter', 'prolific'], from: 1478, to: 1519, quote: 'Art is never finished, only abandoned' },
+  { id: 'michelangelo', name: 'Michelangelo Buonarroti', role: 'artist', skill: 6, traits: ['builder', 'painter'], from: 1495, to: 1564, quote: 'I saw the angel in the marble' },
+  { id: 'durer', name: 'Albrecht Dürer', role: 'artist', skill: 5, traits: ['painter', 'poet'], from: 1495, to: 1528, quote: 'Painter of Nuremberg' },
+  { id: 'el_greco', name: 'El Greco', role: 'artist', skill: 5, traits: ['painter'], from: 1577, to: 1614, nations: ['castile', 'spain'], quote: 'The Greek of Toledo' },
+  { id: 'velazquez', name: 'Diego Velázquez', role: 'artist', skill: 6, traits: ['painter', 'prolific'], from: 1623, to: 1660, nations: ['castile', 'spain'], quote: 'Painter to the king' },
+  { id: 'sinan', name: 'Mimar Sinan', role: 'artist', skill: 6, traits: ['builder', 'prolific'], from: 1538, to: 1588, nations: ['ottomans'], quote: 'Chief architect of the empire' },
+  { id: 'las_casas', name: 'Bartolomé de las Casas', role: 'priest', skill: 5, traits: ['beloved', 'curial'], from: 1514, to: 1566, quote: 'Protector of the Indians' },
+  { id: 'loyola', name: 'Ignatius of Loyola', role: 'priest', skill: 6, traits: ['zealous', 'curial'], from: 1534, to: 1556, quote: 'Founder of the Society of Jesus' },
+  { id: 'erasmus', name: 'Erasmus of Rotterdam', role: 'leader', skill: 6, traits: ['humanist', 'tolerant'], from: 1500, to: 1536, quote: 'Prince of the humanists' },
+  { id: 'more', name: 'Thomas More', role: 'leader', skill: 5, traits: ['orator', 'humanist'], from: 1510, to: 1535, nations: ['england'], quote: 'Author of Utopia' },
   { id: 'gran_capitan', name: 'Gonzalo Fernández de Córdoba', role: 'general', skill: 6, traits: ['cunning', 'inspiring'], from: 1480, to: 1515, nations: ['castile', 'aragon'], quote: '"El Gran Capitán"' },
   { id: 'cisneros', name: 'Francisco Jiménez de Cisneros', role: 'admin', skill: 6, traits: ['steward', 'architect'], from: 1492, to: 1517, nations: ['castile'], quote: 'Cardinal, regent and reformer' },
   { id: 'nebrija', name: 'Antonio de Nebrija', role: 'researcher', skill: 5, traits: ['scholar'], from: 1480, to: 1522, quote: 'Author of the first Castilian grammar' },

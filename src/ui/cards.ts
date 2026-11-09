@@ -47,7 +47,7 @@ export function equipCard(e: Pick<EquipCard, 'type'>, o: Opts = {}) {
   );
 }
 
-export const ROLE_ICON: Record<string, string> = { general: 'helm', diplomat: 'scroll', admin: 'quill', merchant: 'coin', researcher: 'book', explorer: 'anchor', conqueror: 'lance', colonist: 'tower', admiral: 'ship' };
+export const ROLE_ICON: Record<string, string> = { general: 'helm', diplomat: 'scroll', admin: 'quill', merchant: 'coin', researcher: 'book', explorer: 'anchor', conqueror: 'lance', colonist: 'tower', admiral: 'ship', courtier: 'people', priest: 'church', artist: 'quill', leader: 'laurel' };
 
 export function charCard(c: Character, s: GameState, o: Opts = {}) {
   return shell('char', { ...o, cls: `r-${c.rarity} role-${c.role} ${o.cls ?? ''}` },

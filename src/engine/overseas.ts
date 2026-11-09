@@ -229,7 +229,7 @@ export function aiOverseas(s: GameState) {
 }
 
 // ---------- specialists ----------
-export const PROMOTION: Partial<Record<Role, Role>> = { diplomat: 'explorer', general: 'conqueror', admin: 'colonist' };
+export const PROMOTION: Partial<Record<Role, Role>> = { diplomat: 'explorer', general: 'conqueror', admin: 'colonist', courtier: 'artist' };
 
 export function promoteBlocked(s: GameState, c: Character): string | null {
   const to = PROMOTION[c.role];
