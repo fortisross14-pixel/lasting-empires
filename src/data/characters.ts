@@ -21,6 +21,24 @@ export const RARITY: Record<Rarity, RarityDef> = {
   epic:      { id: 'epic', name: 'Epic', skill: 5, mult: 1.75, traits: 2, weight: 7 },
   legendary: { id: 'legendary', name: 'Legendary', skill: 6, mult: 2, traits: 3, weight: 0 },
 };
+export interface OutcomeDef { id: number; name: string; mult: number; tone: 'good' | 'bad' | 'neutral'; }
+/** Mission results, from worst to best. */
+export const OUTCOMES: OutcomeDef[] = [
+  { id: 0, name: 'Poor', mult: 0.6, tone: 'bad' },
+  { id: 1, name: 'Standard', mult: 1, tone: 'neutral' },
+  { id: 2, name: 'Good', mult: 1.3, tone: 'good' },
+  { id: 3, name: 'Great', mult: 1.7, tone: 'good' },
+  { id: 4, name: 'Exceptional', mult: 2.5, tone: 'good' },
+];
+/** Chance (%) of each outcome by the rarity of the person assigned. */
+export const OUTCOME_ODDS: Record<Rarity, number[]> = {
+  common:    [30, 55, 13, 2, 0],
+  uncommon:  [20, 55, 20, 4.99, 0.01],
+  rare:      [12, 48, 30, 9.9, 0.1],
+  epic:      [6, 37, 37, 18, 2],
+  legendary: [2, 18, 35, 25, 20],
+};
+
 export const RARITY_ORDER: Rarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 
 export interface TraitDef { id: string; name: string; role: Role | 'any'; desc: string; }

@@ -6,7 +6,7 @@ import { PROVINCES } from '../data/geo';
 import { PROVINCE_GOODS } from '../data/goods';
 import { BUILDINGS } from '../data/techs';
 import {
-  rand, pick, randInt, uid, clamp, player, provsOf, incomeOf, log, push, addRel, playerManpower,
+  rand, pick, randInt, uid, clamp, player, provsOf, incomeOf, log, push, addRel, playerManpower, initialSettlement, grade,
   addTreaty, hasTech, genCharacter, declareWar, nationName, atWar, getRel, hasGood, armyPower,
 } from './core';
 import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS } from './cards';
@@ -76,7 +76,7 @@ function setRuler(s: GameState, heir: Heir) {
   if (a.stab) me.stability = clamp(me.stability + a.stab, -3, 3);
   if (a.startCards) grantRandomCards(s, a.startCards);
   if (a.role) {
-    s.characters.unshift({ uid: uid(s), name: me.ruler.name, role: a.role, skill: heir.skill, traits: [], born: s.year - 25, dies: me.ruler.to, rarity: 'legendary', xp: 0, ruler: true });
+    s.characters.unshift({ uid: uid(s), name: me.ruler.name, role: a.role, skill: heir.skill, traits: [], born: s.year - 25, dies: me.ruler.to, rarity: (['common', 'common', 'common', 'uncommon', 'rare', 'epic', 'legendary'] as const)[Math.min(6, heir.skill)], xp: 0, ruler: true });
   }
 }
 
@@ -109,7 +109,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
     s.nations[d.id] = n;
   }
   for (const [id, name, owner, dev, fort, land, lon, lat] of PROVINCES) {
-    s.provinces[id] = { id, name, owner, core: owner, dev, fort, buildings: [], land, lon, lat, control: 80, good: PROVINCE_GOODS[id] ?? 'grain', cities: 0 };
+    s.provinces[id] = { id, name, owner, core: owner, dev, fort, buildings: [], land, lon, lat, control: 80, good: PROVINCE_GOODS[id] ?? 'grain', settlement: initialSettlement(dev, NATIONS.some(n => n.capital === id)), grades: {} };
   }
   for (const n of Object.values(s.nations)) if (n.id !== nationId) n.ruler = initialRuler(s, n.id);
   for (const [a, b, v] of START_REL) addRel(s, a, b, v);
@@ -190,7 +190,7 @@ function playerEconomy(s: GameState) {
   // control
   for (const p of provsOf(s, s.player)) {
     let d = 2 + me.stability;
-    for (const b of p.buildings) d += BUILDINGS[b]?.control ?? 0;
+    for (const b of p.buildings) d += (BUILDINGS[b]?.control ?? 0) * grade(p, b);
     if (p.core !== s.player) d -= 1;
     p.control = clamp(p.control + d, 0, 100);
   }

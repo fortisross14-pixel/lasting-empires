@@ -537,3 +537,8 @@ ul.traits { margin: 0; padding-left: 18px; }
 .reveal-row .flip:has(.k-hand), .reveal-row .flip:has(.k-char), .reveal-row .flip:has(.k-troop) { width: var(--cw); height: var(--ch); }
 @media (min-width: 761px) { #app:has(#sheet:not([hidden])) #zoom { right: calc(min(440px, 100%) + 10px); } }
 @media (max-width: 760px) { #app:has(#sheet:not([hidden])) #zoom, #app:has(#sheet:not([hidden])) #tracker { display: none; } }
+
+.odds { display: flex; gap: 2px; margin-top: 4px; border-radius: 6px; overflow: hidden; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.odd { padding: 4px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: #fff; }
+.odd.o0 { background: #7a2e26; } .odd.o1 { background: #4a5a60; } .odd.o2 { background: #3c6a45; } .odd.o3 { background: #2f6fb0; } .odd.o4 { background: #a8740e; }
+.oddsbox { display: flex; flex-direction: column; gap: 2px; }

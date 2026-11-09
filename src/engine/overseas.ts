@@ -71,7 +71,7 @@ export function conquistaChance(s: GameState, id: string, ch: Character, troopUi
 }
 
 // ---------- resolutions (called from missions.ts) ----------
-export function resolveExplore(s: GameState, ch: Character, items: RevealItem[]) {
+export function resolveExplore(s: GameState, ch: Character, items: RevealItem[], o = 1) {
   const pool = discoverable(s);
   if (!pool.length) { items.push({ title: 'Nothing new', text: 'Every known sea has been sailed.', tone: 'neutral', kind: 'anchor' }); return false; }
   if (rand(s) >= exploreChance(s, ch)) {
@@ -90,14 +90,23 @@ export function resolveExplore(s: GameState, ch: Character, items: RevealItem[])
   items.push({ title: `${r.name} discovered!`, text: `${r.text} People: ${r.people}. Produces ${GOODS[r.good]?.name ?? r.good}.`, tone: 'good', kind: 'anchor' });
   if (st.holder && st.holder !== s.player) items.push({ title: 'Too late', text: `${nationName(s, st.holder)} already holds it.`, tone: 'bad', kind: 'twist' });
   log(s, `${ch.name} discovers ${r.name}.`, 'good');
+  if (o >= 3) {
+    const more = discoverable(s);
+    if (more.length) {
+      const r2 = more[Math.floor(rand(s) * more.length)];
+      regionState(s, r2.id).found = true;
+      items.unshift({ title: `${o === 4 ? 'Exceptional' : 'Great'} voyage`, text: `The fleet sails on and also finds ${r2.name}.`, tone: 'good', kind: 'star' });
+    }
+  }
   return true;
 }
 
-export function resolveColonize(s: GameState, id: string, ch: Character, items: RevealItem[]) {
+export function resolveColonize(s: GameState, id: string, ch: Character, items: RevealItem[], o = 1) {
   const r = REGIONS[id], st = regionState(s, id);
   if (st.holder && st.holder !== s.player) { items.push({ title: 'Claimed', text: `${nationName(s, st.holder)} got there first.`, tone: 'bad', kind: 'twist' }); return false; }
   if (rand(s) < colonizeChance(s, id, ch)) {
-    st.colony++; st.holder = s.player;
+    st.colony = Math.min(3, st.colony + (o >= 3 ? 2 : 1)); st.holder = s.player;
+    if (o >= 3) items.push({ title: `${o === 4 ? 'Exceptional' : 'Great'} outcome`, text: 'Settlers pour in: the colony grows two levels at once.', tone: 'good', kind: 'star' });
     if (ch.traits.includes('planter')) s.flags['planter_' + id] = Math.max(s.flags['planter_' + id] ?? 0, Math.round(traitMult(ch)));
     player(s).prestige += 3;
     items.push({ title: st.colony === 1 ? `A colony in ${r.name}` : `${r.name} grows`, text: `Colony level ${st.colony}/3: +${r.value} ducats a year per level, and access to ${GOODS[r.good]?.name ?? r.good}.`, tone: 'good', kind: 'tower' });
@@ -108,7 +117,7 @@ export function resolveColonize(s: GameState, id: string, ch: Character, items: 
   return false;
 }
 
-export function resolveConquista(s: GameState, id: string, ch: Character, troopUids: number[], items: RevealItem[]) {
+export function resolveConquista(s: GameState, id: string, ch: Character, troopUids: number[], items: RevealItem[], o = 1) {
   const r = REGIONS[id], st = regionState(s, id);
   const p = conquistaChance(s, id, ch, troopUids);
   const ok = rand(s) < p;
@@ -118,9 +127,9 @@ export function resolveConquista(s: GameState, id: string, ch: Character, troopU
   s.troops = s.troops.filter(t => !(troopUids.includes(t.uid) && t.str < 15));
   if (ok) {
     st.subdued = true; st.holder = s.player;
-    const loot = Math.round(r.loot * inflation(s) * (ch.traits.includes('plunderer') ? 1 + 0.5 * traitMult(ch) : 1));
+    const loot = Math.round(r.loot * inflation(s) * [0.6, 1, 1.3, 1.7, 2.5][o] * (ch.traits.includes('plunderer') ? 1 + 0.5 * traitMult(ch) : 1));
     player(s).gold += loot; player(s).prestige += 10 + r.natives * 3;
-    items.push({ title: `The ${r.people} submit`, text: `${r.name} is yours to settle. Plunder: ${loot} ducats.`, tone: 'good', kind: 'sword' });
+    items.push({ title: `The ${r.people} submit`, text: `${r.name} is yours to settle. Plunder: ${loot} ducats (${['poor', 'standard', 'good', 'great', 'exceptional'][o]} haul).`, tone: 'good', kind: 'sword' });
     log(s, `${ch.name} conquers ${r.name}.`, 'good');
   } else {
     items.push({ title: 'Disaster', text: `The ${r.people} destroy the expedition.`, tone: 'bad', kind: 'skull' });

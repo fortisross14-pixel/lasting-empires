@@ -84,13 +84,14 @@ export interface Province {
   lat: number;
   control: number;    // 0..100: how firmly the crown rules here
   good: string;       // trade good produced
-  cities: number;     // extra cities founded (each adds building slots)
+  settlement: number; // 0 none, 1 village, 2 town, 3 city, 4 metropolis
+  grades: Record<string, number>; // building quality multiplier (Shoddy 0.75 … Wonder 2)
 }
 
 export type MissionKind =
   | 'conquer' | 'raid'
   | 'relations' | 'trade' | 'alliance' | 'marriage' | 'peace'
-  | 'research' | 'build' | 'develop' | 'found' | 'tax' | 'progress'
+  | 'research' | 'build' | 'develop' | 'found' | 'grow' | 'tax' | 'progress'
   | 'explore' | 'colonize' | 'conquista';
 
 export interface Mission {

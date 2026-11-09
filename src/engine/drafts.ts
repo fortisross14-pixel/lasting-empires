@@ -136,7 +136,7 @@ export const AMBITIONS: AmbitionDef[] = [
   { id: 'army', name: 'Army of Legend', text: 'Field 4 troops of Tercio quality or better (tier 4+).', reward: 50, check: s => s.troops.filter(t => TROOPS[t.type].tier >= 4).length >= 4 },
   { id: 'scholar', name: 'Light of Learning', text: 'Research 15 technologies.', reward: 50, check: s => s.techs.length >= 15 },
   { id: 'builder', name: 'The Builder King', text: 'Have 12 buildings across your realm.', reward: 45, check: s => provsOf(s, s.player).reduce((a, p) => a + p.buildings.length, 0) >= 12 },
-  { id: 'cities', name: 'City Founder', text: 'Found 4 new cities.', reward: 45, check: s => provsOf(s, s.player).reduce((a, p) => a + (p.cities ?? 0), 0) >= 4 },
+  { id: 'cities', name: 'City of Cities', text: 'Have 4 cities or metropolises.', reward: 45, check: s => provsOf(s, s.player).filter(p => (p.settlement ?? 0) >= 3).length >= 4 },
 ];
 
 export function ambitionOptions(s: GameState): DraftOption[] {

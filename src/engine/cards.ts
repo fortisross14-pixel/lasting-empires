@@ -5,7 +5,7 @@ import { TROOPS, EQUIPMENT } from '../data/troops';
 import { TECH, TECHS, BUILDINGS, TECH_RATES, type TechTrack, type BuildingGroup } from '../data/techs';
 import { RULER_ARCHS } from '../data/nations';
 import {
-  player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf,
+  player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName,
 } from './core';
 
 export type CardTarget = 'none' | 'nation' | 'mission' | 'troop';
@@ -95,7 +95,8 @@ add({ id: 'conquista', name: 'Conquista', cat: 'military', kind: 'mission', miss
 add({ id: 'hire_admin', name: 'Appoint an Administrator', cat: 'internal', kind: 'hire', role: 'admin', icon: 'quill', text: 'Meet three officials, keep one. Costs 1 manpower.', weight: () => 1.1 });
 add({ id: 'royal_works', name: 'Royal Works', cat: 'internal', kind: 'mission', missions: ['build'], group: 'internal', icon: 'hammer', text: 'Build a temple, library, barracks, fortress, courthouse or university.', weight: () => 2.5 });
 add({ id: 'settlers', name: 'Settlers', cat: 'internal', kind: 'mission', missions: ['develop'], icon: 'wheat', text: 'Develop a province: +1 development.', weight: () => 1.5 });
-add({ id: 'found_city', name: 'Found a City', cat: 'internal', kind: 'mission', missions: ['found'], icon: 'tower', text: 'Found a new city in a province: +1 development and 2 more building slots.', weight: () => 0.7 });
+add({ id: 'found_settlement', name: 'Found a Settlement', cat: 'internal', kind: 'mission', missions: ['found'], icon: 'tower', text: 'Found a village, town or city where there is none. The better the administrator, the bigger it starts.', weight: s => (provsOf(s, s.player).some(p => !p.settlement) ? 1.4 : 0.2) });
+add({ id: 'grow_settlement', name: 'Grow your Settlement', cat: 'internal', kind: 'mission', missions: ['grow'], icon: 'tower', text: 'Grow a village to a town, a town to a city, a city to a metropolis.', weight: () => 1.3 });
 add({ id: 'royal_progress', name: 'Royal Progress', cat: 'internal', kind: 'mission', missions: ['progress'], icon: 'crown', text: 'Tour the realm: stability +1, prestige +2, control +10 everywhere.', weight: () => 1.2 });
 add({ id: 'colonial_charter', name: 'Colonial Charter', cat: 'internal', kind: 'mission', missions: ['colonize'], agent: 'colonist', icon: 'tower', text: 'A colonist settles a discovered land (1 manpower).', weight: s => (Object.values(s.overseas).some(o => o.found) ? 1.2 : 0.15) });
 add({ id: 'harvest', name: 'Bountiful Harvest', cat: 'internal', kind: 'instant', icon: 'wheat', text: 'Stability +1, manpower +2.', weight: () => 1,
@@ -178,7 +179,7 @@ export function cardRates(s: GameState): Record<Cat, { rate: number; parts: Rate
   for (const c of CATS) {
     const parts: RatePart[] = [{ label: 'Base', v: 1 }];
     let b = 0;
-    for (const p of provsOf(s, s.player)) for (const bid of p.buildings) b += BUILDINGS[bid]?.rates?.[c] ?? 0;
+    for (const p of provsOf(s, s.player)) for (const bid of p.buildings) b += (BUILDINGS[bid]?.rates?.[c] ?? 0) * grade(p, bid);
     if (b) parts.push({ label: 'Buildings', v: b });
     let t = 0;
     for (const tid of s.techs) t += TECH_RATES[tid]?.[c] ?? 0;
@@ -196,7 +197,7 @@ export function cardRates(s: GameState): Record<Cat, { rate: number; parts: Rate
 
 export function npRate(s: GameState): { rate: number; parts: RatePart[] } {
   const parts: RatePart[] = [{ label: 'Crown', v: 2 }];
-  const courts = provsOf(s, s.player).reduce((a, p) => a + p.buildings.reduce((x, b) => x + (BUILDINGS[b]?.np ?? 0), 0), 0);
+  const courts = provsOf(s, s.player).reduce((a, p) => a + p.buildings.reduce((x, b) => x + (BUILDINGS[b]?.np ?? 0) * grade(p, b), 0), 0);
   if (courts) parts.push({ label: 'Courthouses', v: courts });
   const cities = provsOf(s, s.player).reduce((a, p) => a + TIERS[tierOf(p)].np, 0);
   if (cities) parts.push({ label: 'Cities', v: cities });
@@ -273,12 +274,15 @@ export function playCard(s: GameState, handUid: number, target: string): string 
   const blocked = cardBlocked(s, def);
   if (blocked) return '!' + blocked;
   if (def.kind === 'troop') {
+    const gen = s.characters.find(c => String(c.uid) === target && c.mission == null && (c.role === 'general' || c.role === 'conqueror'));
     player(s).manpower -= 1;
     player(s).gold -= troopHireCost(s, def.troop!);
-    s.troops.push({ uid: uid(s), type: def.troop!, vet: 0, str: 100 });
+    const o = rollOutcome(s, gen);
+    const vet = [0, 0, 1, 2, 3][o];
+    s.troops.push({ uid: uid(s), type: def.troop!, vet, str: o === 0 ? 70 : 100 });
     removeCard(s, handUid);
-    log(s, `Hired ${TROOPS[def.troop!].name}.`);
-    return `${TROOPS[def.troop!].name} join your army`;
+    log(s, `Hired ${TROOPS[def.troop!].name}${vet ? ' ' + '★'.repeat(vet) : ''}.`);
+    return `${outcomeName(o)} recruits: ${TROOPS[def.troop!].name}${vet ? ' ' + '★'.repeat(vet) : ''}${o === 0 ? ' (under strength)' : ''}${gen ? ', trained by ' + gen.name : ''}`;
   }
   if (def.kind !== 'instant' || !def.play) return '!This card is used another way';
   if (def.target === 'nation' && !s.nations[target]?.alive) return '!Choose a nation';

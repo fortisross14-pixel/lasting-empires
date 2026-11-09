@@ -4,11 +4,13 @@ import { CARDS, drawCat, CAT_INFO } from './cards';
 import { REGIONS } from '../data/overseas';
 import { colonizeBlocked, conquistaBlocked, discoverable, resolveExplore, resolveColonize, resolveConquista, colonyCost } from './overseas';
 import { GOODS } from '../data/goods';
+import { OUTCOMES } from '../data/characters';
 import { TECH } from '../data/techs';
 import { BUILDINGS } from '../data/techs';
 import {
   player, provsOf, hasTech, getRel, addRel, addTreaty, hasTreaty, atWar, findWar, makePeace, rulerMod, clamp,
   rand, pick, uid, log, nationName, armyPower, buildingAllowed, push, buildingCost, inflation, ownGoods, traitMult, promoteRarity,
+  rollOutcome, outcomeName, TIERS, tierOf, GROW_DEV,
 } from './core';
 import { getGeo } from './map';
 import { createBattle, makeSide, toBattleUnits, genericGeneral, freeMission, transferProvince } from './battle';
@@ -24,7 +26,8 @@ export const MISSION_INFO: Record<MissionKind, { name: string; role: Role; icon:
   research: { name: 'Study', role: 'researcher', icon: 'book', verb: 'Research' },
   build: { name: 'Construction', role: 'admin', icon: 'hammer', verb: 'Build' },
   develop: { name: 'Development', role: 'admin', icon: 'wheat', verb: 'Develop' },
-  found: { name: 'New City', role: 'admin', icon: 'tower', verb: 'Found a city in' },
+  found: { name: 'New Settlement', role: 'admin', icon: 'tower', verb: 'Found a settlement in' },
+  grow: { name: 'Growing Settlement', role: 'admin', icon: 'tower', verb: 'Grow the settlement of' },
   tax: { name: 'Tax Collection', role: 'admin', icon: 'coin', verb: 'Collect taxes' },
   progress: { name: 'Royal Progress', role: 'admin', icon: 'crown', verb: 'Tour the realm' },
   explore: { name: 'Voyage of Discovery', role: 'explorer', icon: 'anchor', verb: 'Sail into the unknown' },
@@ -38,9 +41,17 @@ export function cardRole(cardId: string): Role {
   return d.agent ?? CAT_INFO[d.cat].role;
 }
 
+const townSlotsText = (lvl: number) => `${[0, 1, 2, 4, 6][lvl]} town building slots.`;
+
+/** Building quality by outcome. */
+export const GRADES = [
+  { name: 'Shoddy', mult: 0.75 }, { name: 'Standard', mult: 1 }, { name: 'Fine', mult: 1.25 }, { name: 'Grand', mult: 1.5 }, { name: 'Wonder', mult: 2 },
+];
+
 export const developCost = (s: GameState, prov: string) => Math.round((25 + s.provinces[prov].dev * 15) * inflation(s));
 
-export const foundCost = (s: GameState) => Math.round(70 * inflation(s));
+export const foundCost = (s: GameState) => Math.round(50 * inflation(s));
+export const growCost = (s: GameState, prov: string) => Math.round((40 + 30 * (s.provinces[prov]?.settlement ?? 0)) * inflation(s));
 
 /** Goods a trade partner can sell you that you do not have. */
 export function importable(s: GameState, partner: string): string[] {
@@ -60,7 +71,7 @@ export function techCost(s: GameState, techId: string): number {
 
 export function researchRate(s: GameState, ch: Character, track?: string): number {
   const unis = Math.min(2, provsOf(s, s.player).filter(p => p.buildings.includes('university')).length);
-  let r = 1 + ch.skill + unis + rulerMod(s, 'research') + (hasTech(s, 'councils') ? 1 : 0) + (s.flags.reform_research ?? 0) + (s.flags.printing_bonus ?? 0);
+  let r = 1 + ch.skill * 1.5 + unis + rulerMod(s, 'research') + (hasTech(s, 'councils') ? 1 : 0) + (s.flags.reform_research ?? 0) + (s.flags.printing_bonus ?? 0);
   const m = traitMult(ch);
   if (ch.traits.includes('scholar')) r += 1 * m;
   if (ch.traits.includes('polymath')) r += 2 * m;
@@ -96,7 +107,8 @@ export function missionTurns(s: GameState, kind: MissionKind, ch: Character, tar
     case 'colonize': return 4;
     case 'conquista': return 3;
     case 'develop': return 3;
-    case 'found': return 4;
+    case 'found': return 3;
+    case 'grow': return 3;
     case 'tax': return 1;
     case 'progress': return 2;
     default: {
@@ -186,9 +198,19 @@ export function missionBlocked(s: GameState, kind: MissionKind, target: string, 
   if (kind === 'found') {
     const p = s.provinces[target];
     if (p?.owner !== me) return 'Choose one of your provinces';
-    if ((p.cities ?? 0) >= 2) return 'Two cities already founded here';
-    if (s.missions.some(m => m.kind === 'found' && m.target === target)) return 'Already under way';
+    if (p.settlement > 0) return `There is already a ${TIERS[tierOf(p)].name.toLowerCase()} here: grow it instead`;
+    if (s.missions.some(m => (m.kind === 'found' || m.kind === 'grow') && m.target === target)) return 'Already under way';
     if (player(s).gold < foundCost(s)) return `Needs ${foundCost(s)} ducats`;
+    return null;
+  }
+  if (kind === 'grow') {
+    const p = s.provinces[target];
+    if (p?.owner !== me) return 'Choose one of your provinces';
+    if (!p.settlement) return 'No settlement here yet: found one first';
+    if (p.settlement >= 4) return 'Already a metropolis';
+    if (p.dev < GROW_DEV[p.settlement + 1]) return `Needs development ${GROW_DEV[p.settlement + 1]} to grow`;
+    if (s.missions.some(m => (m.kind === 'found' || m.kind === 'grow') && m.target === target)) return 'Already under way';
+    if (player(s).gold < growCost(s, target)) return `Needs ${growCost(s, target)} ducats`;
     return null;
   }
   if (kind === 'explore') {
@@ -233,6 +255,7 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   if (kind === 'colonize') { m.progress = colonyCost(s); player(s).gold -= m.progress; player(s).manpower -= 1; }
   if (kind === 'develop') { m.progress = developCost(s, target); player(s).gold -= m.progress; }
   if (kind === 'found') { m.progress = foundCost(s); player(s).gold -= m.progress; }
+  if (kind === 'grow') { m.progress = growCost(s, target); player(s).gold -= m.progress; }
   ch.mission = m.id;
   for (const t of s.troops) if (troopUids.includes(t.uid)) t.mission = m.id;
   s.missions.push(m);
@@ -242,7 +265,7 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
 export function cancelMission(s: GameState, id: number) {
   const m = s.missions.find(x => x.id === id);
   if (!m) return;
-  if ((m.kind === 'build' || m.kind === 'develop' || m.kind === 'found' || m.kind === 'colonize') && m.progress) player(s).gold += Math.round(m.progress / 2);
+  if (['build', 'develop', 'found', 'grow', 'colonize', 'explore'].includes(m.kind) && m.progress) player(s).gold += Math.round(m.progress / 2);
   freeMission(s, id);
   s.missions = s.missions.filter(x => x.id !== id);
 }
@@ -255,6 +278,11 @@ const TWISTS: { title: string; text: string; d: number; rel: number }[] = [
   { title: 'Favourable Winds', text: 'Good news from your agents arrives just in time.', d: 0.1, rel: 0 },
   { title: 'The Prince is Ill', text: 'Nothing can be decided while the prince lies sick.', d: -0.1, rel: 0 },
 ];
+
+/** A reveal card announcing how well the mission went. */
+export function outcomeItem(o: number, text: string): RevealItem {
+  return { title: `${outcomeName(o)} outcome`, text, tone: OUTCOMES[o].tone, kind: o >= 3 ? 'star' : o === 0 ? 'twist' : 'scroll' };
+}
 
 function gainXp(s: GameState, ch: Character | undefined, items: RevealItem[]) {
   if (!ch) return;
@@ -290,6 +318,13 @@ function completeResearch(s: GameState, m: Mission, ch: Character) {
   if (t.id === 'bureaucracy' || t.id === 'absolutism') player(s).stability = clamp(player(s).stability + 1, -3, 3);
   if (t.id === 'star_forts') { const cap = s.provinces[player(s).capital]; if (cap && cap.owner === s.player) cap.fort = Math.min(3, cap.fort + 1); }
   const items: RevealItem[] = [{ title: t.name, text: t.desc, tone: 'good', kind: 'book' }];
+  const o = rollOutcome(s, ch);
+  if (o >= 3) {
+    const n = o === 4 ? 2 : 1;
+    for (let i = 0; i < n; i++) drawCat(s, 'research');
+    if (o === 4) player(s).prestige += 5;
+    items.unshift(outcomeItem(o, `The work opens new questions: +${n} Research card${n > 1 ? 's' : ''}${o === 4 ? ', prestige +5' : ''}.`));
+  }
   gainXp(s, ch, items);
   push(s, { kind: 'reveal', title: 'Research complete', subtitle: `${ch.name} completes the study`, items });
   log(s, `Research complete: ${t.name}.`, 'good');
@@ -366,6 +401,13 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
         case 'marriage': addTreaty(s, s.player, target, 'marriage'); addRel(s, s.player, target, 20); me.prestige += 4; items.push({ title: 'A royal wedding', text: `The houses of ${me.name} and ${tname} are joined. Relations improve every year.`, tone: 'good', kind: 'ring' }); break;
         case 'peace': items.push(...endWar(s, target)); makePeace(s, s.player, target); items.push({ title: 'Peace', text: `The war with ${tname} is over. A ten-year truce begins.`, tone: 'good', kind: 'dove' }); break;
       }
+      const o = rollOutcome(s, ch);
+      if (o >= 2) {
+        addRel(s, s.player, target, o * 5);
+        if (o >= 3) { drawCat(s, 'diplomacy'); me.prestige += o === 4 ? 6 : 2; }
+        if (m.kind === 'trade' && o >= 3) s.flags['trade_bonus_' + target] = (s.flags['trade_bonus_' + target] ?? 0) + (o - 2);
+        items.unshift(outcomeItem(o, `The court is charmed: relations +${o * 5}${o >= 3 ? ', a Diplomacy card' : ''}${m.kind === 'trade' && o >= 3 ? `, trade +${o - 2} ducats` : ''}.`));
+      }
       gainXp(s, ch, items);
       log(s, `${MISSION_INFO[m.kind].name} with ${tname} succeeded.`, 'good');
     } else {
@@ -381,10 +423,14 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
     const prov = s.provinces[m.target];
     const b = BUILDINGS[m.building!];
     if (prov.owner !== s.player) { finish(s, m); return; }
-    if (b.id === 'fortress') prov.fort++; else prov.buildings.push(b.id);
-    if (b.id === 'cathedral') me.stability = clamp(me.stability + 1, -3, 3);
-    me.prestige += 1;
-    const items: RevealItem[] = [{ title: `${b.name} in ${prov.name}`, text: b.desc, tone: 'good', kind: b.icon }];
+    const o = rollOutcome(s, ch);
+    const g = GRADES[o];
+    if (b.id === 'fortress') { prov.fort++; if (o >= 3 && prov.fort < 3) prov.fort++; } else { prov.buildings.push(b.id); prov.grades = { ...(prov.grades ?? {}), [b.id]: g.mult }; }
+    if (b.id === 'temple') me.stability = clamp(me.stability + 1, -3, 3);
+    me.prestige += o >= 3 ? o : 1;
+    const items: RevealItem[] = [
+      outcomeItem(o, b.id === 'fortress' ? (o >= 3 ? 'The walls rise twice as strong: +2 fort levels.' : 'The walls are finished.') : `A ${g.name.toLowerCase()} ${b.name.toLowerCase()}: output ×${g.mult}.`),
+      { title: `${b.name} in ${prov.name}`, text: b.desc, tone: 'good', kind: b.icon }];
     gainXp(s, ch, items);
     push(s, { kind: 'reveal', title: 'Construction complete', items });
     log(s, `${b.name} completed in ${prov.name}.`, 'good');
@@ -393,7 +439,8 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
 
   if (m.kind === 'explore' || m.kind === 'colonize' || m.kind === 'conquista') {
     const items: RevealItem[] = [];
-    const ok = m.kind === 'explore' ? resolveExplore(s, ch, items) : m.kind === 'colonize' ? resolveColonize(s, m.target, ch, items) : resolveConquista(s, m.target, ch, m.troops, items);
+    const o = rollOutcome(s, ch);
+    const ok = m.kind === 'explore' ? resolveExplore(s, ch, items, o) : m.kind === 'colonize' ? resolveColonize(s, m.target, ch, items, o) : resolveConquista(s, m.target, ch, m.troops, items, o);
     if (ok && s.characters.includes(ch)) gainXp(s, ch, items);
     push(s, { kind: 'reveal', title: MISSION_INFO[m.kind].name, subtitle: m.kind === 'explore' ? `${ch.name} returns` : REGIONS[m.target]?.name, items });
     finish(s, m); return;
@@ -402,8 +449,12 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
   if (m.kind === 'develop') {
     const prov = s.provinces[m.target];
     if (prov.owner !== s.player) { finish(s, m); return; }
-    prov.dev++; me.prestige += 1;
-    const items: RevealItem[] = [{ title: `${prov.name} flourishes`, text: `Development rises to ${prov.dev}: more ducats and manpower.`, tone: 'good', kind: 'wheat' }];
+    const o = rollOutcome(s, ch);
+    const d = [0, 1, 1, 2, 3][o];
+    prov.dev += d; me.prestige += d;
+    if (o === 2) prov.control = Math.min(100, prov.control + 10);
+    const items: RevealItem[] = [outcomeItem(o, d ? `Development +${d}${o === 2 ? ', control +10' : ''}.` : 'Floods and quarrels: the work comes to nothing.'),
+      { title: `${prov.name}`, text: `Development is now ${prov.dev}.`, tone: d ? 'good' : 'bad', kind: 'wheat' }];
     gainXp(s, ch, items);
     push(s, { kind: 'reveal', title: 'Development', items });
     finish(s, m); return;
@@ -412,11 +463,35 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
   if (m.kind === 'found') {
     const prov = s.provinces[m.target];
     if (prov.owner !== s.player) { finish(s, m); return; }
-    prov.cities = (prov.cities ?? 0) + 1; prov.dev++; prov.control = Math.min(100, prov.control + 5); me.prestige += 3;
-    const items: RevealItem[] = [{ title: `A new city in ${prov.name}`, text: `Development +1, two more building slots, prestige +3.`, tone: 'good', kind: 'tower' }];
+    const o = rollOutcome(s, ch);
+    prov.settlement = [1, 1, 2, 3, 3][o];
+    if (o === 4) { prov.dev++; me.prestige += 5; }
+    prov.control = Math.min(100, prov.control + 5); me.prestige += prov.settlement;
+    const tn = TIERS[tierOf(prov)].name;
+    const items: RevealItem[] = [outcomeItem(o, `${o >= 3 ? 'Settlers flock in' : o === 2 ? 'A good start' : 'A modest start'}: a ${tn.toLowerCase()} rises${o === 4 ? ', and the land around it flourishes (+1 development)' : ''}.`),
+      { title: `${tn} of ${prov.name}`, text: `${townSlotsText(prov.settlement)} Grow it later with a Grow your Settlement card.`, tone: 'good', kind: 'tower' }];
     gainXp(s, ch, items);
-    push(s, { kind: 'reveal', title: 'City founded', items });
-    log(s, `A new city is founded in ${prov.name}.`, 'good');
+    push(s, { kind: 'reveal', title: 'Settlement founded', items });
+    log(s, `A ${tn.toLowerCase()} is founded in ${prov.name}.`, 'good');
+    finish(s, m); return;
+  }
+
+  if (m.kind === 'grow') {
+    const prov = s.provinces[m.target];
+    if (prov.owner !== s.player) { finish(s, m); return; }
+    const o = rollOutcome(s, ch);
+    const step = [0, 1, 1, 1, 2][o];
+    const before = TIERS[tierOf(prov)].name;
+    prov.settlement = Math.min(4, prov.settlement + step);
+    if (prov.settlement > 3 && prov.dev < GROW_DEV[4]) prov.settlement = 3;
+    if (o >= 2) prov.control = Math.min(100, prov.control + 5 * o);
+    if (o >= 3) prov.dev++;
+    me.prestige += step * 2;
+    const tn = TIERS[tierOf(prov)].name;
+    const items: RevealItem[] = [outcomeItem(o, step ? `The ${before.toLowerCase()} becomes a ${tn.toLowerCase()}${o >= 3 ? ', and development +1' : ''}.` : 'Plague and quarrels: the settlement does not grow this time.'),
+      { title: `${tn} of ${prov.name}`, text: townSlotsText(prov.settlement), tone: step ? 'good' : 'bad', kind: 'tower' }];
+    gainXp(s, ch, items);
+    push(s, { kind: 'reveal', title: 'Settlement', items });
     finish(s, m); return;
   }
 
@@ -425,21 +500,24 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
     let g = 4 * ch.skill + dev * 0.5;
     if (ch.traits.includes('tax')) g *= 1 + 0.5 * traitMult(ch);
     if (hasTech(s, 'bureaucracy')) g *= 1.5;
-    g = Math.round(g);
+    const o = rollOutcome(s, ch);
+    g = Math.round(g * OUTCOMES[o].mult);
     me.gold += g;
-    const items: RevealItem[] = [{ title: 'Coffers filled', text: `${ch.name} collects ${g} ducats.`, tone: 'good', kind: 'coin' }];
-    if (rand(s) < 0.2) { me.stability = clamp(me.stability - 1, -3, 3); items.push({ title: 'Grumbling', text: 'The collectors were heavy-handed. Stability −1.', tone: 'bad', kind: 'twist' }); }
+    const items: RevealItem[] = [outcomeItem(o, `${ch.name} collects ${g} ducats.`)];
+    if (o === 0 && rand(s) < 0.6) { me.stability = clamp(me.stability - 1, -3, 3); items.push({ title: 'Grumbling', text: 'The collectors were heavy-handed. Stability −1.', tone: 'bad', kind: 'twist' }); }
     gainXp(s, ch, items);
     push(s, { kind: 'reveal', title: 'Tax Collection', items });
     finish(s, m); return;
   }
 
   if (m.kind === 'progress') {
-    const d = 1 + (ch.traits.includes('steward') ? (traitMult(ch) >= 2 ? 2 : 1) : 0);
+    const o = rollOutcome(s, ch);
+    const d = [0, 1, 1, 2, 2][o] + (ch.traits.includes('steward') ? (traitMult(ch) >= 2 ? 2 : 1) : 0);
+    const ctl = [5, 10, 15, 20, 30][o];
     me.stability = clamp(me.stability + d, -3, 3);
-    me.prestige += 2;
-    for (const p of provsOf(s, s.player)) p.control = Math.min(100, p.control + 10);
-    const items: RevealItem[] = [{ title: 'The crown is cheered', text: `Stability +${d}, prestige +2. Control +10 everywhere.`, tone: 'good', kind: 'crown' }];
+    me.prestige += 1 + o;
+    for (const p of provsOf(s, s.player)) p.control = Math.min(100, p.control + ctl);
+    const items: RevealItem[] = [outcomeItem(o, `Stability +${d}, prestige +${1 + o}, control +${ctl} everywhere.`)];
     gainXp(s, ch, items);
     push(s, { kind: 'reveal', title: 'Royal Progress', items });
     finish(s, m); return;

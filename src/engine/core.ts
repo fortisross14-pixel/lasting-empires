@@ -5,7 +5,7 @@ import { BUILDINGS, TECH } from '../data/techs';
 import { RULER_ARCHS } from '../data/nations';
 import { GOODS } from '../data/goods';
 import { REGIONS } from '../data/overseas';
-import { TRAITS, FIRST_NAMES, SURNAMES, RARITY, RARITY_ORDER } from '../data/characters';
+import { TRAITS, FIRST_NAMES, SURNAMES, RARITY, RARITY_ORDER, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
 import { getGeo, neighbours } from './map';
 
 // ---------- RNG (mulberry32, state kept in the save) ----------
@@ -143,9 +143,9 @@ export function provinceIncome(s: GameState, id: string): number {
   const p = s.provinces[id];
   const g = getGeo();
   let v = p.dev * 0.6 + (g.coastal[id] ? 0.4 : 0);
-  for (const b of p.buildings) v += BUILDINGS[b]?.gold ?? 0;
-  if (p.buildings.includes('pasture') && (p.good === 'wool' || p.good === 'horses')) v += 1;
-  if (p.buildings.includes('mine') && (p.good === 'iron' || p.good === 'silver')) v += 3;
+  for (const b of p.buildings) v += (BUILDINGS[b]?.gold ?? 0) * grade(p, b);
+  if (p.buildings.includes('pasture') && (p.good === 'wool' || p.good === 'horses')) v += 1 * grade(p, 'pasture');
+  if (p.buildings.includes('mine') && (p.good === 'iron' || p.good === 'silver')) v += 3 * grade(p, 'mine');
   v += TIERS[tierOf(p)].gold;
   return v * controlMult(p.control);
 }
@@ -261,34 +261,51 @@ export const roleName: Record<Role, string> = {
   explorer: 'Explorer', conqueror: 'Conqueror', colonist: 'Colonist',
 };
 
-/** Building slots in the town (grows with development and new cities) and in the countryside. */
-export const townSlots = (p: Province) => 1 + Math.ceil(p.dev / 2) + 2 * (p.cities ?? 0);
+/** Building slots in the town (by settlement size) and in the countryside (by development). */
+export const SETTLEMENT_SLOTS = [0, 1, 2, 4, 6];
+export const townSlots = (p: Province) => SETTLEMENT_SLOTS[p.settlement ?? 0];
 export const ruralSlots = (p: Province) => 2 + Math.floor(p.dev / 3);
 export const buildingSlots = (s: GameState, id: string, site: 'town' | 'rural' = 'town') => (site === 'town' ? townSlots(s.provinces[id]) : ruralSlots(s.provinces[id]));
 export const builtAt = (p: Province, site: 'town' | 'rural') => p.buildings.filter(b => b !== 'fortress' && BUILDINGS[b]?.site === site).length;
+export const grade = (p: Province, b: string) => p.grades?.[b] ?? 1;
 
-export type Tier = 'village' | 'town' | 'city' | 'metropolis';
-export const TIERS: Record<Tier, { name: string; gold: number; np: number; rate: number }> = {
-  village: { name: 'Village', gold: 0, np: 0, rate: 0 },
-  town: { name: 'Town', gold: 0.5, np: 0, rate: 0 },
-  city: { name: 'City', gold: 1.5, np: 0.2, rate: 0.03 },
-  metropolis: { name: 'Metropolis', gold: 3, np: 0.5, rate: 0.08 },
+export type Tier = 'none' | 'village' | 'town' | 'city' | 'metropolis';
+export const TIER_ORDER: Tier[] = ['none', 'village', 'town', 'city', 'metropolis'];
+export const TIERS: Record<Tier, { name: string; gold: number; np: number; rate: number; people: number }> = {
+  none: { name: 'No town', gold: 0, np: 0, rate: 0, people: 0 },
+  village: { name: 'Village', gold: 0.3, np: 0, rate: 0, people: 2 },
+  town: { name: 'Town', gold: 1, np: 0.1, rate: 0.02, people: 8 },
+  city: { name: 'City', gold: 2.5, np: 0.3, rate: 0.05, people: 30 },
+  metropolis: { name: 'Metropolis', gold: 5, np: 0.6, rate: 0.1, people: 100 },
 };
-/** The settlement grows with development, town buildings and founded cities. */
-export function tierOf(p: Province, capital = false): Tier {
-  const score = p.dev + builtAt(p, 'town') + 2 * (p.cities ?? 0) + (capital ? 2 : 0);
-  return score >= 12 ? 'metropolis' : score >= 8 ? 'city' : score >= 4 ? 'town' : 'village';
-}
+export const tierOf = (p: Province): Tier => TIER_ORDER[Math.max(0, Math.min(4, p.settlement ?? 0))];
+/** Development needed before a settlement can grow to the next size. */
+export const GROW_DEV = [0, 1, 2, 3, 5];
 export function population(s: GameState, p: Province): number {
-  const k = p.dev * 8 + builtAt(p, 'town') * 3 + builtAt(p, 'rural') * 2 + (p.cities ?? 0) * 10;
+  const k = p.dev * 6 + builtAt(p, 'rural') * 1.5 + TIERS[tierOf(p)].people + builtAt(p, 'town') * 2;
   return Math.round(k * (1 + (s.year - 1453) / 300)) * 1000;
 }
+export function initialSettlement(dev: number, capital: boolean): number {
+  const base = dev >= 4 ? 2 : dev === 3 ? 1 : 0;
+  return Math.min(4, base + (capital ? 1 : 0));
+}
+
+// ---------- outcomes ----------
+/** Roll a mission outcome (0 Poor … 4 Exceptional). Better people get better odds. */
+export function rollOutcome(s: GameState, c?: { rarity?: Rarity } | null): number {
+  const odds = OUTCOME_ODDS[c?.rarity ?? 'common'];
+  let r = rand(s) * 100;
+  for (let i = 0; i < odds.length; i++) { if ((r -= odds[i]) < 0) return i; }
+  return 1;
+}
+export const outcomeName = (o: number) => OUTCOMES[o].name;
 
 export function buildingAllowed(s: GameState, provId: string, b: string): string | null {
   const p = s.provinces[provId];
   const def = BUILDINGS[b];
   if (def.tech && !hasTech(s, def.tech)) return `Needs ${TECH[def.tech].name}`;
   if (def.coastal && !getGeo().coastal[provId]) return 'Coastal provinces only';
+  if (def.site === 'town' && !p.settlement) return 'No town here yet: found a settlement first';
   const slots = buildingSlots(s, provId, def.site);
   if (b === 'fortress') {
     const max = hasTech(s, 'star_forts') ? 3 : 2;

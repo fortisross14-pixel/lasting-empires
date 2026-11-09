@@ -3,7 +3,7 @@ import { CATS } from '../types';
 import { NATIONS, RULER_ARCHS } from '../data/nations';
 import { TROOPS, EQUIPMENT, COUNTER_TEXT } from '../data/troops';
 import { TECHS, TECH, BUILDINGS, type TechTrack } from '../data/techs';
-import { TRAITS, RARITY } from '../data/characters';
+import { TRAITS, RARITY, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
 import { GOODS } from '../data/goods';
 import { REGIONS } from '../data/overseas';
 import {
@@ -16,7 +16,7 @@ import { EVENT, eventTitle, upcomingHistory } from '../engine/events';
 import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBlocked, troopHireCost, discardCard, HAND_LIMIT, cardFor } from '../engine/cards';
 import {
   MISSION_INFO, DIPLO, missionBlocked, launchMission, cancelMission, diploChance, missionTurns, techCost, researchRate, attackRoute,
-  developCost, foundCost, importable, cardRole, voyageCost,
+  developCost, foundCost, growCost, importable, cardRole, voyageCost, GRADES,
 } from '../engine/missions';
 import { buyCard, buyBlocked, hireWithCard, takeDraftOption, mergePreview, doMerge, AMBITIONS } from '../engine/drafts';
 import { regionState, discoverable, exploreChance, colonizeChance, conquistaChance, colonizeBlocked, promote, promoteBlocked, PROMOTION, colonyCost } from '../engine/overseas';
@@ -34,6 +34,7 @@ let sheet: { kind: string; arg?: string } | null = null;
 let modalOpen = false;
 let forge: number[] = [];
 let chronTab = 'powers';
+const RARITY_ORDER_I = (c: Character) => ['common', 'uncommon', 'rare', 'epic', 'legendary'].indexOf(c.rarity);
 
 // ---------- persistence ----------
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { /* storage may be blocked */ } }
@@ -245,6 +246,13 @@ function renderSheet() {
   body.scrollTop = scroll;
 }
 
+const gradeLabel = (g: number) => { const d = GRADES.find(x => x.mult === g); return d && d.mult !== 1 ? ` (${d.name})` : ''; };
+
+function oddsLine(c?: Character | null) {
+  const odds = OUTCOME_ODDS[c?.rarity ?? 'common'];
+  return h('div', { class: 'odds' }, ...odds.map((v, i) => h('span', { class: 'odd o' + i, style: `flex:${Math.max(v, 1.5)}`, title: `${OUTCOMES[i].name} ${v}%` }, `${OUTCOMES[i].name} ${v < 1 ? v : Math.round(v)}%`)));
+}
+
 const stat = (label: string, value: string | number | HTMLElement) => h('div', { class: 'stat' }, h('span', {}, label), typeof value === 'object' ? value : h('b', {}, String(value)));
 
 function actionRow(ic: string, title: string, sub: string, blocked: string | null, onclick: () => void, tone = '') {
@@ -292,20 +300,25 @@ function provinceSheet(id: string, body: HTMLElement) {
     stat(TIERS[tier].name, `${(population(S, p) / 1000).toFixed(0)}k people`), stat('Development', p.dev),
     stat('Control', `${Math.round(p.control)}%`), stat('Produces', GOODS[p.good]?.name ?? p.good),
     stat('Income', provinceIncome(S, id).toFixed(1)), stat('Fort', p.fort ? '▮'.repeat(p.fort) : 'none'),
-    g.coastal[id] ? stat('Coast', 'yes') : null, p.cities ? stat('New cities', p.cities) : null));
+    g.coastal[id] ? stat('Coast', 'yes') : null));
   const site = (sname: 'town' | 'rural', label: string) => {
     const blds = p.buildings.filter(b => BUILDINGS[b]?.site === sname);
     const slots = sname === 'town' ? townSlots(p) : ruralSlots(p);
     return h('div', { class: 'site' }, h('h3', {}, `${label} (${builtAt(p, sname)}/${slots})`),
-      h('div', { class: 'tags' }, blds.length ? blds.map(b => h('span', { class: 'tag', html: icon(BUILDINGS[b].icon, 14) + ' ' + BUILDINGS[b].name })) : h('span', { class: 'muted' }, 'Nothing built yet')));
+      h('div', { class: 'tags' }, blds.length ? blds.map(b => h('span', { class: 'tag', html: icon(BUILDINGS[b].icon, 14) + ' ' + BUILDINGS[b].name + gradeLabel(p.grades?.[b] ?? 1) })) : h('span', { class: 'muted' }, sname === 'town' && !p.settlement ? 'No town yet. Found a settlement to build here.' : 'Nothing built yet')));
   };
   body.append(site('town', TIERS[tier].name), site('rural', 'Countryside'));
   if (mine) {
     body.append(h('h3', {}, 'Actions'));
     const devCard = cardFor(S, 'develop');
     body.append(actionRow('wheat', 'Develop', `+1 development · ${developCost(S, id)} ducats · uses Settlers or Irrigation`, !devCard ? 'Needs a Settlers (Internal) or Irrigation (Economy) card' : missionBlocked(S, 'develop', id), () => openPlanner('develop', id, undefined, devCard!.uid)));
-    const fc = cardFor(S, 'found');
-    body.append(actionRow('tower', 'Found a new city', `+1 development, +2 town slots · ${foundCost(S)} ducats`, !fc ? 'Needs a Found a City card (Internal)' : missionBlocked(S, 'found', id), () => openPlanner('found', id, undefined, fc!.uid)));
+    if (!p.settlement) {
+      const fc = cardFor(S, 'found');
+      body.append(actionRow('tower', 'Found a settlement', `A village, town or city, depending on your administrator · ${foundCost(S)} ducats`, !fc ? 'Needs a Found a Settlement card (Internal)' : missionBlocked(S, 'found', id), () => openPlanner('found', id, undefined, fc!.uid)));
+    } else if (p.settlement < 4) {
+      const gc = cardFor(S, 'grow');
+      body.append(actionRow('tower', `Grow the ${TIERS[tierOf(p)].name.toLowerCase()}`, `Up to a ${TIERS[(['none', 'village', 'town', 'city', 'metropolis'] as const)[p.settlement + 1]].name.toLowerCase()} · ${growCost(S, id)} ducats`, !gc ? 'Needs a Grow your Settlement card (Internal)' : missionBlocked(S, 'grow', id), () => openPlanner('grow', id, undefined, gc!.uid)));
+    }
     for (const [siteName, label] of [['town', 'Build in town'], ['rural', 'Build in the countryside']] as const) {
       body.append(h('h3', {}, label));
       for (const b of Object.values(BUILDINGS).filter(b => b.site === siteName)) {
@@ -688,8 +701,12 @@ function missionTargets(handUid: number): TargetRow[] {
       const acts = Object.values(BUILDINGS).filter(b => b.group === d.group).map(b => ({ label: b.name, kind, target: p.id, building: b.id, why: missionBlocked(S, 'build', p.id, b.id) })).filter(a => !a.why || a.why.startsWith('Needs') && !a.why.startsWith('Needs Ocean') || a.why.startsWith('No free'));
       if (acts.length) rows.push({ label: p.name, sub: `${TIERS[tierOf(p)].name} · town ${builtAt(p, 'town')}/${townSlots(p)} · countryside ${builtAt(p, 'rural')}/${ruralSlots(p)}`, acts });
     }
-  } else if (kind === 'develop' || kind === 'found') {
-    for (const p of provsOf(S, S.player)) rows.push({ label: p.name, sub: `dev ${p.dev} · ${TIERS[tierOf(p)].name}`, acts: [{ label: kind === 'develop' ? `Develop (${developCost(S, p.id)})` : `Found city (${foundCost(S)})`, kind, target: p.id, why: missionBlocked(S, kind, p.id) }] });
+  } else if (kind === 'develop' || kind === 'found' || kind === 'grow') {
+    for (const p of provsOf(S, S.player)) {
+      const why = missionBlocked(S, kind, p.id);
+      if (kind !== 'develop' && why && (why.startsWith('There is already') || why.startsWith('No settlement') || why.startsWith('Already a'))) continue;
+      rows.push({ label: p.name, sub: `dev ${p.dev} · ${TIERS[tierOf(p)].name}`, acts: [{ label: kind === 'develop' ? `Develop (${developCost(S, p.id)})` : kind === 'found' ? `Found (${foundCost(S)})` : `Grow (${growCost(S, p.id)})`, kind, target: p.id, why }] });
+    }
   } else if (kind === 'colonize' || kind === 'conquista') {
     for (const r of Object.values(REGIONS)) {
       if (!regionState(S, r.id).found) continue;
@@ -713,8 +730,20 @@ function openCardModal(handUid: number) {
     !def.burden ? h('button', { class: 'btn ghost', onclick: () => { closeModal(); act(() => discardCard(S, handUid), 'Discarded: +0.5 nation points'); } }, 'Discard (+0.5 NP)') : null);
 
   if (def.kind === 'troop') {
-    body.append(h('p', {}, `Hire for 1 manpower and ${troopHireCost(S, def.troop!)} ducats. Upkeep ${TROOPS[def.troop!].upkeep} a year.`));
-    footer.append(h('button', { class: 'btn primary' + (blocked ? ' blocked' : ''), onclick: () => (blocked ? toast(blocked, 'bad') : done(playCard(S, handUid, ''))) }, blocked ?? 'Hire'));
+    body.append(h('p', {}, `Hire for 1 manpower and ${troopHireCost(S, def.troop!)} ducats. Upkeep ${TROOPS[def.troop!].upkeep} a year. A better general trains better troops: veteran stars depend on the outcome.`));
+    const gens = S.characters.filter(c => (c.role === 'general' || c.role === 'conqueror') && c.mission == null);
+    let gsel: Character | null = [...gens].sort((a, b) => RARITY_ORDER_I(b) - RARITY_ORDER_I(a))[0] ?? null;
+    const gl = h('div', { class: 'cards-row wrap' });
+    const oddsBox = h('div');
+    const drawG = () => {
+      clear(gl); clear(oddsBox);
+      for (const c of gens) gl.append(charCard(c, S, { small: true, selected: gsel?.uid === c.uid, onclick: () => { gsel = c; drawG(); } }));
+      if (!gens.length) gl.append(h('p', { class: 'muted' }, 'No free general: recruits get Common odds.'));
+      oddsBox.append(h('small', { class: 'muted' }, gsel ? `Trained by ${gsel.name}:` : 'Without a general:'), oddsLine(gsel));
+    };
+    drawG();
+    body.append(h('h3', {}, 'Choose who trains them'), gl, oddsBox);
+    footer.append(h('button', { class: 'btn primary' + (blocked ? ' blocked' : ''), onclick: () => (blocked ? toast(blocked, 'bad') : done(playCard(S, handUid, gsel ? String(gsel.uid) : ''))) }, blocked ?? 'Hire'));
   } else if (def.kind === 'hire') {
     body.append(h('p', {}, `Costs 1 manpower. Three candidates are revealed; you keep one. Court ${courtCount(S)}/${courtCap(S)}.`));
     footer.append(h('button', { class: 'btn primary' + (blocked ? ' blocked' : ''), onclick: () => { if (blocked) return toast(blocked, 'bad'); closeModal(); act(() => hireWithCard(S, handUid)); } }, blocked ?? 'Hire'));
@@ -810,16 +839,20 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
       if (DIPLO.includes(kind)) sub = `${Math.round(diploChance(S, kind, c, target) * 100)}%`;
       if (kind === 'explore') sub = `${Math.round(exploreChance(S, c) * 100)}%`;
       if (kind === 'colonize') sub = `${Math.round(colonizeChance(S, target, c) * 100)}%`;
+      if (!DIPLO.includes(kind) && kind !== 'explore' && kind !== 'colonize') sub = `${OUTCOME_ODDS[c.rarity][3] + OUTCOME_ODDS[c.rarity][4] < 1 ? '<1' : Math.round(OUTCOME_ODDS[c.rarity][3] + OUTCOME_ODDS[c.rarity][4])}% great`;
       row.append(charCard(c, S, { small: true, selected: c.uid === ch.uid, dim: busy, badge: busy ? 'busy' : sub, onclick: () => { if (busy) return toast('Busy on another mission'); ch = c; if (military) picked = picked.slice(0, maxTroops()); draw(); } }));
     }
     box.append(row);
+    if (!['conquer', 'raid'].includes(kind)) box.append(h('div', { class: 'oddsbox' }, h('small', { class: 'muted' }, `Outcome odds with a ${RARITY[ch.rarity].name} ${roleName[ch.role].toLowerCase()}:`), oddsLine(ch)));
     const turns = missionTurns(S, kind, ch, target, building);
     const facts: (string | HTMLElement)[] = [`${turns} year${turns > 1 ? 's' : ''}`];
     if (DIPLO.includes(kind)) facts.push(`${Math.round(diploChance(S, kind, ch, target) * 100)}% chance`);
     if (kind === 'research') facts.push(`${researchRate(S, ch, TECH[target]?.track)} research a year · ${techCost(S, target)} needed`);
     if (kind === 'build') facts.push(`${buildingCost(S, building!)} ducats now · salary ${BUILDINGS[building!].salary} a year`);
     if (kind === 'develop') facts.push(`${developCost(S, target)} ducats now`);
-    if (kind === 'found') facts.push(`${foundCost(S)} ducats now`);
+    if (kind === 'found') facts.push(`${foundCost(S)} ducats now · Poor/Standard: village · Good: town · Great/Exceptional: city`);
+    if (kind === 'grow') facts.push(`${growCost(S, target)} ducats now · Poor: no growth · Exceptional: two steps`);
+    if (kind === 'build') facts.push('Quality: Shoddy ×0.75 · Standard · Fine ×1.25 · Grand ×1.5 · Wonder ×2');
     if (kind === 'explore') facts.push(`${Math.round(exploreChance(S, ch) * 100)}% chance of a discovery · ${voyageCost(S)} ducats`);
     if (kind === 'colonize') facts.push(`${Math.round(colonizeChance(S, target, ch) * 100)}% chance · ${colonyCost(S)} ducats and 1 manpower`);
     if (kind === 'trade') {

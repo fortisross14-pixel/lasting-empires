@@ -210,6 +210,7 @@ export function transferProvince(s: GameState, provId: string, to: string) {
   if (from === to) return;
   p.owner = to;
   p.control = p.core === to ? 60 : 25;
+  if (p.settlement > 1 && rand(s) < 0.4) p.settlement--; // sacked
   // cancel player missions targeting things that no longer make sense
   if (from === s.player) {
     s.missions = s.missions.filter(m => {
