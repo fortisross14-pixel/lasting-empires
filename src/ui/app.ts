@@ -1,4 +1,4 @@
-import type { GameState, MissionKind, DraftOption, RevealItem, Battle, Character, Cat, Heir } from '../types';
+import type { GameState, MissionKind, DraftOption, RevealItem, Battle, Character, Cat, Heir, BattleRecord } from '../types';
 import { CATS } from '../types';
 import { NATIONS, RULER_ARCHS } from '../data/nations';
 import { TROOPS, EQUIPMENT, COUNTER_TEXT } from '../data/troops';
@@ -34,11 +34,16 @@ import { navyCap, transportOf, hireShip, shipHireCost } from '../engine/navy';
 import { warScore, peaceTerms, enemyDemands, concludePeace, subjectsOf, integrateBlocked, vassalizeBlocked, tributeShare } from '../engine/diplo';
 import { happinessOf, moodName, CULTURE_NAMES, RELIGION_NAMES, isAccepted } from '../engine/society';
 import { MapView, MAP_MODES, legendFor } from './map';
+import { rankOf, nextRank, missionCap, missionsLeft, VICEROY_COST, viceroyBlocked, territoryOf, appointViceroy, recallViceroy } from '../engine/realm';
 
 const KEY = 'lasting-empires.save.v2';
 let S: GameState;
 let map: MapView;
 let sheet: { kind: string; arg?: string } | null = null;
+let win: { cat: Cat; tab: string } | null = null; // the centred window of a core menu
+let pick: { char?: number; card?: number } = {};   // the Missions tab: a person and/or a card chosen
+let preferChar: number | null = null;              // person chosen first, preselected in the planner
+let pendingReport = false;                          // show the turn report when the queue is empty
 let modalOpen = false;
 let forge: number[] = [];
 let chronTab = 'powers';
@@ -84,8 +89,9 @@ function currentStyle() {
   if (!v || v === 'manuscript') v = 'chancery';
   return STYLES.some(x => x.id === v) ? v : 'chancery';
 }
-export function applyStyle(id = currentStyle()) {
-  if (id === 'portolan') delete document.documentElement.dataset.style; else document.documentElement.dataset.style = id;
+export function applyStyle(_id = currentStyle()) {
+  // one style only: the Chancery
+  document.documentElement.dataset.style = 'chancery';
 }
 function setStyle(id: string) { try { localStorage.setItem(STYLE_KEY, id); } catch { /* */ } applyStyle(id); }
 function stylePicker(onChange: () => void) {
@@ -136,7 +142,7 @@ function chooseNation(id: string) {
 }
 
 // ---------- realm picker: tap any realm on the world map ----------
-const FEATURED = ['castile', 'portugal', 'aragon', 'france', 'england', 'austria', 'ottomans', 'muscovy', 'venice', 'mamluks', 'vijayanagara', 'ming', 'japan', 'mali', 'aztec', 'inca'];
+const FEATURED = ['castile', 'portugal', 'aragon', 'byzantium', 'ottomans', 'france', 'england', 'austria', 'muscovy', 'venice', 'mamluks', 'vijayanagara', 'ming', 'japan', 'mali', 'aztec', 'inca'];
 function difficulty(provs: number, army: number): { label: string; cls: string } {
   const size = provs + army / 3;
   return size >= 14 ? { label: 'Strong start', cls: 'd-easy' } : size >= 6 ? { label: 'Balanced', cls: 'd-mid' } : size >= 3 ? { label: 'Hard start', cls: 'd-hard' } : { label: 'Very hard', cls: 'd-vhard' };
@@ -188,13 +194,11 @@ function showTitle() {
   const root = clear($('#app'));
   root.append(h('div', { class: 'title-screen' },
     h('div', { class: 'title-inner' },
-      h('p', { class: 'eyebrow' }, 'Anno Domini 1453 – 1750'),
+      h('p', { class: 'eyebrow' }, 'Anno Domini 1451 – 1750'),
       h('h1', { class: 'title' }, 'Lasting Empires'),
       h('p', { class: 'lede' }, 'Every action is a card. Gather Military, Diplomacy, Internal, Economy and Research cards each year, then send your people on missions. One turn is one year.'),
       SLOTS.some(n => loadSlot(n)) || pendingNation ? h('h2', { class: 'pick-h' }, 'Campaigns') : null,
       SLOTS.some(n => loadSlot(n)) || pendingNation ? slotsSection() : null,
-      h('h2', { class: 'pick-h' }, 'Menu style'),
-      stylePicker(showTitle),
       h('button', { class: 'btn primary wide newgame', onclick: () => showPicker() }, 'Start a new game'),
       h('details', { class: 'howto' },
         h('summary', {}, 'How to play'),
@@ -218,10 +222,12 @@ function start(s: GameState) {
       h('button', { class: 'zbtn', 'aria-label': 'Zoom out', onclick: () => map.zoomBy(1.33), html: '<svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7"><path d="M5 12 H19"/></svg>' }),
       h('button', { class: 'zbtn', 'aria-label': 'Show my realm', onclick: () => map.focus(provsOf(S, S.player).map(p => p.id)), html: icon('crown', 18) }),
       h('button', { class: 'zbtn', 'aria-label': 'Overseas', title: 'Overseas', onclick: () => toggleSheet('overseas'), html: icon('anchor', 18) }),
-      h('button', { class: 'zbtn', id: 'modebtn', 'aria-label': 'Map view', title: 'Map view', onclick: () => toggleModes(), html: icon('map', 18) })),
+    ),
+      h('button', { class: 'viewpill', id: 'modebtn', 'aria-label': 'Map view', onclick: () => toggleModes() }, h('span', { html: icon('map', 16) }), h('span', { id: 'modelabel' }, 'Map: Realms'), h('span', { class: 'caret' }, '▾')),
       h('div', { id: 'modes', hidden: true }), h('div', { id: 'legend', hidden: true }),
       h('div', { id: 'tracker' })),
     h('aside', { id: 'sheet', hidden: true }),
+    h('section', { id: 'win', hidden: true, role: 'dialog', 'aria-modal': 'false' }),
     h('nav', { id: 'tabs' }),
     h('div', { id: 'modal', hidden: true }),
     h('div', { id: 'toast', role: 'status', 'aria-live': 'polite' }),
@@ -242,6 +248,8 @@ function toggleModes() {
 }
 
 function renderLegend() {
+  const lbl = document.getElementById('modelabel');
+  if (lbl) lbl.textContent = 'Map: ' + MAP_MODES.find(m => m.id === map.mode)!.name;
   const box = $('#legend');
   const items = legendFor(S, map.mode);
   box.hidden = map.mode === 'political';
@@ -255,6 +263,7 @@ function renderLegend() {
 function refresh() {
   renderTop(); renderTabs(); map.render(S); renderTimeline(); renderTracker(); renderLegend();
   if (sheet) renderSheet();
+  if (win) renderWin();
   save();
 }
 
@@ -294,7 +303,7 @@ function renderTop() {
     h('button', { class: 'crest', onclick: () => toggleSheet('realm'), style: `--nc:${me.color}` },
       h('span', { class: 'np-shield sm' }, me.name[0]),
       h('span', { class: 'crest-t' }, h('b', {}, me.name), h('small', {}, me.ruler.name))),
-    h('button', { class: 'year', title: ageOf(S).name, onclick: () => showEra() }, h('span', { class: 'year-n' }, String(S.year)), h('small', {}, ageOf(S).name.replace('Age of ', ''))),
+    h('button', { class: 'year', title: ageOf(S).name, onclick: () => showEra() }, h('span', { class: 'year-n' }, String(S.year)), h('small', {}, `${SEASONS[S.quarter ?? 0]} · ${ageOf(S).name.replace('Age of ', '')}`)),
     h('div', { class: 'res' },
       chip('coin', fmt(me.gold), signed(inc.total), 'Ducats', inc.total < 0 ? 'bad' : ''),
       chip('people', String(Math.floor(me.manpower)), '+' + mp.gain.toFixed(1), 'Manpower'),
@@ -322,12 +331,13 @@ function renderTabs() {
   const rates = cardRates(S);
   for (const c of CATS) {
     const n = handOf(S, c).length;
-    nav.append(h('button', { class: 'tab' + (sheet?.kind === c ? ' on' : ''), onclick: () => toggleSheet(c), style: `--cc:${CAT_INFO[c].color}` },
+    nav.append(h('button', { class: 'tab' + (win?.cat === c ? ' on' : ''), onclick: () => toggleWin(c), style: `--cc:${CAT_INFO[c].color}` },
       h('span', { class: 'tab-i', html: icon(CAT_INFO[c].icon, 20) }),
       h('span', { class: 'tab-l' }, c === 'diplomacy' ? 'Diplomacy' : CAT_INFO[c].name),
       h('span', { class: 'tab-n' }, `${n} · +${rates[c].rate.toFixed(1)}`)));
   }
-  nav.append(h('button', { id: 'endturn', class: 'btn primary', onclick: onEndTurn }, h('span', { class: 'et-l' }, 'End Year'), h('small', {}, `${S.year} → ${S.year + 1}`)));
+  const q = S.quarter ?? 0;
+  nav.append(h('button', { id: 'endturn', class: 'btn primary', onclick: onEndTurn }, h('span', { class: 'et-l' }, 'End Turn'), h('small', {}, `${SEASONS[q]} ${S.year}`)));
 }
 
 function renderTimeline() {
@@ -350,12 +360,138 @@ function renderTracker() {
   const tr = clear($('#tracker'));
   for (const m of S.missions.slice(0, 8)) {
     tr.append(h('button', { class: 'trk', onclick: () => openSheet('missions') },
-      h('span', { html: icon(MISSION_INFO[m.kind].icon, 14) }), h('span', { class: 'trk-t' }, missionTitle(m)), h('b', {}, `${m.turnsLeft}y`)));
+      h('span', { html: icon(MISSION_INFO[m.kind].icon, 14) }), h('span', { class: 'trk-t' }, missionTitle(m)), h('b', {}, qLabel(m.turnsLeft))));
   }
   if (S.missions.length > 8) tr.append(h('button', { class: 'trk', onclick: () => openSheet('missions') }, `+${S.missions.length - 8} more`));
 }
 
 // ---------- sheets ----------
+const SEASONS = ['Spring', 'Summer', 'Autumn', 'Winter'];
+/** Turns are quarters: show them as quarters, or years when long. */
+const qLabel = (n: number) => (n >= 8 ? `${Math.round(n / 4)} yr` : `${n} q`);
+const qText = (n: number) => (n >= 8 ? `${Math.round(n / 4)} years` : `${n} quarter${n > 1 ? 's' : ''}`);
+
+// ---------- the core menus: a centred window with tabs ----------
+const WIN_TABS: Record<Cat, [string, string][]> = {
+  military: [['cards', 'Cards'], ['missions', 'Missions'], ['army', 'Army'], ['navy', 'Navy'], ['wars', 'Wars & battles']],
+  diplomacy: [['cards', 'Cards'], ['missions', 'Missions'], ['realms', 'Realms'], ['subjects', 'Subjects']],
+  internal: [['cards', 'Cards'], ['missions', 'Missions'], ['core', 'Core'], ['realm', 'Realm'], ['provinces', 'Provinces']],
+  economy: [['cards', 'Cards'], ['missions', 'Missions'], ['ledger', 'Ledger'], ['goods', 'Goods']],
+  research: [['cards', 'Cards'], ['missions', 'Missions'], ['tech', 'Technologies']],
+};
+function toggleWin(cat: Cat) { if (win?.cat === cat) closeWin(); else openWin(cat); }
+function openWin(cat: Cat, tab = win?.cat === cat ? win.tab : 'cards') {
+  if (sheet) { sheet = null; $('#sheet').hidden = true; }
+  if (win?.cat !== cat) pick = {};
+  win = { cat, tab };
+  $('#win').hidden = false;
+  refresh();
+}
+function closeWin() { win = null; pick = {}; forge = []; $('#win').hidden = true; refresh(); }
+function renderWin() {
+  if (!win) return;
+  const el = clear($('#win'));
+  const { cat, tab } = win;
+  const prev = document.querySelector('#win .win-body')?.scrollTop ?? 0;
+  const body = h('div', { class: 'win-body' });
+  const head = h('div', { class: 'win-head', style: `--cc:${CAT_INFO[cat].color}` },
+    h('span', { class: 'win-ico', html: icon(CAT_INFO[cat].icon, 22) }),
+    h('div', { class: 'win-titles' }, h('h2', {}, CAT_INFO[cat].name), h('p', {}, winSub(cat))),
+    h('button', { class: 'iconbtn', 'aria-label': 'Close', onclick: closeWin, html: icon('close', 18) }));
+  const tabs = h('div', { class: 'win-tabs', role: 'tablist' }, WIN_TABS[cat].map(([id, label]) =>
+    h('button', { class: 'win-tab' + (tab === id ? ' on' : ''), role: 'tab', 'aria-selected': String(tab === id), onclick: () => { win = { cat, tab: id }; renderWin(); } }, label,
+      id === 'cards' ? h('span', { class: 'win-n' }, String(handOf(S, cat).length)) : id === 'missions' ? h('span', { class: 'win-n' }, String(missionsOfCat(cat).length)) : null)));
+  winTab(cat, tab, body);
+  el.append(head, tabs, body);
+  body.scrollTop = prev;
+}
+function winSub(cat: Cat) {
+  if (cat === 'military') return `Army power ${Math.round(armyPower(S.troops))} · ${S.troops.length}/${armyCap(S)} companies · ${S.fleet.length} ships`;
+  if (cat === 'diplomacy') return `${alliesOf(S, S.player).length} allies · ${enemiesOf(S, S.player).length} wars · ${subjectsOf(S).length} subjects`;
+  if (cat === 'internal') return `${rankOf(S).name} · ${provsOf(S, S.player).length} provinces · missions this year ${S.launched ?? 0}/${missionCap(S)}`;
+  if (cat === 'economy') return `${signed(incomeOf(S, S.player).total)} ducats a year`;
+  return `${S.techs.length} of ${TECHS.length} technologies known`;
+}
+const CAT_ROLES: Record<Cat, Character['role'][]> = {
+  military: ['general', 'conqueror', 'admiral'], diplomacy: ['diplomat', 'explorer'], internal: ['admin', 'colonist'], economy: ['merchant'], research: ['researcher'],
+};
+const missionsOfCat = (cat: Cat) => S.missions.filter(m => CAT_ROLES[cat].includes(MISSION_INFO[m.kind].role as Character['role']) || (cat === 'military' && ['conquer', 'raid', 'conquista'].includes(m.kind)));
+
+function winTab(cat: Cat, tab: string, body: HTMLElement) {
+  if (tab === 'cards') { body.append(cardSection(cat)); body.append(...peopleSection(CAT_ROLES[cat], 'People')); return; }
+  if (tab === 'missions') return missionsTab(cat, body);
+  const holder = h('div');
+  if (cat === 'military') {
+    if (tab === 'army') armyTab(body);
+    else if (tab === 'navy') navyTab(body);
+    else warsTab(body);
+  } else if (cat === 'diplomacy') {
+    if (tab === 'realms') realmsTab(body); else subjectsTab(body);
+  } else if (cat === 'internal') {
+    if (tab === 'core') body.append(coreSection());
+    else if (tab === 'realm') realmTab(body);
+    else provincesTab(body);
+  } else if (cat === 'economy') {
+    if (tab === 'ledger') ledgerTab(body); else goodsTab(body);
+  } else techTab(body);
+  void holder;
+}
+
+/** Choose a person then a mission, or a mission then a person. */
+function missionsTab(cat: Cat, body: HTMLElement) {
+  const left = missionsLeft(S);
+  body.append(h('div', { class: 'mcap' + (left ? '' : ' full') }, h('b', {}, `Missions this year: ${S.launched ?? 0} of ${missionCap(S)}`), h('small', {}, `${rankOf(S).name}${S.viceroys?.length ? ` · ${S.viceroys.length} viceroy${S.viceroys.length > 1 ? 's' : ''} take ${S.viceroys.length * VICEROY_COST}` : ''} · resets in spring`)));
+  const people = S.characters.filter(c => CAT_ROLES[cat].includes(c.role) || (cat === 'military' && c.ruler && RULER_ARCHS[player(S).ruler.arch]?.role === 'general'));
+  const cards = handOf(S, cat).filter(hc => CARDS[hc.card].kind === 'mission');
+  const pc = pick.card != null ? S.hand.find(x => x.uid === pick.card) : undefined;
+  const pp = pick.char != null ? S.characters.find(x => x.uid === pick.char) : undefined;
+  const canDo = (c: Character, hcId: string) => cardRoles(hcId).includes(c.role) && c.mission == null;
+  const go = (cardUid: number, charUid: number) => { preferChar = charUid; pick = {}; openCardModal(cardUid); };
+  const cols = h('div', { class: 'mcols' });
+  const pcol = h('div', { class: 'mcol' }, h('h3', {}, pp ? `${pp.name}` : 'People'), h('p', { class: 'muted small' }, pc ? 'Who will carry it out?' : 'Tap a person, then a mission card'));
+  const prow = h('div', { class: 'cards-row wrap' });
+  if (!people.length) prow.append(h('p', { class: 'muted' }, 'Nobody yet. Hire people with the hiring cards.'));
+  for (const c of people) {
+    const busy = c.mission != null;
+    const ok = !pc || canDo(c, pc.card);
+    prow.append(charCard(c, S, { small: true, selected: pp?.uid === c.uid, dim: busy || !ok, badge: busy ? (c.mission === -1 ? 'viceroy' : 'busy') : undefined, onclick: () => {
+      if (busy) return toast(c.mission === -1 ? 'Serving as a viceroy' : 'Away on a mission');
+      if (pc) { if (!ok) return toast('This person cannot do that mission', 'bad'); return go(pc.uid, c.uid); }
+      pick = { char: pp?.uid === c.uid ? undefined : c.uid }; renderWin();
+    } }));
+  }
+  pcol.append(prow);
+  const ccol = h('div', { class: 'mcol' }, h('h3', {}, 'Mission cards'), h('p', { class: 'muted small' }, pp ? `What will ${pp.name.split(' ')[0]} do?` : 'Or tap a card, then a person'));
+  const crow = h('div', { class: 'cards-row wrap' });
+  if (!cards.length) crow.append(h('p', { class: 'muted' }, 'No mission cards. You draw them each quarter, or buy one in the Cards tab.'));
+  for (const hc of cards) {
+    const ok = !pp || canDo(pp, hc.card);
+    crow.append(handCard(hc.card, { small: true, selected: pc?.uid === hc.uid, dim: !ok, onclick: () => {
+      if (pp) { if (!ok) return toast(`${pp.name} cannot do that: it needs a ${cardRoles(hc.card).map(r => roleName[r].toLowerCase()).join(' or ')}`, 'bad'); return go(hc.uid, pp.uid); }
+      pick = { card: pc?.uid === hc.uid ? undefined : hc.uid }; renderWin();
+    } }));
+  }
+  ccol.append(crow);
+  cols.append(pcol, ccol);
+  body.append(cols);
+  const now = missionsOfCat(cat);
+  body.append(h('h3', {}, `Under way (${now.length})`));
+  if (!now.length) body.append(h('p', { class: 'muted' }, 'Nothing under way.'));
+  for (const m of now) body.append(missionRow(m));
+}
+
+function missionRow(m: GameState['missions'][number]) {
+  const c = S.characters.find(x => x.uid === m.char);
+  const info = MISSION_INFO[m.kind];
+  const pct = m.kind === 'research' ? Math.min(100, (m.progress / techCost(S, m.target)) * 100) : ((m.total - m.turnsLeft) / Math.max(1, m.total)) * 100;
+  return h('div', { class: 'mission k-' + info.role },
+    h('span', { class: 'a-ico', html: icon(info.icon, 20) }),
+    h('div', { class: 'a-t' }, h('b', {}, missionTitle(m)),
+      h('small', {}, `${c?.name ?? '?'}${m.troops.length ? ` with ${m.troops.length} troops` : ''} · ${qText(m.turnsLeft)} left`),
+      h('div', { class: 'pbar' }, h('i', { style: `width:${pct}%` }))),
+    h('button', { class: 'iconbtn', 'aria-label': 'Recall', title: 'Recall', onclick: () => confirmBox('Recall this mission?', 'The card is lost. Construction refunds half its cost.', 'Recall', () => act(() => cancelMission(S, m.id))), html: icon('close', 16) }));
+}
+
 function toggleSheet(kind: string, arg?: string) {
   if (sheet && sheet.kind === kind && sheet.arg === arg) closeSheet(); else openSheet(kind, arg);
 }
@@ -387,11 +523,6 @@ function renderSheet() {
   let parts: HTMLElement[] = [];
   if (k === 'province') parts = provinceSheet(sheet.arg!, body);
   else if (k === 'nation') parts = nationSheet(sheet.arg!, body);
-  else if (k === 'military') parts = militarySheet(body);
-  else if (k === 'diplomacy') parts = diplomacySheet(body);
-  else if (k === 'internal') parts = internalSheet(body);
-  else if (k === 'economy') parts = economySheet(body);
-  else if (k === 'research') parts = researchSheet(body);
   else if (k === 'missions') parts = missionsSheet(body);
   else if (k === 'chronicle') parts = chronicleSheet(body);
   else if (k === 'realm') parts = realmSheet(body);
@@ -580,8 +711,7 @@ function diploHint(k: MissionKind) {
 }
 
 // ---------- category panels ----------
-function militarySheet(body: HTMLElement) {
-  body.append(cardSection('military'));
+function armyTab(body: HTMLElement) {
   const fb = h('div', { class: 'forge' + (forge.length ? ' active' : '') });
   fb.append(h('div', { class: 'forge-h' }, h('span', { html: icon('merge', 18) }), h('b', {}, 'Forge'), h('small', {}, 'Tap two troops of the same kind for a veteran, or play an equipment card to upgrade a troop')));
   if (forge.length === 2) {
@@ -598,13 +728,17 @@ function militarySheet(body: HTMLElement) {
     tr.append(troopCard(t, { small: true, selected: forge.includes(t.uid), onclick: () => {
       if (t.mission != null) return toast('This troop is away on a mission');
       forge = forge.includes(t.uid) ? forge.filter(x => x !== t.uid) : [...forge.slice(-1), t.uid];
-      renderSheet();
+      renderWin();
     } })));
   body.append(tr);
   if (forge.length === 1) {
     const t = S.troops.find(x => x.uid === forge[0]);
     if (t) body.append(h('button', { class: 'btn ghost danger', onclick: () => confirmBox(`Disband ${TROOPS[t.type].name}?`, 'The troop is removed for good.', 'Disband', () => { forge = []; act(() => disbandTroop(S, t.uid)); }) }, 'Disband selected troop'));
   }
+  body.append(recipeBook());
+}
+
+function navyTab(body: HTMLElement) {
   body.append(h('h3', {}, `Fleet (${S.fleet.length}/${navyCap(S)}) · carries ${transportOf(S, S.fleet.map(t => t.uid))} companies`));
   const fl = h('div', { class: 'cards-grid' });
   if (!S.fleet.length) fl.append(h('p', { class: 'muted' }, 'No ships. Ship cards come with Military draws; hiring one turns a general into an admiral.'));
@@ -612,13 +746,78 @@ function militarySheet(body: HTMLElement) {
     fl.append(troopCard(t, { small: true, selected: forge.includes(t.uid), onclick: () => {
       if (t.mission != null) return toast('This ship is at sea on a mission');
       forge = forge.includes(t.uid) ? forge.filter(x => x !== t.uid) : [...forge.slice(-1), t.uid];
-      renderSheet();
+      renderWin();
     } })));
   body.append(fl);
-  body.append(...peopleSection(['general', 'conqueror'], 'Generals and conquerors'));
   body.append(...peopleSection(['admiral'], 'Admirals', 'No admirals yet. A general who leads an attack with ships becomes one, for good.'));
-  body.append(recipeBook());
-  return [sheetHead('Military', `Army power ${Math.round(armyPower(S.troops))}`, CAT_INFO.military.color), body];
+}
+
+function warsTab(body: HTMLElement) {
+  const wars = S.wars.filter(w => w.a === S.player || w.b === S.player);
+  body.append(h('h3', {}, `Wars (${wars.length})`));
+  if (!wars.length) body.append(h('p', { class: 'muted' }, 'At peace. Declare war from a province or a realm in Diplomacy.'));
+  for (const w of wars) {
+    const foe = w.a === S.player ? w.b : w.a;
+    const n = S.nations[foe];
+    const mine = w.a === S.player ? (w.winsA ?? 0) : (w.winsB ?? 0), theirs = w.a === S.player ? (w.winsB ?? 0) : (w.winsA ?? 0);
+    const score = warScore(S, foe);
+    body.append(h('button', { class: 'nrow war', onclick: () => { closeWin(); openSheet('nation', foe); } },
+      h('span', { class: 'swatch', style: `background:${n?.color}` }),
+      h('span', { class: 'nr-name' }, n?.name ?? foe, h('small', {}, `since ${w.since} · battles ${mine}–${theirs}${S.flags['faction_' + foe] ? ' · civil war' : ''}`)),
+      h('span', { class: 'nr-badges' }, h('span', { class: 'tag ' + (score >= 0 ? 'ally' : 'war') }, `War score ${signed(Math.round(score))}`)),
+      h('span', { class: 'a-go', html: icon('next', 14) })));
+  }
+  const log = [...(S.battleLog ?? [])].reverse();
+  body.append(h('h3', {}, `Your battles (${log.length})`));
+  if (!log.length) body.append(h('p', { class: 'muted' }, 'No battles fought yet.'));
+  const t = h('table', { class: 'ptable' }, h('thead', {}, h('tr', {}, ...['When', 'Where', 'Against', 'Odds', 'Result'].map(x => h('th', {}, x)))));
+  t.append(h('tbody', {}, log.slice(0, 60).map(r => {
+    const meAtt = r.att === S.player;
+    const foe = meAtt ? r.def : r.att;
+    const odds = Math.round(100 * (meAtt ? r.attPower : r.defPower) / Math.max(1, r.attPower + r.defPower));
+    return h('tr', {}, h('td', {}, `${SEASONS[r.quarter]} ${r.year}`), h('td', {}, `${S.provinces[r.province]?.name ?? r.province}${r.naval ? ' (sea)' : ''}`),
+      h('td', {}, nationName(S, foe) === foe && foe === 'rebels' ? 'Rebels' : nationName(S, foe)), h('td', {}, `${odds}%`), h('td', { class: r.player === 'won' ? 'good' : 'bad' }, r.player === 'won' ? 'Victory' : 'Defeat'));
+  })));
+  if (log.length) body.append(h('div', { class: 'tscroll' }, t));
+}
+
+function realmTab(body: HTMLElement) {
+  const r = rankOf(S), nx = nextRank(S), k = provsOf(S, S.player).length;
+  body.append(h('div', { class: 'coresec' },
+    h('div', { class: 'cs-head' }, h('b', {}, `${player(S).name}: ${r.name}`), h('small', {}, nx ? `${nx.name} at ${nx.min} provinces (you have ${k})` : 'The highest rank')),
+    h('div', { class: 'stats' }, stat('Missions a year', `${missionCap(S)}`), stat('Started this year', `${S.launched ?? 0}`), stat('Viceroys', `${S.viceroys?.length ?? 0}/${r.viceroys}`), stat('Provinces', k)),
+    h('p', { class: 'muted' }, 'Small Kingdom 6 missions a year · Kingdom (5+ provinces) 9 · Great Kingdom (13+) 12 and 1 viceroy · Empire (30+) 15 and 3 viceroys. Each viceroy takes 2 of your yearly missions.')));
+  // viceroys
+  body.append(h('h3', {}, 'Viceroys'));
+  if (!r.viceroys) body.append(h('p', { class: 'muted' }, 'A Great Kingdom or an Empire can hand distant provinces to a viceroy. They govern them for you: a better viceroy raises control, happiness and development faster, but the very able grow ambitious and may crown themselves.'));
+  for (const v of S.viceroys ?? []) {
+    const c = S.characters.find(x => x.uid === v.char);
+    body.append(h('div', { class: 'vrow' }, c ? charCard(c, S, { small: true }) : null,
+      h('div', { class: 'a-t' }, h('b', {}, `${c?.name ?? '?'} · Viceroy of ${S.provinces[v.seat]?.name}`), h('small', {}, `${v.provinces.length} provinces · since ${v.since}`),
+        h('div', { class: 'ctl' }, h('span', {}, 'Loyalty'), h('span', { class: 'ctl-bar' }, h('i', { style: `width:${v.loyalty}%`, class: v.loyalty < 40 ? 'low' : '' })), h('b', {}, `${Math.round(v.loyalty)}`))),
+      h('button', { class: 'btn small', onclick: () => confirmBox('Recall the viceroy?', v.loyalty < 40 ? 'They are disloyal: stability falls by 1.' : 'They return to court.', 'Recall', () => act(() => recallViceroy(S, v.char))) }, 'Recall')));
+  }
+  if (r.viceroys && (S.viceroys?.length ?? 0) < r.viceroys) {
+    const seats = provsOf(S, S.player).filter(p => !viceroyBlocked(S, p.id)).sort((a, b) => territoryOf(S, b.id).length - territoryOf(S, a.id).length).slice(0, 8);
+    const free = S.characters.filter(c => c.mission == null && !c.ruler);
+    if (!seats.length) body.append(h('p', { class: 'muted' }, 'No province can seat a viceroy: it needs 3 of your provinces within two marches, away from the capital.'));
+    else if (!free.length) body.append(h('p', { class: 'muted' }, 'Nobody free at court to send.'));
+    else {
+      body.append(h('p', { class: 'muted' }, 'Name a viceroy: choose a seat, then a person.'));
+      let seat = pick.card != null ? null : seats[0].id;
+      const sel = h('div', { class: 'targets' }, seats.map(p => h('button', { class: 'tchip' + (p.id === seat ? ' sel' : ''), onclick: (e: Event) => { seat = p.id; (e.currentTarget as HTMLElement).parentElement!.querySelectorAll('.tchip').forEach(x => x.classList.remove('sel')); (e.currentTarget as HTMLElement).classList.add('sel'); } }, `${p.name} (${territoryOf(S, p.id).length} provinces)`)));
+      const pr = h('div', { class: 'cards-row wrap' }, free.map(c => charCard(c, S, { small: true, badge: `skill ${c.skill}`, onclick: () => seat && confirmBox(`Make ${c.name} viceroy?`, `${c.name} will govern ${territoryOf(S, seat).length} provinces from ${S.provinces[seat].name} for good. ${c.skill >= 5 ? 'Very able: watch their loyalty.' : ''}`, 'Appoint', () => act(() => appointViceroy(S, seat!, c.uid), 'Viceroy appointed')) })));
+      body.append(sel, pr);
+    }
+  }
+  // the people and civil wars
+  body.append(peopleMood());
+  const factions = Object.values(S.nations).filter(n => n.alive && S.flags['faction_' + n.id] === 1);
+  body.append(h('h3', {}, 'Civil wars'));
+  if (!factions.length) body.append(h('p', { class: 'muted' }, 'None. Provinces below 30% happiness may rise; if rebels beat your troops they take the province and start a civil war that spreads to unhappy provinces of the same faith or culture.'));
+  for (const f of factions) body.append(h('button', { class: 'nrow war', onclick: () => { closeWin(); openSheet('nation', f.id); } }, h('span', { class: 'swatch', style: `background:${f.color}` }), h('span', { class: 'nr-name' }, f.name, h('small', {}, `${provsOf(S, f.id).length} provinces · ${f.army.length} companies`)), h('span', { class: 'a-go', html: icon('next', 14) })));
+  const angry = provsOf(S, S.player).filter(p => happinessOf(S, p).value < 30);
+  if (angry.length) body.append(h('p', { class: 'bad' }, `At risk of rising: ${angry.map(p => `${p.name} (${happinessOf(S, p).value}%)`).join(', ')}.`));
 }
 
 function recipeBook() {
@@ -635,9 +834,7 @@ function recipeBook() {
   return d;
 }
 
-function diplomacySheet(body: HTMLElement) {
-  body.append(cardSection('diplomacy'));
-  body.append(...peopleSection(['diplomat', 'explorer'], 'Diplomats and explorers'));
+function subjectsTab(body: HTMLElement) {
   const subs = subjectsOf(S);
   body.append(h('h3', {}, `Subjects (${subs.length})`));
   if (!subs.length) body.append(h('p', { class: 'muted' }, 'No vassals or unions yet. Demand fealty from a weak crown, win one in a peace, or inherit one through a royal marriage.'));
@@ -651,8 +848,11 @@ function diplomacySheet(body: HTMLElement) {
       h('span', { class: 'nr-badges' }, h('span', { class: 'tag ' + (why ? '' : 'ally') }, why ? 'Loyal' : 'Ready to integrate')),
       h('span', { class: 'nr-rel ' + (getRel(S, S.player, x.id) < 0 ? 'bad' : 'good') }, signed(getRel(S, S.player, x.id)))));
   }
-  body.append(h('h3', {}, 'Nations'));
-  const list = Object.values(S.nations).filter(n => n.alive && n.id !== S.player).sort((a, b) => getRel(S, S.player, b.id) - getRel(S, S.player, a.id));
+}
+
+function realmsTab(body: HTMLElement) {
+  body.append(h('p', { class: 'muted' }, 'Every realm you know of, friends first. Tap one for treaties, envoys and war.'));
+  const list = Object.values(S.nations).filter(n => n.alive && n.id !== S.player && provsOf(S, n.id).some(p => provKnown(S, p.id))).sort((a, b) => getRel(S, S.player, b.id) - getRel(S, S.player, a.id));
   for (const n of list) {
     const rel = getRel(S, S.player, n.id);
     const war = atWar(S, S.player, n.id);
@@ -663,7 +863,6 @@ function diplomacySheet(body: HTMLElement) {
       h('span', { class: 'nr-badges' }, badges.map(b => h('span', { class: 'tag ' + b.toLowerCase() }, b))),
       h('span', { class: 'nr-rel ' + (rel >= 30 ? 'good' : rel <= -30 ? 'bad' : '') }, signed(rel))));
   }
-  return [sheetHead('Diplomacy', 'Relations, treaties, envoys and explorers', CAT_INFO.diplomacy.color), body];
 }
 
 function coreSection() {
@@ -706,16 +905,11 @@ function peopleMood() {
     h('p', { class: 'muted' }, 'Raise it with Patronage of the Arts, Royal Festivals, Religious Missions, Cultural Integration, Charters and temples. Taxes and long wars lower it.'));
 }
 
-function internalSheet(body: HTMLElement) {
-  body.append(peopleMood());
-  body.append(coreSection());
-  body.append(cardSection('internal'));
-  body.append(...peopleSection(['admin', 'colonist'], 'Administrators and colonists'));
-  body.append(h('h3', {}, 'Provinces'));
+function provincesTab(body: HTMLElement) {
   const t = h('table', { class: 'ptable' }, h('thead', {}, h('tr', {}, h('th', {}, 'Province'), h('th', {}, 'Settlement'), h('th', {}, 'People'), h('th', {}, 'Happy'), h('th', {}, 'Culture'), h('th', {}, 'Faith'), h('th', {}, 'Dev'), h('th', {}, 'Control'))));
   const tb = h('tbody');
   for (const p of provsOf(S, S.player).sort((a, b) => b.dev - a.dev)) {
-    tb.append(h('tr', { onclick: () => { map.select(p.id); openSheet('province', p.id); } },
+    tb.append(h('tr', { onclick: () => { closeWin(); map.select(p.id); map.focus([p.id]); openSheet('province', p.id); } },
       h('td', {}, p.name), h('td', {}, TIERS[tierOf(p)].name), h('td', {}, `${Math.round(population(S, p) / 1000)}k`),
       h('td', { class: happinessOf(S, p).value < 35 ? 'bad' : '' }, `${happinessOf(S, p).value}%`), h('td', { class: isAccepted(S, p.culture) ? '' : 'bad' }, CULTURE_NAMES[p.culture] ?? p.culture),
       h('td', { class: p.religion === S.stateReligion ? '' : 'bad' }, RELIGION_NAMES[p.religion] ?? p.religion), h('td', {}, String(p.dev)),
@@ -724,11 +918,9 @@ function internalSheet(body: HTMLElement) {
   t.append(tb);
   body.append(h('div', { class: 'tscroll' }, t));
   body.append(actionRow('anchor', 'Overseas lands', 'Discoveries and colonies', null, () => openSheet('overseas')));
-  return [sheetHead('Internal', 'Provinces, towns and the royal administration', CAT_INFO.internal.color), body];
 }
 
-function economySheet(body: HTMLElement) {
-  body.append(cardSection('economy'));
+function ledgerTab(body: HTMLElement) {
   const inc = incomeOf(S, S.player);
   body.append(h('h3', {}, 'Income and expenses'));
   body.append(h('table', { class: 'ledger' }, h('tbody', {},
@@ -743,6 +935,9 @@ function economySheet(body: HTMLElement) {
     h('tr', {}, h('td', {}, 'Administration (grows with the realm)'), h('td', { class: 'bad' }, '−' + inc.admin.toFixed(1))),
     h('tr', { class: 'total' }, h('td', {}, 'Each year'), h('td', {}, signed(inc.total))))));
   body.append(actionRow('scales', 'Sell offices', `${officeCost(S)} ducats for 2 nation points · the price doubles, triples… each time this year`, player(S).gold < officeCost(S) ? `Needs ${officeCost(S)} ducats` : null, () => act(() => sellOffices(S), '+2 nation points')));
+}
+
+function goodsTab(body: HTMLElement) {
   body.append(h('h3', {}, 'Goods'));
   const own = ownGoods(S), col = colonyGoods(S);
   const gl = h('div', { class: 'goods' });
@@ -753,17 +948,14 @@ function economySheet(body: HTMLElement) {
   }
   body.append(gl);
   body.append(h('h3', {}, 'Control and unrest'));
+  void 0;
   for (const p of provsOf(S, S.player).sort((a, b) => a.control - b.control)) {
     body.append(h('div', { class: 'ctl' }, h('span', {}, p.name), h('span', { class: 'ctl-bar' }, h('i', { style: `width:${p.control}%`, class: p.control < 30 ? 'low' : '' })), h('b', {}, `${Math.round(p.control)}%`)));
   }
   body.append(h('p', { class: 'muted' }, 'Low control cuts income and can spark revolts. Temples, courthouses, stability and Royal Progress raise it. Newly conquered lands start low.'));
-  body.append(...peopleSection(['merchant'], 'Merchants'));
-  return [sheetHead('Economy', `${signed(inc.total)} ducats a year`, CAT_INFO.economy.color), body];
 }
 
-function researchSheet(body: HTMLElement) {
-  body.append(cardSection('research'));
-  body.append(...peopleSection(['researcher'], 'Researchers'));
+function techTab(body: HTMLElement) {
   const tracks: [TechTrack, string][] = [['military', 'Military'], ['economy', 'Economy'], ['state', 'Statecraft']];
   const wrap = h('div', { class: 'tech-cols' });
   for (const [tr, label] of tracks) {
@@ -774,14 +966,13 @@ function researchSheet(body: HTMLElement) {
       const why = known ? null : missionBlocked(S, 'research', t.id);
       const card = cardFor(S, 'research', { track: tr });
       const cost = techCost(S, t.id);
-      col.append(h('button', { class: `tech${known ? ' known' : m ? ' active' : why ? ' locked' : ''}`, onclick: () => (known ? toast(t.desc) : m ? toast(`Being studied: ${m.turnsLeft} year(s) left`) : why ? toast(why, 'bad') : !card ? toast(`Needs a ${label} treatise card`, 'bad') : openPlanner('research', t.id, undefined, card.uid)) },
-        h('span', { class: 'tech-t' }, h('b', {}, t.name), h('small', {}, known ? 'Known' : m ? `${Math.floor(m.progress)}/${cost} · ${m.turnsLeft} yr` : `${t.year} · ${cost} pts${t.year > S.year ? ' (ahead of its time)' : ''}`)),
+      col.append(h('button', { class: `tech${known ? ' known' : m ? ' active' : why ? ' locked' : ''}`, onclick: () => (known ? toast(t.desc) : m ? toast(`Being studied: ${qText(m.turnsLeft)} left`) : why ? toast(why, 'bad') : !card ? toast(`Needs a ${label} treatise card`, 'bad') : openPlanner('research', t.id, undefined, card.uid)) },
+        h('span', { class: 'tech-t' }, h('b', {}, t.name), h('small', {}, known ? 'Known' : m ? `${Math.floor(m.progress)}/${cost} · ${qLabel(m.turnsLeft)}` : `${t.year} · ${cost} pts${t.year > S.year ? ' (ahead of its time)' : ''}`)),
         h('span', { class: 'tech-d' }, t.desc), AGE_TECH[t.id] ? h('span', { class: 'tech-age' }, `Opens the ${ERA[AGE_TECH[t.id]].name} for the whole world`) : null));
     }
     wrap.append(col);
   }
   body.append(wrap);
-  return [sheetHead('Research', `${S.techs.length} of ${TECHS.length} known`, CAT_INFO.research.color), body];
 }
 
 function missionsSheet(body: HTMLElement) {
@@ -793,7 +984,7 @@ function missionsSheet(body: HTMLElement) {
     body.append(h('div', { class: 'mission k-' + info.role },
       h('span', { class: 'a-ico', html: icon(info.icon, 20) }),
       h('div', { class: 'a-t' }, h('b', {}, missionTitle(m)),
-        h('small', {}, `${c?.name ?? '?'}${m.troops.length ? ` with ${m.troops.length} troops` : ''} · ${m.turnsLeft} yr left`),
+        h('small', {}, `${c?.name ?? '?'}${m.troops.length ? ` with ${m.troops.length} troops` : ''} · ${qText(m.turnsLeft)} left`),
         h('div', { class: 'pbar' }, h('i', { style: `width:${pct}%` }))),
       h('button', { class: 'iconbtn', 'aria-label': 'Recall', title: 'Recall', onclick: () => confirmBox('Recall this mission?', 'The card is lost. Construction refunds half its cost.', 'Recall', () => act(() => cancelMission(S, m.id))), html: icon('close', 16) })));
   }
@@ -889,7 +1080,6 @@ function realmSheet(body: HTMLElement) {
     stat('Manpower', `${Math.floor(me.manpower)}/${mp.max} (+${mp.gain.toFixed(1)})`), stat('Stability', me.stability),
     stat('Court', `${courtCount(S)}/${courtCap(S)}`), stat('Provinces', provsOf(S, S.player).length)));
   body.append(h('p', { class: 'muted' }, 'Stability from −3 to +3 changes income by 6% a step and nation points by 0.5. At −2 or lower, revolts break out and you draw fewer cards.'));
-  body.append(h('h3', {}, 'Menu style'), stylePicker(() => refresh()));
   body.append(h('button', { class: 'btn ghost', onclick: () => confirmBox('Leave this campaign?', `It stays saved in slot ${slot}. You can continue it from the title screen.`, 'Back to title', () => { closeModal(); showTitle(); }) }, 'Back to title screen'));
   return [sheetHead(me.name, `${me.ruler.name} · ${S.year}`, me.color), body];
 }
@@ -1097,7 +1287,8 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
   if (!chars.length) { toast(`You need a ${who}. Play a hiring card.`, 'bad'); return; }
   if (!free.length) { toast(`Every ${who} is busy`, 'bad'); return; }
   const military = kind === 'conquer' || kind === 'raid' || kind === 'conquista';
-  let ch = [...free].sort((a, b) => b.skill - a.skill)[0];
+  let ch = free.find(c => c.uid === preferChar) ?? [...free].sort((a, b) => b.skill - a.skill)[0];
+  preferChar = null;
   const home = S.troops.filter(t => t.mission == null && t.str >= 30).sort((a, b) => armyPower([b]) - armyPower([a]));
   const maxTroops = () => ch.skill + 3;
   let picked: number[] = military ? home.slice(0, maxTroops()).map(t => t.uid) : [];
@@ -1117,7 +1308,7 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
     const row = h('div', { class: 'cards-row' });
     for (const c of chars) {
       const busy = c.mission != null;
-      let sub = `${missionTurns(S, kind, c, target, building)} yr`;
+      let sub = qLabel(missionTurns(S, kind, c, target, building));
       if (DIPLO.includes(kind)) sub = `${Math.round(diploChance(S, kind, c, target) * 100)}%`;
       if (kind === 'explore') sub = `${Math.round(exploreChance(S, c) * 100)}%`;
       if (kind === 'colonize') sub = `${Math.round(colonizeChance(S, target, c) * 100)}%`;
@@ -1130,9 +1321,10 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
     if (turnsInto) box.append(h('p', { class: 'bad' }, `${ch.name} will become ${turnsInto === 'explorer' || turnsInto === 'admiral' ? 'an' : 'a'} ${roleName[turnsInto].toLowerCase()} for good: new skills, no going back.`));
     if (!['conquer', 'raid'].includes(kind)) box.append(h('div', { class: 'oddsbox' }, h('small', { class: 'muted' }, `Outcome odds with a ${RARITY[ch.rarity].name} ${roleName[ch.role].toLowerCase()}:`), oddsLine(ch)));
     const turns = missionTurns(S, kind, ch, target, building);
-    const facts: (string | HTMLElement)[] = [`${turns} year${turns > 1 ? 's' : ''}`];
+    const facts: (string | HTMLElement)[] = [qText(turns)];
     if (DIPLO.includes(kind)) facts.push(`${Math.round(diploChance(S, kind, ch, target) * 100)}% chance`);
     if (kind === 'research') facts.push(`${researchRate(S, ch, TECH[target]?.track)} research a year · ${techCost(S, target)} needed`);
+    facts.push(`Missions left this year: ${missionsLeft(S)}`);
     if (kind === 'build') facts.push(`${buildingCost(S, building!)} ducats now · salary ${BUILDINGS[building!].salary} a year`);
     if (kind === 'develop') facts.push(`${developCost(S, target)} ducats now`);
     if (kind === 'found') facts.push(`${foundCost(S)} ducats now · Poor/Standard: village · Good: town · Great/Exceptional: city`);
@@ -1206,8 +1398,9 @@ async function onEndTurn() {
   if (sheet?.kind === 'province' && !S.provinces[sheet.arg!]) closeSheet();
   refresh();
   if (rep) {
-    const got = CATS.filter(c => rep.cards[c]).map(c => `${rep.cards[c]} ${CAT_INFO[c].name}`).join(', ');
-    await yearFlash(S.year, `${signed(rep.gold)} ducats · +${rep.np.toFixed(1)} NP${got ? ' · cards: ' + got : ''}`);
+    lastReport = rep;
+    pendingReport = true;
+    if ((S.quarter ?? 0) === 0) await yearFlash(S.year, ageOf(S).name);
   }
   processQueue();
 }
@@ -1221,7 +1414,63 @@ async function yearFlash(year: number, line: string) {
   setTimeout(() => f.remove(), 400);
 }
 
+let lastReport: { gold: number; np: number; cards: Record<string, number> } | null = null;
+
+/** End of turn: what happened this quarter, with the battles played out. */
+function showTurnReport() {
+  pendingReport = false;
+  const tl = S.turnLog, rep = lastReport;
+  if (!tl || !rep) return;
+  const box = h('div', { class: 'mbox report' });
+  const prevQ = tl.quarter;
+  box.append(h('h2', {}, `${SEASONS[prevQ]} ${tl.year}`), h('p', { class: 'muted' }, `Now: ${SEASONS[S.quarter ?? 0]} ${S.year}`));
+  const got = CATS.filter(c => rep.cards[c]).map(c => `${rep.cards[c]} ${CAT_INFO[c].name}`).join(', ');
+  box.append(h('div', { class: 'facts' }, h('span', { class: 'fact' }, `${signed(Math.round(rep.gold))} ducats`), h('span', { class: 'fact' }, `+${rep.np.toFixed(1)} nation points`), got ? h('span', { class: 'fact' }, `Cards: ${got}`) : null));
+  if (tl.battles.length) {
+    box.append(h('h3', {}, `Battles (${tl.battles.length})`));
+    const list = h('div', { class: 'blist' });
+    tl.battles.forEach((r, i) => list.append(battleRow(r, i)));
+    box.append(list);
+  }
+  if (tl.done.length) {
+    box.append(h('h3', {}, 'Missions completed'));
+    box.append(h('ul', { class: 'rlist' }, tl.done.map(d => h('li', {}, h('span', { html: icon(MISSION_INFO[d.kind as MissionKind]?.icon ?? 'star', 14) }), d.title))));
+  }
+  box.append(h('h3', {}, `Under way (${S.missions.length})`));
+  if (!S.missions.length) box.append(h('p', { class: 'muted' }, 'No missions under way. Open a menu and send someone out.'));
+  for (const m of S.missions.slice(0, 6)) box.append(missionRow(m));
+  if (S.missions.length > 6) box.append(h('p', { class: 'muted' }, `+${S.missions.length - 6} more in the Missions tabs.`));
+  box.append(h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: () => { closeModal(); refresh(); } }, 'Continue')));
+  openModal(box);
+}
+
+/** One battle, sports-results style: the odds first, a few seconds of fighting, then the winner. */
+function battleRow(r: BattleRecord, i: number) {
+  const a = S.nations[r.att], d = S.nations[r.def];
+  const pA = r.attPower / Math.max(1, r.attPower + r.defPower);
+  const name = (n: string) => (n === 'rebels' ? 'Rebels' : nationName(S, n));
+  const mine = r.att === S.player || r.def === S.player;
+  const row = h('div', { class: 'brow' + (mine ? ' mine' : '') });
+  const bar = h('div', { class: 'bbar' }, h('i', { class: 'ba', style: `width:${pA * 100}%; background:${a?.color ?? '#7a2e26'}` }), h('i', { class: 'bd', style: `background:${d?.color ?? '#555'}` }), h('b', { class: 'bmark', style: `left:${pA * 100}%` }));
+  const res = h('span', { class: 'bres' }, `${Math.round(pA * 100)}% – ${Math.round((1 - pA) * 100)}%`);
+  row.append(h('div', { class: 'bnames' }, h('span', {}, name(r.att)), h('small', {}, `${r.naval ? 'At sea off ' : ''}${S.provinces[r.province]?.name ?? ''}`), h('span', {}, name(r.def))), bar, res);
+  const end = r.winner === 'att' ? 100 : 0;
+  const steps = reduced() ? [] : [pA * 100 + 12, pA * 100 - 10, pA * 100 + 6, (pA * 100 + end) / 2];
+  const mark = bar.querySelector('.bmark') as HTMLElement, fill = bar.querySelector('.ba') as HTMLElement;
+  const set = (v: number) => { const x = Math.max(2, Math.min(98, v)); mark.style.left = x + '%'; fill.style.width = x + '%'; };
+  let t = 400 + i * 500;
+  for (const v of steps) { setTimeout(() => set(v), t); t += 420; }
+  setTimeout(() => {
+    set(end);
+    const won = r.winner === 'att' ? name(r.att) : name(r.def);
+    res.textContent = mine ? (r.player === 'won' ? `Victory: ${won}` : `Defeat: ${won} win`) : `${won} win`;
+    res.classList.add(mine ? (r.player === 'won' ? 'good' : 'bad') : 'done');
+  }, t);
+  return row;
+}
+
 function processQueue() {
+  if (!modalOpen && !S.queue.length && pendingReport) { showTurnReport(); return; }
   if (modalOpen || !S.queue.length) return;
   const p = S.queue[0];
   if (p.kind === 'reveal') showReveal(p.title, p.subtitle, p.items, () => { S.queue.shift(); afterPrompt(); });

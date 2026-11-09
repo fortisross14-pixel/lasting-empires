@@ -111,7 +111,7 @@ export const troopPower = (t: { type: string; vet: number; str: number }) => {
 export const armyPower = (arr: { type: string; vet: number; str: number }[]) => arr.reduce((a, t) => a + troopPower(t), 0);
 
 /** Prices rise over the centuries. */
-export const inflation = (s: GameState) => 1 + (s.year - 1453) / 160;
+export const inflation = (s: GameState) => 1 + Math.max(0, s.year - 1453) / 160;
 
 export const buildingCost = (s: GameState, b: string) => Math.round(BUILDINGS[b].cost * inflation(s) * (hasGood(s, 'timber') ? 0.85 : 1));
 

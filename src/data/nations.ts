@@ -54,7 +54,7 @@ wallachia;Wallachia;Wallachian;#9c4a3a;romanian;orthodox;tirgoviste;cautious;20;
 bosnia;Bosnia;Bosnian;#6a7fa0;serbian;catholic;bosnia;cautious;15;S
 serbia;Serbia;Serbian;#a35a5a;serbian;orthodox;belgrade;cautious;20;S
 albania;Albania;Albanian;#7a2f2f;albanian;catholic;kruja;cautious;15;S
-byzantium;Byzantium;Byzantine;#8e44ad;greek;orthodox;constantinople;cautious;30;levy,levy,crossbow,men_at_arms
+byzantium;Byzantium;Byzantine;#8e44ad;greek;orthodox;constantinople;cautious;90;levy,levy,crossbow,men_at_arms,men_at_arms
 ottomans;Ottoman Empire;Ottoman;#3c8f5a;turkish;muslim;edirne;expansionist;90;levy,levy,levy,crossbow,crossbow,men_at_arms,jinetes,jinetes,bombard
 karaman;Karaman;Karamanid;#b5895a;turkish;muslim;konya;balanced;30;H
 trebizond;Trebizond;Trapezuntine;#c070a0;greek;orthodox;trebizond;cautious;15;S
@@ -181,11 +181,17 @@ const PLAYABLE: NationDef[] = [
     army: ['levy', 'levy', 'crossbow', 'crossbow', 'men_at_arms'] },
 ];
 
+const BLURBS: Record<string, string> = {
+  byzantium: 'The last of Rome: one great city, the Morea, and the young Sultan already casting his guns. Very hard: you have two years before the siege.',
+  ottomans: 'Mehmed II takes the throne in 1451. Constantinople lies before you, and Europe and Asia beyond it.',
+  ming: 'The richest state on earth, guarding a long northern frontier against the steppe.',
+};
+
 export const NATIONS: NationDef[] = [
   ...PLAYABLE,
   ...NATION_TABLE.trim().split('\n').map(line => {
     const [id, name, adj, color, culture, religion, capital, personality, gold, army] = line.split(';');
-    return { id, name, adj, color, culture, religion, capital, personality: personality as Personality, gold: +gold, army: ARMIES[army] ?? army.split(','), native: id === 'natives' || undefined };
+    return { id, name, adj, color, culture, religion, capital, personality: personality as Personality, gold: +gold, army: ARMIES[army] ?? army.split(','), native: id === 'natives' || undefined, blurb: BLURBS[id] };
   }),
 ];
 
@@ -213,6 +219,16 @@ export const START_REL: [string, string, number][] = [
 
 // Historical rulers for the playable nations. After the list runs out, rulers are generated.
 export const RULERS: Record<string, HistRuler[]> = {
+  ottomans: [
+    { name: 'Mehmed II', traits: ['Ambitious', 'Able'], from: 1451, to: 1481 },
+    { name: 'Bayezid II', traits: ['Pious'], from: 1481, to: 1512 },
+    { name: 'Selim I', traits: ['Ruthless', 'Warrior'], from: 1512, to: 1520 },
+    { name: 'Süleyman I', traits: ['Able', 'Ambitious'], from: 1520, to: 1566 },
+    { name: 'Selim II', traits: ['Idle'], from: 1566, to: 1574 },
+  ],
+  byzantium: [
+    { name: 'Konstantinos XI', traits: ['Warrior', 'Pious'], from: 1449, to: 1460 },
+  ],
   castile: [
     { name: 'Juan II', traits: ['Weak'], from: 1406, to: 1454 },
     { name: 'Enrique IV', traits: ['Weak', 'Generous'], from: 1454, to: 1474 },

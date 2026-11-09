@@ -1,7 +1,9 @@
 // Battles: three rounds, each side commits a face-down tactic, then both flip.
-import type { GameState, Battle, BattleSide, BattleUnit, BattleGeneral, RoundLog, TroopCard } from '../types';
+import { rebelsTake } from './realm';
+import { siegeAftermath } from './history';
+import type { GameState, Battle, BattleSide, BattleUnit, BattleGeneral, RoundLog, TroopCard, BattleRecord } from '../types';
 import { TROOPS, TACTICS } from '../data/troops';
-import { rand, pick, weighted, uid, clamp, hasTech, rulerMod, log, nationName, addRel, player, findWar, promoteRarity, hasCore } from './core';
+import { rand, pick, weighted, uid, clamp, hasTech, rulerMod, log, nationName, addRel, player, findWar, promoteRarity, hasCore, alliesOf, enemiesOf, troopPower } from './core';
 import { landPhase } from './missions';
 import { landDefence } from './ai';
 
@@ -260,6 +262,20 @@ export function freeMission(s: GameState, missionId: number) {
 
 export interface BattleOutcome { title: string; lines: string[]; good: boolean; }
 
+/** Strength of a side when the battle began, for odds. */
+export const sidePower = (side: BattleSide) => side.units.reduce((a, u) => a + troopPower({ type: u.type, vet: u.vet, str: u.start ?? u.str }), 0) * (1 + 0.08 * (side.general?.skill ?? 0));
+/** Chance the attacker wins, from the strength of both sides at the start. */
+export const startOdds = (b: Battle) => { const a = sidePower(b.att), d = sidePower(b.def); return a + d > 0 ? a / (a + d) : 0.5; };
+
+function recordBattle(s: GameState, b: Battle, mine: boolean, won?: boolean) {
+  const allies = alliesOf(s, s.player), foes = enemiesOf(s, s.player);
+  const notable = mine || [b.att.nation, b.def.nation].some(n => allies.includes(n) || foes.includes(n) || s.nations[n]?.overlord === s.player);
+  if (!notable) return;
+  const r: BattleRecord = { year: s.year, quarter: s.quarter ?? 0, province: b.province, att: b.att.nation, def: b.def.nation, attPower: Math.round(sidePower(b.att)), defPower: Math.round(sidePower(b.def)), winner: b.winner ?? 'def', naval: b.naval, context: b.context };
+  if (mine) { r.player = won ? 'won' : 'lost'; (s.battleLog ??= []).push(r); if (s.battleLog.length > 120) s.battleLog.shift(); }
+  s.turnLog?.battles.push(r);
+}
+
 export function finishBattle(s: GameState, b: Battle): BattleOutcome {
   const pSide = b.playerSide === 'att' ? b.att : b.def;
   const eSide = b.playerSide === 'att' ? b.def : b.att;
@@ -270,6 +286,7 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
   let good = false;
   let title = '';
 
+  recordBattle(s, b, playerInvolved, playerInvolved ? (b.playerSide === 'att') === attWon : undefined);
   const rec = (n: string, won: boolean) => {
     if (!s.nations[n]) return;
     const st = (s.stats.battles[n] ??= { won: 0, lost: 0 });
@@ -334,6 +351,11 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
       lines.push(`Your soldiers return with ${loot} ducats of plunder.`);
       good = true;
     } else { title = `Raid on ${prov.name} repulsed`; lines.push('The raiders are driven off.'); }
+  } else if (b.context === 'defend' && b.siege) {
+    title = playerWon ? 'Constantinople holds!' : 'Constantinople has fallen';
+    good = playerWon;
+    if (!playerWon) transferProvince(s, b.province, eSide.nation);
+    lines.push(siegeAftermath(s, playerWon));
   } else if (b.context === 'defend') {
     if (playerWon) {
       title = `${prov.name} holds!`; me.prestige += 3; good = true;
@@ -346,6 +368,13 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
     }
   } else if (b.context === 'rebels') {
     if (playerWon) { title = 'The revolt is crushed'; me.stability = clamp(me.stability + 1, -3, 3); prov.control = Math.max(prov.control, 60); good = true; lines.push('Order returns. Stability +1.'); }
+    else if (b.rebel) {
+      title = `${prov.name} breaks away`;
+      const left = b.att.units.filter(u => u.str > 20).length;
+      const n = rebelsTake(s, prov.id, b.rebel.cause, b.rebel.name, b.rebel.adj, left);
+      me.stability = clamp(me.stability - 1, -3, 3);
+      lines.push(`The ${n.name} hold ${prov.name}. Stability −1.`);
+    }
     else { title = 'The rebels triumph'; me.gold = Math.max(0, me.gold - 30); prov.control = Math.min(prov.control, 10); me.stability = clamp(me.stability - 1, -3, 3); lines.push('The rebels loot the treasury (−30 ducats) and the province defies you.'); }
   }
   if (res.lost.length) lines.push(`Lost: ${res.lost.join(', ')}.`);

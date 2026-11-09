@@ -1,5 +1,6 @@
 // Missions: characters (and troops) sent to do things over several years.
 import { onTech } from './ages';
+import { missionsLeft, missionCap, rankOf } from './realm';
 import type { GameState, Mission, MissionKind, RevealItem, Character, Role } from '../types';
 import { CARDS, drawCat, CAT_INFO } from './cards';
 import { vassalizeBlocked, integrateBlocked, makeSubject, integrate } from './diplo';
@@ -150,31 +151,30 @@ export const GRACE_GAIN = [4, 10, 14, 20, 28];
 
 export const graceCost = (s: GameState) => Math.round(20 * inflation(s));
 
+/** How many turns (quarters) a mission takes. */
 export function missionTurns(s: GameState, kind: MissionKind, ch: Character, target: string, building?: string): number {
   switch (kind) {
     case 'conquer': case 'raid': return attackRoute(s, target)?.turns ?? 2;
-    case 'research': return Math.max(1, Math.ceil(techCost(s, target) / researchRate(s, ch, TECH[target]?.track)));
+    case 'research': return Math.max(1, Math.ceil(techCost(s, target) / (researchRate(s, ch, TECH[target]?.track) / 4)));
     case 'build': {
       const b = BUILDINGS[building!];
       const fast = (b.group === 'internal' && ch.traits.includes('architect')) || (b.group === 'economy' && ch.traits.includes('guildmaster'));
-      return Math.max(1, b.turns - (fast ? (traitMult(ch) >= 1.75 ? 2 : 1) : 0));
+      return Math.max(2, b.turns * 3 - (fast ? (traitMult(ch) >= 1.75 ? 4 : 2) : 0));
     }
-    case 'explore': return Math.max(2, 3 - (ch.traits.includes('cartographer') ? 1 : 0));
-    case 'colonize': return colonizeTurns(s, target);
-    case 'conquista': return attackRoute(s, target)?.turns ?? 3;
-    case 'vassalize': return 2;
-    case 'integrate': return 5;
-    case 'patronage': return 2;
-    case 'convert': return RARITY_YEARS[ch.rarity];
-    case 'assimilate': return RARITY_YEARS[ch.rarity] + 1;
-    case 'grace': return Math.max(1, Math.ceil(RARITY_YEARS[ch.rarity] / 2));
-    case 'develop': return 3;
-    case 'found': return 3;
-    case 'grow': return 3;
-    case 'tax': return 1;
-    case 'progress': return 2;
+    case 'explore': return ch.traits.includes('cartographer') ? 4 : 6;
+    case 'colonize': return colonizeTurns(s, target) * 3;
+    case 'conquista': return (attackRoute(s, target)?.turns ?? 3) + 1;
+    case 'vassalize': return 4;
+    case 'integrate': return 12;
+    case 'patronage': return 4;
+    case 'convert': return RARITY_YEARS[ch.rarity] * 3;
+    case 'assimilate': return (RARITY_YEARS[ch.rarity] + 1) * 3;
+    case 'grace': return Math.max(2, RARITY_YEARS[ch.rarity]);
+    case 'develop': case 'found': case 'grow': return 8;
+    case 'tax': return 2;
+    case 'progress': return 4;
     default: {
-      const base = { relations: 2, trade: 3, alliance: 3, marriage: 2, peace: 1 }[kind as 'relations'] ?? 2;
+      const base = { relations: 2, trade: 4, alliance: 4, marriage: 3, peace: 1 }[kind as 'relations'] ?? 2;
       return Math.max(1, base - (hasTech(s, 'chancery') ? 1 : 0) - (ch.traits.includes('envoy') ? 1 : 0));
     }
   }
@@ -321,6 +321,7 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   if (!cdef || !cdef.missions?.includes(kind)) return 'You need a card for this mission';
   if (kind === 'research' && cdef.track && TECH[target]?.track !== cdef.track) return 'This card studies another field';
   if (kind === 'build' && cdef.group && BUILDINGS[building!]?.group !== cdef.group) return 'This card builds another kind of building';
+  if (missionsLeft(s) <= 0) return `No missions left this year: a ${rankOf(s).name} can start ${missionCap(s)} a year`;
   const ch = s.characters.find(c => c.uid === charUid);
   if (!ch || ch.mission != null) return 'Choose a free character';
   const roles = cardRoles(cdef.id);
@@ -351,6 +352,7 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   if (kind === 'found') { m.progress = foundCost(s); player(s).gold -= m.progress; }
   if (kind === 'grow') { m.progress = growCost(s, target); player(s).gold -= m.progress; }
   ch.mission = m.id;
+  s.launched = (s.launched ?? 0) + 1;
   for (const t of s.troops) if (troopUids.includes(t.uid)) t.mission = m.id;
   for (const t of s.fleet) if (shipUids.includes(t.uid)) t.mission = m.id;
   if (shipUids.length) m.ships = shipUids;
@@ -395,10 +397,10 @@ export function advanceMissions(s: GameState) {
     const ch = s.characters.find(c => c.uid === m.char);
     if (!ch) { cancelMission(s, m.id); continue; }
     if (m.kind === 'research') {
-      m.progress += researchRate(s, ch, TECH[m.target].track);
-      if (rand(s) < 0.08) { m.progress += 2; log(s, `Breakthrough in the study of ${TECH[m.target].name}!`, 'good'); }
+      m.progress += researchRate(s, ch, TECH[m.target].track) / 4;
+      if (rand(s) < 0.02) { m.progress += 2; log(s, `Breakthrough in the study of ${TECH[m.target].name}!`, 'good'); }
       const cost = techCost(s, m.target);
-      m.turnsLeft = Math.max(0, Math.ceil((cost - m.progress) / researchRate(s, ch, TECH[m.target].track)));
+      m.turnsLeft = Math.max(0, Math.ceil((cost - m.progress) / (researchRate(s, ch, TECH[m.target].track) / 4)));
       if (m.progress >= cost) completeResearch(s, m, ch);
       continue;
     }

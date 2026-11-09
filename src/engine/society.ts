@@ -6,6 +6,18 @@ import { NATIONS, NO_STATE } from '../data/nations';
 import { getGeo } from './map';
 
 const NAMED: Record<string, string> = {
+  fur: 'Fur',
+  fulani: 'Fulani',
+  charrua: 'Charrúa',
+  tehuelche: 'Tehuelche',
+  guaycuru: 'Guaycuru',
+  ge: 'Gê',
+  yaqui: 'Yaqui',
+  inuit: 'Inuit',
+  dene: 'Dene',
+  salish: 'Salish',
+  cree: 'Cree',
+  sioux: 'Sioux',
   beja: 'Beja',
   dagestani: 'Dagestani',
   circassian: 'Circassian',

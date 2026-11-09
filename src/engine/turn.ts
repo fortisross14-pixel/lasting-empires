@@ -3,6 +3,8 @@ import { GOODS } from '../data/goods';
 import { initKnownWorld } from './overseas';
 import { poolFor } from '../data/names';
 import { yearlyAges } from './ages';
+import { scriptedHistory } from './history';
+import { yearlyViceroys, quarterlyUnrest } from './realm';
 import { eraOfYear } from '../data/eras';
 import type { GameState, Nation, Ruler, RevealItem, Heir, Character } from '../types';
 import { CATS } from '../types';
@@ -15,7 +17,7 @@ import {
   addTreaty, hasTech, genCharacter, declareWar, nationName, atWar, getRel, hasGood, armyPower, hasCore, coreSlots, hasTreaty, ageId,
 } from './core';
 import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS } from './cards';
-import { advanceMissions } from './missions';
+import { advanceMissions, MISSION_INFO } from './missions';
 import { runAI } from './ai';
 import { rollEvents, EVENT } from './events';
 import { AMBITIONS, ambitionOptions } from './drafts';
@@ -42,9 +44,9 @@ function histRuler(nation: string, year: number) {
 
 /** Starting ruler for any nation (AI rulers are flavour only). */
 function initialRuler(s: GameState, nation: string): Ruler {
-  const h = histRuler(nation, 1453);
+  const h = histRuler(nation, START_YEAR);
   if (h) return { name: h.name, traits: [...h.traits], arch: archFromTraits(h.traits), skill: h.traits.some(t => ['Weak', 'Idle', 'Unstable'].includes(t)) ? 1 : 3, from: h.from, to: h.to };
-  return { name: genRulerName(s, nation), traits: [], arch: pick(s, Object.keys(RULER_ARCHS)), skill: randInt(s, 2, 4), from: 1453, to: 1453 + randInt(s, 8, 30) };
+  return { name: genRulerName(s, nation), traits: [], arch: pick(s, Object.keys(RULER_ARCHS)), skill: randInt(s, 2, 4), from: START_YEAR, to: START_YEAR + randInt(s, 8, 30) };
 }
 
 /** Three heirs with different talents. The historical one, if any, is first. */
@@ -97,9 +99,12 @@ export function chooseHeir(s: GameState, idx: number) {
   log(s, `${player(s).ruler.name} is crowned.`, 'good');
 }
 
+/** The game opens in 1451, as Mehmed II takes the Ottoman throne. */
+export const START_YEAR = 1451;
+
 export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)): GameState {
   const s: GameState = {
-    version: SAVE_VERSION, seed, rng: seed, nextUid: 1, year: 1453, startYear: 1453, endYear: 1750, player: nationId,
+    version: SAVE_VERSION, seed, rng: seed, nextUid: 1, year: START_YEAR, quarter: 0, startYear: START_YEAR, endYear: 1750, player: nationId,
     nations: {}, provinces: {}, rel: {}, treaties: [], wars: [], truces: [], hand: [],
     cardAccum: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 },
     bought: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 },
@@ -113,7 +118,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
       manpower: 10, stability: 1, prestige: 0, personality: d.personality, alive: true,
       army: d.id === nationId ? [] : d.army.map(type => ({ uid: s.nextUid++, type, vet: 0, str: 100 })),
       fleet: d.id === nationId ? [] : (START_FLEETS[d.id] ?? []).map(type => ({ uid: s.nextUid++, type, vet: 0, str: 100 })),
-      ruler: { name: '', traits: [], arch: 'balanced', skill: 2, from: 1453, to: 1453 },
+      ruler: { name: '', traits: [], arch: 'balanced', skill: 2, from: START_YEAR, to: START_YEAR },
     };
     s.nations[d.id] = n;
     if (d.native) { n.alive = false; n.army = []; n.fleet = []; } // stateless lands: never act
@@ -131,11 +136,12 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   addTreaty(s, 'venice', 'florence', 'trade');
   addTreaty(s, 'genoa', 'castile', 'trade');
   addTreaty(s, 'poland', 'lithuania', 'alliance');
+  addTreaty(s, 'byzantium', 'venice', 'trade');
+  addTreaty(s, 'byzantium', 'genoa', 'trade');
   addTreaty(s, 'france', 'scotland', 'alliance');
   addTreaty(s, 'england', 'portugal', 'alliance');
   addTreaty(s, 'burgundy', 'england', 'trade');
   addTreaty(s, 'ming', 'korea', 'alliance');
-  declareWar(s, 'ottomans', 'byzantium'); // the siege of Constantinople is under way
   declareWar(s, 'england', 'france');     // the last years of the Hundred Years' War
   if (nationId === 'castile') declareWar(s, 'castile', 'granada'); // the frontier war of the Reconquista simmers on
 
@@ -160,15 +166,15 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
     s.characters.push({ uid: uid(s), name: 'Henrique, the Navigator', role: 'researcher', skill: 6, traits: ['scholar', 'polymath'], born: 1394, dies: 1460, rarity: 'legendary', xp: 0, legendId: 'henry' });
   }
   const r = initialRuler(s, nationId);
-  me.ruler = { name: '', traits: [], arch: 'balanced', skill: 1, from: 1453, to: 1453 };
-  setRuler(s, { name: r.name, arch: r.arch, skill: r.skill, reign: r.to - 1453, historical: true, traits: r.traits });
+  me.ruler = { name: '', traits: [], arch: 'balanced', skill: 1, from: START_YEAR, to: START_YEAR };
+  setRuler(s, { name: r.name, arch: r.arch, skill: r.skill, reign: r.to - START_YEAR, historical: true, traits: r.traits });
   s.stats.kings = [];
   me.ruler.from = r.from;
   for (const c of CATS) { drawCat(s, c); drawCat(s, c); }
   addCard(s, 'eq_plate');
   push(s, { kind: 'draft', draft: 'ambition', options: ambitionOptions(s) });
   rollEvents(s);
-  log(s, `${me.ruler.name} rules ${me.name}. The year is 1453.`);
+  log(s, `${me.ruler.name} rules ${me.name}. It is the spring of ${START_YEAR}.`);
   return s;
 }
 
@@ -207,20 +213,27 @@ function characterAging(s: GameState) {
   }
 }
 
+/** Each quarter: a quarter of the year's income, manpower and control. */
 function playerEconomy(s: GameState) {
   const me = player(s);
   const inc = incomeOf(s, s.player);
-  me.gold += inc.total;
+  me.gold += inc.total / 4;
   const mp = playerManpower(s);
-  me.manpower = Math.min(mp.max, me.manpower + mp.gain);
-  for (const t of s.troops) if (t.mission == null && t.str < 100) t.str = Math.min(100, t.str + 15);
+  me.manpower = Math.min(mp.max, me.manpower + mp.gain / 4);
+  for (const t of s.troops) if (t.mission == null && t.str < 100) t.str = Math.min(100, t.str + 4);
   // control
   for (const p of provsOf(s, s.player)) {
     let d = 2 + me.stability + (hasCore(s, 'consolidation') ? 3 : 0) + (hasCore(s, 'agrarian') ? 1 : 0);
     for (const b of p.buildings) d += (BUILDINGS[b]?.control ?? 0) * grade(p, b);
     if (p.core !== s.player) d -= hasCore(s, 'expansion') ? 2 : 1;
-    p.control = clamp(p.control + d, 0, 100);
+    p.control = clamp(p.control + d / 4, 0, 100);
   }
+  treasuryCheck(s);
+}
+
+/** Once a year: workshops, prestige, unrest and war weariness. */
+function yearlyPlayer(s: GameState) {
+  const me = player(s);
   // workshops forge equipment cards
   for (const p of provsOf(s, s.player)) {
     if (p.buildings.includes('workshop') && (s.year + p.dev) % 4 === 0) {
@@ -234,6 +247,11 @@ function playerEconomy(s: GameState) {
   // prestige
   me.prestige *= 0.985; // prestige fades unless renewed, for every crown
   me.prestige += provsOf(s, s.player).filter(p => p.buildings.includes('temple')).length * 0.5 + (hasTech(s, 'absolutism') ? 2 : 0) + (hasGood(s, 'silk') ? 1 : 0) + (hasGood(s, 'ivory') ? 0.5 : 0) + (hasGood(s, 'porcelain') ? 0.5 : 0);
+}
+
+/** An empty treasury: imports stop, then loans, then bankruptcy. */
+function treasuryCheck(s: GameState) {
+  const me = player(s);
   if (me.gold < 0 && s.imports.length) {
     // first the crown stops buying goods abroad
     const costly = [...s.imports].sort((x, y) => (GOODS[y.good]?.price ?? 0) - (GOODS[x.good]?.price ?? 0))[0];
@@ -254,6 +272,10 @@ function playerEconomy(s: GameState) {
     me.stability = clamp(me.stability - 1, -3, 3);
     push(s, { kind: 'reveal', title: 'The treasury is empty', items: [{ title: 'Emergency loan', text: 'Genoese bankers lend you 40 ducats. A Crown Debt card is added and stability falls by 1.', tone: 'bad', kind: 'chain' }] });
   }
+}
+
+function yearlyStrain(s: GameState) {
+  const me = player(s);
   for (const h of s.hand) if (h.card === 'unrest' && rand(s) < 0.2) { me.stability = clamp(me.stability - 1, -3, 3); log(s, 'Peasant unrest lowers stability.', 'bad'); }
   if (s.wars.some(w => (w.a === s.player || w.b === s.player) && s.year - w.since > 8) && rand(s) < 0.15) {
     me.stability = clamp(me.stability - 1, -3, 3); log(s, 'War weariness lowers stability.', 'bad');
@@ -307,20 +329,34 @@ export interface YearReport { gold: number; np: number; cards: Record<string, nu
 export function endTurn(s: GameState): YearReport | null {
   if (s.over || s.queue.length) return null;
   const g0 = player(s).gold, np0 = s.np;
-  s.bought = { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 };
+  s.quarter ??= 0;
+  const q = s.quarter;
+  s.turnLog = { year: s.year, quarter: q, battles: [], done: [] };
+  if (q === 0) { s.bought = { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 }; s.launched = 0; }
+  const before = s.missions.map(m => ({ id: m.id, kind: m.kind, target: m.target }));
   advanceMissions(s);
-  runAI(s);
+  for (const m of before) if (!s.missions.some(x => x.id === m.id)) s.turnLog.done.push({ kind: m.kind, title: `${MISSION_INFO[m.kind].name}${s.provinces[m.target] ? ' · ' + s.provinces[m.target].name : s.nations[m.target] ? ' · ' + s.nations[m.target].name : ''}`, ok: true });
+  runAI(s, q);
   playerEconomy(s);
-  yearlySubjects(s);
-  yearlyFleet(s);
-  yearlySociety(s);
-  s.year++;
-  yearlyAges(s);
-  characterAging(s);
-  successionCheck(s);
+  yearlyViceroys(s, q);
+  quarterlyUnrest(s);
+  const cards = yearlyCards(s, 1 / 4);
   rollEvents(s);
-  const cards = yearlyCards(s);
-  checkAmbition(s);
+  s.quarter = (q + 1) % 4;
+  if (s.quarter === 0) {
+    // the year turns
+    yearlyPlayer(s);
+    yearlyStrain(s);
+    yearlySubjects(s);
+    yearlyFleet(s);
+    yearlySociety(s);
+    s.year++;
+    yearlyAges(s);
+    characterAging(s);
+    successionCheck(s);
+    checkAmbition(s);
+  }
+  scriptedHistory(s);
   if (!provsOf(s, s.player).length) {
     s.over = true;
     push(s, { kind: 'gameover', victory: false, reason: `${player(s).name} has been conquered.` });

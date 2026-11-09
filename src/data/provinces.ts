@@ -215,6 +215,46 @@ canaries;Canary Islands;natives;1;0;-15.5;28.1;sugar;atlantic
 `;
 
 const TABLE_WORLD = `
+# amaf
+pueblo;Pueblo Lands;natives;1;0;-106.0;35.5;cotton;north_america;pueblo
+dakota;Dakota;natives;1;0;-100.5;46.5;cattle;north_america;sioux
+blackfoot;Blackfoot;natives;1;0;-110.0;47.5;furs;north_america;algonquian
+prairies;Saskatchewan;natives;1;0;-106.0;53.0;furs;north_america;cree
+fraser;Fraser;natives;1;0;-123.5;52.5;fish;north_america;salish
+mackenzie;Mackenzie;natives;1;0;-120.0;61.5;furs;north_america;dene
+kivalliq;Kivalliq;natives;1;0;-95.0;63.0;fish;north_america;inuit
+labrador;Labrador;natives;1;0;-62.0;54.0;fish;north_america;algonquian
+havana;Havana;natives;1;0;-82.4;22.8;sugar;caribbean;taino
+sonora;Sonora;natives;1;0;-110.0;29.5;silver;mexico;yaqui
+nicaragua;Nicaragua;natives;2;0;-85.5;12.8;cotton;mexico;nahua
+lima;Ychsma;natives;2;0;-76.8;-12.0;cotton;andes;quechua
+copiapo;Copiapó;natives;1;0;-70.0;-27.5;silver;andes;diaguita
+araucania;Araucanía;natives;1;0;-72.5;-38.5;timber;andes;mapuche
+matogrosso;Mato Grosso;natives;1;0;-55.0;-13.0;timber;brazil;ge
+goias;Goiás;natives;1;0;-48.5;-14.5;gold;brazil;ge
+guapore;Guaporé;natives;1;0;-63.5;-10.0;timber;brazil;arawak
+solimoes;Solimões;natives;1;0;-69.0;-4.0;spices;brazil;tupi
+chaco;Gran Chaco;natives;1;0;-61.0;-23.0;timber;plata;guaycuru
+pampas;Pampas;natives;1;0;-63.0;-37.0;cattle;plata;tehuelche
+uruguay;Banda Oriental;natives;1;0;-56.0;-32.5;cattle;plata;charrua
+santacruz;Santa Cruz;natives;1;0;-70.0;-49.5;wool;plata;tehuelche
+futajallon;Futa Jallon;natives;1;0;-12.0;11.0;cattle;west_africa;fulani
+liberia;Grain Coast;natives;1;0;-9.5;7.0;spices;west_africa;manding
+air;Aïr;natives;2;0;8.5;17.5;salt;west_africa;berber
+darfur;Darfur;natives;2;0;24.5;13.5;cattle;west_africa;fur
+cameroon;Cameroon;natives;1;0;12.5;5.5;ivory;central_africa;bantu
+loango;Loango;natives;2;0;12.0;-2.0;ivory;central_africa;bantu
+ubangi;Ubangi;natives;1;0;19.5;4.0;ivory;central_africa;bantu
+ituri;Ituri;natives;1;0;27.5;2.0;ivory;central_africa;bantu
+kasai;Kasai;natives;1;0;21.5;-7.0;iron;central_africa;bantu
+namibia;Namib;natives;1;0;17.5;-22.0;cattle;southern_africa;khoisan
+highveld;Highveld;natives;1;0;27.5;-26.5;cattle;southern_africa;bantu
+natal;Natal;natives;1;0;30.5;-29.0;cattle;southern_africa;bantu
+barotse;Barotse;natives;1;0;23.5;-15.5;cattle;southern_africa;bantu
+sennar;Alodia;natives;2;0;33.5;13.5;cotton;east_africa;nubian
+kitara;Kitara;natives;2;0;31.5;1.0;cattle;east_africa;bantu
+majeerteen;Majeerteen;natives;1;0;48.5;9.0;spices;east_africa;somali
+unyamwezi;Unyamwezi;natives;1;0;33.0;-5.5;ivory;east_africa;bantu
 # mena
 bursa;Bursa;ottomans;6;2;29.05;40.15;silk;middle_east;turkish
 kocaeli;Kocaeli;ottomans;3;1;30.35;40.6;timber;middle_east;turkish

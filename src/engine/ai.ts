@@ -49,7 +49,7 @@ function aiEconomy(s: GameState, n: Nation) {
   for (const t of n.army) t.str = Math.min(100, t.str + 20);
   // AI realms slowly develop their land, the way a player would
   // the same pace for every realm, so great empires do not outgrow everyone on size alone
-  if (rand(s) < 0.2 + (n.personality === 'merchant' ? 0.06 : 0)) {
+  if (rand(s) < 0.12 + (n.personality === 'merchant' ? 0.04 : 0)) {
     const low = provsOf(s, n.id).filter(p => p.dev < 8).sort((x, y) => x.dev - y.dev);
     if (low.length) low[Math.floor(rand(s) * Math.min(4, low.length))].dev++;
   }
@@ -80,7 +80,7 @@ function aiEconomy(s: GameState, n: Nation) {
   }
   // slow growth
   // prestige
-  n.prestige = n.prestige * 0.985 + 0.5 + Math.sqrt(provsOf(s, n.id).length) * 0.6;
+  n.prestige = n.prestige * 0.985 + 0.3 + Math.sqrt(provsOf(s, n.id).length) * 0.35;
 }
 
 function weightedPick(s: GameState, items: [string, number][]): string {
@@ -260,12 +260,15 @@ function aiRebellions(s: GameState) {
   }
 }
 
-export function runAI(s: GameState) {
-  aiRebellions(s);
-  attacksOnPlayer = 0;
-  aiOverseas(s);
+/** Which quarter of the year a realm acts in: spreads the world's moves over the year. */
+export const aiQuarter = (id: string) => { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 4; };
+
+/** One quarter of AI play. Every realm runs its yearly turn in its own quarter; world upkeep runs at year end. */
+export function runAI(s: GameState, q = 3) {
+  if (q === 0) attacksOnPlayer = 0;
+  if (q === 3) { aiRebellions(s); aiOverseas(s); }
   revealBorders(s);
-  const ids = Object.keys(s.nations).filter(id => id !== s.player && s.nations[id].alive);
+  const ids = Object.keys(s.nations).filter(id => id !== s.player && s.nations[id].alive && aiQuarter(id) === q);
   ids.sort(() => rand(s) - 0.5);
   for (const id of ids) {
     const n = s.nations[id];
@@ -275,6 +278,7 @@ export function runAI(s: GameState) {
     aiAlliances(s, n);
     if (n.alive) aiWar(s, n);
   }
+  if (q !== 3) return;
   // fear of the strong: everyone grows wary of large realms
   for (const big of Object.values(s.nations)) {
     if (!big.alive || provsOf(s, big.id).length < 12) continue;

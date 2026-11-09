@@ -251,18 +251,18 @@ export function npRate(s: GameState): { rate: number; parts: RatePart[] } {
 export const buyCost = (s: GameState, cat: Cat) => 3 + 2 * (s.bought[cat] ?? 0);
 
 /** Yearly card income. Fractions carry over. */
-export function yearlyCards(s: GameState): Record<Cat, number> {
+export function yearlyCards(s: GameState, share = 1): Record<Cat, number> {
   const rates = cardRates(s);
   const got = {} as Record<Cat, number>;
   for (const c of CATS) {
-    s.cardAccum[c] = (s.cardAccum[c] ?? 0) + rates[c].rate;
+    s.cardAccum[c] = (s.cardAccum[c] ?? 0) + rates[c].rate * share;
     got[c] = 0;
     while (s.cardAccum[c] >= 1) {
       s.cardAccum[c] -= 1;
       if (drawCat(s, c)) got[c]++;
     }
   }
-  s.np += npRate(s).rate;
+  s.np += npRate(s).rate * share;
   return got;
 }
 

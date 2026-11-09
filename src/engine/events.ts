@@ -14,6 +14,7 @@ import { unionClaim, subjectsOf, makeSubject } from './diplo';
 import { happinessOf, CULTURE_NAMES } from './society';
 import { getGeo } from './map';
 import { createBattle, makeSide, genericGeneral, transferProvince } from './battle';
+import { cityFalls } from './history';
 import { courtOptions } from './drafts';
 
 type Vars = Record<string, string | number>;
@@ -69,20 +70,57 @@ function annexNation(s: GameState, other: string) {
 
 export const EVENTS: EventDef[] = [
   {
-    id: 'constantinople', history: true, title: 'The Fall of Constantinople', art: 'tower', window: [1453, 1454], chance: 1,
-    text: () => 'Sultan Mehmed\'s great cannon pound the walls of the Queen of Cities. Messengers race west with the news. Has the last Roman city fallen?',
+    id: 'constantinople', history: true, title: s => s.flags.const_holds ? 'Constantinople Holds' : 'The Fall of Constantinople', art: 'tower', window: [1453, 1454], chance: 1,
+    cond: s => !!(s.flags.const_fell || s.flags.const_holds) && P(s) !== 'ottomans' && P(s) !== 'byzantium',
+    text: s => s.flags.const_holds ? 'Against all odds, the Sultan\'s guns fell silent and his host withdrew. The last Roman city stands.' : 'Sultan Mehmed\'s great cannon have breached the walls of the Queen of Cities. The last Roman emperor died in the breach. Messengers race west with the news.',
     options: [{
-      label: 'Await the news',
+      label: 'Hear the news',
       run: s => {
-        if (rand(s) < 0.85) {
-          addCards(s, 'greek_scholars', 2);
-          return [bad('The City has fallen', 'The Ottoman Turks take Constantinople. Greek scholars flee west with their books.'), good('Greek Scholars', 'Two Greek Scholars research cards are added to your hand.', 'book')];
-        }
-        s.flags.const_holds = 1;
-        player(s).gold += 20;
-        return [good('The walls hold!', 'Against all odds the Sultan withdraws. History takes a different road: fewer corsairs will trouble the sea.'), good('Grateful envoys', 'A Byzantine embassy brings you 20 ducats.', 'coin')];
+        if (s.flags.const_holds) { player(s).gold += 20; return [good('The walls held', 'History takes a different road. A grateful Byzantine embassy brings 20 ducats.', 'coin')]; }
+        addCards(s, 'greek_scholars', 2);
+        return [bad('The City has fallen', 'The Ottoman Turks hold Constantinople.'), good('Greek Scholars', 'Scholars flee west with their books: two Greek Scholars research cards.', 'book')];
       },
     }],
+  },
+  // ---------- the siege, as Byzantium or as the Sultan ----------
+  {
+    id: 'giustiniani', title: 'A Genoese Captain', art: 'helm', window: [1452, 1453], chance: 2,
+    cond: s => P(s) === 'byzantium' && !s.flags.siege_done,
+    text: () => 'Giovanni Giustiniani Longo, a famous captain of Genoa, offers to defend the walls with seven hundred men of his own. He asks for gold, and the island of Lemnos when it is over.',
+    options: [
+      { label: 'Hire him (40 ducats)', can: s => player(s).gold < 40 ? 'Needs 40 ducats' : null, run: s => {
+        player(s).gold -= 40;
+        for (let i = 0; i < 3; i++) s.troops.push({ uid: uid(s), type: 'men_at_arms', vet: 2, str: 100 });
+        s.characters.push({ uid: uid(s), name: 'Giovanni Giustiniani', role: 'general', skill: 5, traits: ['cautious', 'inspiring'], born: 1418, dies: 1453 + 6, rarity: 'legendary', xp: 0 });
+        return [good('The Genoese arrive', 'Three veteran companies and a legendary general join the defence.', 'helm')];
+      } },
+      { label: 'We cannot pay', run: () => [neutral('He sails home', 'Constantinople must stand alone.')] },
+    ],
+  },
+  {
+    id: 'church_union', title: 'The Union of the Churches', art: 'church', window: [1451, 1453], chance: 1.2,
+    cond: s => P(s) === 'byzantium' && !s.flags.siege_done && !s.flags.union_asked,
+    text: () => 'The Pope promises ships and soldiers if the Orthodox Church submits to Rome. Your people would rather see the Sultan\'s turban in the City than the Latin mitre.',
+    options: [
+      { label: 'Proclaim the union', hint: 'Help arrives at the siege; your people are furious', run: s => { s.flags.union_asked = 1; s.flags.union_aid = 1; stab(s, -2); addRel(s, P(s), 'papacy', 40); addRel(s, P(s), 'venice', 20); return [good('Latin help is promised', 'Two companies of Latin crossbowmen and men-at-arms will reach the City before the siege. Stability −2.', 'church')]; } },
+      { label: 'Refuse', run: s => { s.flags.union_asked = 1; stab(s, 1); return [neutral('Orthodox and alone', 'Stability +1. No help will come from Rome.', 'church')]; } },
+    ],
+  },
+  {
+    id: 'siege_attack', title: 'The Conquest of Constantinople', art: 'cannon', chance: 0,
+    text: () => 'The Red Apple lies before you. Your host surrounds the city by land and sea, and the Hungarian founder Urban has cast a cannon such as the world has never seen.',
+    options: [
+      { label: 'Storm the walls', hint: 'Very likely to succeed', run: s => {
+        if (rand(s) < 0.88) { cityFalls(s); player(s).prestige += 10; return [good('The City is yours', 'Constantinople falls. Prestige +40. You are Fatih, the Conqueror.', 'crown')]; }
+        s.flags.siege_done = 0; s.flags.siege_next = s.year + 1; stab(s, -1);
+        return [bad('Repulsed', 'The walls hold for now. Stability −1. You will try again next year.', 'tower')];
+      } },
+      { label: 'Bring up the great bombard (60 ducats)', hint: 'Almost certain', can: s => player(s).gold < 60 ? 'Needs 60 ducats' : null, run: s => {
+        player(s).gold -= 60;
+        if (rand(s) < 0.98) { cityFalls(s); player(s).prestige += 10; return [good('The walls crumble', 'Urban\'s gun opens a breach and Constantinople falls. Prestige +40.', 'cannon')]; }
+        s.flags.siege_done = 0; s.flags.siege_next = s.year + 1; return [bad('The gun cracks', 'The great bombard bursts. Next year, then.', 'cannon')];
+      } },
+    ],
   },
   {
     id: 'printing', history: true, title: 'The Printing Press', art: 'book', window: [1460, 1480], chance: 0.15,
@@ -582,14 +620,14 @@ export const EVENT: Record<string, EventDef> = Object.fromEntries(EVENTS.map(e =
 export function rollEvents(s: GameState) {
   let fired = 0;
   for (const e of EVENTS) {
-    if (fired >= 2 || e.chance <= 0) continue;
+    if (fired >= 1 || e.chance <= 0) continue; // one event a quarter at most
     if (e.window && (s.year < e.window[0] || s.year > e.window[1])) continue;
     const lastKey = 'ev_' + e.id;
     if (e.repeat == null && s.firedEvents.includes(e.id)) continue;
     if (e.repeat != null && (s.flags[lastKey] ?? -999) + e.repeat > s.year) continue;
     if (e.history && !westernRealm(s)) continue;
     if (e.cond && !e.cond(s)) continue;
-    let p = e.chance;
+    let p = e.chance / 4; // chances are per year; a turn is a quarter
     if (e.window && e.history && s.year >= e.window[1]) p = 1; // history always comes due
     if (rand(s) >= p) continue;
     const vars = e.setup ? e.setup(s) : {};

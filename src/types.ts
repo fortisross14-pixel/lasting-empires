@@ -151,6 +151,13 @@ export interface RoundLog {
   dmgToDef: number;
 }
 
+export interface Viceroy { char: number; seat: string; provinces: string[]; loyalty: number; since: number; }
+export interface BattleRecord {
+  year: number; quarter: number; province: string; att: string; def: string;
+  attPower: number; defPower: number; winner: 'att' | 'def'; player?: 'won' | 'lost'; naval?: boolean; context: string;
+}
+export interface TurnLog { year: number; quarter: number; battles: BattleRecord[]; done: { kind: string; title: string; ok: boolean }[]; }
+
 export interface Battle {
   id: number;
   att: BattleSide;
@@ -160,6 +167,8 @@ export interface Battle {
   logs: RoundLog[];
   playerSide: 'att' | 'def';
   context: 'conquer' | 'defend' | 'raid' | 'rebels' | 'sea';
+  siege?: boolean; // the great siege of Constantinople
+  rebel?: { cause: string; name: string; adj: string }; // a rising: if it wins, a civil war
   naval?: boolean;
   follow?: { type: 'land-attack' | 'land-defend'; missionId?: number; nation?: string; force?: number[] };
   missionId?: number;
@@ -203,6 +212,7 @@ export interface GameState {
   rng: number;
   nextUid: number;
   year: number;
+  quarter?: number;  // 0 spring, 1 summer, 2 autumn, 3 winter: one turn is one quarter
   startYear: number;
   endYear: number;
   player: string;
@@ -226,7 +236,11 @@ export interface GameState {
   accepted: string[];               // accepted cultures
   stateReligion: string;
   happiness: number;                // national, 0..100 (cached each year)
-  age?: { id: string; since: number; pioneer?: string }; // the current age and who opened it
+  age?: { id: string; since: number; pioneer?: string };
+  launched?: number;                // missions started this year (capped by realm rank)
+  viceroys?: Viceroy[];
+  turnLog?: TurnLog;                // what happened this turn, for the report
+  battleLog?: BattleRecord[];       // the player's battles, newest last // the current age and who opened it
   coreChanged: number;              // year of the last change
   troops: TroopCard[];
   equipment: EquipCard[];

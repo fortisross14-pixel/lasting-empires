@@ -26,6 +26,8 @@ World map check (after the expansion to 363 provinces): `reasonable` survived 9/
 
 World of 663 provinces (Ming 62, Ottomans 13): the score now weighs growth since 1453 (`prestige/2 + development + 5 × development gained + 2 × subject development`), AI realms develop at one flat pace (about +1 every 5 years, regardless of size), and every crown's prestige fades 1.5% a year. `reasonable` survived 12/12, top 3 in 3, first in 2 — below target; `greedy` top 3 in 3/6; `passive` never top 3. To tune next: AI expansion speed in the bigger world and the growth weight in the score.
 
+Quarterly turns, 702 provinces, civil wars and viceroys (current): `reasonable` survived 9/9, top 3 in 3, first in 2; `greedy` survived 6/6, top 3 in 3, first in 2; `passive` never top 3. AI development about +1 every 8 years per realm; AI prestige settles around 60–130; tribal realms do not settle empty land. Risings: below 25% happiness, about 1–3% a quarter per province, at most one every 6 years per province, local militia always defend. Siege of Constantinople (auto-resolved, 300 runs): start army 0%, with Giustiniani 1%, plus church union 9%, plus Venice and Genoa as allies 47%, plus 3 more companies 94%.
+
 ## Levers (where to tune)
 
 - **Income:** `provinceIncome`, `tradeValue` (1 + 0.07 × partner development, capped at 4, each extra route ×0.8), building gold in `src/data/techs.ts`, settlement tiers (`TIERS`), price level (income follows 70% of inflation).

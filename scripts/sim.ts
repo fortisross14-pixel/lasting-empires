@@ -12,6 +12,8 @@ import { CARDS, playCard, cardBlocked, buyCost } from '../src/engine/cards';
 import { neighbours } from '../src/engine/map';
 import { CATS, type GameState } from '../src/types';
 import { NATIONS } from '../src/data/nations';
+import { happinessOf } from '../src/engine/society';
+import { appointViceroy, viceroyBlocked } from '../src/engine/realm';
 
 const R = Math.random;
 function resolveQueue(s: GameState) {
@@ -41,6 +43,7 @@ const free = (s: GameState, role: string) => s.characters.filter(c => c.role ===
 
 function botTurn(s: GameState) {
   const me = player(s);
+  if ((s.quarter ?? 0) === 1) { const seat = provsOf(s, s.player).find(p => !viceroyBlocked(s, p.id)); const who = s.characters.filter(c => c.mission == null && !c.ruler && c.role === 'admin').sort((a, b) => a.skill - b.skill)[0]; if (seat && who) appointViceroy(s, seat.id, who.uid); }
   while (me.gold > 300 && me.gold > officeCost(s) * 3 && !sellOffices(s)) { /* turn spare gold into cards */ }
   for (const c of ['consolidation', 'open', 'mercantile', 'land']) if (!coreBlocked(s, c)) adoptCore(s, c);
   for (let k = 0; k < 3; k++) { const c = CATS[Math.floor(R() * 5)]; if (s.np >= buyCost(s, c) + 2) { buyCard(s, c); resolveQueue(s); } }
@@ -149,16 +152,19 @@ for (const n of (MODE === 'big' ? ['castile'] : PICK)) for (let seed = 1; seed <
   resolveQueue(s);
   let turns = 0;
   try {
-    while (!s.over && turns < (MODE === 'big' ? 60 : 400)) {
+    while (!s.over && turns < (MODE === 'big' ? 240 : 1300)) {
       if (MODE === 'passive') passiveTurn(s); else { botTurn(s); if (MODE === 'greedy') greedyExtra(s); }
       resolveQueue(s); endTurn(s); resolveQueue(s); turns++;
-      if (CHECK.includes(s.year)) (rows[s.year] ??= []).push(snap(s));
+      if (CHECK.includes(s.year) && s.quarter === 0) (rows[s.year] ??= []).push(snap(s));
+      if (process.env.TRACE && s.quarter === 0 && s.year % 20 === 0) { const own: Record<string, number> = {}; for (const p of Object.values(s.provinces)) if (p.core === s.player && p.owner !== s.player) own[p.owner] = (own[p.owner] ?? 0) + 1; console.log('  trace', n, s.year, 'provs', provsOf(s, s.player).length, 'troops', s.troops.length, 'stab', player(s).stability, 'lost to', JSON.stringify(own), 'wars', s.wars.filter(w => w.a === s.player || w.b === s.player).map(w => w.a === s.player ? w.b : w.a).join(',')); }
     }
   } catch (e) { console.error('CRASH', n, seed, s.year, e); throw e; }
   if (process.env.DUMP) console.log('  state', n, 'provs', provsOf(s, n).length, 'overlord', player(s).overlord, 'year', s.year, 'over', s.over, 'hand', s.hand.length);
   if (process.env.DUMP) { const c: Record<string, number> = {}; for (const h of s.hand) c[h.card] = (c[h.card] ?? 0) + 1; console.log('  hand', n, JSON.stringify(c), 'gold', Math.round(player(s).gold), 'income', JSON.stringify(incomeOf(s, n), (k, v) => typeof v === 'number' ? Math.round(v * 10) / 10 : v)); }
   const f = snap(s); f.year = s.year; f.provs = provsOf(s, n).length; finals.push(f);
   if (process.env.TOP) console.log('  top', n, seed, ranking(s).slice(0, 4).map(r => r.name + ':' + r.score + '(' + provsOf(s, r.id).length + 'p,' + Math.round(s.nations[r.id].prestige) + 'pr)').join(' '));
+  if (process.env.CIVIL) { const hs = provsOf(s, s.player).map(p => happinessOf(s, p).value); console.log('  happy', n, 'provs', hs.length, 'min', Math.min(...hs), 'under30', hs.filter(h => h < 30).length, 'under40', hs.filter(h => h < 40).length, 'vblock', viceroyBlocked(s, provsOf(s, s.player).filter(p => p.id !== player(s).capital)[0]?.id ?? '')); }
+  if (process.env.CIVIL) console.log('  civil', n, seed, s.log.filter(l => /Civil war|joins the|rising|crowns himself|declares independence|breaks away/i.test(l.text)).map(l => l.year + ' ' + l.text).slice(0, 8).join(' | '), 'viceroys', (s.viceroys ?? []).length);
   if (process.env.WHY && f.provs === 0) console.log('  died', n, seed, s.year, s.log.filter(l => l.tone === 'bad').slice(0, 6).map(l => l.year + ' ' + l.text).join(' | '));
 }
 const avg = (a: Row[], k: string) => a.reduce((x, r) => x + (r[k] ?? 0), 0) / Math.max(1, a.length);

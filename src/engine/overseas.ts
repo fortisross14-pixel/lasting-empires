@@ -220,7 +220,7 @@ export function aiOverseas(s: GameState) {
   if (s.year < 1480) return;
   for (const p of free) {
     if (p.owner !== NO_STATE || rand(s) > 0.004) continue;
-    const owners = [...new Set(getGeo().adj[p.id].map(nb => s.provinces[nb].owner))].filter(o => o !== NO_STATE && o !== s.player && s.nations[o]?.alive && !s.nations[o].overlord);
+    const owners = [...new Set(getGeo().adj[p.id].map(nb => s.provinces[nb].owner))].filter(o => o !== NO_STATE && o !== s.player && s.nations[o]?.alive && !s.nations[o].overlord && !['tribes', 'bedouins'].includes(o));
     if (!owners.length) continue;
     const to = owners[Math.floor(rand(s) * owners.length)];
     settle(s, p.id, to);
