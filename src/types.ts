@@ -83,6 +83,7 @@ export interface Province {
   dev: number;        // 1..6
   fort: number;       // 0..3
   buildings: string[];
+  favor?: number;     // happiness from royal grace, fades by 1 a year
   land: string;       // landmass id
   lon: number;
   lat: number;
@@ -99,7 +100,7 @@ export type MissionKind =
   | 'relations' | 'trade' | 'alliance' | 'marriage' | 'peace'
   | 'research' | 'build' | 'develop' | 'found' | 'grow' | 'tax' | 'progress'
   | 'explore' | 'colonize' | 'conquista'
-  | 'vassalize' | 'integrate' | 'patronage' | 'convert' | 'assimilate';
+  | 'vassalize' | 'integrate' | 'patronage' | 'convert' | 'assimilate' | 'grace';
 
 export interface Mission {
   id: number;

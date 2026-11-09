@@ -3,7 +3,7 @@ import type { GameState, Nation, TroopCard } from '../types';
 import { TROOPS } from '../data/troops';
 import {
   rand, pick, uid, clamp, provsOf, incomeOf, manpowerGain, manpowerMax, getRel, addRel, atWar, findWar,
-  declareWar, makePeace, inTruce, hasTreaty, alliesOf, enemiesOf, armyPower, log, push, nationName, player, chance, traitMult,
+  declareWar, makePeace, inTruce, hasTreaty, addTreaty, alliesOf, enemiesOf, armyPower, log, push, nationName, player, chance, traitMult,
 } from './core';
 import { neighbours } from './map';
 import { aiOverseas, revealBorders } from './overseas';
@@ -47,6 +47,8 @@ function aiEconomy(s: GameState, n: Nation) {
   n.gold += inc.total;
   n.manpower = Math.min(manpowerMax(s, n.id), n.manpower + manpowerGain(s, n.id));
   for (const t of n.army) t.str = Math.min(100, t.str + 20);
+  // AI realms slowly develop their land, the way a player would
+  for (const p of provsOf(s, n.id)) if (p.dev < 8 && rand(s) < 0.012 + (n.personality === 'merchant' ? 0.003 : 0)) p.dev++;
   if (n.gold < -20 && n.army.length) { n.army.splice(Math.floor(rand(s) * n.army.length), 1); n.gold += 10; }
   // recruit
   const cap = aiArmyCap(s, n);
@@ -217,6 +219,22 @@ function aiDiplomacy(s: GameState, n: Nation) {
   }
 }
 
+/** AI crowns make friends against common rivals, and give up old friendships that turned sour. */
+function aiAlliances(s: GameState, n: Nation) {
+  const mine = alliesOf(s, n.id).filter(a => a !== s.player);
+  for (const a of mine) if (getRel(s, n.id, a) < -20 && rand(s) < 0.2) { s.treaties = s.treaties.filter(t => !(t.kind === 'alliance' && ((t.a === n.id && t.b === a) || (t.b === n.id && t.a === a)))); return; }
+  if (mine.length >= 3 || n.overlord || rand(s) > 0.04) return;
+  const rivals = Object.values(s.nations).filter(x => x.alive && getRel(s, n.id, x.id) <= -30).map(x => x.id);
+  const enemies = enemiesOf(s, n.id);
+  const cands = Object.values(s.nations).filter(x => x.alive && x.id !== n.id && x.id !== s.player && !x.overlord && !atWar(s, n.id, x.id) && !hasTreaty(s, n.id, x.id, 'alliance')
+    && getRel(s, n.id, x.id) > -10 && (getRel(s, n.id, x.id) >= 30 || enemies.some(e => atWar(s, x.id, e)) || rivals.some(r => getRel(s, x.id, r) <= -30)));
+  if (!cands.length) return;
+  const x = pick(s, cands);
+  addTreaty(s, n.id, x.id, 'alliance');
+  addRel(s, n.id, x.id, 15);
+  if (alliesOf(s, s.player).includes(x.id) || alliesOf(s, s.player).includes(n.id)) log(s, `${n.name} and ${x.name} sign an alliance.`, 'neutral');
+}
+
 /** Conquered lands in AI empires sometimes rise and go back to their old crown; fallen crowns can return. */
 function aiRebellions(s: GameState) {
   for (const p of Object.values(s.provinces)) {
@@ -251,6 +269,7 @@ export function runAI(s: GameState) {
     if (!n.alive) continue;
     aiEconomy(s, n);
     aiDiplomacy(s, n);
+    aiAlliances(s, n);
     if (n.alive) aiWar(s, n);
   }
   // fear of the strong: everyone grows wary of large realms

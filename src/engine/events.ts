@@ -9,8 +9,8 @@ import {
 import { addCard, grantRandomCards } from './cards';
 import { endWar } from './missions';
 import { regionState } from './overseas';
-import { unionClaim } from './diplo';
-import { happinessOf } from './society';
+import { unionClaim, subjectsOf, makeSubject } from './diplo';
+import { happinessOf, CULTURE_NAMES } from './society';
 import { getGeo } from './map';
 import { createBattle, makeSide, genericGeneral, transferProvince } from './battle';
 import { courtOptions } from './drafts';
@@ -45,6 +45,9 @@ const bad = (title: string, text: string, kind = 'twist'): RevealItem => ({ titl
 const neutral = (title: string, text: string, kind = 'scroll'): RevealItem => ({ title, text, tone: 'neutral', kind });
 const P = (s: GameState) => s.player;
 const alive = (s: GameState, n: string) => !!s.nations[n]?.alive;
+/** Crowns whose provinces touch yours. */
+const borderNations = (s: GameState) => { const out = new Set<string>(); for (const p of provsOf(s, P(s))) for (const nb of getGeo().adj[p.id]) { const o = s.provinces[nb].owner; if (o !== P(s)) out.add(o); } return out; };
+const sameFaith = (s: GameState, n: string) => s.provinces[s.nations[n].capital]?.religion === s.stateReligion;
 const coastIn = (f: (lon: number, lat: number) => boolean) => getGeo().seeds.filter(x => getGeo().coastal[x.id] && f(x.lon, x.lat)).map(x => x.id);
 let MED_C: string[] | null = null, ATL_C: string[] | null = null;
 const MED = () => (MED_C ??= coastIn((lon, lat) => lon > -5.5 && lon < 19 && lat > 35 && lat < 45.5));
@@ -406,6 +409,154 @@ export const EVENTS: EventDef[] = [
     options: [
       { label: 'Honour the alliance', run: (s, v) => { const a = String(v.attacker); if (!atWar(s, P(s), a)) declareWar(s, P(s), a); player(s).prestige += 3; addRel(s, P(s), String(v.ally), 15); return [good('Faithful ally', `You are at war with ${nationName(s, a)}. Prestige +3.`, 'hands')]; } },
       { label: 'Break the alliance', run: (s, v) => { const ally = String(v.ally); s.treaties = s.treaties.filter(t => !(t.kind === 'alliance' && ((t.a === ally && t.b === P(s)) || (t.b === ally && t.a === P(s))))); addRel(s, P(s), ally, -40); player(s).prestige -= 10; return [bad('Oath-breaker', 'The alliance ends. Prestige −10.', 'twist')]; } },
+    ],
+  },
+
+  // ---------- the world reacts: proposals from other crowns ----------
+  {
+    id: 'ai_alliance', title: s => 'An Offer of Alliance', art: 'hands', chance: 0.12, repeat: 5,
+    cond: s => s.year > s.startYear + 2,
+    setup: s => {
+      const near = borderNations(s);
+      const c = Object.values(s.nations).filter(n => n.alive && n.id !== P(s) && !n.overlord && !atWar(s, P(s), n.id) && !hasTreaty(s, P(s), n.id, 'alliance')
+        && (getRel(s, P(s), n.id) >= 25 || enemiesOf(s, P(s)).some(e => atWar(s, n.id, e)) || (near.has(n.id) && getRel(s, P(s), n.id) >= 10))
+        && alliesOf(s, P(s)).length < 4);
+      if (!c.length) return null;
+      const n = pick(s, c);
+      const foe = enemiesOf(s, P(s)).find(e => atWar(s, n.id, e)) ?? enemiesOf(s, n.id)[0] ?? '';
+      return { nation: n.id, foe };
+    },
+    text: (s, v) => `Envoys from ${nationName(s, String(v.nation))} propose a defensive alliance${v.foe ? `. They fear ${nationName(s, String(v.foe))} as much as you do` : ''}. Allies join each other's wars.`,
+    options: [
+      { label: 'Sign the alliance', run: (s, v) => {
+        const n = String(v.nation);
+        addTreaty(s, P(s), n, 'alliance'); addRel(s, P(s), n, 15);
+        const out = [good('Allies', `${nationName(s, n)} is now your ally. Relations +15.`, 'hands')];
+        if (v.foe && atWar(s, P(s), String(v.foe)) && !atWar(s, n, String(v.foe))) { declareWar(s, n, String(v.foe)); out.push(good('They march', `${nationName(s, n)} joins your war against ${nationName(s, String(v.foe))}.`, 'sword')); }
+        return out;
+      } },
+      { label: 'Decline politely', run: (s, v) => { addRel(s, P(s), String(v.nation), -8); return [neutral('Declined', 'Relations −8.')]; } },
+    ],
+  },
+  {
+    id: 'ai_marriage', title: 'A Royal Match', art: 'ring', chance: 0.08, repeat: 6,
+    setup: s => {
+      const c = Object.values(s.nations).filter(n => n.alive && n.id !== P(s) && n.id !== 'papacy' && !atWar(s, P(s), n.id) && !hasTreaty(s, P(s), n.id, 'marriage') && getRel(s, P(s), n.id) >= 10 && sameFaith(s, n.id));
+      return c.length ? { nation: pick(s, c).id } : null;
+    },
+    text: (s, v) => `${nationName(s, String(v.nation))} offers a prince for a marriage into your royal house. Marriages bind crowns, and one day may unite them.`,
+    options: [
+      { label: 'Agree to the match', run: (s, v) => { addTreaty(s, P(s), String(v.nation), 'marriage'); addRel(s, P(s), String(v.nation), 10); return [good('Wedding bells', `Your houses are joined. Relations +10, and they grow by 3 a year.`, 'ring')]; } },
+      { label: 'Refuse', run: (s, v) => { addRel(s, P(s), String(v.nation), -10); return [neutral('Refused', 'Relations −10.')]; } },
+    ],
+  },
+  {
+    id: 'ai_vassal_offer', title: 'A Small Crown Seeks Protection', art: 'crown', chance: 0.05, repeat: 8,
+    setup: s => {
+      const myPow = s.troops.length;
+      const near = borderNations(s);
+      const c = Object.values(s.nations).filter(n => n.alive && near.has(n.id) && !n.overlord && !atWar(s, P(s), n.id) && provsOf(s, n.id).length <= 2 && n.army.length * 2 < myPow && getRel(s, P(s), n.id) >= 20 && !subjectsOf(s, n.id).length);
+      return c.length ? { nation: pick(s, c).id } : null;
+    },
+    text: (s, v) => `${nationName(s, String(v.nation))} is small and afraid of its neighbours. Its ruler offers to become your vassal.`,
+    options: [
+      { label: 'Take them under your wing', run: (s, v) => { makeSubject(s, String(v.nation), 'vassal'); return [good('A new vassal', `${nationName(s, String(v.nation))} pays you tribute and follows you to war.`, 'crown')]; } },
+      { label: 'Stay out of it', run: () => [neutral('No', 'They will look for another protector.')] },
+    ],
+  },
+  // ---------- the realm reacts to how you rule ----------
+  {
+    id: 'protestant_minority', title: 'The New Faith Spreads', art: 'church', chance: 0.15, repeat: 12, window: [1520, 1700],
+    cond: s => s.stateReligion === 'catholic' && provsOf(s, P(s)).some(p => p.religion === 'catholic' && p.settlement >= 2),
+    setup: s => { const ps = provsOf(s, P(s)).filter(p => p.religion === s.stateReligion && p.settlement >= 2); return ps.length ? { prov: pick(s, ps).id } : null; },
+    text: (s, v) => `Preachers of the new faith fill the squares of ${s.provinces[v.prov].name}. Printers spread their pamphlets faster than your bishops can burn them.`,
+    options: [
+      { label: 'Tolerate them', hint: 'Other faiths are less unhappy for 15 years', run: (s, v) => { s.flags.reformation_seen = 1; s.provinces[v.prov].religion = 'protestant'; s.flags.tolerance_until = Math.max(s.flags.tolerance_until ?? 0, s.year + 15); addRel(s, P(s), 'papacy', -10); return [neutral('Freedom of conscience', `${s.provinces[v.prov].name} turns Protestant, peacefully. Other faiths are less unhappy for 15 years. The Pope frowns (−10).`, 'church')]; } },
+      { label: 'Suppress them', run: (s, v) => { s.flags.reformation_seen = 1; const p = s.provinces[v.prov]; p.control = Math.max(0, p.control - 20); addRel(s, P(s), 'papacy', 10); if (rand(s) < 0.4) { p.religion = 'protestant'; return [bad('It spreads anyway', `${p.name} turns Protestant despite you. Control −20 there.`, 'torch')]; } return [good('Order restored', `The preachers flee. Control −20 in ${p.name}. The Pope is pleased (+10).`, 'church')]; } },
+      { label: 'Convert the crown', hint: 'Your state faith becomes Protestant', run: (s, v) => { s.flags.reformation_seen = 1; s.stateReligion = 'protestant'; s.provinces[v.prov].religion = 'protestant'; stab(s, -2); addRel(s, P(s), 'papacy', -60); return [bad('A new church', 'Your crown breaks with Rome. Stability −2. Catholic provinces are now of another faith; Protestant ones rejoice.', 'church')]; } },
+    ],
+  },
+  {
+    id: 'great_artist', title: 'A Genius Seeks a Patron', art: 'quill', chance: 0.18, repeat: 10,
+    cond: s => s.art >= 30,
+    text: s => `Your fame as a patron (arts ${Math.round(s.art)}) has spread. A painter of rare gifts asks for a commission.`,
+    options: [
+      { label: 'Commission a masterpiece (60 ducats)', can: s => player(s).gold < 60 ? 'Needs 60 ducats' : null, run: s => { player(s).gold -= 60; s.art = Math.min(100, s.art + 12); player(s).prestige += 12; return [good('A masterpiece', 'Arts +12, prestige +12. People will come from afar to see it.', 'quill')]; } },
+      { label: 'A small portrait (15 ducats)', can: s => player(s).gold < 15 ? 'Needs 15 ducats' : null, run: s => { player(s).gold -= 15; s.art = Math.min(100, s.art + 4); player(s).prestige += 3; return [good('A fine portrait', 'Arts +4, prestige +3.', 'quill')]; } },
+      { label: 'Not now', run: () => [neutral('Another court', 'The artist moves on.')] },
+    ],
+  },
+  {
+    id: 'tax_riots', title: 'Bread and Taxes', art: 'torch', chance: 0.35, repeat: 5,
+    cond: s => s.taxBurden >= 10,
+    setup: s => { const ps = provsOf(s, P(s)).filter(p => p.id !== player(s).capital); return ps.length ? { prov: pick(s, ps).id } : null; },
+    text: (s, v) => `The tax collectors are stoned in ${s.provinces[v.prov].name}. Crowds shout that the crown is bleeding them dry.`,
+    options: [
+      { label: 'Forgive this year\'s taxes', run: s => { const g = Math.round(20 + s.taxBurden * 2); player(s).gold -= g; s.taxBurden = 0; return [neutral('Relief', `You give up ${g} ducats. Tax anger is gone.`, 'coin')]; } },
+      { label: 'Send the soldiers', run: (s, v) => { const p = s.provinces[v.prov]; p.control = Math.min(100, p.control + 10); p.favor = Math.max(0, (p.favor ?? 0) - 10) || undefined; stab(s, -1); return [bad('Order by the sword', `Control +10 in ${p.name}, but stability −1 and the people remember.`, 'sword')]; } },
+    ],
+  },
+  {
+    id: 'vassal_plot', title: 'A Vassal Plots', art: 'eye', chance: 0.12, repeat: 6,
+    setup: s => { const c = subjectsOf(s).filter(n => getRel(s, P(s), n.id) < 10); return c.length ? { nation: pick(s, c).id } : null; },
+    text: (s, v) => `Your spies report that ${nationName(s, String(v.nation))} is talking to your rivals about throwing off your rule.`,
+    options: [
+      { label: 'Grant them privileges (2 nation points)', can: s => s.np < 2 ? 'Needs 2 nation points' : null, run: (s, v) => { s.np -= 2; addRel(s, P(s), String(v.nation), 30); return [good('Loyalty bought', 'Relations +30.', 'hands')]; } },
+      { label: 'Threaten them', run: (s, v) => { const n = s.nations[String(v.nation)]; if (rand(s) < 0.45 + s.troops.length / 60) { addRel(s, P(s), n.id, 10); return [good('They bow', `${n.name} swears loyalty again.`, 'crown')]; } n.overlord = undefined; n.subject = undefined; declareWar(s, n.id, P(s)); return [bad('Rebellion', `${n.name} declares independence and war!`, 'sword')]; } },
+    ],
+  },
+  {
+    id: 'idle_fleet', title: 'Sailors Without Work', art: 'anchor', chance: 0.1, repeat: 8,
+    cond: s => s.fleet.length >= 3 && !enemiesOf(s, P(s)).length,
+    text: s => `Your ${s.fleet.length} ships rot at anchor. Captains ask leave to sail as privateers against foreign merchants.`,
+    options: [
+      { label: 'Issue letters of marque', run: s => { const g = Math.round(15 * s.fleet.length * (1 + (s.year - 1453) / 200)); player(s).gold += g; const victim = pick(s, Object.values(s.nations).filter(n => n.alive && n.id !== P(s) && n.fleet.length)); if (victim) addRel(s, P(s), victim.id, -20); return [good('Prizes', `Your privateers bring in ${g} ducats.${victim ? ` ${victim.name} is furious (−20).` : ''}`, 'coin')]; } },
+      { label: 'Keep them in port', run: () => [neutral('Patience', 'Nothing happens.')] },
+    ],
+  },
+  {
+    id: 'golden_age', title: 'A Golden Age', art: 'laurel', chance: 0.3, repeat: 15,
+    cond: s => (s.happiness ?? 0) >= 72 && player(s).stability >= 2 && !enemiesOf(s, P(s)).length,
+    text: () => 'Bells ring, markets overflow and poets write of your reign. The realm has rarely been so content.',
+    options: [
+      { label: 'Celebrate', run: s => { player(s).prestige += 15; grantRandomCards(s, 2); return [good('Glory', 'Prestige +15 and two cards.', 'laurel')]; } },
+      { label: 'Invest the goodwill', run: s => { s.np += 4; return [good('Prudence', '+4 nation points.', 'star')]; } },
+    ],
+  },
+  {
+    id: 'culture_petition', title: 'A People Asks to Be Heard', art: 'scroll', chance: 0.12, repeat: 10,
+    setup: s => {
+      const count: Record<string, number> = {};
+      for (const p of provsOf(s, P(s))) if (!s.accepted.includes(p.culture)) count[p.culture] = (count[p.culture] ?? 0) + 1;
+      const best = Object.entries(count).filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1])[0];
+      return best ? { culture: best[0], n: best[1] } : null;
+    },
+    text: (s, v) => `Leaders of the ${CULTURE_NAMES[String(v.culture)]} people (${v.n} provinces) ask for their customs and language to be honoured at court.`,
+    options: [
+      { label: 'Accept their culture (4 nation points)', can: s => s.np < 4 ? 'Needs 4 nation points' : null, run: (s, v) => { s.np -= 4; s.accepted.push(String(v.culture)); return [good('Embraced', `${CULTURE_NAMES[String(v.culture)]} is now an accepted culture: no more foreign-culture unhappiness.`, 'scroll')]; } },
+      { label: 'Refuse', run: (s, v) => { for (const p of provsOf(s, P(s))) if (p.culture === v.culture) p.control = Math.max(0, p.control - 8); return [bad('Resentment', `Control −8 in every ${CULTURE_NAMES[String(v.culture)]} province.`, 'torch')]; } },
+    ],
+  },
+  {
+    id: 'native_unrest', title: 'Unrest in the Colonies', art: 'torch', chance: 0.12, repeat: 6,
+    setup: s => { const ps = provsOf(s, P(s)).filter(p => p.religion !== s.stateReligion && !s.accepted.includes(p.culture) && p.control < 60 && p.dev <= 3); return ps.length ? { prov: pick(s, ps).id } : null; },
+    text: (s, v) => `The native people of ${s.provinces[v.prov].name} rise against the settlers, who beg for soldiers.`,
+    options: [
+      { label: 'Send soldiers (25 ducats)', can: s => player(s).gold < 25 ? 'Needs 25 ducats' : null, run: (s, v) => { player(s).gold -= 25; s.provinces[v.prov].control = Math.min(100, s.provinces[v.prov].control + 15); return [good('Order', `Control +15 in ${s.provinces[v.prov].name}.`, 'sword')]; } },
+      { label: 'Make peace with their chiefs', run: (s, v) => { const p = s.provinces[v.prov]; p.favor = Math.min(30, (p.favor ?? 0) + 10); p.dev = Math.max(1, p.dev - (rand(s) < 0.4 ? 1 : 0)); return [neutral('A treaty', `Happiness +10 in ${p.name}, but some settlers leave.`, 'hands')]; } },
+    ],
+  },
+  {
+    id: 'rival_colonies', title: 'Rival Flags Overseas', art: 'anchor', chance: 0.1, repeat: 10,
+    setup: s => {
+      const mine = new Set(provsOf(s, P(s)).filter(p => !getGeo().seeds.some(x => x.id === p.id && ['europe', 'north_africa', 'atlantic'].includes(x.region))).map(p => p.id));
+      for (const id of mine) for (const nb of getGeo().adj[id]) { const o = s.provinces[nb].owner; if (o !== P(s) && s.nations[o]?.alive && !atWar(s, P(s), o) && !hasTreaty(s, P(s), o, 'alliance')) return { nation: o, prov: id }; }
+      return null;
+    },
+    text: (s, v) => `Settlers of ${nationName(s, String(v.nation))} push into the lands around ${s.provinces[v.prov].name}. Your governor asks for orders.`,
+    options: [
+      { label: 'Claim the frontier', hint: 'A claim: war with them costs no stability', run: (s, v) => { s.flags['claim_' + v.nation] = 1; addRel(s, P(s), String(v.nation), -15); return [neutral('A claim', `You may declare war on ${nationName(s, String(v.nation))} without losing stability. Relations −15.`, 'sword')]; } },
+      { label: 'Agree a border', run: (s, v) => { addRel(s, P(s), String(v.nation), 10); return [good('A border treaty', 'Relations +10.', 'hands')]; } },
     ],
   },
 ];

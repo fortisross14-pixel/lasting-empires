@@ -7,7 +7,9 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "tsc -p .",
-    "sim": "esbuild scripts/sim.ts --bundle --platform=node --outfile=dist/sim.js --log-level=warning && node dist/sim.js"
+    "sim": "esbuild scripts/sim.ts --bundle --platform=node --outfile=dist/sim.js --log-level=warning && node dist/sim.js",
+    "gen-world": "esbuild scripts/gen-world.ts --bundle --platform=node --outfile=dist/gen-world.js --log-level=warning && node dist/gen-world.js",
+    "icons": "node scripts/make-icons.cjs"
   },
   "repository": {
     "type": "git",

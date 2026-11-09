@@ -1,6 +1,7 @@
 // Lands beyond the sea: discovery, colonies and conquest, and the people who specialise in them.
 import type { GameState, Character, RevealItem, Role } from '../types';
 import { REGIONS, NATIVE_EMPIRES, COLONIAL_AI, type RegionDef } from '../data/overseas';
+import { eraOf } from '../data/eras';
 import { KNOWN_REGIONS } from '../data/provinces';
 import { NO_STATE } from '../data/nations';
 import { GOODS } from '../data/goods';
@@ -40,6 +41,7 @@ export function exploreChance(s: GameState, ch: Character): number {
   if (ch.traits.includes('navigator')) p += 0.15 * traitMult(ch);
   if (hasTech(s, 'navigation')) p += 0.15;
   if (hasCore(s, 'sea')) p += 0.15;
+  if (eraOf(s.year).id === 'discovery') p += 0.1;
   return clamp(p, 0.1, 0.95);
 }
 
@@ -54,7 +56,7 @@ export function oceanReach(s: GameState, id: string): boolean {
   return true;
 }
 
-export const colonyCost = (s: GameState) => Math.round(40 * inflation(s));
+export const colonyCost = (s: GameState) => Math.round(40 * inflation(s) * (eraOf(s.year).id === 'discovery' ? 0.75 : 1));
 
 export function colonizeBlocked(s: GameState, id: string, ch?: Character): string | null {
   const p = s.provinces[id];
@@ -74,6 +76,7 @@ export function colonizeChance(s: GameState, id: string, ch: Character): number 
   let c = 0.6 + ch.skill * 0.06 - (p?.dev ?? 1) * 0.06;
   if (ch.traits.includes('settler')) c += 0.15 * traitMult(ch);
   if (ch.traits.includes('missionary')) c += 0.1 * traitMult(ch);
+  if (eraOf(s.year).id === 'discovery') c += 0.1;
   return clamp(c, 0.1, 0.95);
 }
 
@@ -187,7 +190,7 @@ export function aiOverseas(s: GameState) {
   for (const [id, from] of Object.entries(COLONIAL_AI)) {
     const n = s.nations[id];
     if (id === s.player || !n?.alive || n.overlord || s.year < from || !hasCoast(s, id)) continue;
-    if (rand(s) > 0.07) continue;
+    if (rand(s) > 0.05) continue;
     const age = s.year - from;
     const reach = (r: string) => { const d = REGIONS[r]?.dist ?? 1; return d === 1 || (d === 2 && age > 10) || (d === 3 && age > 30); };
     const mine = new Set(provsOf(s, id).map(p => provRegion(p.id)));

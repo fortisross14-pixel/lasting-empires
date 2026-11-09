@@ -1,4 +1,5 @@
 // Shared helpers: RNG, lookups, relations, treaties, wars, logging.
+import { eraOf } from '../data/eras';
 import type { GameState, Nation, TroopCard, Character, Role, LogEntry, Prompt, Rarity, Province } from '../types';
 import { TROOPS } from '../data/troops';
 import { BUILDINGS, TECH } from '../data/techs';
@@ -190,7 +191,7 @@ export interface IncomeBreakdown {
 /** Running a realm costs more than it grows: courts, officials, garrisons. */
 export function administration(s: GameState, n: string) {
   const k = provsOf(s, n).length;
-  return 0.14 * Math.pow(k, 1.45) * inflation(s);
+  return 0.14 * Math.pow(k, 1.45) * inflation(s) * (eraOf(s.year).id === 'absolutism' ? 0.85 : 1);
 }
 
 export function salaries(s: GameState, n: string) {

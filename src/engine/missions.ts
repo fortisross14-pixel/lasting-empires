@@ -1,4 +1,5 @@
 // Missions: characters (and troops) sent to do things over several years.
+import { eraOf } from '../data/eras';
 import type { GameState, Mission, MissionKind, RevealItem, Character, Role } from '../types';
 import { CARDS, drawCat, CAT_INFO } from './cards';
 import { vassalizeBlocked, integrateBlocked, makeSubject, integrate } from './diplo';
@@ -40,6 +41,7 @@ export const MISSION_INFO: Record<MissionKind, { name: string; role: Role; icon:
   integrate: { name: 'Integration', role: 'diplomat', icon: 'hands', verb: 'Integrate' },
   patronage: { name: 'Patronage', role: 'admin', icon: 'star', verb: 'Commission works of art for' },
   convert: { name: 'Religious Mission', role: 'admin', icon: 'church', verb: 'Convert' },
+  grace: { name: 'Royal Grace', role: 'admin', icon: 'mood', verb: 'Win the hearts of' },
   assimilate: { name: 'Cultural Integration', role: 'admin', icon: 'scroll', verb: 'Integrate the people of' },
 };
 
@@ -141,6 +143,13 @@ export function attackRoute(s: GameState, target: string): { turns: number; nava
   return { turns: Math.max(1, t), naval: true };
 }
 
+/** Years a religious or cultural mission takes, by the administrator's rarity. */
+export const RARITY_YEARS: Record<string, number> = { legendary: 2, epic: 3, rare: 4, uncommon: 5, common: 6 };
+/** Happiness a Royal Grace adds, by outcome (it fades by 1 a year). */
+export const GRACE_GAIN = [4, 10, 14, 20, 28];
+
+export const graceCost = (s: GameState) => Math.round(20 * inflation(s));
+
 export function missionTurns(s: GameState, kind: MissionKind, ch: Character, target: string, building?: string): number {
   switch (kind) {
     case 'conquer': case 'raid': return attackRoute(s, target)?.turns ?? 2;
@@ -156,8 +165,9 @@ export function missionTurns(s: GameState, kind: MissionKind, ch: Character, tar
     case 'vassalize': return 2;
     case 'integrate': return 5;
     case 'patronage': return 2;
-    case 'convert': return 4;
-    case 'assimilate': return 5;
+    case 'convert': return RARITY_YEARS[ch.rarity];
+    case 'assimilate': return RARITY_YEARS[ch.rarity] + 1;
+    case 'grace': return Math.max(1, Math.ceil(RARITY_YEARS[ch.rarity] / 2));
     case 'develop': return 3;
     case 'found': return 3;
     case 'grow': return 3;
@@ -279,6 +289,14 @@ export function missionBlocked(s: GameState, kind: MissionKind, target: string, 
     if (s.missions.some(m => m.kind === 'patronage')) return 'Artists are already at work';
     return null;
   }
+  if (kind === 'grace') {
+    const p = s.provinces[target];
+    if (p?.owner !== me) return 'Choose one of your provinces';
+    if ((p.favor ?? 0) >= 20) return 'Already in high favour';
+    if (s.missions.some(m => m.kind === 'grace' && m.target === target)) return 'Already under way';
+    if (player(s).gold < graceCost(s)) return `Needs ${graceCost(s)} ducats`;
+    return null;
+  }
   if (kind === 'convert' || kind === 'assimilate') {
     const p = s.provinces[target];
     if (p?.owner !== me) return 'Choose one of your provinces';
@@ -328,6 +346,7 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   if (kind === 'explore') { m.progress = voyageCost(s); player(s).gold -= m.progress; }
   if (kind === 'colonize') { m.progress = colonyCost(s); player(s).gold -= m.progress; player(s).manpower -= 1; }
   if (kind === 'develop') { m.progress = developCost(s, target); player(s).gold -= m.progress; }
+  if (kind === 'grace') { m.progress = graceCost(s); player(s).gold -= m.progress; }
   if (kind === 'found') { m.progress = foundCost(s); player(s).gold -= m.progress; }
   if (kind === 'grow') { m.progress = growCost(s, target); player(s).gold -= m.progress; }
   ch.mission = m.id;
@@ -617,10 +636,25 @@ function resolveOther(s: GameState, m: Mission, ch: Character) {
     finish(s, m); return;
   }
 
-  if (m.kind === 'convert' || m.kind === 'assimilate') {
+  if (m.kind === 'grace') {
     const prov = s.provinces[m.target];
     if (prov.owner !== s.player) { finish(s, m); return; }
     const o = rollOutcome(s, ch);
+    const gain = GRACE_GAIN[o];
+    prov.favor = Math.min(30, (prov.favor ?? 0) + gain);
+    if (o >= 3) prov.control = Math.min(100, prov.control + 10);
+    const how = ['A cold welcome', 'Alms and a feast', 'A royal charter of privileges', 'Bread, wine and a new bridge', 'A visit the people will tell their grandchildren about'];
+    const items: RevealItem[] = [outcomeItem(o, `${how[o]} in ${prov.name}. Happiness +${gain} there (fading by 1 a year)${o >= 3 ? ', control +10' : ''}.`)];
+    gainXp(s, ch, items);
+    push(s, { kind: 'reveal', title: 'Royal Grace', items });
+    finish(s, m); return;
+  }
+
+  if (m.kind === 'convert' || m.kind === 'assimilate') {
+    const prov = s.provinces[m.target];
+    if (prov.owner !== s.player) { finish(s, m); return; }
+    let o = rollOutcome(s, ch);
+    if (o === 0 && m.kind === 'convert' && eraOf(s.year).id === 'reformation' && rand(s) < 0.4) o = 1;
     const items: RevealItem[] = [];
     if (o === 0) {
       prov.control = Math.max(0, prov.control - 15);

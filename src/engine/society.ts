@@ -2,6 +2,7 @@
 import type { GameState, Province } from '../types';
 import { BUILDINGS } from '../data/techs';
 import { player, provsOf, clamp, rand, hasCore, hasGood, log, population } from './core';
+import { eraOf } from '../data/eras';
 import { NATIONS, NO_STATE } from '../data/nations';
 import { getGeo } from './map';
 
@@ -72,6 +73,7 @@ export function happinessOf(s: GameState, p: Province): { value: number; parts: 
     let v = -18;
     if ((s.flags.tolerance_until ?? 0) > s.year) v += 10;
     if (hasCore(s, 'open')) v += 6;
+    if (eraOf(s.year).id === 'reformation') v -= 4;
     parts.push({ label: `${RELIGION_NAMES[p.religion] ?? p.religion} minority`, v });
   }
   parts.push(isAccepted(s, p.culture) ? { label: `${CULTURE_NAMES[p.culture] ?? p.culture} culture`, v: 5 } : { label: `Foreign culture (${CULTURE_NAMES[p.culture] ?? p.culture})`, v: -12 });
@@ -87,6 +89,7 @@ export function happinessOf(s: GameState, p: Province): { value: number; parts: 
   if (s.taxBurden > 0) parts.push({ label: 'Taxes', v: -Math.round(s.taxBurden) });
   if ((s.flags.festival_until ?? 0) > s.year) parts.push({ label: 'Royal festival', v: 8 });
   if (p.control < 30) parts.push({ label: 'Weak royal control', v: -8 });
+  if ((p.favor ?? 0) >= 1) parts.push({ label: 'Royal favour', v: Math.round(p.favor!) });
   if (p.core !== s.player) parts.push({ label: 'Recently conquered', v: -5 });
   const size = provsOf(s, s.player).length;
   if (size > 10) parts.push({ label: 'Overextension', v: -Math.min(20, Math.round((size - 10) * 0.9)) });
@@ -115,8 +118,9 @@ export function yearlySociety(s: GameState) {
   for (const p of provsOf(s, s.player)) p.control = clamp(p.control + (happinessOf(s, p).value - 50) / 25, 0, 100);
   let artGain = 0;
   for (const p of provsOf(s, s.player)) for (const b of p.buildings) artGain += ({ university: 0.5, temple: 0.3, library: 0.3 } as Record<string, number>)[b] ?? 0;
-  s.art = clamp(s.art * 0.985 + artGain, 0, 100);
+  s.art = clamp(s.art * 0.985 + artGain * (eraOf(s.year).id === 'enlightenment' ? 1.5 : 1), 0, 100);
   s.taxBurden = Math.max(0, s.taxBurden - 3);
+  for (const p of Object.values(s.provinces)) if (p.favor) p.favor = p.favor > 1 ? p.favor - 1 : undefined;
   void BUILDINGS;
 }
 

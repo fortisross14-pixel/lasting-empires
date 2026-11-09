@@ -24,9 +24,8 @@ necessarily play out the way they did in our world.
 4. **Thumbs first.** Tap, drag, long-press. Nothing needs hover or precision.
 
 ## 3. Setting & scope
-- Map: Europe, Mediterranean, Near East — ~60 large provinces, plus
-  off-map **Colonial / Trade regions** (Americas, Indies, Africa coast) as
-  abstract slots, not map conquest.
+- Map: the whole world, 363 provinces (Europe densest; Castile 35, Portugal 11),
+  with hidden regions revealed by explorers and native lands settled by colonists.
 - Playable nations (launch target, 8): Castile, Portugal, France, England,
   Austria, Venice, Ottomans, Muscovy. Minors are AI-only.
 - Turn = 5 years → ~60 turns.

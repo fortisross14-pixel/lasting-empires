@@ -1,4 +1,6 @@
 // Cards are the actions of the game. Five kinds, each drawn at its own yearly rate.
+import { eraOf } from '../data/eras';
+import { happinessOf } from './society';
 import { getGeo } from './map';
 import type { GameState, Cat, Role, MissionKind } from '../types';
 import { CATS } from '../types';
@@ -118,6 +120,7 @@ add({ id: 'royal_progress', name: 'Royal Progress', cat: 'internal', kind: 'miss
 add({ id: 'colonial_charter', name: 'Colonial Charter', cat: 'internal', kind: 'mission', missions: ['colonize'], agent: 'colonist', icon: 'tower', text: 'A colonist settles a discovered land (1 manpower).', weight: s => (Object.values(s.overseas).some(o => o.found) ? 1.2 : 0.15) });
 add({ id: 'patronage', name: 'Patronage of the Arts', cat: 'internal', kind: 'mission', missions: ['patronage'], icon: 'star', text: 'Commission painters, poets and builders. Raises the arts, which make the people happier.', weight: () => 1.3 });
 add({ id: 'religious_mission', name: 'Religious Mission', cat: 'internal', kind: 'mission', missions: ['convert'], icon: 'church', text: 'Preachers convert a province to your faith.', weight: s => (provsOf(s, s.player).some(p => p.religion !== s.stateReligion) ? 1.3 : 0.1) });
+add({ id: 'royal_grace', name: 'Royal Grace', cat: 'internal', kind: 'mission', missions: ['grace'], icon: 'mood', text: 'An administrator wins the hearts of one province. A better one is faster and kinder.', weight: s => (provsOf(s, s.player).some(p => happinessOf(s, p).value < 50) ? 1.3 : 0.5) });
 add({ id: 'assimilation', name: 'Cultural Integration', cat: 'internal', kind: 'mission', missions: ['assimilate'], icon: 'scroll', text: 'Bring a province of foreign culture into your ways.', weight: s => (provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? 1.1 : 0.1) });
 add({ id: 'festival', name: 'Royal Festival', cat: 'internal', kind: 'instant', icon: 'cup', text: 'Pay 15 ducats: happiness +8 for 5 years.', weight: () => 0.9,
   can: s => player(s).gold < Math.round(15 * inflation(s)) ? `Needs ${Math.round(15 * inflation(s))} ducats` : null,
@@ -219,6 +222,8 @@ export function cardRates(s: GameState): Record<Cat, { rate: number; parts: Rate
     if (c === 'economy' && hasGood(s, 'salt')) parts.push({ label: 'Salt', v: 0.1 });
     const core = (s.core ?? []).reduce((a, id) => a + (CORE_RATES[id]?.[c] ?? 0), 0);
     if (core) parts.push({ label: 'Core cards', v: core });
+    const era = eraOf(s.year);
+    if (era.rates?.[c]) parts.push({ label: era.name, v: era.rates[c]! });
     if (player(s).stability <= -2) parts.push({ label: 'Unrest', v: -0.2 });
     out[c] = { rate: Math.min(RATE_CAP, Math.max(0.2, parts.reduce((a, p) => a + p.v, 0))), parts };
   }
@@ -235,6 +240,7 @@ export function npRate(s: GameState): { rate: number; parts: RatePart[] } {
   if (arch?.np) parts.push({ label: 'Monarch', v: arch.np });
   if (hasGood(s, 'wine')) parts.push({ label: 'Wine', v: 0.5 });
   if (hasTech(s, 'councils')) parts.push({ label: 'Royal Councils', v: 1 });
+  if (eraOf(s.year).id === 'absolutism') parts.push({ label: 'Absolutism', v: 1 });
   if (hasCore(s, 'traditional')) parts.push({ label: 'Traditional', v: 1 });
   if (hasCore(s, 'open')) parts.push({ label: 'Open-minded', v: -0.5 });
   const st = player(s).stability;

@@ -1,4 +1,5 @@
 // New game setup, the yearly turn, and player actions that touch several systems.
+import { eraOf, ERAS } from '../data/eras';
 import type { GameState, Nation, Ruler, RevealItem, Heir, Character } from '../types';
 import { CATS } from '../types';
 import { NATIONS, START_REL, RULERS, RULER_NAMES, RULER_ARCHS, archFromTraits } from '../data/nations';
@@ -286,6 +287,11 @@ export function endTurn(s: GameState): YearReport | null {
   yearlyFleet(s);
   yearlySociety(s);
   s.year++;
+  const era = eraOf(s.year);
+  if (era.from === s.year && ERAS[0] !== era) {
+    push(s, { kind: 'reveal', title: era.name, subtitle: `${era.from}–${era.to}`, items: [{ title: 'A new age begins', text: era.text, tone: 'neutral', kind: 'star' }, ...era.effects.map(e => ({ title: 'This age', text: e, tone: 'good' as const, kind: era.icon }))] });
+    log(s, `The ${era.name} begins.`, 'neutral');
+  }
   characterAging(s);
   successionCheck(s);
   rollEvents(s);
@@ -323,6 +329,7 @@ export function warCost(s: GameState, target: string): number {
   if (s.flags['claim_' + target]) return 0;
   const allied = s.treaties.some(t => (t.kind === 'alliance' || t.kind === 'marriage') && ((t.a === s.player && t.b === target) || (t.b === s.player && t.a === target)));
   let c = allied ? 2 : 1;
+  if (eraOf(s.year).id === 'reconquest' && s.provinces[s.nations[target]?.capital]?.religion !== s.stateReligion) c -= 1;
   if (hasCore(s, 'expansion')) c -= 1;
   if (hasCore(s, 'consolidation')) c += 1;
   return Math.max(0, c);

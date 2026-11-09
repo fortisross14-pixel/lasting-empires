@@ -22,6 +22,8 @@ Economy for `reasonable` (median treasury and average net income per year):
 
 The bot turns spare gold into nation points by selling offices; a player who sits on gold will see larger treasuries.
 
+World map check (after the expansion to 363 provinces): `reasonable` survived 9/9, top 3 in 9, first in 4; `greedy` 6/6, top 3 in 6, first in 2; `passive` survived 6/6, never top 3. AI realms now develop their land (about 1.2% a province a year), AI prestige settles around 150–250, and unclaimed lands are mostly settled by 1600–1650.
+
 ## Levers (where to tune)
 
 - **Income:** `provinceIncome`, `tradeValue` (1 + 0.07 × partner development, capped at 4, each extra route ×0.8), building gold in `src/data/techs.ts`, settlement tiers (`TIERS`), price level (income follows 70% of inflation).

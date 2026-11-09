@@ -5,10 +5,11 @@ import { TROOPS, EQUIPMENT, COUNTER_TEXT } from '../data/troops';
 import { TECHS, TECH, BUILDINGS, type TechTrack } from '../data/techs';
 import { TRAITS, RARITY, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
 import { GOODS } from '../data/goods';
+import { eraOf } from '../data/eras';
 import { REGIONS, NATIVE_EMPIRES } from '../data/overseas';
 import { NO_STATE } from '../data/nations';
 import {
-  player, provsOf, incomeOf, playerManpower, getRel, atWar, hasTreaty, enemiesOf, alliesOf, armyPower,
+  player, push, provsOf, incomeOf, playerManpower, getRel, atWar, hasTreaty, enemiesOf, alliesOf, armyPower,
   armyCap, courtCap, courtCount, provinceIncome, buildingAllowed, buildingCost, roleName, nationName, inTruce,
   tierOf, TIERS, population, townSlots, ruralSlots, builtAt, ownGoods, colonyGoods, coreSlots,
 } from '../engine/core';
@@ -18,6 +19,7 @@ import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBloc
 import {
   MISSION_INFO, DIPLO, missionBlocked, launchMission, cancelMission, diploChance, missionTurns, techCost, researchRate, attackRoute,
   developCost, foundCost, growCost, importable, cardRole, cardRoles, becomesOnMission, voyageCost, GRADES,
+  graceCost,
 } from '../engine/missions';
 import { buyCard, buyBlocked, hireWithCard, takeDraftOption, mergePreview, doMerge, AMBITIONS, officeCost, sellOffices } from '../engine/drafts';
 import { discoverable, exploreChance, colonizeChance, conquistaChance, PROMOTION, colonyCost, regionKnown, provRegion, provKnown } from '../engine/overseas';
@@ -184,6 +186,12 @@ function act(fn: () => string | null | void, okMsg?: string) {
 }
 
 // ---------- top bar ----------
+function showEra() {
+  const e = eraOf(S.year);
+  push(S, { kind: 'reveal', title: e.name, subtitle: `${e.from}–${e.to}`, items: [{ title: 'This age', text: e.text, tone: 'neutral', kind: 'star' }, ...e.effects.map(x => ({ title: 'Effect', text: x, tone: 'good' as const, kind: e.icon }))] });
+  processQueue();
+}
+
 function renderTop() {
   const me = player(S);
   const inc = incomeOf(S, S.player);
@@ -193,7 +201,7 @@ function renderTop() {
     h('button', { class: 'crest', onclick: () => toggleSheet('realm'), style: `--nc:${me.color}` },
       h('span', { class: 'np-shield sm' }, me.name[0]),
       h('span', { class: 'crest-t' }, h('b', {}, me.name), h('small', {}, me.ruler.name))),
-    h('div', { class: 'year' }, h('span', { class: 'year-n' }, String(S.year)), h('small', {}, 'A.D.')),
+    h('button', { class: 'year', title: eraOf(S.year).name, onclick: () => showEra() }, h('span', { class: 'year-n' }, String(S.year)), h('small', {}, eraOf(S.year).name.replace('Age of ', ''))),
     h('div', { class: 'res' },
       chip('coin', fmt(me.gold), signed(inc.total), 'Ducats', inc.total < 0 ? 'bad' : ''),
       chip('people', String(Math.floor(me.manpower)), '+' + mp.gain.toFixed(1), 'Manpower'),
@@ -351,7 +359,7 @@ function provinceSheet(id: string, body: HTMLElement) {
   const tier = tierOf(p);
   body.append(h('div', { class: 'stats' },
     stat(TIERS[tier].name, `${(population(S, p) / 1000).toFixed(0)}k people`), stat('Development', p.dev),
-    stat('Control', `${Math.round(p.control)}%`), stat('Produces', GOODS[p.good]?.name ?? p.good),
+    stat('Control', `${Math.round(p.control)}%`), stat('Raw material', GOODS[p.good]?.name ?? p.good),
     stat('Income', provinceIncome(S, id).toFixed(1)), stat('Fort', p.fort ? '▮'.repeat(p.fort) : 'none'),
     g.coastal[id] ? stat('Coast', 'yes') : null,
     stat('Culture', `${CULTURE_NAMES[p.culture] ?? p.culture}${mine && !isAccepted(S, p.culture) ? ' (foreign)' : ''}`), stat('Faith', RELIGION_NAMES[p.religion] ?? p.religion)));
@@ -368,18 +376,22 @@ function provinceSheet(id: string, body: HTMLElement) {
       h('div', { class: 'tags' }, blds.length ? blds.map(b => h('span', { class: 'tag', html: icon(BUILDINGS[b].icon, 14) + ' ' + BUILDINGS[b].name + gradeLabel(p.grades?.[b] ?? 1) })) : h('span', { class: 'muted' }, sname === 'town' && !p.settlement ? 'No town yet. Found a settlement to build here.' : 'Nothing built yet')));
   };
   body.append(site('town', TIERS[tier].name), site('rural', 'Countryside'));
+  const best = Object.values(BUILDINGS).filter(b => b.match?.includes(p.good)).map(b => b.name);
+  if (best.length) body.append(h('p', { class: 'muted' }, `${GOODS[p.good]?.name ?? p.good}: ${best.join(' and ')} produce double here.`));
   if (mine) {
     body.append(h('h3', {}, 'Actions'));
     const devCard = cardFor(S, 'develop');
     body.append(actionRow('wheat', 'Develop', `+1 development · ${developCost(S, id)} ducats · uses Settlers or Irrigation`, !devCard ? 'Needs a Settlers (Internal) or Irrigation (Economy) card' : missionBlocked(S, 'develop', id), () => openPlanner('develop', id, undefined, devCard!.uid)));
     if (p.religion !== S.stateReligion) {
       const rc = cardFor(S, 'convert');
-      body.append(actionRow('church', 'Religious mission', `Convert to the ${RELIGION_NAMES[S.stateReligion]} faith · 4 years`, !rc ? 'Needs a Religious Mission card (Internal)' : missionBlocked(S, 'convert', id), () => openPlanner('convert', id, undefined, rc!.uid)));
+      body.append(actionRow('church', 'Religious mission', `Convert to the ${RELIGION_NAMES[S.stateReligion]} faith · 2–6 years, faster with a rarer administrator`, !rc ? 'Needs a Religious Mission card (Internal)' : missionBlocked(S, 'convert', id), () => openPlanner('convert', id, undefined, rc!.uid)));
     }
     if (!isAccepted(S, p.culture)) {
       const ac = cardFor(S, 'assimilate');
-      body.append(actionRow('scroll', 'Cultural integration', `Bring the ${CULTURE_NAMES[p.culture] ?? p.culture} people into your ways · 5 years`, !ac ? 'Needs a Cultural Integration card (Internal)' : missionBlocked(S, 'assimilate', id), () => openPlanner('assimilate', id, undefined, ac!.uid)));
+      body.append(actionRow('scroll', 'Cultural integration', `Bring the ${CULTURE_NAMES[p.culture] ?? p.culture} people into your ways · 3–7 years, faster with a rarer administrator`, !ac ? 'Needs a Cultural Integration card (Internal)' : missionBlocked(S, 'assimilate', id), () => openPlanner('assimilate', id, undefined, ac!.uid)));
     }
+    const gr = cardFor(S, 'grace');
+    body.append(actionRow('mood', 'Royal grace', `Raise happiness here (+4 to +28, fading 1 a year) · ${graceCost(S)} ducats · 1–3 years`, !gr ? 'Needs a Royal Grace card (Internal)' : missionBlocked(S, 'grace', id), () => openPlanner('grace', id, undefined, gr!.uid)));
     if (!p.settlement) {
       const fc = cardFor(S, 'found');
       body.append(actionRow('tower', 'Found a settlement', `A village, town or city, depending on your administrator · ${foundCost(S)} ducats`, !fc ? 'Needs a Found a Settlement card (Internal)' : missionBlocked(S, 'found', id), () => openPlanner('found', id, undefined, fc!.uid)));
@@ -398,8 +410,18 @@ function provinceSheet(id: string, body: HTMLElement) {
         body.append(actionRow(b.icon, b.name, `${b.desc} · ${buildingCost(S, b.id)} ducats · salary ${b.salary}/yr`, block, () => openPlanner('build', id, b.id, card!.uid)));
       }
     }
+  } else if (p.owner === NO_STATE) {
+    const cc = cardFor(S, 'colonize');
+    body.append(h('h3', {}, 'Unclaimed land'));
+    body.append(h('p', { class: 'muted' }, `No state rules here. The ${CULTURE_NAMES[p.culture] ?? p.culture} people live by their own ways.`));
+    body.append(actionRow('tower', `Colonise ${p.name}`, `${Math.round(colonyCost(S))} ducats and 1 manpower · a colonist settles it`, !cc ? 'Needs a Colonial Charter card (Internal)' : missionBlocked(S, 'colonize', id), () => openPlanner('colonize', id, undefined, cc!.uid)));
+    return [sheetHead(p.name, 'Unclaimed land', '#b9ad8e'), body];
   } else {
     const war = atWar(S, S.player, p.owner);
+    if (NATIVE_EMPIRES.includes(p.owner)) {
+      const kc = cardFor(S, 'conquista');
+      body.append(actionRow('sword', `Conquista: ${p.name}`, 'A conqueror and troops take it, with plunder', !kc ? 'Needs a Conquista card (Military)' : missionBlocked(S, 'conquista', id), () => openPlanner('conquista', id, undefined, kc!.uid)));
+    }
     if (war) {
       const route = attackRoute(S, id);
       const card = cardFor(S, 'conquer');
@@ -840,6 +862,10 @@ function missionTargets(handUid: number): TargetRow[] {
     for (const p of provsOf(S, S.player)) {
       const acts = Object.values(BUILDINGS).filter(b => b.group === d.group).map(b => ({ label: b.name, kind, target: p.id, building: b.id, why: missionBlocked(S, 'build', p.id, b.id) })).filter(a => !a.why || a.why.startsWith('Needs') && !a.why.startsWith('Needs Ocean') || a.why.startsWith('No free'));
       if (acts.length) rows.push({ label: p.name, sub: `${TIERS[tierOf(p)].name} · town ${builtAt(p, 'town')}/${townSlots(p)} · countryside ${builtAt(p, 'rural')}/${ruralSlots(p)}`, acts });
+    }
+  } else if (kind === 'grace') {
+    for (const p of provsOf(S, S.player).sort((a, b) => happinessOf(S, a).value - happinessOf(S, b).value)) {
+      rows.push({ label: p.name, sub: `happiness ${happinessOf(S, p).value}%${p.favor ? ` · favour ${Math.round(p.favor)}` : ''}`, acts: [{ label: 'Grace', kind, target: p.id, why: missionBlocked(S, kind, p.id) }] });
     }
   } else if (kind === 'convert' || kind === 'assimilate') {
     for (const p of provsOf(S, S.player)) {
