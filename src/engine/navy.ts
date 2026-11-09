@@ -1,4 +1,5 @@
 // Ships and admirals.
+import { shortfallCost, takeGoods, hireNeeds } from './trade';
 import type { GameState, Character } from '../types';
 import { TROOPS } from '../data/troops';
 import { player, provsOf, hasTech, hasCore, inflation, uid, rollOutcome, outcomeName, log, rollTraits, traitMult } from './core';
@@ -21,7 +22,7 @@ export function transportOf(s: GameState, shipUids: number[], ch?: Character | n
 }
 
 export function shipHireCost(s: GameState, type: string): number {
-  return Math.round((10 + 8 * TROOPS[type].tier) * inflation(s));
+  return Math.round((10 + 8 * TROOPS[type].tier) * inflation(s)) + shortfallCost(s, hireNeeds(type, 'ship'));
 }
 
 export function shipBlocked(s: GameState, type: string): string | null {
@@ -51,6 +52,7 @@ export function hireShip(s: GameState, handUid: number, charUid?: number): strin
   const note = c ? ` Crew trained by ${c.name}.` : '';
   player(s).manpower -= 1;
   player(s).gold -= shipHireCost(s, def.troop!);
+  takeGoods(s, hireNeeds(def.troop!, 'ship'));
   const o = rollOutcome(s, c);
   const vet = [0, 0, 1, 2, 3][o];
   s.fleet.push({ uid: uid(s), type: def.troop!, vet, str: o === 0 ? 70 : 100 });

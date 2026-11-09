@@ -98,6 +98,7 @@ export interface Province {
   religion: string;
   settlement: number; // 0 none, 1 village, 2 town, 3 city, 4 metropolis
   grades: Record<string, number>; // building quality multiplier (Shoddy 0.75 … Wonder 2)
+  make?: string;      // what its Workshop / Manufactory makes
 }
 
 export type MissionKind =
@@ -105,7 +106,7 @@ export type MissionKind =
   | 'relations' | 'trade' | 'alliance' | 'marriage' | 'peace'
   | 'research' | 'build' | 'develop' | 'found' | 'grow' | 'tax' | 'progress'
   | 'explore' | 'colonize' | 'conquista'
-  | 'vassalize' | 'integrate' | 'patronage' | 'convert' | 'assimilate' | 'grace' | 'base';
+  | 'vassalize' | 'integrate' | 'patronage' | 'convert' | 'assimilate' | 'grace' | 'base' | 'route' | 'post';
 
 export interface Mission {
   id: number;
@@ -119,8 +120,15 @@ export interface Mission {
   total: number;
   progress: number;      // research points accumulated
   bonus: number;         // flat success bonus from cards (0..1)
-  good?: string;         // good to import (trade routes)
+  good?: string;         // good traded (trade routes)
+  dir?: 'buy' | 'sell';  // trade routes
+  amount?: number;       // trade routes: loads a year
 }
+
+/** A standing trade route: buys or sells loads of one good every quarter. */
+export interface TradeRoute { id: number; good: string; dir: 'buy' | 'sell'; partner: string; amount: number; since: number; deal: number; }
+/** A trading post abroad: cheaper buying and better selling with that realm. */
+export interface TradePost { nation: string; since: number; }
 
 export interface Treaty { a: string; b: string; kind: 'trade' | 'alliance' | 'marriage'; since: number; }
 export interface War { a: string; b: string; since: number; gainsA: number; gainsB: number; winsA?: number; winsB?: number; }
@@ -238,7 +246,12 @@ export interface GameState {
   cardAccum: Record<Cat, number>;
   bought: Record<Cat, number>;      // cards bought this year (price rises)
   np: number;                       // nation points
-  imports: { good: string; from: string }[];
+  imports: { good: string; from: string }[]; // old saves only
+  stock: Record<string, number>;    // loads in the warehouses
+  short: Record<string, number>;    // share of last year's need that went unmet (0..1)
+  routes: TradeRoute[];
+  posts: TradePost[];
+  tradeYear?: { bought: number; sold: number; local: number; market: number }; // ducats over the last four quarters
   overseas: Record<string, { found: boolean; holder: string | null; colony: number; subdued: boolean }>;
   stats: Stats;
   core: string[];                   // adopted core cards

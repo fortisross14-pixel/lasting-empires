@@ -1,10 +1,11 @@
-import type { GameState, MissionKind, DraftOption, RevealItem, Battle, Character, Cat, Heir, BattleRecord } from '../types';
+import type { GameState, Province, MissionKind, DraftOption, RevealItem, Battle, Character, Cat, Heir, BattleRecord } from '../types';
 import { CATS } from '../types';
 import { NATIONS, RULER_ARCHS } from '../data/nations';
 import { TROOPS, EQUIPMENT, COUNTER_TEXT } from '../data/troops';
 import { TECHS, TECH, BUILDINGS, type TechTrack } from '../data/techs';
 import { TRAITS, RARITY, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
-import { GOODS } from '../data/goods';
+import { GOODS, FOOD, RAW, MADE } from '../data/goods';
+import { hireNeeds, quarterFlow, needs, partners, routeBlocked, postBlocked, routeCap, postCap, postTurns, postCost, distanceTo, price, canMake, workshopCap, provinceOutput, sideOutput, dealFor, merchantFactor, POST_UPKEEP, MAX_ROUTE, materialsFor, stockCap } from '../engine/trade';
 import { AGE_TECH, ERA, PIONEER_YEARS } from '../data/eras';
 import { ageOf, nextAge } from '../engine/ages';
 import { REGIONS, HOME_REGIONS, NATIVE_EMPIRES } from '../data/overseas';
@@ -19,7 +20,7 @@ import { EVENT, eventTitle, upcomingHistory } from '../engine/events';
 import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBlocked, troopHireCost, discardCard, handLimit, cardFor, archiveCards, restoreCard, dropArchived } from '../engine/cards';
 import {
   MISSION_INFO, DIPLO, missionBlocked, launchMission, cancelMission, diploChance, missionTurns, techCost, researchRate, attackRoute,
-  developCost, foundCost, growCost, importable, cardRole, cardRoles, becomesOnMission, voyageCost, GRADES,
+  developCost, foundCost, growCost, projectGoods, projectShortfall, cardRole, cardRoles, becomesOnMission, voyageCost, GRADES,
   graceCost, envoyCost, envoyTravel,
 } from '../engine/missions';
 import { buyCard, buyBlocked, hireWithCard, takeDraftOption, mergePreview, doMerge, AMBITIONS, officeCost, sellOffices } from '../engine/drafts';
@@ -265,7 +266,8 @@ function renderLegend() {
   if (box.hidden) return;
   const title = MAP_MODES.find(m => m.id === map.mode)!.name;
   const name = (k: string) => map.mode === 'religion' ? RELIGION_NAMES[k] ?? k : map.mode === 'goods' ? GOODS[k]?.name ?? k : k;
-  clear(box).append(h('b', {}, title), ...items.map(i => h('span', { class: 'lg' }, h('i', { style: `background:${i.color}` }), name(i.label))),
+  clear(box).append(h('b', {}, title), ...items.map(i => h('span', { class: 'lg', title: map.mode === 'goods' ? GOODS[i.label]?.desc ?? '' : '', onclick: map.mode === 'goods' ? () => toast(`${GOODS[i.label].name}: ${GOODS[i.label].desc}`) : undefined },
+    i.icon ? h('i', { class: 'lg-ic', style: `background:${i.color}`, html: icon(i.icon, 12) }) : h('i', { style: `background:${i.color}` }), name(i.label))),
     h('button', { class: 'lg-x', 'aria-label': 'Back to realms', onclick: () => { map.setMode('political', S); renderLegend(); }, html: icon('close', 14) }));
 }
 
@@ -415,7 +417,7 @@ const WIN_TABS: Record<Cat, [string, string][]> = {
   military: [['cards', 'Cards'], ['missions', 'Missions'], ['army', 'Army'], ['navy', 'Navy'], ['wars', 'Wars & battles']],
   diplomacy: [['cards', 'Cards'], ['missions', 'Missions'], ['realms', 'Realms'], ['subjects', 'Subjects']],
   internal: [['cards', 'Cards'], ['missions', 'Missions'], ['core', 'Core'], ['realm', 'Realm'], ['provinces', 'Provinces']],
-  economy: [['cards', 'Cards'], ['missions', 'Missions'], ['ledger', 'Ledger'], ['goods', 'Goods']],
+  economy: [['cards', 'Cards'], ['missions', 'Missions'], ['goods', 'Trade'], ['ledger', 'Ledger']],
   research: [['cards', 'Cards'], ['missions', 'Missions'], ['tech', 'Technologies']],
 };
 function toggleWin(cat: Cat) { if (win?.cat === cat) closeWin(); else openWin(cat); }
@@ -723,7 +725,10 @@ function provinceSheet(id: string, body: HTMLElement) {
   };
   body.append(site('town', TIERS[tier].name), site('rural', 'Countryside'));
   const best = Object.values(BUILDINGS).filter(b => b.match?.includes(p.good)).map(b => b.name);
-  if (best.length) body.append(h('p', { class: 'muted' }, `${GOODS[p.good]?.name ?? p.good}: ${best.join(' and ')} produce double here.`));
+  const out = provinceOutput(S, p), side = sideOutput(S, p);
+  body.append(h('p', { class: 'muted' }, h('span', { class: 'gico-in', style: `color:${GOODS[p.good]?.color}`, html: icon(GOODS[p.good]?.icon ?? 'star', 14) }),
+    ` Makes ${f1(out)} ${GOODS[p.good]?.name.toLowerCase() ?? p.good} a year${side.length ? ` and ${side.map(x => `${f1(x.v)} ${GOODS[x.good].name.toLowerCase()}`).join(', ')}` : ''}. ${GOODS[p.good]?.desc ?? ''}${best.length ? ` ${best.join(' or ')} double it.` : ''}`));
+  if (mine && workshopCap(S, p) > 0) body.append(workshopRow(p));
   if (mine) {
     body.append(h('h3', {}, 'Actions'));
     const devCard = cardFor(S, 'develop');
@@ -1059,33 +1064,157 @@ function ledgerTab(body: HTMLElement) {
   body.append(h('table', { class: 'ledger' }, h('tbody', {},
     h('tr', {}, h('td', {}, 'Provinces (after control)'), h('td', {}, inc.provinces.toFixed(1))),
     h('tr', {}, h('td', {}, 'Trade treaties'), h('td', {}, inc.trade.toFixed(1))),
-    h('tr', {}, h('td', {}, 'Goods'), h('td', {}, inc.goods.toFixed(1))),
+    h('tr', {}, h('td', {}, 'Goods sold (routes and local markets)'), h('td', {}, inc.goods.toFixed(1))),
     h('tr', {}, h('td', {}, 'Colonies and overseas'), h('td', {}, inc.other.toFixed(1))),
     h('tr', {}, h('td', {}, `Stability ×${inc.stabMult.toFixed(2)}`), h('td', {}, '')),
     h('tr', {}, h('td', {}, 'Troop upkeep'), h('td', { class: 'bad' }, '−' + inc.upkeep.toFixed(1))),
     h('tr', {}, h('td', {}, 'Building salaries'), h('td', { class: 'bad' }, '−' + inc.salaries.toFixed(1))),
-    h('tr', {}, h('td', {}, 'Imported goods'), h('td', { class: 'bad' }, '−' + inc.imports.toFixed(1))),
+    h('tr', {}, h('td', {}, 'Goods bought and trade posts'), h('td', { class: 'bad' }, '−' + inc.imports.toFixed(1))),
     h('tr', {}, h('td', {}, 'Administration (grows with the realm)'), h('td', { class: 'bad' }, '−' + inc.admin.toFixed(1))),
     h('tr', { class: 'total' }, h('td', {}, 'Each year'), h('td', {}, signed(inc.total))))));
-  body.append(actionRow('scales', 'Sell offices', `${officeCost(S)} ducats for 2 nation points · the price doubles, triples… each time this year`, player(S).gold < officeCost(S) ? `Needs ${officeCost(S)} ducats` : null, () => act(() => sellOffices(S), '+2 nation points')));
-}
-
-function goodsTab(body: HTMLElement) {
-  body.append(h('h3', {}, 'Goods'));
-  const own = ownGoods(S), col = colonyGoods(S);
-  const gl = h('div', { class: 'goods' });
-  for (const g of Object.values(GOODS)) {
-    const imp = S.imports.find(i => i.good === g.id);
-    const src = own.has(g.id) ? 'Produced' : col.has(g.id) ? 'Colonies' : imp ? `Imported from ${nationName(S, imp.from)} (−${g.price}/yr)` : '';
-    gl.append(h('div', { class: 'good' + (src ? ' have' : '') }, h('span', { html: icon(g.icon, 16) }), h('b', {}, g.name), h('small', {}, src || 'Missing: sign a Trade Route to import'), h('small', { class: 'muted' }, g.desc)));
-  }
-  body.append(gl);
   body.append(h('h3', {}, 'Control and unrest'));
-  void 0;
   for (const p of provsOf(S, S.player).sort((a, b) => a.control - b.control)) {
     body.append(h('div', { class: 'ctl' }, h('span', {}, p.name), h('span', { class: 'ctl-bar' }, h('i', { style: `width:${p.control}%`, class: p.control < 30 ? 'low' : '' })), h('b', {}, `${Math.round(p.control)}%`)));
   }
   body.append(h('p', { class: 'muted' }, 'Low control cuts income and can spark revolts. Temples, courthouses, stability and Royal Progress raise it. Newly conquered lands start low.'));
+  body.append(actionRow('scales', 'Sell offices', `${officeCost(S)} ducats for 2 nation points · the price doubles, triples… each time this year`, player(S).gold < officeCost(S) ? `Needs ${officeCost(S)} ducats` : null, () => act(() => sellOffices(S), '+2 nation points')));
+}
+
+const DIST_NAME = ['next door', 'near', 'far', 'overseas'];
+/** "Uses 1 weapons (you have 0.4): the rest bought at double price." */
+function goodsNote(need: Record<string, number>) {
+  const lack = Object.entries(need).filter(([g, n]) => (S.stock[g] ?? 0) < n);
+  return h('p', { class: lack.length ? 'bad small' : 'muted small' }, 'Uses ' + Object.entries(need).map(([g, n]) => `${n} ${GOODS[g].name.toLowerCase()} (you have ${(S.stock[g] ?? 0).toFixed(1)})`).join(', ') + (lack.length ? '. What is missing is bought at double price, included above.' : ' from your warehouses.'));
+}
+const f1 = (v: number) => (Math.abs(v) < 0.05 ? '0' : v.toFixed(1));
+
+/** The goods ledger: what you make, use, buy and sell, good by good. */
+function goodsTab(body: HTMLElement) {
+  const f = quarterFlow(S);
+  const need = needs(S);
+  const inc = incomeOf(S, S.player);
+  const yr = (r: Record<string, number>, g: string) => (r[g] ?? 0) * 4;
+  body.append(h('div', { class: 'stats' },
+    stat('Sold a year', '+' + inc.goods.toFixed(1)), stat('Bought a year', '−' + inc.imports.toFixed(1)),
+    stat('Trade routes', `${S.routes.length}/${routeCap(S)}`), stat('Trade posts', `${S.posts.length}/${postCap(S)}`)));
+  body.append(h('p', { class: 'muted small' }, 'Provinces make raw goods; Workshops turn them into made goods. Buy what you lack with a Trade Route (quick, but dear) or found a Trade Post first (slower, then much cheaper). Sell your surplus the same way. Full warehouses sell the rest at home for half the price.'));
+
+  const row = (g: string) => {
+    const d = GOODS[g];
+    const inflow = yr(f.made, g) + yr(f.bought, g);
+    const outflow = yr(f.used, g) + yr(f.input, g) + yr(f.sold, g);
+    const net = inflow - outflow;
+    const short = d.food ? 0 : S.short[g] ?? 0;
+    const cap = stockCap(outflow);
+    const left = net < -0.05 ? Math.floor((S.stock[g] ?? 0) / (-net / 4)) : 99;
+    const status = short >= 0.05 ? h('span', { class: 'gchip bad' }, `short ${Math.round(short * 100)}%`)
+      : left < 8 ? h('span', { class: 'gchip warn' }, left <= 0 ? 'runs out now' : `lasts ${left} qtr`)
+      : (f.overflow[g] ?? 0) > 0 ? h('span', { class: 'gchip over' }, 'surplus')
+      : need[g] ? h('span', { class: 'gchip ok' }, 'enough') : null;
+    const parts = [`stock ${f1(S.stock[g] ?? 0)}/${Math.round(cap)}`];
+    if (inflow) parts.push(`in ${f1(inflow)}`);
+    if (outflow) parts.push(`out ${f1(outflow)}`);
+    return h('div', { class: 'grow-row' + (short >= 0.05 ? ' short' : '') },
+      h('span', { class: 'gico', style: `color:${d.color}`, html: icon(d.icon, 20) }),
+      h('div', { class: 'g-t' }, h('b', {}, d.name, h('small', {}, ` ${price(S, g).toFixed(1)}`)), h('small', {}, parts.join(' · '), ' · ', h('span', { class: net < -0.05 ? 'bad' : net > 0.05 ? 'good' : '' }, `${net > 0 ? '+' : ''}${f1(net)}/yr`))),
+      status,
+      h('div', { class: 'g-acts' },
+        h('button', { class: 'btn small ghost', onclick: () => openRouteDialog(g, 'buy') }, 'Buy'),
+        h('button', { class: 'btn small ghost', onclick: () => openRouteDialog(g, 'sell') }, 'Sell')));
+  };
+  // food is one need, fed by any mix
+  const foodIn = FOOD.reduce((a, g) => a + yr(f.made, g) + yr(f.bought, g), 0);
+  const hunger = S.short.food ?? 0;
+  body.append(h('h3', {}, 'Food'), h('p', { class: hunger >= 0.05 ? 'bad' : 'muted' },
+    `The people eat ${f1(need.food)} a year; your lands and routes bring ${f1(foodIn)}. ` + (hunger >= 0.05 ? `Hunger: ${Math.round(hunger * 100)}% short. Unhappy people, fewer recruits.` : 'Three or more kinds of food in store make people happier.')));
+  const fl = h('div', { class: 'glist' }); for (const g of FOOD) fl.append(row(g)); body.append(fl);
+  body.append(h('h3', {}, 'Raw materials'));
+  const rl = h('div', { class: 'glist' }); for (const g of RAW.filter(g => !GOODS[g].food)) rl.append(row(g)); body.append(rl);
+  body.append(h('h3', {}, 'Made goods'), h('p', { class: 'muted small' }, 'Each is used up by something: buildings, farms and mines, troops, guns, ships, the people, temples and libraries, the court. Tap a name in the map legend for what it does.'));
+  const ml = h('div', { class: 'glist' });
+  for (const g of MADE) { const r = row(g); r.title = GOODS[g].desc; ml.append(r, h('small', { class: 'gdesc' }, GOODS[g].desc + (GOODS[g].recipe ? ` Made from ${Object.entries(GOODS[g].recipe!).map(([i, a]) => `${a} ${GOODS[i].name.toLowerCase()}`).join(' + ')}.` : '') + (GOODS[g].tech && !canMake(S, g) ? ` Needs ${TECH[GOODS[g].tech!].name}.` : ''))); }
+  body.append(ml);
+
+  // workshops
+  body.append(h('h3', {}, 'Workshops'));
+  const shops = provsOf(S, S.player).filter(p => workshopCap(S, p) > 0);
+  if (!shops.length) body.append(h('p', { class: 'muted' }, 'No workshops yet. Build one with an Economy building card (any town): it makes 2 loads a year of the good you choose.'));
+  for (const p of shops) body.append(workshopRow(p, f));
+
+  // routes and posts
+  body.append(h('h3', {}, `Trade routes (${S.routes.length}/${routeCap(S)})`));
+  if (!S.routes.length) body.append(h('p', { class: 'muted' }, 'None. Tap Buy or Sell on a good. A merchant needs one quarter to set a route up.'));
+  for (const r of S.routes) {
+    const each = price(S, r.good) * dealFor(S, r.partner, r.dir, r.deal);
+    body.append(h('div', { class: 'grow-row' },
+      h('span', { class: 'gico', style: `color:${GOODS[r.good].color}`, html: icon(GOODS[r.good].icon, 20) }),
+      h('div', { class: 'g-t' }, h('b', {}, `${r.dir === 'buy' ? 'Buy' : 'Sell'} ${r.amount} ${GOODS[r.good].name.toLowerCase()} a year`), h('small', {}, `${r.dir === 'buy' ? 'from' : 'to'} ${nationName(S, r.partner)}${S.posts.some(p => p.nation === r.partner) ? ' (trade post)' : ''} · ${each.toFixed(1)} each · `, h('span', { class: r.dir === 'buy' ? 'bad' : 'good' }, `${r.dir === 'buy' ? '−' : '+'}${(each * r.amount).toFixed(1)}/yr`))),
+      h('div', { class: 'g-acts' }, h('button', { class: 'btn small ghost', onclick: () => confirmBox('Close this route?', 'The merchant comes home. Opening it again takes another mission.', 'Close route', () => act(() => { S.routes = S.routes.filter(x => x !== r); }, 'Route closed')) }, 'Close'))));
+  }
+  body.append(h('h3', {}, `Trade posts (${S.posts.length}/${postCap(S)})`));
+  for (const p of S.posts) body.append(h('div', { class: 'grow-row' }, h('span', { class: 'gico', html: icon('anchor', 20) }), h('div', { class: 'g-t' }, h('b', {}, nationName(S, p.nation)), h('small', {}, `since ${p.since} · buy at 90% of the price, sell 20% above · upkeep ${POST_UPKEEP}/yr`))));
+  body.append(actionRow('anchor', 'Found a trade post', `2 quarters next door, up to 6 overseas · makes every route with that realm cheaper, +1 route`, S.posts.length >= postCap(S) ? `You can keep ${postCap(S)} trade post${postCap(S) > 1 ? 's' : ''}` : null, openPostPicker));
+}
+
+function workshopRow(p: Province, f = quarterFlow(S)) {
+  const cap = workshopCap(S, p);
+  const made = f.factories.find(x => x.prov === p.id)?.made ?? 0;
+  const chips = h('div', { class: 'tags' }, MADE.map(g => {
+    const ok = canMake(S, g);
+    return h('button', { class: 'tchip small' + (p.make === g ? ' sel' : '') + (ok ? '' : ' blocked'), title: GOODS[g].desc, onclick: () => { if (!ok) return toast(`Needs ${TECH[GOODS[g].tech!].name}`, 'bad'); p.make = g; refresh(); }, html: icon(GOODS[g].icon, 14) + ' ' + GOODS[g].name });
+  }));
+  const rec = p.make ? GOODS[p.make]?.recipe : null;
+  const note = !p.make ? 'Choose what it makes.' : made + 0.05 < cap ? `Makes ${f1(made)} of ${f1(cap)} a year: short of ${Object.keys(rec!).map(i => GOODS[i].name.toLowerCase()).join(' or ')}.` : `Makes ${f1(cap)} ${GOODS[p.make].name.toLowerCase()} a year from ${Object.entries(rec!).map(([i, a]) => `${f1(a * cap)} ${GOODS[i].name.toLowerCase()}`).join(' + ')}.`;
+  return h('div', { class: 'wshop' }, h('b', {}, `${p.name} · ${[p.buildings.includes('workshop') ? 'Workshop' : '', p.buildings.includes('manufactory') ? 'Manufactory' : ''].filter(Boolean).join(' + ')}`), h('small', { class: made + 0.05 < cap && p.make ? 'bad' : 'muted' }, note), chips);
+}
+
+/** Pick a realm to buy from or sell to. */
+function openRouteDialog(g: string, dir: 'buy' | 'sell') {
+  const card = cardFor(S, 'route');
+  if (!card) return toast('You need the Trade Route card', 'bad');
+  const d = GOODS[g];
+  let amount = 2;
+  const box = h('div', { class: 'mbox narrow' });
+  const draw = () => {
+    clear(box);
+    box.append(h('h2', { html: icon(d.icon, 22) + ` ${dir === 'buy' ? 'Buy' : 'Sell'} ${d.name}` }),
+      h('p', { class: 'muted' }, `Market price ${price(S, g).toFixed(1)} a load. ${dir === 'buy' ? 'Bought directly it costs 125–140% (more the farther it comes); through your trade post there, 90%.' : 'Sold directly it fetches 70–85%; through your trade post there, 120%.'} A trade treaty adds 10%; a skilled merchant a little more.`));
+    box.append(h('div', { class: 'targets' }, h('span', { class: 'muted' }, 'Loads a year: '), ...[1, 2, 3, MAX_ROUTE].map(a => h('button', { class: 'tchip' + (a === amount ? ' sel' : ''), onclick: () => { amount = a; draw(); } }, String(a)))));
+    const list = h('div', { class: 'tlist' });
+    const ps = partners(S, g, dir).slice(0, 14);
+    if (!ps.length) list.append(h('p', { class: 'muted' }, dir === 'buy' ? `Nobody you know has ${d.name.toLowerCase()} to sell.` : `Everyone you know makes their own ${d.name.toLowerCase()}.`));
+    for (const pt of ps) {
+      const n = S.nations[pt.nation];
+      const each = price(S, g) * pt.deal;
+      const why = pt.why ?? routeBlocked(S, g, dir, pt.nation, amount);
+      list.append(h('div', { class: 'trow' }, h('span', { class: 'swatch', style: `background:${n.color}` }),
+        h('div', { class: 'a-t' }, h('b', {}, n.name, pt.post ? h('small', {}, ' · trade post') : null), h('small', {}, `${DIST_NAME[pt.dist]} · ${each.toFixed(1)} each · ${dir === 'buy' ? '−' : '+'}${(each * amount).toFixed(1)} a year`)),
+        h('div', { class: 'r-acts' }, h('button', { class: 'btn small' + (why ? ' blocked' : ''), title: why ?? '', onclick: () => { if (why) return toast(why, 'bad'); closeModal(); openPlanner('route', pt.nation, undefined, card.uid, { good: g, dir, amount }); } }, 'Choose'))));
+    }
+    box.append(list, h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: closeModal }, 'Close')));
+  };
+  draw();
+  openModal(box);
+}
+
+/** Pick where to found a trade post. */
+function openPostPicker() {
+  const card = cardFor(S, 'post');
+  if (!card) return toast('You need the Trade Post card', 'bad');
+  const lacking = Object.keys(GOODS).filter(g => (S.short[g] ?? 0) >= 0.05 || S.routes.some(r => r.good === g && r.dir === 'buy'));
+  const rows = Object.values(S.nations).filter(n => n.alive && n.id !== S.player && n.capital && provsOf(S, n.id).length && provKnown(S, n.capital))
+    .map(n => ({ n, routes: S.routes.filter(r => r.partner === n.id).length, has: lacking.filter(g => partners(S, g, 'buy').some(p => p.nation === n.id)), dist: distanceTo(S, n.id) }))
+    .sort((a, b) => b.routes - a.routes || b.has.length - a.has.length || a.dist - b.dist).slice(0, 30);
+  const list = h('div', { class: 'tlist' });
+  for (const r of rows) {
+    const why = postBlocked(S, r.n.id);
+    list.append(h('div', { class: 'trow' }, h('span', { class: 'swatch', style: `background:${r.n.color}` }),
+      h('div', { class: 'a-t' }, h('b', {}, r.n.name), h('small', {}, `${DIST_NAME[r.dist]} · ${qText(postTurns(S, r.n.id))} · ${postCost(S, r.n.id)} ducats${r.routes ? ` · ${r.routes} route${r.routes > 1 ? 's' : ''} already` : ''}${r.has.length ? ` · sells you ${r.has.map(g => GOODS[g].name.toLowerCase()).join(', ')}` : ''}`)),
+      h('div', { class: 'r-acts' }, h('button', { class: 'btn small' + (why ? ' blocked' : ''), title: why ?? '', onclick: () => { if (why) return toast(why, 'bad'); closeModal(); openPlanner('post', r.n.id, undefined, card.uid); } }, 'Found'))));
+  }
+  openModal(h('div', { class: 'mbox narrow' }, h('h2', { html: icon('anchor', 22) + ' Found a trade post' }),
+    h('p', { class: 'muted' }, 'A merchant travels there and sets up: 2 quarters next door, 3 near, 4 far, 6 overseas. Then every route with that realm buys at 90% of the market price and sells 20% above it, and you can keep one more route.'),
+    list, h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: closeModal }, 'Close'))));
 }
 
 function techTab(body: HTMLElement) {
@@ -1326,7 +1455,7 @@ function openCardModal(handUid: number) {
     !def.burden ? h('button', { class: 'btn ghost', onclick: () => { closeModal(); act(() => discardCard(S, handUid), 'Discarded: +0.5 nation points'); } }, 'Discard (+0.5 NP)') : null);
 
   if (def.kind === 'troop') {
-    body.append(h('p', {}, `Hire for 1 manpower and ${troopHireCost(S, def.troop!)} ducats. Upkeep ${TROOPS[def.troop!].upkeep} a year. A better general trains better troops: veteran stars depend on the outcome.`));
+    body.append(h('p', {}, `Hire for 1 manpower and ${troopHireCost(S, def.troop!)} ducats. Upkeep ${TROOPS[def.troop!].upkeep} a year. A better general trains better troops: veteran stars depend on the outcome.`), goodsNote(hireNeeds(def.troop!, TROOPS[def.troop!].kind)));
     const gens = S.characters.filter(c => (c.role === 'general' || c.role === 'conqueror') && c.mission == null);
     let gsel: Character | null = [...gens].sort((a, b) => RARITY_ORDER_I(b) - RARITY_ORDER_I(a))[0] ?? null;
     const gl = h('div', { class: 'cards-row wrap' });
@@ -1341,6 +1470,7 @@ function openCardModal(handUid: number) {
     body.append(h('h3', {}, 'Choose who trains them'), gl, oddsBox);
     footer.append(h('button', { class: 'btn primary' + (blocked ? ' blocked' : ''), onclick: () => (blocked ? toast(blocked, 'bad') : done(playCard(S, handUid, gsel ? String(gsel.uid) : ''))) }, blocked ?? 'Hire'));
   } else if (def.kind === 'ship') {
+    body.append(goodsNote(hireNeeds(def.troop!, 'ship')));
     body.append(h('p', {}, `Fit out for 1 manpower and ${shipHireCost(S, def.troop!)} ducats. Upkeep ${TROOPS[def.troop!].upkeep} a year. Carries ${TROOPS[def.troop!].transport} companies. Navy ${S.fleet.length}/${navyCap(S)}.`));
     const crew = S.characters.filter(c => (c.role === 'admiral' || c.role === 'general') && c.mission == null);
     let csel: Character | null = crew.find(c => c.role === 'admiral') ?? crew[0] ?? null;
@@ -1371,6 +1501,9 @@ function openCardModal(handUid: number) {
     }
     if (!any) row.append(h('p', { class: 'muted' }, 'None of your troops at home can use this. Check the recipe book in the Military panel.'));
     body.append(row);
+  } else if (def.kind === 'mission' && (def.missions![0] === 'route' || def.missions![0] === 'post')) {
+    body.append(h('p', {}, def.text));
+    footer.append(h('button', { class: 'btn primary', onclick: () => { closeModal(); if (def.missions![0] === 'route') openWin('economy', 'goods'); else openPostPicker(); } }, def.missions![0] === 'route' ? 'Open the Trade ledger' : 'Choose where'));
   } else if (def.kind === 'mission') {
     const role = cardRole(def.id);
     body.append(h('p', { class: 'muted' }, `Needs a free ${roleName[role].toLowerCase()}. Choose where to send them.`));
@@ -1470,7 +1603,7 @@ function onMapPick(id: string) {
 }
 
 // ---------- mission planner ----------
-function openPlanner(kind: MissionKind, target: string, building: string | undefined, cardUid: number) {
+function openPlanner(kind: MissionKind, target: string, building: string | undefined, cardUid: number, trade?: { good: string; dir: 'buy' | 'sell'; amount: number }) {
   const card = S.hand.find(x => x.uid === cardUid);
   if (!card) { toast('That card is gone', 'bad'); return; }
   const role = cardRole(card.card);
@@ -1490,8 +1623,7 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
   const naval = ((kind === 'conquer' || kind === 'raid') && !!attackRoute(S, target)?.naval) || (kind === 'base' && home.some(t => travel(locOf(S, t), target) >= 1 && S.provinces[target] && getGeo().land[S.provinces[target].id] !== getGeo().land[locOf(S, t).replace('base:', '')]));
   const harbourShips = S.fleet.filter(t => t.mission == null && t.str >= 30);
   let ships: number[] = naval ? harbourShips.map(t => t.uid) : [];
-  const goods = kind === 'trade' ? importable(S, target) : [];
-  let good: string | undefined = goods[0];
+  const good: string | undefined = trade?.good;
 
   const tname = S.provinces[target]?.name ?? S.nations[target]?.name ?? TECH[target]?.name ?? 'the realm';
   const box = h('div', { class: 'mbox planner' });
@@ -1521,22 +1653,23 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
     if (kind === 'research') facts.push(`${researchRate(S, ch, TECH[target]?.track)} research a year · ${techCost(S, target)} needed`);
     facts.push(`Missions left this year: ${missionsLeft(S)}`);
     if (kind === 'build') facts.push(`${buildingCost(S, building!)} ducats now · salary ${BUILDINGS[building!].salary} a year`);
+    const pg = projectGoods(kind, building);
+    for (const [g, n] of Object.entries(pg)) {
+      const have = S.stock[g] ?? 0, extra = projectShortfall(S, kind, building);
+      facts.push(h('span', { class: have >= n ? '' : 'bad' }, `Uses ${n} ${GOODS[g].name.toLowerCase()} (you have ${have.toFixed(1)})${have >= n ? '' : ` · the rest bought at double price: +${extra} ducats`}`));
+    }
+    if (kind === 'route' && trade) {
+      const d = dealFor(S, target, trade.dir, merchantFactor(ch.skill));
+      const each = price(S, trade.good) * d;
+      facts.push(`${trade.dir === 'buy' ? 'Buys' : 'Sells'} ${trade.amount} ${GOODS[trade.good].name.toLowerCase()} a year at ${each.toFixed(1)} each (${Math.round(d * 100)}% of the market price)`, `${trade.dir === 'buy' ? 'Costs' : 'Earns'} ${(each * trade.amount).toFixed(1)} ducats a year, every quarter, until you close it`, `Trade routes ${S.routes.length}/${routeCap(S)}`);
+    }
+    if (kind === 'post') facts.push(`${postCost(S, target)} ducats now · upkeep ${POST_UPKEEP} a year`, `Routes with ${nationName(S, target)} then buy at 90% of the market price and sell 20% above it`, `Trade posts ${S.posts.length}/${postCap(S)}`);
     if (kind === 'develop') facts.push(`${developCost(S, target)} ducats now`);
     if (kind === 'found') facts.push(`${foundCost(S)} ducats now · Poor/Standard: village · Good: town · Great/Exceptional: city`);
     if (kind === 'grow') facts.push(`${growCost(S, target)} ducats now · Poor: no growth · Exceptional: two steps`);
     if (kind === 'build') facts.push('Quality: Shoddy ×0.75 · Standard · Fine ×1.25 · Grand ×1.5 · Wonder ×2');
     if (kind === 'explore') facts.push(`${Math.round(exploreChance(S, ch) * 100)}% chance of a discovery · ${voyageCost(S)} ducats`);
     if (kind === 'colonize') facts.push(`${Math.round(colonizeChance(S, target, ch) * 100)}% chance · ${colonyCost(S)} ducats and 1 manpower`);
-    if (kind === 'trade') {
-      box.append(h('h3', {}, 'Import a good'));
-      const gr = h('div', { class: 'targets' });
-      if (!goods.length) gr.append(h('p', { class: 'muted' }, 'They have nothing you lack.'));
-      for (const g of [...goods, '']) {
-        const lbl = g ? `${GOODS[g].name}: ${GOODS[g].desc} (−${GOODS[g].price}/yr)` : 'No import';
-        gr.append(h('button', { class: 'tchip' + (good === (g || undefined) ? ' sel' : ''), onclick: () => { good = g || undefined; draw(); } }, lbl));
-      }
-      box.append(gr);
-    }
     if (military) {
       box.append(h('h3', {}, `Troops (${picked.length}/${maxTroops()})`));
       const tr = h('div', { class: 'cards-row wrap' });
@@ -1571,12 +1704,12 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
       if (!S.troops.some(t => t.mission == null && !picked.includes(t.uid))) facts.push(h('span', { class: 'bad' }, 'No troops left at home to defend'));
     }
     box.append(h('div', { class: 'facts' }, facts.map(f => h('span', { class: 'fact' }, f))));
-    const why = missionBlocked(S, kind, target, building) ?? (military && !picked.length ? 'Choose at least one troop' : null) ?? (naval && transportOf(S, ships, ch) < picked.length ? 'Not enough ships to carry these troops' : null);
+    const why = (kind === 'route' && trade ? routeBlocked(S, trade.good, trade.dir, target, trade.amount) : missionBlocked(S, kind, target, building)) ?? (military && !picked.length ? 'Choose at least one troop' : null) ?? (naval && transportOf(S, ships, ch) < picked.length ? 'Not enough ships to carry these troops' : null);
     box.append(h('div', { class: 'mrow' },
       h('button', { class: 'btn ghost', onclick: closeModal }, 'Cancel'),
       h('button', { class: 'btn primary' + (why ? ' blocked' : ''), onclick: () => {
         if (why) return toast(why, 'bad');
-        const r = launchMission(S, kind, ch.uid, target, picked, building, cardUid, good, ships);
+        const r = launchMission(S, kind, ch.uid, target, picked, building, cardUid, good, ships, trade ? { dir: trade.dir, amount: trade.amount } : undefined);
         if (r) return toast(r, 'bad');
         closeModal();
         toast(`${ch.name} sets out`, 'good');

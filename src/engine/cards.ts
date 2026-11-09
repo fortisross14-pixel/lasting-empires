@@ -9,6 +9,7 @@ import { RULER_ARCHS } from '../data/nations';
 import { largestForeignCulture, CULTURE_NAMES } from './society';
 import { CORE_RATES } from '../data/core';
 import { shipBlocked } from './navy';
+import { shortfallCost, takeGoods, hireNeeds } from './trade';
 import {
   ageId, ageDef, pioneerNow, enemiesOf, player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore,
 } from './core';
@@ -89,7 +90,9 @@ add({ id: 'conquistadors', name: 'Conquistadors', cat: 'military', kind: 'instan
 // ---------- diplomacy ----------
 add({ id: 'hire_diplomat', name: 'Engage a Diplomat', cat: 'diplomacy', kind: 'hire', role: 'diplomat', icon: 'scroll', text: 'Meet three envoys, keep one. Costs 1 manpower.', weight: () => 1.1 });
 add({ id: 'embassy', name: 'Embassy', cat: 'diplomacy', kind: 'mission', permanent: true, missions: ['relations'], icon: 'scroll', text: 'Send a diplomat to improve relations (+25).', weight: () => 2 });
-add({ id: 'trade_route', name: 'Trade Route', cat: 'diplomacy', kind: 'mission', missions: ['trade'], icon: 'coin', text: 'Sign a trade treaty, and import one of their goods you lack.', weight: () => 2 });
+add({ id: 'merchant_route', name: 'Trade Route', cat: 'economy', kind: 'mission', permanent: true, missions: ['route'], icon: 'coin', text: 'A merchant opens a route to buy or sell a good every quarter. Quick to set up; buying this way is dear.', weight: never });
+add({ id: 'trading_post', name: 'Trade Post', cat: 'economy', kind: 'mission', permanent: true, missions: ['post'], icon: 'anchor', text: 'A merchant founds a post abroad: 2 quarters next door, up to 6 across the oceans. Routes there buy below market price and sell above it.', weight: never });
+add({ id: 'trade_route', name: 'Trade Treaty', cat: 'diplomacy', kind: 'mission', missions: ['trade'], icon: 'coin', text: 'Sign a trade treaty: ducats every year, and better prices on your trade routes with them.', weight: () => 2 });
 add({ id: 'alliance_pact', name: 'Alliance Pact', cat: 'diplomacy', kind: 'mission', missions: ['alliance'], icon: 'hands', text: 'Seek an alliance. They will join your wars.', weight: () => 1.2 });
 add({ id: 'marriage', name: 'Royal Marriage', cat: 'diplomacy', kind: 'mission', missions: ['marriage'], icon: 'ring', text: 'Join the royal houses: relations grow every year.', weight: () => 1 });
 add({ id: 'peace_envoy', name: 'Peace Envoy', cat: 'diplomacy', kind: 'mission', permanent: true, missions: ['peace'], icon: 'dove', text: 'Negotiate an end to a war.', weight: s => (s.wars.some(w => w.a === s.player || w.b === s.player) ? 2 : 0.6) });
@@ -213,7 +216,9 @@ export function cardRates(s: GameState): Record<Cat, { rate: number; parts: Rate
   for (const c of CATS) {
     const parts: RatePart[] = [{ label: 'Base', v: 1 }];
     let b = 0;
-    for (const p of provsOf(s, s.player)) for (const bid of p.buildings) b += (BUILDINGS[bid]?.rates?.[c] ?? 0) * grade(p, bid);
+    // temples, libraries and universities work at half pace without books and art
+    const arts = 1 - 0.5 * (s.short?.arts ?? 0);
+    for (const p of provsOf(s, s.player)) for (const bid of p.buildings) b += (BUILDINGS[bid]?.rates?.[c] ?? 0) * grade(p, bid) * (['temple', 'library', 'university'].includes(bid) ? arts : 1);
     if (b) parts.push({ label: 'Buildings', v: b });
     let t = 0;
     for (const tid of s.techs) t += TECH_RATES[tid]?.[c] ?? 0;
@@ -222,7 +227,6 @@ export function cardRates(s: GameState): Record<Cat, { rate: number; parts: Rate
     if (tier) parts.push({ label: 'Cities', v: tier });
     const r = (arch?.rates[c] ?? 0) + (arch?.all ?? 0);
     if (r) parts.push({ label: 'Monarch', v: r });
-    if (c === 'economy' && hasGood(s, 'salt')) parts.push({ label: 'Salt', v: 0.1 });
     const core = (s.core ?? []).reduce((a, id) => a + (CORE_RATES[id]?.[c] ?? 0), 0);
     if (core) parts.push({ label: 'Core cards', v: core });
     const era = ageDef(s);
@@ -242,7 +246,7 @@ export function npRate(s: GameState): { rate: number; parts: RatePart[] } {
   if (cities) parts.push({ label: 'Cities', v: cities });
   const arch = RULER_ARCHS[player(s).ruler.arch];
   if (arch?.np) parts.push({ label: 'Monarch', v: arch.np });
-  if (hasGood(s, 'wine')) parts.push({ label: 'Wine', v: 0.5 });
+  if ((s.short?.luxuries ?? 1) < 0.05) parts.push({ label: 'Luxuries at court', v: 0.5 });
   if (hasTech(s, 'councils')) parts.push({ label: 'Royal Councils', v: 1 });
   if (ageId(s) === 'absolutism') parts.push({ label: 'Absolutism', v: 1 });
   if (hasCore(s, 'traditional')) parts.push({ label: 'Traditional', v: 1 });
@@ -301,10 +305,8 @@ export function cardBlocked(s: GameState, def: HandCardDef): string | null {
 
 export function troopHireCost(s: GameState, type: string): number {
   const d = TROOPS[type];
-  let c = (6 + 6 * d.tier) * inflation(s);
-  if (hasGood(s, 'iron')) c *= 0.8;
-  if (d.kind === 'cav' && hasGood(s, 'horses')) c *= 0.7;
-  return Math.round(c);
+  // what the warehouses lack (weapons, powder, leather) is bought at double price
+  return Math.round((6 + 6 * d.tier) * inflation(s)) + shortfallCost(s, hireNeeds(type, d.kind));
 }
 
 export const removeCard = (s: GameState, handUid: number) => { s.hand = s.hand.filter(x => x.uid !== handUid); };
@@ -320,6 +322,7 @@ export function playCard(s: GameState, handUid: number, target: string): string 
     const gen = s.characters.find(c => String(c.uid) === target && c.mission == null && (c.role === 'general' || c.role === 'conqueror'));
     player(s).manpower -= 1;
     player(s).gold -= troopHireCost(s, def.troop!);
+    takeGoods(s, hireNeeds(def.troop!, TROOPS[def.troop!].kind));
     const o = rollOutcome(s, gen);
     const vet = [0, 0, 1, 2, 3][o];
     s.troops.push({ uid: uid(s), type: def.troop!, vet, str: o === 0 ? 70 : 100 });

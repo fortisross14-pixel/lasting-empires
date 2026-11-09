@@ -10,6 +10,7 @@ import { transportOf } from './navy';
 import { colonizeBlocked, conquistaBlocked, discoverable, resolveExplore, resolveColonize, resolveConquista, colonyCost, colonizeTurns, oceanReach } from './overseas';
 import { NO_STATE } from '../data/nations';
 import { GOODS } from '../data/goods';
+import { routeBlocked, postBlocked, postTurns, postCost, POST_UPKEEP, dealFor, merchantFactor, price, supplies, routeCap, shortfallCost, takeGoods, materialsFor, defaultMake } from './trade';
 import { OUTCOMES, RARITY } from '../data/characters';
 import { TECH } from '../data/techs';
 import { BUILDINGS } from '../data/techs';
@@ -46,7 +47,21 @@ export const MISSION_INFO: Record<MissionKind, { name: string; role: Role; icon:
   convert: { name: 'Religious Mission', role: 'admin', icon: 'church', verb: 'Convert' },
   grace: { name: 'Royal Grace', role: 'admin', icon: 'mood', verb: 'Win the hearts of' },
   assimilate: { name: 'Cultural Integration', role: 'admin', icon: 'scroll', verb: 'Integrate the people of' },
+  route: { name: 'Trade Route', role: 'merchant', icon: 'coin', verb: 'Open a trade route with' },
+  post: { name: 'Trade Post', role: 'merchant', icon: 'anchor', verb: 'Open a trade post in' },
 };
+
+/** Goods a project uses up when it starts. */
+export function projectGoods(kind: MissionKind, building?: string): Record<string, number> {
+  if (kind === 'build' && building) return { materials: materialsFor(building) };
+  if (kind === 'develop') return { materials: 2 };
+  if (kind === 'found') return { materials: 3 };
+  if (kind === 'grow') return { materials: 4 };
+  if (kind === 'patronage') return { arts: 2 };
+  return {};
+}
+/** Ducats to buy what the warehouses lack for a project. */
+export const projectShortfall = (s: GameState, kind: MissionKind, building?: string) => shortfallCost(s, projectGoods(kind, building));
 
 /** Who can carry out a mission started by this card. */
 export function cardRole(cardId: string): Role {
@@ -93,11 +108,6 @@ export const foundCost = (s: GameState) => Math.round(50 * inflation(s));
 export const growCost = (s: GameState, prov: string) => Math.round((40 + 30 * (s.provinces[prov]?.settlement ?? 0)) * inflation(s));
 
 /** Goods a trade partner can sell you that you do not have. */
-export function importable(s: GameState, partner: string): string[] {
-  const mine = ownGoods(s);
-  const theirs = ownGoods(s, partner);
-  return [...theirs].filter(g => !mine.has(g) && !s.imports.some(i => i.good === g));
-}
 
 export const patronageCost = (s: GameState) => Math.round(45 * inflation(s));
 
@@ -167,6 +177,8 @@ export function missionTurns(s: GameState, kind: MissionKind, ch: Character, tar
     case 'develop': case 'found': case 'grow': return 8;
     case 'tax': return 2;
     case 'progress': return 4;
+    case 'route': return 1;
+    case 'post': return postTurns(s, target);
     default: {
       // the journey out, then talks; the envoy comes home afterwards
       const talks = { relations: 0, trade: 1, alliance: 1, marriage: 1, peace: 0 }[kind as 'relations'] ?? 0;
@@ -208,6 +220,8 @@ export function diploChance(s: GameState, kind: MissionKind, ch: Character, targ
 /** Returns a reason the mission cannot be launched, or null. */
 export function missionBlocked(s: GameState, kind: MissionKind, target: string, building?: string): string | null {
   const me = s.player;
+  if (kind === 'post') return postBlocked(s, target);
+  if (kind === 'route') { const n = s.nations[target]; return !n?.alive ? 'Choose a realm' : atWar(s, me, target) ? `You are at war with ${n.name}` : null; }
   if (kind === 'base') {
     const p = s.provinces[target];
     if (!p || p.owner === me) return 'Choose an enemy province';
@@ -254,7 +268,8 @@ export function missionBlocked(s: GameState, kind: MissionKind, target: string, 
     if (s.provinces[target]?.owner !== me) return 'Choose one of your provinces';
     const why = buildingAllowed(s, target, building!);
     if (why) return why;
-    if (player(s).gold < buildingCost(s, building!)) return `Needs ${buildingCost(s, building!)} ducats`;
+    const cost = buildingCost(s, building!) + projectShortfall(s, 'build', building);
+    if (player(s).gold < cost) return `Needs ${cost} ducats`;
     return null;
   }
   if (kind === 'develop') {
@@ -321,7 +336,7 @@ export function missionBlocked(s: GameState, kind: MissionKind, target: string, 
   return null;
 }
 
-export function launchMission(s: GameState, kind: MissionKind, charUid: number, target: string, troopUids: number[], building?: string, cardUid?: number, good?: string, shipUids: number[] = []): string | null {
+export function launchMission(s: GameState, kind: MissionKind, charUid: number, target: string, troopUids: number[], building?: string, cardUid?: number, good?: string, shipUids: number[] = [], trade?: { dir: 'buy' | 'sell'; amount: number }): string | null {
   const card = s.hand.find(h => h.uid === cardUid);
   const cdef = card && CARDS[card.card];
   if (!cdef || !cdef.missions?.includes(kind)) return 'You need a card for this mission';
@@ -333,7 +348,7 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   const roles = cardRoles(cdef.id);
   if (!roles.includes(ch.role)) return `Needs a ${roles.join(' or ')}`;
   if (ch.ruler && roles[0] !== ch.role && SPECIAL_BASE[roles[0]]) return 'The monarch cannot leave the court for this'; 
-  const why = kind === 'colonize' ? colonizeBlocked(s, target, ch) : missionBlocked(s, kind, target, building);
+  const why = kind === 'colonize' ? colonizeBlocked(s, target, ch) : kind === 'route' ? routeBlocked(s, good ?? '', trade?.dir ?? 'buy', target, trade?.amount ?? 0) : missionBlocked(s, kind, target, building);
   if (why) return why;
   if ((kind === 'conquer' || kind === 'raid' || kind === 'conquista' || kind === 'base') && !troopUids.length) return 'Send at least one troop';
   const sent = s.troops.filter(t => troopUids.includes(t.uid));
@@ -348,6 +363,11 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
     id: uid(s), kind, char: charUid, troops: troopUids, target, building,
     turnsLeft: missionTurns(s, kind, ch, target, building), total: 0, progress: 0, bonus: 0, good,
   };
+  if (kind === 'route') { m.dir = trade!.dir; m.amount = trade!.amount; }
+  if (kind === 'post') { m.progress = postCost(s, target); player(s).gold -= m.progress; }
+  const extra = projectShortfall(s, kind, building);
+  takeGoods(s, projectGoods(kind, building));
+  player(s).gold -= extra;
   if (kind === 'conquer' || kind === 'raid') m.turnsLeft = Math.max(1, ...sent.map(t => travel(locOf(s, t), target)));
   if (kind === 'base') m.turnsLeft = Math.max(1, Math.max(...sent.map(t => travel(locOf(s, t), target))) - 1);
   if (!cdef.permanent) s.hand = s.hand.filter(h => h.uid !== cardUid);
@@ -379,7 +399,7 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
 export function cancelMission(s: GameState, id: number) {
   const m = s.missions.find(x => x.id === id);
   if (!m) return;
-  if (['build', 'develop', 'found', 'grow', 'colonize', 'explore'].includes(m.kind) && m.progress) player(s).gold += Math.round(m.progress / 2);
+  if (['build', 'develop', 'found', 'grow', 'colonize', 'explore', 'post'].includes(m.kind) && m.progress) player(s).gold += Math.round(m.progress / 2);
   freeMission(s, id);
   s.missions = s.missions.filter(x => x.id !== id);
 }
@@ -427,6 +447,16 @@ function finish(s: GameState, m: Mission) {
   freeMission(s, m.id); s.missions = s.missions.filter(x => x.id !== m.id);
   // envoys abroad still have to ride home before they can go out again
   if (DIPLO.includes(m.kind)) { const ch = s.characters.find(c => c.uid === m.char); if (ch && ch.mission == null) { ch.back = Math.max(1, envoyTravel(s, m.target)); ch.mission = -4; } }
+}
+
+/** A route mission's deal can fall through while the merchant travels. */
+function routeBlockedNow(s: GameState, m: Mission): string | null {
+  const n = s.nations[m.target];
+  if (!n?.alive) return 'That realm is gone.';
+  if (atWar(s, s.player, m.target)) return `You are at war with ${n.name}.`;
+  if (s.routes.length >= routeCap(s)) return 'All your trade routes are already in use.';
+  if (m.dir === 'buy' && !supplies(s, m.target, m.good!)) return `${n.name} no longer has ${GOODS[m.good!].name} to sell.`;
+  return null;
 }
 
 /** Quarters for an envoy to reach a realm's court from yours. */
@@ -535,6 +565,35 @@ export function landPhase(s: GameState, missionId: number) {
 function resolveOther(s: GameState, m: Mission, ch: Character) {
   const me = player(s);
 
+  if (m.kind === 'route') {
+    const tn = s.nations[m.target];
+    const why = routeBlockedNow(s, m);
+    const g = GOODS[m.good!];
+    if (why) {
+      push(s, { kind: 'reveal', title: 'Trade Route', items: [{ title: 'No deal', text: why, tone: 'bad', kind: 'coin' }] });
+    } else {
+      s.routes.push({ id: uid(s), good: m.good!, dir: m.dir!, partner: m.target, amount: m.amount!, since: s.year, deal: merchantFactor(ch.skill) });
+      const d = dealFor(s, m.target, m.dir!, merchantFactor(ch.skill));
+      const each = price(s, m.good!) * d;
+      push(s, { kind: 'reveal', title: 'Trade Route', subtitle: `${ch.name} in ${tn.name}`, items: [{ title: m.dir === 'buy' ? `${g.name} bought from ${tn.name}` : `${g.name} sold to ${tn.name}`, text: `${m.amount} loads a year at ${each.toFixed(1)} ducats each: ${m.dir === 'buy' ? 'costs' : 'earns'} ${(each * m.amount!).toFixed(1)} a year, paid every quarter.`, tone: 'good', kind: g.icon }] });
+      log(s, `Trade route opened: ${g.name} ${m.dir === 'buy' ? 'from' : 'to'} ${tn.name}.`, 'good');
+      gainXp(s, ch, []);
+    }
+    finish(s, m); return;
+  }
+  if (m.kind === 'post') {
+    const tn = s.nations[m.target];
+    if (!tn?.alive || atWar(s, s.player, m.target)) {
+      push(s, { kind: 'reveal', title: 'Trade Post', items: [{ title: 'Abandoned', text: 'Events have overtaken your merchants.', tone: 'bad', kind: 'anchor' }] });
+    } else {
+      s.posts.push({ nation: m.target, since: s.year });
+      push(s, { kind: 'reveal', title: 'Trade Post', subtitle: `${ch.name} in ${tn.name}`, items: [{ title: `A trade post in ${tn.name}`, text: `Routes with ${tn.name} now buy at 90% of the market price and sell 20% above it. One more trade route allowed. Upkeep ${POST_UPKEEP} ducats a year.`, tone: 'good', kind: 'anchor' }] });
+      log(s, `Trade post opened in ${tn.name}.`, 'good');
+      gainXp(s, ch, []);
+    }
+    finish(s, m); return;
+  }
+
   if (DIPLO.includes(m.kind)) {
     const target = m.target;
     const tn = s.nations[target];
@@ -558,11 +617,7 @@ function resolveOther(s: GameState, m: Mission, ch: Character) {
         case 'trade': {
           addTreaty(s, s.player, target, 'trade'); addRel(s, s.player, target, 10); me.prestige += 2;
           if (ch.traits.includes('merchant')) s.flags['trade_bonus_' + target] = 2;
-          items.push({ title: 'Treaty signed', text: `A trade route opens with ${tname}. Both crowns earn ducats every year.`, tone: 'good', kind: 'coin' });
-          if (m.good && GOODS[m.good] && !s.imports.some(i => i.good === m.good)) {
-            s.imports.push({ good: m.good, from: target });
-            items.push({ title: `${GOODS[m.good].name} imported`, text: `${GOODS[m.good].desc}. Costs ${GOODS[m.good].price} ducats a year.`, tone: 'good', kind: GOODS[m.good].icon });
-          }
+          items.push({ title: 'Treaty signed', text: `Merchants of both crowns are welcome: ducats every year, and your trade routes with ${tname} get 10% better prices.`, tone: 'good', kind: 'coin' });
           break;
         }
         case 'alliance': addTreaty(s, s.player, target, 'alliance'); addRel(s, s.player, target, 15); me.prestige += 3; items.push({ title: 'Alliance sealed', text: `${tname} will stand with you in war.`, tone: 'good', kind: 'hands' }); break;
@@ -597,6 +652,7 @@ function resolveOther(s: GameState, m: Mission, ch: Character) {
     const g = GRADES[o];
     if (b.id === 'fortress') { prov.fort++; if (o >= 3 && prov.fort < 3) prov.fort++; } else { prov.buildings.push(b.id); prov.grades = { ...(prov.grades ?? {}), [b.id]: g.mult }; }
     if (b.id === 'temple') me.stability = clamp(me.stability + 1, -3, 3);
+    if ((b.id === 'workshop' || b.id === 'manufactory') && !prov.make) prov.make = defaultMake(s);
     me.prestige += o >= 3 ? o : 1;
     const items: RevealItem[] = [
       outcomeItem(o, b.id === 'fortress' ? (o >= 3 ? 'The walls rise twice as strong: +2 fort levels.' : 'The walls are finished.') : `A ${g.name.toLowerCase()} ${b.name.toLowerCase()}: output ×${g.mult}.`),

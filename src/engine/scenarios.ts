@@ -3,6 +3,7 @@ import type { GameState } from '../types';
 import { newGame } from './turn';
 import { player, uid, makePeace, declareWar, atWar, enemiesOf, genCharacter } from './core';
 import { addCard } from './cards';
+import { startStock } from './trade';
 import { settleArmies, announceAttack, troopsNear, turnNo } from './army';
 
 /** Castile at war with Portugal in the summer of 1467: armies in three garrisons, the Portuguese marching on Badajoz,
@@ -33,13 +34,16 @@ export function scenarioCastilePortugal(): GameState {
   s.characters.push(g1, g2);
   // cards to play with
   s.hand = s.hand.filter(h => h.card === 'debt');
-  for (const c of ['peace_envoy', 'march_orders', 'march_orders', 'march_orders', 'scouts', 'spy_network', 'hire_men_at_arms']) addCard(s, c, true);
+  for (const c of ['peace_envoy', 'merchant_route', 'trading_post', 'march_orders', 'march_orders', 'march_orders', 'scouts', 'spy_network', 'hire_men_at_arms']) addCard(s, c, true);
   // the war
   if (!atWar(s, 'castile', 'portugal')) declareWar(s, 'castile', 'portugal');
   const pt = s.nations.portugal;
   pt.army = ['levy', 'levy', 'levy', 'crossbow', 'crossbow', 'men_at_arms', 'men_at_arms', 'jinetes', 'knights', 'men_at_arms', 'levy', 'crossbow'].map(type => ({ uid: uid(s), type, vet: 0, str: 100 }));
   pt.spiedUntil = s.year + 2;
   settleArmies(s);
+  s.stock = startStock(s);
+  // a merchant to try trade routes
+  const m = genCharacter(s, 'merchant', 'castilian', 2); m.dies = s.year + 25; s.characters.push(m);
   // the Portuguese are already on the march against Badajoz: choose your defence
   const near = troopsNear(s, 'portugal', 'badajoz');
   if (near.length) { announceAttack(s, 'portugal', 'badajoz', near.slice(0, 6)); s.incoming![0].due = turnNo(s); } // they arrive when you end this turn

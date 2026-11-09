@@ -2,7 +2,7 @@ import { newGame, endTurn, chooseEventOption, playerDeclareWar, ranking, chooseH
 import { EVENT } from '../src/engine/events';
 import { autoResolve, finishBattle } from '../src/engine/battle';
 import { takeDraftOption, doMerge, mergePreview, buyCard, hireWithCard, sellOffices, officeCost } from '../src/engine/drafts';
-import { launchMission, missionBlocked, importable, cardRole, cardRoles, attackRoute } from '../src/engine/missions';
+import { launchMission, missionBlocked, cardRole, cardRoles, attackRoute } from '../src/engine/missions';
 import { discoverable } from '../src/engine/overseas';
 import { hireShip, transportOf } from '../src/engine/navy';
 import { warScore, peaceTerms, concludePeace, enemyDemands, subjectsOf } from '../src/engine/diplo';
@@ -14,6 +14,8 @@ import { CATS, type GameState } from '../src/types';
 import { NATIONS } from '../src/data/nations';
 import { troopsNear } from '../src/engine/army';
 import { happinessOf } from '../src/engine/society';
+import { partners, routeBlocked, postBlocked, quarterFlow, defaultMake } from '../src/engine/trade';
+import { GOODS } from '../src/data/goods';
 import { appointViceroy, viceroyBlocked } from '../src/engine/realm';
 
 const R = Math.random;
@@ -97,7 +99,28 @@ function botTurn(s: GameState) {
       const others = Object.keys(s.nations).filter(n => n !== s.player && s.nations[n].alive && !missionBlocked(s, kind, n));
       if (!others.length) continue;
       const t = others[Math.floor(R() * others.length)];
-      launchMission(s, kind, dip.uid, t, [], undefined, h.uid, kind === 'trade' ? importable(s, t)[0] : undefined);
+      launchMission(s, kind, dip.uid, t, [], undefined, h.uid);
+    } else if (kind === 'route' || kind === 'post') {
+      // workshops make whatever is shortest
+      for (const p of provsOf(s, s.player)) if (p.buildings.includes('workshop') || p.buildings.includes('manufactory')) p.make = defaultMake(s);
+      if (process.env.NOTRADE) continue;
+      const m = free(s, role); if (!m) continue;
+      // buy what runs short; sell what overflows
+      const short = Object.entries(s.short).filter(([g, v]) => v > 0.15 && g !== 'food').sort((a, b) => b[1] - a[1])[0]?.[0] ?? ((s.short.food ?? 0) > 0.15 ? 'grain' : null);
+      if (kind === 'route' && short) {
+        const f = quarterFlow(s);
+        const gap = Math.min(4, Math.max(1, Math.ceil((f.missing[short === 'grain' ? 'food' : short] ?? 0) * 4)));
+        const pt = partners(s, short, 'buy').find(x => !x.why && !routeBlocked(s, short, 'buy', x.nation, gap));
+        if (pt && me.gold > 40 && !s.missions.some(x => x.kind === 'route' && x.good === short)) launchMission(s, 'route', m.uid, pt.nation, [], undefined, h.uid, short, [], { dir: 'buy', amount: gap });
+      } else if (kind === 'route') {
+        const f = quarterFlow(s);
+        const over = Object.entries(f.overflow).sort((a, b) => b[1] * GOODS[b[0]].price - a[1] * GOODS[a[0]].price)[0]?.[0];
+        const pt = over && partners(s, over, 'sell').find(x => !x.why && !routeBlocked(s, over, 'sell', x.nation, 2));
+        if (pt) launchMission(s, 'route', m.uid, pt.nation, [], undefined, h.uid, over, [], { dir: 'sell', amount: 2 });
+      } else {
+        const r = s.routes[0];
+        if (r && !postBlocked(s, r.partner) && me.gold > 100) launchMission(s, 'post', m.uid, r.partner, [], undefined, h.uid);
+      }
     } else if (kind === 'research') {
       const r = free(s, role); if (!r) continue;
       const t = TECHS.find(t => t.track === d.track && !missionBlocked(s, 'research', t.id));
@@ -105,7 +128,10 @@ function botTurn(s: GameState) {
     } else {
       const a = free(s, role); if (!a) continue;
       if (kind === 'build') {
-        const opts = Object.values(BUILDINGS).filter(b => b.group === d.group).map(b => b.id);
+        let opts = Object.values(BUILDINGS).filter(b => b.group === d.group).map(b => b.id);
+        // short of made goods: a workshop first
+        const shortMade = Object.entries(s.short).some(([g, v]) => v > 0.2 && GOODS[g]?.kind === 'made');
+        if (shortMade && !process.env.NOWORKSHOP) opts = ['workshop', ...opts.filter(b => b !== 'workshop')];
         for (const b of opts) { const p = provsOf(s, s.player).find(p => !missionBlocked(s, 'build', p.id, b)); if (p) { launchMission(s, 'build', a.uid, p.id, [], b, h.uid); break; } }
       } else if (kind === 'convert' || kind === 'assimilate') {
         const p = provsOf(s, s.player).find(p => !missionBlocked(s, kind, p.id)); if (p) launchMission(s, kind, a.uid, p.id, [], undefined, h.uid);
@@ -164,6 +190,7 @@ for (const n of (MODE === 'big' ? ['castile'] : PICK)) for (let seed = 1; seed <
   if (process.env.DUMP) console.log('  state', n, 'provs', provsOf(s, n).length, 'overlord', player(s).overlord, 'year', s.year, 'over', s.over, 'hand', s.hand.length);
   if (process.env.DUMP) { const c: Record<string, number> = {}; for (const h of s.hand) c[h.card] = (c[h.card] ?? 0) + 1; console.log('  hand', n, JSON.stringify(c), 'gold', Math.round(player(s).gold), 'income', JSON.stringify(incomeOf(s, n), (k, v) => typeof v === 'number' ? Math.round(v * 10) / 10 : v)); }
   const f = snap(s); f.year = s.year; f.provs = provsOf(s, n).length; finals.push(f);
+  if (process.env.GOODSLOG) { const t = incomeOf(s, n); console.log('  goods', n, seed, s.year, 'short', JSON.stringify(Object.fromEntries(Object.entries(s.short).filter(([, v]) => v > 0.05))), 'routes', s.routes.map(r => r.dir + ':' + r.good + '>' + r.partner).join(','), 'posts', s.posts.map(p => p.nation).join(','), 'workshops', provsOf(s, n).filter(p => p.make && (p.buildings.includes('workshop') || p.buildings.includes('manufactory'))).map(p => p.make).join(','), 'trade+', t.goods.toFixed(1), 'trade-', t.imports.toFixed(1), 'total', t.total.toFixed(1)); }
   if (process.env.TOP) console.log('  top', n, seed, ranking(s).slice(0, 4).map(r => r.name + ':' + r.score + '(' + provsOf(s, r.id).length + 'p,' + Math.round(s.nations[r.id].prestige) + 'pr)').join(' '));
   if (process.env.CIVIL) { const hs = provsOf(s, s.player).map(p => happinessOf(s, p).value); console.log('  happy', n, 'provs', hs.length, 'min', Math.min(...hs), 'under30', hs.filter(h => h < 30).length, 'under40', hs.filter(h => h < 40).length, 'vblock', viceroyBlocked(s, provsOf(s, s.player).filter(p => p.id !== player(s).capital)[0]?.id ?? '')); }
   if (process.env.CIVIL) console.log('  civil', n, seed, s.log.filter(l => /Civil war|joins the|rising|crowns himself|declares independence|breaks away/i.test(l.text)).map(l => l.year + ' ' + l.text).slice(0, 8).join(' | '), 'viceroys', (s.viceroys ?? []).length);

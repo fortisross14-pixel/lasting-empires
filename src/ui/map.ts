@@ -16,15 +16,11 @@ export const RELIGION_COLORS: Record<string, string> = {
   catholic: '#d9c27a', protestant: '#5b8fc9', orthodox: '#9a6ac0', coptic: '#b07a4a', muslim: '#3f9a5a', hindu: '#e08a3a',
   buddhist: '#e0c040', confucian: '#c05050', shinto: '#e06a8a', animist: '#8a7a5a', nahuatl: '#3aa0a0', inti: '#e0a020',
 };
-export const GOOD_COLORS: Record<string, string> = {
-  grain: '#e2c35a', cattle: '#b07a4a', fish: '#5aa0c8', iron: '#7a7f88', timber: '#4f7f3f', horses: '#a0603a', wool: '#e8e0d0', wine: '#8a2f4a',
-  oil: '#a0a040', salt: '#d8d8e8', silver: '#b8c0c8', sugar: '#f0e8e0', gold: '#e8b020', spices: '#c0502a', furs: '#6a4a3a', silk: '#c070b0',
-  cotton: '#f4f0e8', ivory: '#efe6c8', porcelain: '#7ab0e0',
-};
 const hue = (k: string) => { let x = 7; for (const c of k) x = (x * 31 + c.charCodeAt(0)) % 997; return `hsl(${(x * 47) % 360} 42% ${48 + (x % 3) * 8}%)`; };
 const ramp = (t: number) => `hsl(${Math.round(4 + t * 116)} 55% ${44 + Math.round(t * 6)}%)`; // red → green
 import { MISSION_INFO } from '../engine/missions';
-import { icon } from './icons';
+import { icon, iconPath } from './icons';
+import { GOODS, RAW } from '../data/goods';
 
 const NS = 'http://www.w3.org/2000/svg';
 const svgEl = (tag: string, attrs: Record<string, string | number> = {}) => {
@@ -45,6 +41,7 @@ export class MapView {
   cells: Record<string, SVGPathElement> = {};
   labels: Record<string, SVGTextElement> = {};
   marks: SVGGElement;
+  gicons: Record<string, SVGGElement> = {};
   selected: string | null = null;
   onSelect: (id: string | null) => void = () => {};
   /** target picking: hold (touch) or click (mouse) a province to choose it */
@@ -108,6 +105,21 @@ export class MapView {
       lab.append(t);
     }
     this.svg.append(lab);
+    // raw-material icons, shown on the goods map
+    for (const g of Object.values(GOODS)) {
+      const sym = svgEl('symbol', { id: 'gi-' + g.id, viewBox: '0 0 24 24' });
+      sym.append(svgEl('path', { d: iconPath(g.icon), fill: 'none', stroke: 'currentColor', 'stroke-width': 2.2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+      defs.append(sym);
+    }
+    const gl = svgEl('g', { class: 'goods-icons' });
+    for (const [id, [x, y]] of Object.entries(g.center)) {
+      const r = Math.max(4, Math.min(6.5, this.size[id] * 0.12));
+      const grp = svgEl('g', { class: 'gi', transform: `translate(${x} ${y})` });
+      grp.append(svgEl('circle', { r, class: 'gi-bg' }), svgEl('use', { href: '#gi-grain', x: -r * 0.72, y: -r * 0.72, width: r * 1.44, height: r * 1.44, class: 'gi-ic' }));
+      this.gicons[id] = grp as SVGGElement;
+      gl.append(grp);
+    }
+    this.svg.append(gl);
     this.marks = svgEl('g', { class: 'marks' }) as SVGGElement;
     this.svg.append(this.marks);
     host.append(this.svg);
@@ -274,7 +286,7 @@ export class MapView {
     switch (this.mode) {
       case 'culture': return hue(p.culture);
       case 'religion': return RELIGION_COLORS[p.religion] ?? hue(p.religion);
-      case 'goods': return GOOD_COLORS[p.good] ?? hue(p.good);
+      case 'goods': return GOODS[p.good]?.color ?? hue(p.good);
       case 'happiness': return p.owner === s.player || s.nations[p.owner]?.overlord === s.player ? ramp(happinessOf(s, p).value / 100) : '#8a8478';
       case 'population': return popShade(Math.sqrt(population(s, p) / maxPop));
       default: return null;
@@ -292,6 +304,11 @@ export class MapView {
       c.classList.toggle('fog', !known);
       const lbl = this.labels[id];
       lbl.textContent = known ? p.name : '';
+      const gi = this.gicons[id];
+      if (gi) {
+        gi.style.display = known && GOODS[p.good] ? '' : 'none';
+        if (known && GOODS[p.good]) { const u = gi.lastChild as SVGUseElement; if (u.getAttribute('href') !== '#gi-' + p.good) u.setAttribute('href', '#gi-' + p.good); (gi.firstChild as SVGCircleElement).style.fill = GOODS[p.good].color; }
+      }
       if (!known) { c.style.fill = ''; for (const k of ['mine', 'subject', 'enemy', 'unrest', 'native']) c.classList.remove(k); continue; }
       const occupied = this.mode === 'political' && p.occupiedFrom && s.nations[p.occupiedFrom]?.alive && atWar(s, p.owner, p.occupiedFrom);
       c.style.fill = occupied ? `url(#${this.stripes(nat?.color ?? '#777', s.nations[p.occupiedFrom!].color, p.owner + '_' + p.occupiedFrom)})` : this.fill(s, p, maxPop) ?? nat?.color ?? '#777';
@@ -356,7 +373,7 @@ export class MapView {
   }
 }
 
-export interface LegendItem { color: string; label: string; }
+export interface LegendItem { color: string; label: string; icon?: string; }
 
 /** What the current map mode shows, for the legend. */
 export function legendFor(s: GameState, mode: MapMode): LegendItem[] {
@@ -366,7 +383,7 @@ export function legendFor(s: GameState, mode: MapMode): LegendItem[] {
     return Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k]) => k);
   };
   if (mode === 'religion') return count(p => p.religion).map(k => ({ color: RELIGION_COLORS[k] ?? hue(k), label: k }));
-  if (mode === 'goods') return count(p => p.good).slice(0, 14).map(k => ({ color: GOOD_COLORS[k] ?? hue(k), label: k }));
+  if (mode === 'goods') return RAW.map(k => ({ color: GOODS[k].color, label: k, icon: GOODS[k].icon }));
   if (mode === 'happiness') return [{ color: ramp(0), label: 'angry' }, { color: ramp(0.5), label: 'restless' }, { color: ramp(1), label: 'joyful' }, { color: '#8a8478', label: 'not yours' }];
   if (mode === 'population') return [{ color: popShade(0.1), label: 'few' }, { color: popShade(0.5), label: '' }, { color: popShade(1), label: 'many' }];
   return [];

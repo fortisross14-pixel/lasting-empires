@@ -1,5 +1,6 @@
 // New game setup, the yearly turn, and player actions that touch several systems.
-import { GOODS } from '../data/goods';
+import { GOODS, OLD_GOODS } from '../data/goods';
+import { settleGoods, checkTrade, startStock, GUN_TROOPS } from './trade';
 import { initKnownWorld } from './overseas';
 import { poolFor } from '../data/names';
 import { yearlyAges } from './ages';
@@ -111,7 +112,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
     nations: {}, provinces: {}, rel: {}, treaties: [], wars: [], truces: [], hand: [],
     cardAccum: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 },
     bought: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 },
-    np: 3, imports: [], overseas: {}, core: [], coreChanged: -99, fleet: [], art: 5, taxBurden: 0, accepted: [], stateReligion: 'catholic', happiness: 55, stats: { battles: {}, kings: [], fallen: [], wars: { won: 0, lost: 0 } },
+    np: 3, imports: [], stock: {}, short: {}, routes: [], posts: [], overseas: {}, core: [], coreChanged: -99, fleet: [], art: 5, taxBurden: 0, accepted: [], stateReligion: 'catholic', happiness: 55, stats: { battles: {}, kings: [], fallen: [], wars: { won: 0, lost: 0 } },
     troops: [], equipment: [], characters: [], missions: [], techs: [], firedEvents: [], usedLegends: [], queue: [],
     log: [], flags: {}, ambition: null, ambitionDone: false, over: false,
   };
@@ -176,7 +177,10 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   for (const c of CATS) { drawCat(s, c); drawCat(s, c); }
   addCard(s, 'eq_plate');
   addCard(s, 'peace_envoy', true);
+  addCard(s, 'merchant_route', true);
+  addCard(s, 'trading_post', true);
   settleArmies(s);
+  s.stock = startStock(s);
   push(s, { kind: 'draft', draft: 'ambition', options: ambitionOptions(s) });
   rollEvents(s);
   log(s, `${me.ruler.name} rules ${me.name}. It is the spring of ${START_YEAR}.`);
@@ -221,11 +225,16 @@ function characterAging(s: GameState) {
 /** Each quarter: a quarter of the year's income, manpower and control. */
 function playerEconomy(s: GameState) {
   const me = player(s);
+  checkTrade(s);
   const inc = incomeOf(s, s.player);
   me.gold += inc.total / 4;
+  settleGoods(s);
   const mp = playerManpower(s);
   me.manpower = Math.min(mp.max, me.manpower + mp.gain / 4);
-  for (const t of [...s.troops, ...s.fleet]) if (t.mission == null && !t.moving && t.str < 100) t.str = Math.min(100, t.str + HEAL);
+  // the wounded heal only if there are weapons (and powder, and naval stores) to refit them
+  const refit = (t: { type: string }) => 1 - Math.max(s.short?.weapons ?? 0, GUN_TROOPS.has(t.type) ? s.short?.gunpowder ?? 0 : 0);
+  for (const t of s.troops) if (t.mission == null && !t.moving && t.str < 100) t.str = Math.min(100, t.str + HEAL * refit(t));
+  for (const t of s.fleet) if (t.mission == null && !t.moving && t.str < 100) t.str = Math.min(100, t.str + HEAL * (1 - (s.short?.stores ?? 0)));
   // control
   for (const p of provsOf(s, s.player)) {
     let d = 2 + me.stability + (hasCore(s, 'consolidation') ? 3 : 0) + (hasCore(s, 'agrarian') ? 1 : 0);
@@ -241,7 +250,7 @@ function yearlyPlayer(s: GameState) {
   const me = player(s);
   // workshops forge equipment cards
   for (const p of provsOf(s, s.player)) {
-    if (p.buildings.includes('workshop') && (s.year + p.dev) % 4 === 0) {
+    if (p.buildings.includes('workshop') && p.make === 'weapons' && (s.short?.weapons ?? 0) < 0.2 && (s.year + p.dev) % 4 === 0) {
       const eqs = Object.values(CARDS).filter(c => c.kind === 'equip' && c.weight(s) > 0);
       const e = pick(s, eqs);
       addCard(s, e.id);
@@ -251,25 +260,26 @@ function yearlyPlayer(s: GameState) {
   if (s.flags.new_world && s.year % 5 === 0 && (s.flags.new_world_income ?? 0) < 12) s.flags.new_world_income = (s.flags.new_world_income ?? 0) + 1;
   // prestige
   me.prestige *= 0.985; // prestige fades unless renewed, for every crown
-  me.prestige += provsOf(s, s.player).filter(p => p.buildings.includes('temple')).length * 0.5 + (hasTech(s, 'absolutism') ? 2 : 0) + (hasGood(s, 'silk') ? 1 : 0) + (hasGood(s, 'ivory') ? 0.5 : 0) + (hasGood(s, 'porcelain') ? 0.5 : 0);
+  me.prestige += provsOf(s, s.player).filter(p => p.buildings.includes('temple')).length * 0.5 + (hasTech(s, 'absolutism') ? 2 : 0) + (1 - 2 * (s.short?.luxuries ?? 0));
 }
 
 /** An empty treasury: imports stop, then loans, then bankruptcy. */
 function treasuryCheck(s: GameState) {
   const me = player(s);
-  if (me.gold < 0 && s.imports.length) {
+  const buys = s.routes.filter(r => r.dir === 'buy');
+  if (me.gold < 0 && buys.length) {
     // first the crown stops buying goods abroad
-    const costly = [...s.imports].sort((x, y) => (GOODS[y.good]?.price ?? 0) - (GOODS[x.good]?.price ?? 0))[0];
-    s.imports = s.imports.filter(i => i !== costly);
-    log(s, `The empty treasury stops imports of ${GOODS[costly.good]?.name ?? costly.good}.`, 'bad');
+    const costly = [...buys].sort((x, y) => GOODS[y.good].price * y.amount - GOODS[x.good].price * x.amount)[0];
+    s.routes = s.routes.filter(r => r !== costly);
+    log(s, `The empty treasury closes the ${GOODS[costly.good]?.name ?? costly.good} route from ${nationName(s, costly.partner)}.`, 'bad');
   }
   const debts = s.hand.filter(h => h.card === 'debt').length;
   if (me.gold < 0 && debts >= 5) {
     // bankruptcy: the debts are repudiated, at a price
     s.hand = s.hand.filter(h => h.card !== 'debt');
-    s.imports = [];
+    s.routes = s.routes.filter(r => r.dir === 'sell');
     me.gold = 0; me.stability = clamp(me.stability - 2, -3, 3); me.prestige = Math.max(0, me.prestige - 20);
-    push(s, { kind: 'reveal', title: 'Bankruptcy', items: [{ title: 'The crown defaults', text: 'You repudiate every Crown Debt. Imports stop, stability falls by 2 and prestige by 20. No banker will forget.', tone: 'bad', kind: 'chain' }] });
+    push(s, { kind: 'reveal', title: 'Bankruptcy', items: [{ title: 'The crown defaults', text: 'You repudiate every Crown Debt. Trade routes that buy abroad close, stability falls by 2 and prestige by 20. No banker will forget.', tone: 'bad', kind: 'chain' }] });
     log(s, 'The crown declares bankruptcy.', 'bad');
   } else if (me.gold < 0) {
     me.gold += 40;
@@ -451,7 +461,16 @@ export function migrate(s: GameState): GameState {
   settleArmies(s);
   for (const n of Object.values(s.nations)) n.fleet ??= [];
   initSociety(s);
-  for (const p of Object.values(s.provinces)) { p.settlement ??= 0; p.grades ??= {}; }
+  for (const p of Object.values(s.provinces)) { p.settlement ??= 0; p.grades ??= {}; if (OLD_GOODS[p.good]) p.good = OLD_GOODS[p.good]; }
+  if (!s.stock) {
+    // the goods economy arrived: old imports end, every workshop picks a product, and warehouses start half full
+    s.imports = []; s.routes = []; s.posts = []; s.short = {};
+    for (const p of provsOf(s, s.player)) if ((p.buildings.includes('workshop') || p.buildings.includes('manufactory')) && !p.make) p.make = 'materials';
+    s.stock = startStock(s);
+    if (!s.hand.some(h => h.card === 'merchant_route')) addCard(s, 'merchant_route', true);
+    if (!s.hand.some(h => h.card === 'trading_post')) addCard(s, 'trading_post', true);
+  }
+  s.routes ??= []; s.posts ??= []; s.short ??= {};
   return s;
 }
 

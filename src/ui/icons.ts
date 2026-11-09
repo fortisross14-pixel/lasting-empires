@@ -1,5 +1,19 @@
 // Small stroke icons on a 24×24 grid.
 const P: Record<string, string> = {
+  fish: 'M2 12 Q9 4 16 12 Q9 20 2 12 Z M16 12 L22 7 V17 Z M7 11 V11.1',
+  meat: 'M14 3 a6.5 6.5 0 0 1 3 12 L12 14 L10.5 9.5 a6.5 6.5 0 0 1 3.5 -6.5 Z M11 14 L6 19 M4 17 L5.5 18.5 L4.5 21 M6 19 L8.5 20.5',
+  apple: 'M12 7 C7 4 3 8 5 14 C6 18 9 21 12 19 C15 21 18 18 19 14 C21 8 17 4 12 7 Z M12 7 V3 M12 4.5 Q14.5 2 17 3.5',
+  tree: 'M12 2 L18 10 H15 L19.5 16.5 H4.5 L9 10 H6 Z M12 16.5 V22',
+  coal: 'M3 19 L6 12 L11 13 L13 19 Z M11 13 L15 8 L20 11 L21 19 H13',
+  hide: 'M7 3 L9 6 H15 L17 3 L20 7 L18 12 L19.5 20 L15 18 H9 L4.5 20 L6 12 L4 7 Z',
+  spool: 'M6 3 H18 M6 21 H18 M8.5 3 V21 M15.5 3 V21 M8.5 7 L15.5 10 M8.5 11 L15.5 14 M8.5 15 L15.5 18',
+  drop: 'M12 3 C9 8 6 11 6 15 a6 6 0 0 0 12 0 C18 11 15 8 12 3 Z',
+  flask: 'M9 3 H15 M10 3 V9 L4.5 19 a1.5 1.5 0 0 0 1.3 2 H18.2 a1.5 1.5 0 0 0 1.3 -2 L14 9 V3 M7 15 H17',
+  pepper: 'M6 18 C14 20 20 13 17 6 L14 6.5 C14.5 12 11 15 6 15.5 Z M17 6 L18.5 2.5',
+  brick: 'M3 6 H21 V19 H3 Z M3 12.5 H21 M9 6 V12.5 M15 12.5 V19',
+  pick: 'M3 9 Q12 2 21 9 M12 5.5 V22',
+  barrel: 'M7 3 H17 Q20.5 12 17 21 H7 Q3.5 12 7 3 Z M5 8 H19 M5 16 H19',
+  cloth: 'M4 4 H18 V17 L15 20 H4 Z M8 4 V20 M18 17 H15 V20',
   spear: 'M12 2 L14 7 L12 8.5 L10 7 Z M12 8.5 V22 M9.5 20 H14.5',
   pike: 'M12 1 L13.5 5 L12 6 L10.5 5 Z M12 6 V23 M8 9 H16',
   sword: 'M19 3 L21 5 L9.5 16.5 L7.5 14.5 Z M5 12.5 L11.5 19 M3 21 L6.5 17.5',
@@ -49,6 +63,9 @@ const P: Record<string, string> = {
   next: 'M5 4 L15 12 L5 20 Z M18 4 V20',
   torchfire: 'M12 2 C15 6 17 9 12 14 C7 9 9 6 12 2 Z',
 };
+
+/** Raw path data, for SVG symbols. */
+export const iconPath = (name: string) => P[name] ?? P.star;
 
 export function icon(name: string, size = 20, cls = ''): string {
   const d = P[name] ?? P.star;

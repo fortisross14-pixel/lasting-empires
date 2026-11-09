@@ -5,7 +5,7 @@ import type { GameState, Nation, TroopCard, Character, Role, LogEntry, Prompt, R
 import { TROOPS } from '../data/troops';
 import { BUILDINGS, TECH } from '../data/techs';
 import { RULER_ARCHS } from '../data/nations';
-import { GOODS } from '../data/goods';
+import { tradeIncome } from './trade';
 import { TRAITS, FIRST_NAMES, SURNAMES, RARITY, RARITY_ORDER, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
 import { getGeo, neighbours } from './map';
 
@@ -119,7 +119,7 @@ export const armyPower = (arr: { type: string; vet: number; str: number; might?:
 /** Prices rise over the centuries. */
 export const inflation = (s: GameState) => 1 + Math.max(0, s.year - 1453) / 160;
 
-export const buildingCost = (s: GameState, b: string) => Math.round(BUILDINGS[b].cost * inflation(s) * (1 + 0.15 * ageIndex(s)) * (hasGood(s, 'timber') ? 0.85 : 1));
+export const buildingCost = (s: GameState, b: string) => Math.round(BUILDINGS[b].cost * inflation(s) * (1 + 0.15 * ageIndex(s)));
 
 export function upkeepOf(s: GameState, arr: TroopCard[]): number {
   const mult = (hasTech(s, 'standing_army') ? 0.8 : 1) * (0.7 + 0.3 * inflation(s));
@@ -150,15 +150,15 @@ export function ownGoods(s: GameState, n = s.player): Set<string> {
   for (const p of provsOf(s, n)) if (p.good) g.add(p.good);
   return g;
 }
+/** Goods in the warehouses or made at home. */
 export function hasGood(s: GameState, good: string): boolean {
-  return ownGoods(s).has(good) || s.imports.some(i => i.good === good) || colonyGoods(s).has(good);
+  return ownGoods(s).has(good) || (s.stock?.[good] ?? 0) > 0.5;
 }
 export function colonyGoods(s: GameState): Set<string> {
   // colonies are ordinary provinces now; kept for old saves and the ledger
   void s;
   return new Set<string>();
 }
-export const importCost = (s: GameState) => s.imports.reduce((a, i) => a + (GOODS[i.good]?.price ?? 0), 0) * inflation(s) * (hasCore(s, 'mercantile') ? 0.7 : 1);
 
 // ---------- ruler modifiers ----------
 export function rulerMod(s: GameState, field: 'battle' | 'diplo' | 'research' | 'goldPct' | 'np'): number {
@@ -171,9 +171,10 @@ export function provinceIncome(s: GameState, id: string): number {
   const p = s.provinces[id];
   const g = getGeo();
   let v = p.dev * 0.6 + (g.coastal[id] ? 0.4 : 0);
-  for (const b of p.buildings) v += (BUILDINGS[b]?.gold ?? 0) * grade(p, b) * extractMult(p, b);
+  // towns without building materials fall into disrepair
+  const repair = p.owner === s.player ? 1 - 0.3 * (s.short?.materials ?? 0) : 1;
+  for (const b of p.buildings) v += (BUILDINGS[b]?.gold ?? 0) * grade(p, b) * extractMult(p, b) * (BUILDINGS[b]?.site === 'town' ? repair : 1);
   if (s.player === p.owner && hasCore(s, 'agrarian')) for (const b of ['farm', 'pasture']) if (p.buildings.includes(b)) v += (BUILDINGS[b].gold ?? 0) * 0.5 * grade(p, b);
-  if (p.buildings.includes('mine') && (p.good === 'gold' || p.good === 'silver')) v += 2 * grade(p, 'mine');
   v += TIERS[tierOf(p)].gold;
   return v * controlMult(p.control);
 }
@@ -226,20 +227,11 @@ export function incomeOf(s: GameState, n: string): IncomeBreakdown {
     for (const x of Object.values(s.nations)) if (x.alive && x.overlord === n) other += provsOf(s, x.id).reduce((a, p) => a + p.dev * 0.6, 0) * (x.subject === 'union' ? 0.4 : 0.25);
     provinces *= 1 + rulerMod(s, 'goldPct');
     other -= s.hand.filter(h => h.card === 'debt').length * 2;
-    if (hasGood(s, 'oil')) goods += 1.5;
-    if (hasGood(s, 'silver')) goods += 2;
-    if (hasGood(s, 'sugar')) goods += 1.5;
-    if (hasGood(s, 'gold')) goods += 3;
-    if (hasGood(s, 'spices')) goods += 1.5;
-    if (hasGood(s, 'furs')) goods += 1.5;
-    if (hasGood(s, 'cattle')) goods += 1;
-    if (hasGood(s, 'ivory')) goods += 1;
-    if (hasGood(s, 'porcelain')) goods += 2;
-    if (hasGood(s, 'cotton')) goods += provsOf(s, n).filter(p => p.buildings.includes('workshop')).length;
     other += colonyIncome(s);
-    if (hasGood(s, 'wool')) goods += provsOf(s, n).filter(p => p.buildings.includes('market')).length;
+    const t = tradeIncome(s);
+    goods += t.sold + t.local;
+    imp = t.bought + t.posts;
     sal = salaries(s, n);
-    imp = importCost(s);
     adm = administration(s, n);
   } else {
     other += s.flags['ai_bonus_' + n] ?? 0;
@@ -266,9 +258,10 @@ export function playerManpower(s: GameState): { gain: number; max: number } {
   const dev = ps.reduce((a, p) => a + p.dev, 0);
   let gain = 0.5 + dev * 0.04 + ps.reduce((a, p) => a + p.buildings.filter(b => b === 'barracks').length * 0.5, 0);
   gain += ps.reduce((a, p) => a + (p.buildings.includes('farm') ? 0.5 * extractMult(p, 'farm') : 0) + (p.buildings.includes('fishery') ? 0.3 * extractMult(p, 'fishery') : 0), 0);
-  if (hasGood(s, 'grain')) gain += 0.5;
-  if (hasGood(s, 'fish')) gain += 0.3;
-  if (hasGood(s, 'cattle')) gain += 0.3;
+  // a fed realm raises more men; a hungry one fewer
+  const hunger = s.short?.food ?? 0;
+  if (hunger < 0.05) gain += 0.5;
+  gain *= 1 - 0.5 * hunger;
   if (hasCore(s, 'agrarian')) gain += 0.5;
   if (hasCore(s, 'mercantile')) gain -= 0.3;
   return { gain, max: Math.round(5 + dev * 0.3) };
