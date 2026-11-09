@@ -1,4 +1,4 @@
-import { newGame, endTurn, chooseEventOption, playerDeclareWar, ranking, chooseHeir } from '../src/engine/turn';
+import { newGame, endTurn, chooseEventOption, playerDeclareWar, ranking, chooseHeir, adoptCore, coreBlocked } from '../src/engine/turn';
 import { EVENT } from '../src/engine/events';
 import { autoResolve, finishBattle } from '../src/engine/battle';
 import { takeDraftOption, doMerge, mergePreview, buyCard, hireWithCard } from '../src/engine/drafts';
@@ -32,6 +32,7 @@ const free = (s: GameState, role: string) => s.characters.filter(c => c.role ===
 
 function botTurn(s: GameState) {
   const me = player(s);
+  for (const c of ['consolidation', 'open', 'mercantile', 'land']) if (!coreBlocked(s, c)) adoptCore(s, c);
   for (let k = 0; k < 3; k++) { const c = CATS[Math.floor(R() * 5)]; if (s.np >= buyCost(s, c) + 2) { buyCard(s, c); resolveQueue(s); } }
   for (const h of [...s.hand]) {
     if (!s.hand.includes(h)) continue;
@@ -111,7 +112,7 @@ for (const n of ['castile', 'portugal', 'aragon']) for (let seed = 1; seed <= 3;
   } catch (e) { console.error('CRASH', n, seed, s.year, e); throw e; }
   const me = player(s);
   const r = ranking(s);
-  console.log(n, seed, 'year', s.year, 'provs', provsOf(s, n).length, 'gold', Math.round(me.gold), 'troops', s.troops.length, 'techs', s.techs.length, 'stab', me.stability, 'rank', r.findIndex(x => x.id === n) + 1, 'top', r.slice(0, 3).map(x => x.name + ':' + x.score).join(' '), 'alive', Object.values(s.nations).filter(x => x.alive).length, 'kings', s.stats.kings.length, 'wars', JSON.stringify(s.stats.wars), 'imports', s.imports.length, 'colonies', Object.values(s.overseas).filter(o => o.holder === n && o.colony).length, 'found', Object.values(s.overseas).filter(o => o.found).length, 'rar', s.characters.map(c => c.rarity[0]).join(''), 'towns', provsOf(s, n).map(p => p.settlement).join(''), 'vets', s.troops.filter(t => t.vet >= 2).length);
+  console.log(n, seed, 'year', s.year, 'provs', provsOf(s, n).length, 'gold', Math.round(me.gold), 'troops', s.troops.length, 'techs', s.techs.length, 'stab', me.stability, 'rank', r.findIndex(x => x.id === n) + 1, 'top', r.slice(0, 3).map(x => x.name + ':' + x.score).join(' '), 'alive', Object.values(s.nations).filter(x => x.alive).length, 'kings', s.stats.kings.length, 'wars', JSON.stringify(s.stats.wars), 'imports', s.imports.length, 'colonies', Object.values(s.overseas).filter(o => o.holder === n && o.colony).length, 'found', Object.values(s.overseas).filter(o => o.found).length, 'rar', s.characters.map(c => c.rarity[0]).join(''), 'towns', provsOf(s, n).map(p => p.settlement).join(''), 'vets', s.troops.filter(t => t.vet >= 2).length, 'core', s.core.join('/'));
 }
 {
   const s = newGame('castile', 99);

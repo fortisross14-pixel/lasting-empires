@@ -108,12 +108,19 @@ export function upkeepOf(s: GameState, arr: TroopCard[]): number {
 export function armyCap(s: GameState): number {
   const ps = provsOf(s, s.player);
   const barracks = ps.reduce((a, p) => a + p.buildings.filter(b => b === 'barracks').length, 0);
-  return 5 + Math.floor(ps.length / 2) + barracks + (hasTech(s, 'standing_army') ? 3 : 0);
+  return 5 + Math.floor(ps.length / 2) + barracks + (hasTech(s, 'standing_army') ? 3 : 0) + (hasCore(s, 'land') ? 2 : 0);
 }
 export function courtCap(s: GameState): number {
   return 6 + (hasTech(s, 'embassies') ? 1 : 0) + (hasTech(s, 'councils') ? 1 : 0);
 }
 export const courtCount = (s: GameState) => s.characters.filter(c => !c.ruler).length;
+
+// ---------- core cards ----------
+export const hasCore = (s: GameState, id: string) => (s.core ?? []).includes(id);
+export function coreSlots(s: GameState): number {
+  const dev = provsOf(s, s.player).reduce((a, p) => a + p.dev, 0);
+  return 1 + (hasTech(s, 'bureaucracy') || dev >= 40 ? 1 : 0) + (hasTech(s, 'absolutism') ? 1 : 0) + (hasTech(s, 'enlightened') ? 1 : 0);
+}
 
 // ---------- goods ----------
 /** Goods the player has: produced in owned provinces, or imported. */
@@ -130,7 +137,7 @@ export function colonyGoods(s: GameState): Set<string> {
   for (const [id, o] of Object.entries(s.overseas ?? {})) if (o.holder === s.player && o.colony > 0 && REGIONS[id]) g.add(REGIONS[id].good);
   return g;
 }
-export const importCost = (s: GameState) => s.imports.reduce((a, i) => a + (GOODS[i.good]?.price ?? 0), 0) * inflation(s);
+export const importCost = (s: GameState) => s.imports.reduce((a, i) => a + (GOODS[i.good]?.price ?? 0), 0) * inflation(s) * (hasCore(s, 'mercantile') ? 0.7 : 1);
 
 // ---------- ruler modifiers ----------
 export function rulerMod(s: GameState, field: 'battle' | 'diplo' | 'research' | 'goldPct' | 'np'): number {
@@ -145,6 +152,7 @@ export function provinceIncome(s: GameState, id: string): number {
   let v = p.dev * 0.6 + (g.coastal[id] ? 0.4 : 0);
   for (const b of p.buildings) v += (BUILDINGS[b]?.gold ?? 0) * grade(p, b);
   if (p.buildings.includes('pasture') && (p.good === 'wool' || p.good === 'horses')) v += 1 * grade(p, 'pasture');
+  if (s.player === p.owner && hasCore(s, 'agrarian')) for (const b of ['farm', 'pasture']) if (p.buildings.includes(b)) v += (BUILDINGS[b].gold ?? 0) * 0.5 * grade(p, b);
   if (p.buildings.includes('mine') && (p.good === 'iron' || p.good === 'silver')) v += 3 * grade(p, 'mine');
   v += TIERS[tierOf(p)].gold;
   return v * controlMult(p.control);
@@ -157,6 +165,9 @@ export function tradeValue(s: GameState, a: string, b: string): number {
   let v = 2 + partnerDev * 0.12;
   if (a === s.player) {
     if (hasTech(s, 'mercantilism')) v *= 1.5;
+    if (hasCore(s, 'sea')) v += 1;
+    if (hasCore(s, 'mercantile')) v *= 1.5;
+    if (hasCore(s, 'agrarian')) v *= 0.8;
     v += (s.flags['trade_bonus_' + b] ?? 0);
   }
   return Math.min(v, 6);
@@ -216,6 +227,8 @@ export function playerManpower(s: GameState): { gain: number; max: number } {
   gain += ps.reduce((a, p) => a + (p.buildings.includes('farm') ? 0.5 : 0), 0);
   if (hasGood(s, 'grain')) gain += 0.5;
   if (hasGood(s, 'fish')) gain += 0.3;
+  if (hasCore(s, 'agrarian')) gain += 0.5;
+  if (hasCore(s, 'mercantile')) gain -= 0.3;
   return { gain, max: Math.round(5 + dev * 0.3) };
 }
 
@@ -298,6 +311,9 @@ export function rollOutcome(s: GameState, c?: { rarity?: Rarity } | null): numbe
   for (let i = 0; i < odds.length; i++) { if ((r -= odds[i]) < 0) return i; }
   return 1;
 }
+/** Roll twice and keep the better result (core-card advantage). */
+export const rollBest = (s: GameState, c?: { rarity?: Rarity } | null) => Math.max(rollOutcome(s, c), rollOutcome(s, c));
+
 export const outcomeName = (o: number) => OUTCOMES[o].name;
 
 export function buildingAllowed(s: GameState, provId: string, b: string): string | null {

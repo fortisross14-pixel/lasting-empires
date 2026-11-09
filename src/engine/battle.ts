@@ -1,7 +1,7 @@
 // Battles: three rounds, each side commits a face-down tactic, then both flip.
 import type { GameState, Battle, BattleSide, BattleUnit, BattleGeneral, RoundLog, TroopCard } from '../types';
 import { TROOPS, TACTICS } from '../data/troops';
-import { rand, pick, weighted, uid, clamp, hasTech, rulerMod, log, nationName, addRel, player, findWar, promoteRarity } from './core';
+import { rand, pick, weighted, uid, clamp, hasTech, rulerMod, log, nationName, addRel, player, findWar, promoteRarity, hasCore } from './core';
 
 export const breakLevel = (side: BattleSide) => (side.general?.traits.includes('inspiring') ? 0.25 : 0.35);
 export const hp = (side: BattleSide) => side.units.reduce((a, u) => a + u.str, 0);
@@ -101,6 +101,8 @@ function attackOutput(s: GameState, side: BattleSide, round: number, my: Mods): 
   if (side.player) {
     mult += rulerMod(s, 'battle');
     if (hasTech(s, 'military_drill')) mult += 0.1;
+    if (hasCore(s, 'land')) mult += 0.1;
+    if (hasCore(s, 'sea')) mult -= 0.05;
   }
   return { fire: fire * mult, melee: melee * mult };
 }
@@ -276,7 +278,7 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
     if (playerWon) {
       title = `${prov.name} is taken!`;
       transferProvince(s, b.province, s.player);
-      me.prestige += 5;
+      me.prestige += hasCore(s, 'expansion') ? 10 : 5;
       lines.push(`${prov.name} now belongs to ${me.name}. Prestige +5.`);
       good = true;
     } else {

@@ -207,6 +207,8 @@ export interface GameState {
   imports: { good: string; from: string }[];
   overseas: Record<string, { found: boolean; holder: string | null; colony: number; subdued: boolean }>;
   stats: Stats;
+  core: string[];                   // adopted core cards
+  coreChanged: number;              // year of the last change
   troops: TroopCard[];
   equipment: EquipCard[];
   characters: Character[];

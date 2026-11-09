@@ -28,9 +28,10 @@ export const TECHS: TechDef[] = [
 
   { id: 'chancery', name: 'Royal Chancery', track: 'state', year: 1453, cost: 6, desc: '+10% diplomatic success, missions 1 year shorter. Build Chancery Offices. +0.2 Diplomacy cards.' },
   { id: 'embassies', name: 'Resident Embassies', track: 'state', year: 1480, cost: 10, req: ['chancery'], desc: '+1 court seat. Alliances need 15 less relation.' },
-  { id: 'bureaucracy', name: 'Bureaucracy', track: 'state', year: 1500, cost: 14, desc: '+1 stability, tax missions +50%, +0.2 Internal cards a year.' },
+  { id: 'bureaucracy', name: 'Bureaucracy', track: 'state', year: 1500, cost: 14, desc: '+1 stability, tax missions +50%, +0.2 Internal cards a year. +1 core card slot.' },
   { id: 'councils', name: 'Royal Councils', track: 'state', year: 1530, cost: 16, req: ['bureaucracy'], desc: '+1 court seat, +1 research per study, +1 nation point a year.' },
-  { id: 'absolutism', name: 'Absolutism', track: 'state', year: 1620, cost: 24, req: ['councils'], desc: '+1 stability, +2 prestige a year.' },
+  { id: 'absolutism', name: 'Absolutism', track: 'state', year: 1620, cost: 24, req: ['councils'], desc: '+1 stability, +2 prestige a year. +1 core card slot.' },
+  { id: 'enlightened', name: 'Enlightened Government', track: 'state', year: 1700, cost: 30, req: ['absolutism'], desc: '+1 core card slot. +0.2 Internal and Research cards a year.' },
 ];
 
 export const TECH: Record<string, TechDef> = Object.fromEntries(TECHS.map(t => [t.id, t]));
@@ -67,5 +68,5 @@ export const BUILDINGS: Record<string, BuildingDef> = {
 /** Card-rate bonuses from research. */
 export const TECH_RATES: Record<string, Partial<Record<'military' | 'diplomacy' | 'internal' | 'economy' | 'research', number>>> = {
   guilds: { economy: 0.2 }, printing: { research: 0.2 }, chancery: { diplomacy: 0.2 }, bureaucracy: { internal: 0.2 },
-  standing_army: { military: 0.2 }, banking: { economy: 0.1 }, embassies: { diplomacy: 0.1 }, councils: { internal: 0.1 },
+  standing_army: { military: 0.2 }, enlightened: { internal: 0.2, research: 0.2 }, banking: { economy: 0.1 }, embassies: { diplomacy: 0.1 }, councils: { internal: 0.1 },
 };

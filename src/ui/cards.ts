@@ -2,6 +2,7 @@
 import type { TroopCard, EquipCard, Character, GameState } from '../types';
 import { TROOPS, EQUIPMENT, TACTICS } from '../data/troops';
 import { TRAITS, RARITY } from '../data/characters';
+import { CORE } from '../data/core';
 import { CARDS } from '../engine/cards';
 import { roleName } from '../engine/core';
 import { h } from './dom';
@@ -95,4 +96,15 @@ export function flipCard(front: HTMLElement, label = '', big = false) {
   inner.append(back, front);
   wrap.append(inner);
   return { el: wrap, flip: () => wrap.classList.add('flipped') };
+}
+
+export function coreCard(id: string, o: Opts & { slotted?: boolean } = {}) {
+  const d = CORE[id];
+  return shell('core', { ...o, cls: `ax-${d.axis}${o.slotted ? ' slotted' : ''} ${o.cls ?? ''}` },
+    h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, 'Core card')),
+    h('div', { class: 'c-art', html: icon(d.icon, o.small ? 24 : 30) }),
+    h('div', { class: 'c-name c-title' }, d.name),
+    o.small ? null : h('div', { class: 'c-text c-pros' }, d.pros.join(' · ')),
+    o.small ? null : h('div', { class: 'c-text c-cons' }, d.cons.join(' · ')),
+  );
 }

@@ -3,7 +3,7 @@ import type { GameState, Character, RevealItem, Role } from '../types';
 import { REGIONS, type RegionDef } from '../data/overseas';
 import { GOODS } from '../data/goods';
 import { RARITY } from '../data/characters';
-import { player, hasTech, rand, clamp, armyPower, rollTraits, traitMult, inflation, log, nationName, weighted } from './core';
+import { player, hasTech, rand, clamp, armyPower, rollTraits, traitMult, inflation, log, nationName, weighted, hasCore } from './core';
 
 export const regionState = (s: GameState, id: string) => (s.overseas[id] ??= { found: false, holder: null, colony: 0, subdued: false });
 
@@ -22,6 +22,7 @@ export function exploreChance(s: GameState, ch: Character): number {
   let p = 0.3 + ch.skill * 0.07;
   if (ch.traits.includes('navigator')) p += 0.15 * traitMult(ch);
   if (hasTech(s, 'navigation')) p += 0.15;
+  if (hasCore(s, 'sea')) p += 0.15;
   return clamp(p, 0.1, 0.95);
 }
 

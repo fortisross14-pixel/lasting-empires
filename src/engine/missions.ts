@@ -10,7 +10,7 @@ import { BUILDINGS } from '../data/techs';
 import {
   player, provsOf, hasTech, getRel, addRel, addTreaty, hasTreaty, atWar, findWar, makePeace, rulerMod, clamp,
   rand, pick, uid, log, nationName, armyPower, buildingAllowed, push, buildingCost, inflation, ownGoods, traitMult, promoteRarity,
-  rollOutcome, outcomeName, TIERS, tierOf, GROW_DEV,
+  rollOutcome, outcomeName, TIERS, tierOf, GROW_DEV, hasCore, rollBest,
 } from './core';
 import { getGeo } from './map';
 import { createBattle, makeSide, toBattleUnits, genericGeneral, freeMission, transferProvince } from './battle';
@@ -80,6 +80,8 @@ export function researchRate(s: GameState, ch: Character, track?: string): numbe
     if (track === 'economy' && ch.traits.includes('economist')) r += 2 * m;
     if (track === 'state' && ch.traits.includes('jurist')) r += 2 * m;
   }
+  if (hasCore(s, 'open')) r *= 1.25;
+  if (hasCore(s, 'traditional')) r *= 0.85;
   return Math.max(1, Math.round(r * 10) / 10);
 }
 
@@ -91,7 +93,10 @@ export function attackRoute(s: GameState, target: string): { turns: number; nava
   const sources = mine.filter(id => g.sea[id].includes(target));
   if (!sources.length) return null;
   const harbour = sources.some(id => s.provinces[id].buildings.includes('harbour'));
-  return { turns: harbour ? 1 : 2, naval: true };
+  let t = harbour ? 1 : 2;
+  if (hasCore(s, 'sea')) t -= 1;
+  if (hasCore(s, 'land')) t += 1;
+  return { turns: Math.max(1, t), naval: true };
 }
 
 export function missionTurns(s: GameState, kind: MissionKind, ch: Character, target: string, building?: string): number {
@@ -128,6 +133,7 @@ export function diploChance(s: GameState, kind: MissionKind, ch: Character, targ
   if (hasTech(s, 'chancery')) p += 0.1;
   if ((nat.spiedUntil ?? 0) > s.year) p += 0.1;
   if (kind === 'trade' && nat.personality === 'merchant') p += 0.1;
+  if (kind === 'trade' && hasCore(s, 'open')) p += 0.1;
   if (nat.personality === 'expansionist') p -= 0.08;
   if (kind === 'alliance') {
     const need = hasTech(s, 'embassies') ? 25 : 40;
@@ -318,7 +324,7 @@ function completeResearch(s: GameState, m: Mission, ch: Character) {
   if (t.id === 'bureaucracy' || t.id === 'absolutism') player(s).stability = clamp(player(s).stability + 1, -3, 3);
   if (t.id === 'star_forts') { const cap = s.provinces[player(s).capital]; if (cap && cap.owner === s.player) cap.fort = Math.min(3, cap.fort + 1); }
   const items: RevealItem[] = [{ title: t.name, text: t.desc, tone: 'good', kind: 'book' }];
-  const o = rollOutcome(s, ch);
+  const o = hasCore(s, 'open') ? rollBest(s, ch) : rollOutcome(s, ch);
   if (o >= 3) {
     const n = o === 4 ? 2 : 1;
     for (let i = 0; i < n; i++) drawCat(s, 'research');
@@ -423,7 +429,7 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
     const prov = s.provinces[m.target];
     const b = BUILDINGS[m.building!];
     if (prov.owner !== s.player) { finish(s, m); return; }
-    const o = rollOutcome(s, ch);
+    const o = hasCore(s, 'consolidation') ? rollBest(s, ch) : rollOutcome(s, ch);
     const g = GRADES[o];
     if (b.id === 'fortress') { prov.fort++; if (o >= 3 && prov.fort < 3) prov.fort++; } else { prov.buildings.push(b.id); prov.grades = { ...(prov.grades ?? {}), [b.id]: g.mult }; }
     if (b.id === 'temple') me.stability = clamp(me.stability + 1, -3, 3);
@@ -449,7 +455,7 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
   if (m.kind === 'develop') {
     const prov = s.provinces[m.target];
     if (prov.owner !== s.player) { finish(s, m); return; }
-    const o = rollOutcome(s, ch);
+    const o = hasCore(s, 'consolidation') ? rollBest(s, ch) : rollOutcome(s, ch);
     const d = [0, 1, 1, 2, 3][o];
     prov.dev += d; me.prestige += d;
     if (o === 2) prov.control = Math.min(100, prov.control + 10);
@@ -463,7 +469,7 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
   if (m.kind === 'found') {
     const prov = s.provinces[m.target];
     if (prov.owner !== s.player) { finish(s, m); return; }
-    const o = rollOutcome(s, ch);
+    const o = hasCore(s, 'consolidation') ? rollBest(s, ch) : rollOutcome(s, ch);
     prov.settlement = [1, 1, 2, 3, 3][o];
     if (o === 4) { prov.dev++; me.prestige += 5; }
     prov.control = Math.min(100, prov.control + 5); me.prestige += prov.settlement;
@@ -479,7 +485,7 @@ function resolveMission(s: GameState, m: Mission, ch: Character) {
   if (m.kind === 'grow') {
     const prov = s.provinces[m.target];
     if (prov.owner !== s.player) { finish(s, m); return; }
-    const o = rollOutcome(s, ch);
+    const o = hasCore(s, 'consolidation') ? rollBest(s, ch) : rollOutcome(s, ch);
     const step = [0, 1, 1, 1, 2][o];
     const before = TIERS[tierOf(prov)].name;
     prov.settlement = Math.min(4, prov.settlement + step);

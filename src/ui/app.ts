@@ -9,9 +9,9 @@ import { REGIONS } from '../data/overseas';
 import {
   player, provsOf, incomeOf, playerManpower, getRel, atWar, hasTreaty, enemiesOf, alliesOf, armyPower,
   armyCap, courtCap, courtCount, provinceIncome, buildingAllowed, buildingCost, roleName, nationName, inTruce,
-  tierOf, TIERS, population, townSlots, ruralSlots, builtAt, ownGoods, colonyGoods,
+  tierOf, TIERS, population, townSlots, ruralSlots, builtAt, ownGoods, colonyGoods, coreSlots,
 } from '../engine/core';
-import { newGame, endTurn, chooseEventOption, playerDeclareWar, warCost, ranking, powerTable, dismissCharacter, disbandTroop, chooseHeir, SAVE_VERSION } from '../engine/turn';
+import { newGame, endTurn, chooseEventOption, playerDeclareWar, warCost, ranking, powerTable, dismissCharacter, disbandTroop, chooseHeir, SAVE_VERSION, coreBlocked, coreCost, adoptCore, dropCore, migrate } from '../engine/turn';
 import { EVENT, eventTitle, upcomingHistory } from '../engine/events';
 import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBlocked, troopHireCost, discardCard, HAND_LIMIT, cardFor } from '../engine/cards';
 import {
@@ -24,7 +24,8 @@ import { playRound, autoResolve, finishBattle, ratio, breakLevel, hp } from '../
 import { getGeo } from '../engine/map';
 import { h, $, clear, sleep, reduced, fmt, signed } from './dom';
 import { icon } from './icons';
-import { troopCard, charCard, handCard, tacticCard, backCard, flipCard } from './cards';
+import { troopCard, charCard, handCard, tacticCard, backCard, flipCard, coreCard } from './cards';
+import { AXES, CORE } from '../data/core';
 import { MapView } from './map';
 
 const KEY = 'lasting-empires.save.v2';
@@ -43,17 +44,36 @@ function loadSave(): GameState | null {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const s = JSON.parse(raw) as GameState;
-    return s.version === SAVE_VERSION ? s : null;
+    return s.version === SAVE_VERSION ? migrate(s) : null;
   } catch { return null; }
 }
 export function snapshot() { return S ? { save: JSON.stringify(S) } : {}; }
 
+// ---------- menu styles ----------
+const STYLE_KEY = 'lasting-empires.style';
+export const STYLES = [
+  { id: 'portolan', name: 'Portolan Chart', desc: 'Dark sea chart, lacquer and gold', sw: ['#152126', '#d6ad55', '#17333b'] },
+  { id: 'manuscript', name: 'Illuminated Manuscript', desc: 'Light vellum, rubric red, ink', sw: ['#f4ead1', '#9a2a1f', '#b9cbc4'] },
+  { id: 'heraldic', name: 'Heraldic Court', desc: 'Royal purple, banners, bright gold', sw: ['#1f1638', '#e7b93f', '#1a2546'] },
+];
+function currentStyle() { try { return localStorage.getItem(STYLE_KEY) ?? 'portolan'; } catch { return 'portolan'; } }
+export function applyStyle(id = currentStyle()) {
+  if (id === 'portolan') delete document.documentElement.dataset.style; else document.documentElement.dataset.style = id;
+}
+function setStyle(id: string) { try { localStorage.setItem(STYLE_KEY, id); } catch { /* */ } applyStyle(id); }
+function stylePicker(onChange: () => void) {
+  const cur = currentStyle();
+  return h('div', { class: 'stylepick' }, STYLES.map(st => h('button', { class: st.id === cur ? 'on' : '', onclick: () => { setStyle(st.id); onChange(); } },
+    h('span', { class: 'sw' }, st.sw.map(c => h('i', { style: `background:${c}` }))), h('b', {}, st.name), h('small', { class: 'muted' }, st.desc))));
+}
+
 // ---------- shell ----------
 export function boot(data: { save?: string }) {
+  applyStyle();
   clear($('#app'));
   let restored: GameState | null = null;
   if (data?.save) { try { restored = JSON.parse(data.save); } catch { /* ignore */ } }
-  if (restored && !restored.over && restored.version === SAVE_VERSION) { start(restored); return; }
+  if (restored && !restored.over && restored.version === SAVE_VERSION) { start(migrate(restored)); return; }
   showTitle();
 }
 
@@ -66,6 +86,8 @@ function showTitle() {
       h('h1', { class: 'title' }, 'Lasting Empires'),
       h('p', { class: 'lede' }, 'Every action is a card. Gather Military, Diplomacy, Internal, Economy and Research cards each year, then send your people on missions. One turn is one year.'),
       saved && !saved.over ? h('button', { class: 'btn primary wide', onclick: () => start(saved) }, `Continue as ${saved.nations[saved.player].name}, ${saved.year}`) : null,
+      h('h2', { class: 'pick-h' }, 'Menu style'),
+      stylePicker(showTitle),
       h('h2', { class: 'pick-h' }, 'Choose your crown'),
       h('div', { class: 'nation-picks' }, NATIONS.filter(n => n.playable).map(n =>
         h('button', { class: 'nation-pick', style: `--nc:${n.color}`, onclick: () => start(newGame(n.id)) },
@@ -455,7 +477,34 @@ function diplomacySheet(body: HTMLElement) {
   return [sheetHead('Diplomacy', 'Relations, treaties, envoys and explorers', CAT_INFO.diplomacy.color), body];
 }
 
+function coreSection() {
+  const slots = coreSlots(S);
+  const wrap = h('div', { class: 'coresec' });
+  wrap.append(h('div', { class: 'cs-head' }, h('b', {}, `Core cards (${S.core.length}/${slots} slots)`),
+    h('small', {}, `Adopting costs ${coreCost(S)} nation points. Setting one aside costs 1 stability. One change every 5 years.`)));
+  const row = h('div', { class: 'cards-row wrap' });
+  for (let i = 0; i < 4; i++) {
+    const id = S.core[i];
+    if (id) row.append(coreCard(id, { slotted: true, onclick: () => confirmBox(`Set aside ${CORE[id].name}?`, 'Stability falls by 1, and the realm returns to the middle on this axis.', 'Set aside', () => act(() => dropCore(S, id))) }));
+    else if (i < slots) row.append(h('div', { class: 'card slot-open' }, h('span', {}, 'Empty slot'), h('small', {}, 'Adopt a core card below')));
+    else row.append(h('div', { class: 'card slot-locked' }, h('span', { html: icon('chain', 18) }), h('small', {}, ['', 'Bureaucracy or 40 development', 'Absolutism', 'Enlightened Government'][i])));
+  }
+  wrap.append(row);
+  for (const ax of AXES) {
+    const cur = S.core.find(c => CORE[c].axis === ax.id);
+    const side = (id: string) => {
+      const why = coreBlocked(S, id);
+      return h('div', { class: 'ax-side' + (cur === id ? ' on' : '') }, coreCard(id, { small: true }),
+        h('div', { class: 'ax-txt' }, h('b', {}, CORE[id].name), h('small', { class: 'good' }, CORE[id].pros.join(' · ')), h('small', { class: 'bad' }, CORE[id].cons.join(' · ')),
+          cur === id ? h('span', { class: 'tag ally' }, 'Adopted') : h('button', { class: 'btn small' + (why ? ' blocked' : ''), onclick: () => (why ? toast(why, 'bad') : act(() => adoptCore(S, id), `${CORE[id].name} adopted`)) }, why ?? `Adopt · ${coreCost(S)} NP`)));
+    };
+    wrap.append(h('div', { class: 'axis' }, h('div', { class: 'ax-h' }, h('b', {}, ax.name), h('span', { class: 'ax-meter' }, h('i', { style: `left:${cur === ax.left ? 8 : cur === ax.right ? 92 : 50}%` }))), side(ax.left), side(ax.right)));
+  }
+  return wrap;
+}
+
 function internalSheet(body: HTMLElement) {
+  body.append(coreSection());
   body.append(cardSection('internal'));
   body.append(...peopleSection(['admin', 'colonist'], 'Administrators and colonists'));
   body.append(h('h3', {}, 'Provinces'));
@@ -633,6 +682,7 @@ function realmSheet(body: HTMLElement) {
     stat('Manpower', `${Math.floor(me.manpower)}/${mp.max} (+${mp.gain.toFixed(1)})`), stat('Stability', me.stability),
     stat('Court', `${courtCount(S)}/${courtCap(S)}`), stat('Provinces', provsOf(S, S.player).length)));
   body.append(h('p', { class: 'muted' }, 'Stability from −3 to +3 changes income by 6% a step and nation points by 0.5. At −2 or lower, revolts break out and you draw fewer cards.'));
+  body.append(h('h3', {}, 'Menu style'), stylePicker(() => refresh()));
   body.append(h('button', { class: 'btn ghost', onclick: () => confirmBox('Leave this campaign?', 'It stays saved. You can continue it from the title screen.', 'Back to title', () => { closeModal(); showTitle(); }) }, 'Back to title screen'));
   return [sheetHead(me.name, `${me.ruler.name} · ${S.year}`, me.color), body];
 }

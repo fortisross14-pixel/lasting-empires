@@ -5,9 +5,10 @@ import { NATIONS, START_REL, RULERS, RULER_NAMES, RULER_ARCHS, archFromTraits } 
 import { PROVINCES } from '../data/geo';
 import { PROVINCE_GOODS } from '../data/goods';
 import { BUILDINGS } from '../data/techs';
+import { CORE } from '../data/core';
 import {
   rand, pick, randInt, uid, clamp, player, provsOf, incomeOf, log, push, addRel, playerManpower, initialSettlement, grade,
-  addTreaty, hasTech, genCharacter, declareWar, nationName, atWar, getRel, hasGood, armyPower,
+  addTreaty, hasTech, genCharacter, declareWar, nationName, atWar, getRel, hasGood, armyPower, hasCore, coreSlots,
 } from './core';
 import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS } from './cards';
 import { advanceMissions } from './missions';
@@ -95,7 +96,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
     nations: {}, provinces: {}, rel: {}, treaties: [], wars: [], truces: [], hand: [],
     cardAccum: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 },
     bought: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 },
-    np: 3, imports: [], overseas: {}, stats: { battles: {}, kings: [], fallen: [], wars: { won: 0, lost: 0 } },
+    np: 3, imports: [], overseas: {}, core: [], coreChanged: -99, stats: { battles: {}, kings: [], fallen: [], wars: { won: 0, lost: 0 } },
     troops: [], equipment: [], characters: [], missions: [], techs: [], firedEvents: [], usedLegends: [], queue: [],
     log: [], flags: {}, ambition: null, ambitionDone: false, over: false,
   };
@@ -189,9 +190,9 @@ function playerEconomy(s: GameState) {
   for (const t of s.troops) if (t.mission == null && t.str < 100) t.str = Math.min(100, t.str + 15);
   // control
   for (const p of provsOf(s, s.player)) {
-    let d = 2 + me.stability;
+    let d = 2 + me.stability + (hasCore(s, 'consolidation') ? 3 : 0) + (hasCore(s, 'agrarian') ? 1 : 0);
     for (const b of p.buildings) d += (BUILDINGS[b]?.control ?? 0) * grade(p, b);
-    if (p.core !== s.player) d -= 1;
+    if (p.core !== s.player) d -= hasCore(s, 'expansion') ? 2 : 1;
     p.control = clamp(p.control + d, 0, 100);
   }
   // workshops forge equipment cards
@@ -287,8 +288,10 @@ export function playerDeclareWar(s: GameState, target: string): string | null {
   if (s.truces.some(t => t.until > s.year && ((t.a === s.player && t.b === target) || (t.b === s.player && t.a === target)))) return 'A truce is in force';
   const claim = s.flags['claim_' + target];
   const allied = s.treaties.some(t => (t.kind === 'alliance' || t.kind === 'marriage') && ((t.a === s.player && t.b === target) || (t.b === s.player && t.a === target)));
+  const cost = warCost(s, target);
   declareWar(s, s.player, target);
-  if (!claim) player(s).stability = clamp(player(s).stability - (allied ? 2 : 1), -3, 3);
+  player(s).stability = clamp(player(s).stability - cost, -3, 3);
+  void claim; void allied;
   delete s.flags['claim_' + target];
   log(s, `You declare war on ${nationName(s, target)}.`, 'neutral');
   return null;
@@ -297,7 +300,51 @@ export function playerDeclareWar(s: GameState, target: string): string | null {
 export function warCost(s: GameState, target: string): number {
   if (s.flags['claim_' + target]) return 0;
   const allied = s.treaties.some(t => (t.kind === 'alliance' || t.kind === 'marriage') && ((t.a === s.player && t.b === target) || (t.b === s.player && t.a === target)));
-  return allied ? 2 : 1;
+  let c = allied ? 2 : 1;
+  if (hasCore(s, 'expansion')) c -= 1;
+  if (hasCore(s, 'consolidation')) c += 1;
+  return Math.max(0, c);
+}
+
+// ---------- core cards ----------
+export function coreBlocked(s: GameState, id: string): string | null {
+  const def = CORE[id];
+  if (!def) return 'Unknown card';
+  if (hasCore(s, id)) return 'Already adopted';
+  if (s.core.some(c => CORE[c].axis === def.axis)) return `You follow ${CORE[s.core.find(c => CORE[c].axis === def.axis)!].name}: set it aside first`;
+  if (s.core.length >= coreSlots(s)) return `All ${coreSlots(s)} core slots are full`;
+  if (s.coreChanged > s.year - 5 && s.core.length) return `The realm needs time: next change in ${s.coreChanged + 5 - s.year} years`;
+  if (s.np < coreCost(s)) return `Needs ${coreCost(s)} nation points`;
+  return null;
+}
+export const coreCost = (s: GameState) => 4 + 2 * s.core.length;
+
+export function adoptCore(s: GameState, id: string): string | null {
+  const why = coreBlocked(s, id);
+  if (why) return why;
+  s.np -= coreCost(s);
+  s.core.push(id);
+  s.coreChanged = s.year;
+  if (id === 'traditional') { player(s).stability = clamp(player(s).stability + 1, -3, 3); addRel(s, s.player, 'papacy', 20); }
+  log(s, `The crown adopts a new principle: ${CORE[id].name}.`, 'good');
+  return null;
+}
+
+/** Setting a core card aside costs 1 stability. */
+export function dropCore(s: GameState, id: string): string | null {
+  if (!hasCore(s, id)) return 'Not adopted';
+  s.core = s.core.filter(c => c !== id);
+  s.coreChanged = s.year;
+  player(s).stability = clamp(player(s).stability - 1, -3, 3);
+  log(s, `${CORE[id].name} is set aside.`);
+  return null;
+}
+
+/** Fill in fields added after a save was made. */
+export function migrate(s: GameState): GameState {
+  s.core ??= []; s.coreChanged ??= -99; s.overseas ??= {}; s.imports ??= [];
+  for (const p of Object.values(s.provinces)) { p.settlement ??= 0; p.grades ??= {}; }
+  return s;
 }
 
 export function chooseEventOption(s: GameState, idx: number): RevealItem[] | string {

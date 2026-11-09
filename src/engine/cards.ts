@@ -4,8 +4,9 @@ import { CATS } from '../types';
 import { TROOPS, EQUIPMENT } from '../data/troops';
 import { TECH, TECHS, BUILDINGS, TECH_RATES, type TechTrack, type BuildingGroup } from '../data/techs';
 import { RULER_ARCHS } from '../data/nations';
+import { CORE_RATES } from '../data/core';
 import {
-  player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName,
+  player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore,
 } from './core';
 
 export type CardTarget = 'none' | 'nation' | 'mission' | 'troop';
@@ -189,6 +190,8 @@ export function cardRates(s: GameState): Record<Cat, { rate: number; parts: Rate
     const r = (arch?.rates[c] ?? 0) + (arch?.all ?? 0);
     if (r) parts.push({ label: 'Monarch', v: r });
     if (c === 'economy' && hasGood(s, 'salt')) parts.push({ label: 'Salt', v: 0.1 });
+    const core = (s.core ?? []).reduce((a, id) => a + (CORE_RATES[id]?.[c] ?? 0), 0);
+    if (core) parts.push({ label: 'Core cards', v: core });
     if (player(s).stability <= -2) parts.push({ label: 'Unrest', v: -0.2 });
     out[c] = { rate: Math.max(0.2, parts.reduce((a, p) => a + p.v, 0)), parts };
   }
@@ -205,6 +208,8 @@ export function npRate(s: GameState): { rate: number; parts: RatePart[] } {
   if (arch?.np) parts.push({ label: 'Monarch', v: arch.np });
   if (hasGood(s, 'wine')) parts.push({ label: 'Wine', v: 0.5 });
   if (hasTech(s, 'councils')) parts.push({ label: 'Royal Councils', v: 1 });
+  if (hasCore(s, 'traditional')) parts.push({ label: 'Traditional', v: 1 });
+  if (hasCore(s, 'open')) parts.push({ label: 'Open-minded', v: -0.5 });
   const st = player(s).stability;
   if (st) parts.push({ label: 'Stability', v: st * 0.5 });
   return { rate: Math.max(0.5, parts.reduce((a, p) => a + p.v, 0)), parts };
