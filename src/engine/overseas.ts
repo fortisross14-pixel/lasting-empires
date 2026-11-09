@@ -1,6 +1,6 @@
 // Lands beyond the sea: discovery, colonies and conquest, and the people who specialise in them.
 import type { GameState, Character, RevealItem, Role } from '../types';
-import { REGIONS, NATIVE_EMPIRES, COLONIAL_AI, type RegionDef } from '../data/overseas';
+import { REGIONS, HOME_REGIONS, WORLD_VIEW, NATIVE_EMPIRES, COLONIAL_AI, type RegionDef } from '../data/overseas';
 import { eraOf } from '../data/eras';
 import { KNOWN_REGIONS } from '../data/provinces';
 import { NO_STATE } from '../data/nations';
@@ -15,16 +15,30 @@ let REGION_CACHE: Record<string, string> | null = null;
 export const provRegion = (id: string) => (REGION_CACHE ??= Object.fromEntries(getGeo().seeds.map(x => [x.id, x.region])))[id] ?? regionOf(id);
 
 export const regionState = (s: GameState, id: string) => (s.overseas[id] ??= { found: false, holder: null, colony: 0, subdued: false });
-export const regionKnown = (s: GameState, region: string) => KNOWN_REGIONS.includes(region) || !!s.overseas[region]?.found;
+export const regionKnown = (s: GameState, region: string) => !!s.overseas[region]?.found || (!s.flags.world_view && KNOWN_REGIONS.includes(region));
+/** Any region, including the heartlands. */
+export const regionDef = (id: string): RegionDef => REGIONS[id] ?? HOME_REGIONS[id] ?? { id, name: id, where: '', dist: 3, text: '' };
+
+/** At the start: a realm knows its own part of the world, what its traders know, and its neighbours. */
+export function initKnownWorld(s: GameState) {
+  s.flags.world_view = 1;
+  const home = provRegion(s.nations[s.player].capital);
+  const known = new Set<string>([home, ...(WORLD_VIEW[home] ?? [])]);
+  for (const p of provsOf(s, s.player)) { known.add(provRegion(p.id)); for (const nb of neighbours(p.id)) known.add(provRegion(nb)); }
+  for (const r of known) regionState(s, r).found = true;
+}
 export const provKnown = (s: GameState, provId: string) => regionKnown(s, provRegion(provId));
 
 /** Regions an explorer could find next. */
 export function discoverable(s: GameState): RegionDef[] {
-  return Object.values(REGIONS).filter(r => {
-    if (regionKnown(s, r.id)) return false;
-    if (r.needs && !r.needs.some(n => regionKnown(s, n))) return false;
-    if (r.dist >= 2 && !hasTech(s, 'navigation') && s.year < 1480) return false;
-    if (r.dist >= 3 && !hasTech(s, 'navigation')) return false;
+  const all = [...new Set(getGeo().seeds.map(x => x.region))];
+  const linked = (r: string) => getGeo().seeds.some(x => x.region === r && neighbours(x.id).some(nb => regionKnown(s, provRegion(nb))));
+  return all.filter(id => !regionKnown(s, id)).map(regionDef).filter(r => {
+    const near = linked(r.id);
+    if (!near && r.needs && !r.needs.some(n => regionKnown(s, n))) return false;
+    const dist = near ? 1 : r.dist;
+    if (dist >= 2 && !hasTech(s, 'navigation') && s.year < 1480) return false;
+    if (dist >= 3 && !hasTech(s, 'navigation')) return false;
     return true;
   });
 }
@@ -33,7 +47,7 @@ export function discoverable(s: GameState): RegionDef[] {
 export function revealBorders(s: GameState) {
   const regions = new Set<string>();
   for (const p of provsOf(s, s.player)) { regions.add(provRegion(p.id)); for (const nb of neighbours(p.id)) regions.add(provRegion(nb)); }
-  for (const r of regions) if (REGIONS[r] && !regionKnown(s, r)) { regionState(s, r).found = true; log(s, `Your borders now touch ${REGIONS[r].name}.`, 'good'); }
+  for (const r of regions) if (!regionKnown(s, r)) { regionState(s, r).found = true; log(s, `Your borders now touch ${regionDef(r).name}.`, 'good'); }
 }
 
 export function exploreChance(s: GameState, ch: Character): number {
@@ -51,8 +65,8 @@ const touches = (s: GameState, id: string, n = s.player) => neighbours(id).some(
 /** Can the player's ships reach this province across the ocean? */
 export function oceanReach(s: GameState, id: string): boolean {
   if (!getGeo().coastal[id] || !provKnown(s, id) || !hasCoast(s)) return false;
-  const r = REGIONS[provRegion(id)];
-  if (r && r.dist >= 2 && !hasTech(s, 'navigation')) return false;
+  const r = regionDef(provRegion(id));
+  if (r.dist >= 2 && !hasTech(s, 'navigation')) return false;
   return true;
 }
 

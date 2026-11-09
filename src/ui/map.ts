@@ -38,6 +38,8 @@ export class MapView {
   W: number; H: number;
   vb = { x: 0, y: 0, w: 1, h: 1 };
   mode: MapMode = 'political';
+  revealAll = false;
+  picked: string | null = null; // the realm picker shows the whole world
   private size: Record<string, number> = {};
   private lastPx = 0;
   cells: Record<string, SVGPathElement> = {};
@@ -244,7 +246,7 @@ export class MapView {
     for (const [id, p] of Object.entries(s.provinces)) {
       const c = this.cells[id];
       const nat = s.nations[p.owner];
-      const known = provKnown(s, id);
+      const known = this.revealAll || provKnown(s, id);
       c.classList.toggle('fog', !known);
       const lbl = this.labels[id];
       lbl.textContent = known ? p.name : '';
@@ -252,7 +254,8 @@ export class MapView {
       c.style.fill = this.fill(s, p, maxPop) ?? nat?.color ?? '#777';
       const pol = this.mode === 'political';
       c.classList.toggle('native', p.owner === NO_STATE && pol);
-      c.classList.toggle('mine', p.owner === s.player);
+      c.classList.toggle('mine', !this.revealAll && p.owner === s.player);
+      c.classList.toggle('picked', this.revealAll && p.owner === this.picked);
       c.classList.toggle('subject', pol && nat?.overlord === s.player);
       c.classList.toggle('enemy', pol && p.owner !== s.player && atWar(s, s.player, p.owner));
       c.classList.toggle('unrest', pol && p.owner === s.player && p.control < 30);
@@ -262,10 +265,10 @@ export class MapView {
     // mission markers and capitals
     while (this.marks.firstChild) this.marks.removeChild(this.marks.firstChild);
     for (const n of Object.values(s.nations)) {
-      if (!n.alive || !s.provinces[n.capital] || s.provinces[n.capital].owner !== n.id || !provKnown(s, n.capital)) continue;
+      if (!n.alive || !s.provinces[n.capital] || s.provinces[n.capital].owner !== n.id || !(this.revealAll || provKnown(s, n.capital))) continue;
       const [x, y] = g.center[n.capital];
       const pin = svgEl('g', { 'data-x': x, 'data-y': y });
-      pin.append(svgEl('path', { d: `M0 -21 l2.4 4.8 5.2 .7 -3.8 3.6 .9 5.2 -4.7 -2.5 -4.7 2.5 .9 -5.2 -3.8 -3.6 5.2 -.7 Z`, class: 'capmark' + (n.id === s.player ? ' mine' : '') }));
+      pin.append(svgEl('path', { d: `M0 -21 l2.4 4.8 5.2 .7 -3.8 3.6 .9 5.2 -4.7 -2.5 -4.7 2.5 .9 -5.2 -3.8 -3.6 5.2 -.7 Z`, class: 'capmark' + (n.id === s.player && !this.revealAll ? ' mine' : '') }));
       this.marks.append(pin);
     }
     const counts: Record<string, number> = {};

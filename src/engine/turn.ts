@@ -1,4 +1,7 @@
 // New game setup, the yearly turn, and player actions that touch several systems.
+import { GOODS } from '../data/goods';
+import { initKnownWorld } from './overseas';
+import { poolFor } from '../data/names';
 import { eraOf, ERAS } from '../data/eras';
 import type { GameState, Nation, Ruler, RevealItem, Heir, Character } from '../types';
 import { CATS } from '../types';
@@ -25,7 +28,7 @@ const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'
 
 function genRulerName(s: GameState, nation: string, title = true): string {
   const culture = s.nations[nation]?.culture ?? 'castilian';
-  const names = RULER_NAMES[culture] ?? RULER_NAMES.castilian;
+  const names = RULER_NAMES[culture] ?? poolFor(culture)?.rulers ?? RULER_NAMES.castilian;
   const base = pick(s, names);
   if (!title) return base;
   const count = (s.flags['regnal_' + nation + base] = (s.flags['regnal_' + nation + base] ?? randInt(s, 1, 3)) + 1);
@@ -141,6 +144,8 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   s.troops = def.army.map(type => ({ uid: uid(s), type, vet: 0, str: 100 }));
   s.fleet = (START_FLEETS[nationId] ?? []).map(type => ({ uid: uid(s), type, vet: 0, str: 100 }));
   initSociety(s);
+  initKnownWorld(s);
+  s.flags.start_provs = provsOf(s, nationId).length;
   s.characters = [
     genCharacter(s, 'general', me.culture, 1),
     genCharacter(s, 'diplomat', me.culture, 1),
@@ -225,8 +230,23 @@ function playerEconomy(s: GameState) {
   }
   if (s.flags.new_world && s.year % 5 === 0 && (s.flags.new_world_income ?? 0) < 12) s.flags.new_world_income = (s.flags.new_world_income ?? 0) + 1;
   // prestige
+  me.prestige *= 0.985; // prestige fades unless renewed, for every crown
   me.prestige += provsOf(s, s.player).filter(p => p.buildings.includes('temple')).length * 0.5 + (hasTech(s, 'absolutism') ? 2 : 0) + (hasGood(s, 'silk') ? 1 : 0) + (hasGood(s, 'ivory') ? 0.5 : 0) + (hasGood(s, 'porcelain') ? 0.5 : 0);
-  if (me.gold < 0) {
+  if (me.gold < 0 && s.imports.length) {
+    // first the crown stops buying goods abroad
+    const costly = [...s.imports].sort((x, y) => (GOODS[y.good]?.price ?? 0) - (GOODS[x.good]?.price ?? 0))[0];
+    s.imports = s.imports.filter(i => i !== costly);
+    log(s, `The empty treasury stops imports of ${GOODS[costly.good]?.name ?? costly.good}.`, 'bad');
+  }
+  const debts = s.hand.filter(h => h.card === 'debt').length;
+  if (me.gold < 0 && debts >= 5) {
+    // bankruptcy: the debts are repudiated, at a price
+    s.hand = s.hand.filter(h => h.card !== 'debt');
+    s.imports = [];
+    me.gold = 0; me.stability = clamp(me.stability - 2, -3, 3); me.prestige = Math.max(0, me.prestige - 20);
+    push(s, { kind: 'reveal', title: 'Bankruptcy', items: [{ title: 'The crown defaults', text: 'You repudiate every Crown Debt. Imports stop, stability falls by 2 and prestige by 20. No banker will forget.', tone: 'bad', kind: 'chain' }] });
+    log(s, 'The crown declares bankruptcy.', 'bad');
+  } else if (me.gold < 0) {
     me.gold += 40;
     addCard(s, 'debt');
     me.stability = clamp(me.stability - 1, -3, 3);

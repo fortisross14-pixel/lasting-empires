@@ -819,3 +819,24 @@ ul.traits { margin: 0; padding-left: 18px; }
 .slot-acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 [data-style="chancery"] .slot-card { border-radius: 0; background: var(--panel); border: 1.5px solid var(--text); border-left: 6px solid var(--nc, var(--text)); }
 [data-style="heraldic"] .slot-card { border-radius: 0; }
+
+/* ---------- new game: realm picker ---------- */
+.newgame { font-size: 18px; min-height: 52px; margin-top: 4px; }
+.picker { grid-row: 1 / -1; display: grid; grid-template-rows: auto auto 1fr auto; height: 100%; min-height: 0; background: var(--ink); }
+.pick-top { display: flex; align-items: center; gap: 12px; padding: 8px max(12px, env(safe-area-inset-right, 0px)) 6px max(12px, env(safe-area-inset-left, 0px)); background: var(--bar); border-bottom: 1px solid var(--line); }
+.pick-top h1 { font-family: var(--f-display); font-size: 22px; color: var(--heading, var(--gold-2)); }
+.pick-hint { margin-left: auto; font-size: 13px; }
+.pick-feat { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; scrollbar-width: none; background: var(--panel); border-bottom: 1px solid var(--line); }
+.pick-feat .tchip { flex: none; }
+.pick-map { position: relative; overflow: hidden; min-height: 0; background: var(--sea); }
+.pick-panel { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 10px max(12px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); background: var(--panel); border-top: 1px solid var(--line); }
+.pick-card { display: flex; gap: 12px; align-items: center; min-width: 0; flex: 1 1 320px; }
+.pick-card .np-shield { grid-row: auto; flex: none; }
+.pick-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pick-t b { font-family: var(--f-display); font-size: 22px; }
+.pick-panel .btn.primary { min-width: 180px; min-height: 48px; font-size: 16px; }
+@media (max-width: 640px) { .pick-hint { display: none; } .pick-panel .btn.primary { width: 100%; } .pick-t small { font-size: 12px; } }
+.np-diff.d-easy { color: #3c7a45; } .np-diff.d-mid { color: #8a6a1e; } .np-diff.d-hard { color: #a4532a; } .np-diff.d-vhard { color: #9e1f2a; }
+#map .prov.picked { fill-opacity: 1; stroke: var(--gold-2); stroke-width: 2.4; }
+[data-style="chancery"] #map .prov.picked { stroke: var(--wax); }
+[data-style="chancery"] .pick-top, [data-style="chancery"] .pick-feat, [data-style="chancery"] .pick-panel { background: var(--panel); border-color: var(--text); }

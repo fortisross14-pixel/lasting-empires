@@ -6,7 +6,7 @@ import { TECHS, TECH, BUILDINGS, type TechTrack } from '../data/techs';
 import { TRAITS, RARITY, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
 import { GOODS } from '../data/goods';
 import { eraOf } from '../data/eras';
-import { REGIONS, NATIVE_EMPIRES } from '../data/overseas';
+import { REGIONS, HOME_REGIONS, NATIVE_EMPIRES } from '../data/overseas';
 import { NO_STATE } from '../data/nations';
 import {
   player, push, provsOf, incomeOf, playerManpower, getRel, atWar, hasTreaty, enemiesOf, alliesOf, armyPower,
@@ -22,7 +22,7 @@ import {
   graceCost,
 } from '../engine/missions';
 import { buyCard, buyBlocked, hireWithCard, takeDraftOption, mergePreview, doMerge, AMBITIONS, officeCost, sellOffices } from '../engine/drafts';
-import { discoverable, exploreChance, colonizeChance, conquistaChance, PROMOTION, colonyCost, regionKnown, provRegion, provKnown } from '../engine/overseas';
+import { discoverable, exploreChance, colonizeChance, conquistaChance, PROMOTION, colonyCost, regionKnown, provRegion, provKnown, regionDef } from '../engine/overseas';
 import { playRound, autoResolve, finishBattle, ratio, breakLevel, hp } from '../engine/battle';
 import { getGeo } from '../engine/map';
 import { h, $, clear, sleep, reduced, fmt, signed } from './dom';
@@ -134,6 +134,54 @@ function chooseNation(id: string) {
   document.querySelector('.slots')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
+// ---------- realm picker: tap any realm on the world map ----------
+const FEATURED = ['castile', 'portugal', 'aragon', 'france', 'england', 'austria', 'ottomans', 'muscovy', 'venice', 'mamluks', 'vijayanagara', 'ming', 'japan', 'mali', 'aztec', 'inca'];
+function difficulty(provs: number, army: number): { label: string; cls: string } {
+  const size = provs + army / 3;
+  return size >= 14 ? { label: 'Strong start', cls: 'd-easy' } : size >= 6 ? { label: 'Balanced', cls: 'd-mid' } : size >= 3 ? { label: 'Hard start', cls: 'd-hard' } : { label: 'Very hard', cls: 'd-vhard' };
+}
+
+function showPicker(initial = 'castile') {
+  const root = clear($('#app'));
+  const preview = newGame('castile', 12345);
+  preview.queue = [];
+  const panel = h('div', { class: 'pick-panel' });
+  const board = h('div', { class: 'pick-map' });
+  root.append(h('div', { class: 'picker' },
+    h('header', { class: 'pick-top' },
+      h('button', { class: 'btn ghost small', onclick: () => showTitle() }, '← Back'),
+      h('h1', {}, 'Choose your realm'),
+      h('span', { class: 'muted pick-hint' }, 'Tap any realm on the map')),
+    h('div', { class: 'pick-feat' }, FEATURED.map(id => h('button', { class: 'tchip', onclick: () => select(id, true) }, h('i', { class: 'swatch', style: `background:${preview.nations[id].color}` }), preview.nations[id].name))),
+    board, panel, h('div', { id: 'toast', role: 'status', 'aria-live': 'polite' })));
+  const mv = new MapView(board);
+  mv.revealAll = true;
+  const select = (id: string, focus = false) => {
+    const n = preview.nations[id];
+    if (!n || id === NO_STATE) return;
+    mv.picked = id; mv.render(preview);
+    const ps = provsOf(preview, id);
+    if (focus) mv.focus(ps.map(p => p.id), 60);
+    const def = NATIONS.find(d => d.id === id)!;
+    const d = difficulty(ps.length, def.army.length);
+    const near = new Set<string>();
+    for (const p of ps) for (const nb of getGeo().adj[p.id]) { const o = preview.provinces[nb].owner; if (o !== id && o !== NO_STATE) near.add(o); }
+    const cap = preview.provinces[n.capital];
+    clear(panel).append(
+      h('div', { class: 'pick-card', style: `--nc:${n.color}` },
+        h('span', { class: 'np-shield' }, n.name[0]),
+        h('div', { class: 'pick-t' },
+          h('b', {}, n.name), h('span', { class: 'np-diff ' + d.cls }, d.label),
+          h('small', {}, `${ps.length} province${ps.length > 1 ? 's' : ''} · capital ${cap?.name ?? '?'} · ${RELIGION_NAMES[cap?.religion ?? ''] ?? ''} · ${CULTURE_NAMES[n.culture]}`),
+          h('small', { class: 'muted' }, def.blurb ?? (near.size ? `Neighbours: ${[...near].slice(0, 5).map(o => preview.nations[o].name).join(', ')}.` : 'No neighbours by land.')))),
+      h('button', { class: 'btn primary', onclick: () => chooseNation(id) }, `Play as ${n.name}`));
+  };
+  mv.onSelect = pid => { if (pid) { const o = preview.provinces[pid].owner; if (o === NO_STATE) { mv.select(null); toast('Unclaimed land: no state to play here', 'bad'); } else select(o); } };
+  mv.render(preview);
+  select(initial);
+  requestAnimationFrame(() => mv.focus(provsOf(preview, 'castile').concat(provsOf(preview, 'ottomans')).map(p => p.id), 40));
+}
+
 function showTitle() {
   migrateOldSave();
   const root = clear($('#app'));
@@ -142,17 +190,11 @@ function showTitle() {
       h('p', { class: 'eyebrow' }, 'Anno Domini 1453 – 1750'),
       h('h1', { class: 'title' }, 'Lasting Empires'),
       h('p', { class: 'lede' }, 'Every action is a card. Gather Military, Diplomacy, Internal, Economy and Research cards each year, then send your people on missions. One turn is one year.'),
-      h('h2', { class: 'pick-h' }, 'Campaigns'),
-      slotsSection(),
+      SLOTS.some(n => loadSlot(n)) || pendingNation ? h('h2', { class: 'pick-h' }, 'Campaigns') : null,
+      SLOTS.some(n => loadSlot(n)) || pendingNation ? slotsSection() : null,
       h('h2', { class: 'pick-h' }, 'Menu style'),
       stylePicker(showTitle),
-      h('h2', { class: 'pick-h' }, 'Choose your crown'),
-      h('div', { class: 'nation-picks' }, NATIONS.filter(n => n.playable).map(n =>
-        h('button', { class: 'nation-pick', style: `--nc:${n.color}`, onclick: () => chooseNation(n.id) },
-          h('span', { class: 'np-shield' }, n.name[0]),
-          h('span', { class: 'np-name' }, n.name),
-          h('span', { class: 'np-diff' }, n.id === 'castile' ? 'Strong start' : n.id === 'aragon' ? 'Balanced' : 'Hard start'),
-          h('span', { class: 'np-blurb' }, n.blurb ?? '')))),
+      h('button', { class: 'btn primary wide newgame', onclick: () => showPicker() }, 'Start a new game'),
       h('details', { class: 'howto' },
         h('summary', {}, 'How to play'),
         h('ul', {},
@@ -758,11 +800,11 @@ function overseasSheet(body: HTMLElement) {
   body.append(actionRow('anchor', 'Voyage of discovery', `An explorer sails out · ${voyageCost(S)} ducats · ${discoverable(S).length} lands within reach`, !exp ? 'Needs a Voyage of Discovery card (Diplomacy)' : missionBlocked(S, 'explore', ''), () => openPlanner('explore', '', undefined, exp!.uid)));
   body.append(h('p', { class: 'muted' }, 'Explorers reveal a region on the map. Then tap an empty native land to settle it with a colonist, or a native empire to take it with a conquistador. A diplomat sent to explore becomes an explorer, an administrator who founds a colony a colonist, a general on a conquista a conqueror. For good.'));
   const groups: Record<string, string[]> = {};
-  for (const r of Object.values(REGIONS)) (groups[r.where] ??= []).push(r.id);
+  for (const r of [...Object.values(HOME_REGIONS), ...Object.values(REGIONS)]) (groups[r.where] ??= []).push(r.id);
   for (const [where, ids] of Object.entries(groups)) {
     body.append(h('h3', {}, where));
     for (const id of ids) {
-      const r = REGIONS[id];
+      const r = regionDef(id);
       if (!regionKnown(S, id)) {
         const can = discoverable(S).some(x => x.id === id);
         body.append(h('div', { class: 'region unknown' }, h('span', { class: 'a-ico', html: icon('star', 18) }), h('div', { class: 'a-t' }, h('b', {}, 'Uncharted'), h('small', {}, can ? 'An explorer could reach it' : 'Too far for now'))));
@@ -928,7 +970,7 @@ function missionTargets(handUid: number): TargetRow[] {
   } else if (kind === 'colonize' || kind === 'conquista') {
     const list = Object.values(S.provinces).filter(p => provKnown(S, p.id) && (kind === 'colonize' ? p.owner === NO_STATE : NATIVE_EMPIRES.includes(p.owner)));
     const scored = list.map(p => ({ p, why: missionBlocked(S, kind, p.id) })).sort((x, y) => (x.why ? 1 : 0) - (y.why ? 1 : 0) || y.p.dev - x.p.dev).slice(0, 30);
-    for (const { p, why } of scored) rows.push({ label: p.name, sub: `${REGIONS[provRegion(p.id)]?.name ?? ''} · ${GOODS[p.good]?.name ?? p.good} · dev ${p.dev}${kind === 'conquista' ? ' · ' + nationName(S, p.owner) : ''}`, acts: [{ label: kind === 'colonize' ? 'Settle' : 'Conquer', kind, target: p.id, why }] });
+    for (const { p, why } of scored) rows.push({ label: p.name, sub: `${regionDef(provRegion(p.id)).name} · ${GOODS[p.good]?.name ?? p.good} · dev ${p.dev}${kind === 'conquista' ? ' · ' + nationName(S, p.owner) : ''}`, acts: [{ label: kind === 'colonize' ? 'Settle' : 'Conquer', kind, target: p.id, why }] });
   } else {
     rows.push({ label: MISSION_INFO[kind].name, sub: MISSION_INFO[kind].verb, acts: [{ label: 'Start', kind, target: '', why: missionBlocked(S, kind, '') }] });
   }

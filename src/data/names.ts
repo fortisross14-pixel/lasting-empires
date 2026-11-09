@@ -1,0 +1,46 @@
+// Name pools by culture group, so any realm gets fitting rulers and courtiers.
+
+export interface NamePool { first: string[]; last: string[]; rulers: string[]; }
+
+export const NAME_POOLS: Record<string, NamePool> = {
+  french: { first: ['Jean', 'Pierre', 'Louis', 'Charles', 'François', 'Guillaume', 'Antoine', 'Jacques', 'Philippe', 'Henri', 'Anne', 'Marguerite'], last: ['de Montmorency', 'de Bourbon', 'de Guise', 'de Rohan', 'de La Trémoille', "d'Albret", 'de Foix', 'de Coligny', 'de Vendôme', 'Le Tellier', 'Colbert'], rulers: ['Louis', 'Charles', 'François', 'Henri', 'Philippe', 'Jean', 'Anne'] },
+  english: { first: ['John', 'Thomas', 'William', 'Richard', 'Edward', 'Henry', 'Robert', 'Walter', 'Francis', 'Humphrey', 'Margaret', 'Elizabeth'], last: ['Howard', 'Percy', 'Neville', 'Stanley', 'Cecil', 'Seymour', 'Dudley', 'Grey', 'Talbot', 'Courtenay', 'Russell'], rulers: ['Henry', 'Edward', 'Richard', 'William', 'James', 'Mary', 'Elizabeth', 'Anne'] },
+  celtic: { first: ['Alexander', 'James', 'Archibald', 'Hugh', 'Donal', 'Conn', 'Niall', 'Brian', 'Fergus', 'Mary'], last: ['Douglas', 'Hamilton', 'Campbell', 'Gordon', "O'Neill", "O'Donnell", 'MacCarthy', 'Fitzgerald', 'Stewart'], rulers: ['James', 'Robert', 'David', 'Alexander', 'Mary'] },
+  german: { first: ['Johann', 'Friedrich', 'Heinrich', 'Wilhelm', 'Georg', 'Albrecht', 'Konrad', 'Ulrich', 'Ernst', 'Moritz', 'Anna', 'Margarete'], last: ['von Hohenzollern', 'von Wittelsbach', 'von Wettin', 'von Fugger', 'von Sickingen', 'von Wallenstein', 'von Pappenheim', 'von Hutten', 'von Habsburg'], rulers: ['Friedrich', 'Albrecht', 'Johann', 'Wilhelm', 'Maximilian', 'Ferdinand', 'Leopold', 'Maria'] },
+  nordic: { first: ['Christian', 'Erik', 'Gustav', 'Olof', 'Knut', 'Sten', 'Axel', 'Magnus', 'Nils', 'Kristina'], last: ['Oxenstierna', 'Brahe', 'Sture', 'Bielke', 'Rantzau', 'Trolle', 'Bonde', 'Banér', 'Gyldenstierne'], rulers: ['Christian', 'Frederik', 'Gustav', 'Erik', 'Karl', 'Kristina'] },
+  italian: { first: ['Lorenzo', 'Giovanni', 'Francesco', 'Cosimo', 'Ludovico', 'Andrea', 'Federico', 'Galeazzo', 'Niccolò', 'Pietro', 'Caterina', 'Isabella'], last: ['de Medici', 'Sforza', 'Visconti', 'Doria', 'Gonzaga', "d'Este", 'Colonna', 'Orsini', 'Farnese', 'Contarini', 'Malatesta'], rulers: ['Francesco', 'Ludovico', 'Cosimo', 'Federico', 'Alfonso', 'Ferrante', 'Giovanni'] },
+  slavic: { first: ['Jan', 'Kazimierz', 'Zygmunt', 'Władysław', 'Ivan', 'Vasily', 'Dmitri', 'Boris', 'Stefan', 'Mikhail', 'Jadwiga', 'Elena'], last: ['Radziwiłł', 'Zamoyski', 'Potocki', 'Ostrogski', 'Shuisky', 'Godunov', 'Romanov', 'Obolensky', 'Lubomirski', 'Vyshnevetsky'], rulers: ['Ivan', 'Vasily', 'Kazimierz', 'Zygmunt', 'Władysław', 'Stefan', 'Mikhail', 'Jan'] },
+  hungarian: { first: ['János', 'Mátyás', 'László', 'István', 'Miklós', 'Gábor', 'Ferenc', 'Péter', 'Erzsébet'], last: ['Hunyadi', 'Báthory', 'Zápolya', 'Esterházy', 'Rákóczi', 'Thurzó', 'Zrínyi', 'Bethlen'], rulers: ['Mátyás', 'László', 'János', 'István', 'Lajos'] },
+  greek: { first: ['Konstantinos', 'Ioannis', 'Demetrios', 'Thomas', 'Andreas', 'Georgios', 'Manuel', 'Theodoros', 'Alexios', 'Eirene', 'Helena'], last: ['Palaiologos', 'Kantakouzenos', 'Laskaris', 'Notaras', 'Komnenos', 'Doukas', 'Angelos', 'Bryennios'], rulers: ['Konstantinos', 'Ioannis', 'Manuel', 'Demetrios', 'Andronikos'] },
+  turkish: { first: ['Mehmed', 'Bayezid', 'Selim', 'Mustafa', 'Ahmed', 'Ibrahim', 'Mahmud', 'Hasan', 'Kemal', 'Piri', 'Hürrem'], last: ['Pasha', 'Bey', 'Reis', 'Agha', 'Efendi', 'Çelebi', 'Köprülü', 'Sokollu', 'Barbaros'], rulers: ['Mehmed', 'Bayezid', 'Selim', 'Süleyman', 'Murad', 'Ahmed', 'Mustafa', 'Osman'] },
+  arab: { first: ['Muhammad', 'Ahmad', 'Ali', 'Hasan', 'Yusuf', 'Umar', 'Khalil', 'Qaitbay', 'Abd al-Rahman', 'Idris', 'Fatima'], last: ['al-Hasani', 'ibn Khaldun', 'al-Zayyani', 'al-Wattasi', 'al-Saadi', 'ibn Battuta', 'al-Mansur', 'al-Ashraf', 'al-Ghuri'], rulers: ['Muhammad', 'Ahmad', 'Abu Abdallah', 'Yusuf', 'Qaitbay', 'Hasan', 'Ali'] },
+  persian: { first: ['Ismail', 'Tahmasp', 'Abbas', 'Husayn', 'Uzun Hasan', 'Yaqub', 'Babur', 'Shahrukh', 'Ulugh', 'Mirza', 'Parisa'], last: ['Mirza', 'Khan', 'Beg', 'Safavi', 'Shirazi', 'Isfahani', 'Tabrizi', 'Khorasani'], rulers: ['Ismail', 'Tahmasp', 'Abbas', 'Husayn', 'Sultan Ahmad', 'Shahrukh', 'Abu Said'] },
+  indian: { first: ['Rana', 'Krishna', 'Deva', 'Rama', 'Bahadur', 'Ibrahim', 'Sher', 'Malik', 'Raja', 'Vijaya', 'Rani', 'Padmini'], last: ['Singh', 'Raya', 'Shah', 'Lodi', 'Khan', 'Sur', 'Rao', 'Varma', 'Gajapati', 'Nayaka'], rulers: ['Deva Raya', 'Krishna Deva', 'Bahlul', 'Sikandar', 'Ibrahim', 'Rana Kumbha', 'Mahmud', 'Ahmad Shah'] },
+  chinese: { first: ['Zhu', 'Wang', 'Li', 'Zhang', 'Zheng', 'Yu', 'Hai', 'Xu', 'Qi', 'Shen', 'Lan'], last: ['Shouren', 'Juzheng', 'Guangqi', 'Jiguang', 'Rui', 'Qian', 'He', 'Wei', 'Tang'], rulers: ['Jingtai', 'Chenghua', 'Hongzhi', 'Zhengde', 'Jiajing', 'Wanli', 'Chongzhen', 'Kangxi', 'Qianlong'] },
+  korean: { first: ['Yi', 'Kim', 'Park', 'Jeong', 'Ryu', 'Gwon', 'Seo'], last: ['Sunsin', 'Hwang', 'Seongnyong', 'Dojeon', 'Jaeil', 'Yul'], rulers: ['Sejo', 'Seongjong', 'Jungjong', 'Seonjo', 'Injo', 'Sukjong', 'Yeongjo'] },
+  japanese: { first: ['Oda', 'Toyotomi', 'Tokugawa', 'Takeda', 'Uesugi', 'Mori', 'Date', 'Shimazu', 'Hojo', 'Ashikaga'], last: ['Nobunaga', 'Hideyoshi', 'Ieyasu', 'Shingen', 'Kenshin', 'Motonari', 'Masamune', 'Yoshihisa', 'Ujiyasu'], rulers: ['Yoshimasa', 'Yoshiteru', 'Ieyasu', 'Hidetada', 'Iemitsu', 'Tsunayoshi', 'Yoshimune'] },
+  seasian: { first: ['Le', 'Ramathibodi', 'Mansur', 'Sultan', 'Paramesvara', 'Tabinshwehti', 'Naresuan', 'Ang', 'Raden', 'Ratu'], last: ['Thanh Tong', 'Shah', 'Iskandar', 'Muzaffar', 'Bayinnaung', 'Chan', 'Wijaya', 'Hayam Wuruk'], rulers: ['Le Thanh Tong', 'Ramathibodi', 'Mansur Shah', 'Bayinnaung', 'Naresuan', 'Ang Chan', 'Hayam Wuruk'] },
+  african: { first: ['Sunni', 'Askia', 'Musa', 'Nzinga', 'Afonso', 'Mvemba', 'Ewuare', 'Idris', 'Zara', 'Lebna', 'Amina'], last: ['Ali', 'Muhammad', 'Keita', 'Mbemba', 'Alooma', 'Yaqob', 'Dengel', 'Mutota', 'Tunde'], rulers: ['Sunni Ali', 'Askia', 'Mansa Musa', 'Nzinga', 'Ewuare', 'Idris', 'Zara Yaqob', 'Lebna Dengel', 'Mutota'] },
+  steppe: { first: ['Ahmed', 'Mengli', 'Hajji', 'Muhammad', 'Abu al-Khayr', 'Dayan', 'Altan', 'Esen', 'Ibak', 'Tokhtamysh'], last: ['Giray', 'Khan', 'Bahadur', 'Taishi', 'Noyan', 'Shaybani'], rulers: ['Hajji Giray', 'Mengli Giray', 'Ahmed Khan', 'Abu al-Khayr', 'Dayan Khan', 'Altan Khan', 'Esen Taishi'] },
+  american: { first: ['Moctezuma', 'Cuauhtémoc', 'Axayacatl', 'Ahuitzotl', 'Pachacuti', 'Túpac', 'Huayna', 'Atahualpa', 'Tangaxuan', 'Minchançaman'], last: ['Ilhuicamina', 'Xocoyotzin', 'Yupanqui', 'Cápac', 'Inca', 'II'], rulers: ['Moctezuma', 'Axayacatl', 'Ahuitzotl', 'Pachacuti', 'Túpac Inca', 'Huayna Cápac', 'Tangaxuan', 'Minchançaman'] },
+};
+
+/** Which name pool a culture uses. */
+export const CULTURE_POOL: Record<string, string> = {
+  french: 'french', breton: 'french', burgundian: 'french', occitan: 'french', swiss: 'german',
+  english: 'english', scottish: 'celtic', irish: 'celtic',
+  german: 'german', austrian: 'german', czech: 'slavic', silesian: 'german', danish: 'nordic', swedish: 'nordic', norwegian: 'nordic', finnish: 'nordic', icelandic: 'nordic',
+  italian: 'italian', sicilian: 'italian', sardinian: 'italian',
+  polish: 'slavic', lithuanian: 'slavic', russian: 'slavic', ruthenian: 'slavic', serbian: 'slavic', croatian: 'slavic', slovak: 'slavic', romanian: 'slavic', baltic: 'slavic', albanian: 'greek', georgian: 'greek',
+  hungarian: 'hungarian', greek: 'greek',
+  turkish: 'turkish', tatar: 'steppe', uzbek: 'steppe', kazakh: 'steppe', mongol: 'steppe', jurchen: 'steppe', uyghur: 'steppe', tibetan: 'steppe',
+  arab: 'arab', maghrebi: 'arab', berber: 'arab', andalusi: 'arab', nubian: 'arab', somali: 'arab',
+  persian: 'persian',
+  hindustani: 'indian', bengali: 'indian', gujarati: 'indian', rajput: 'indian', sindhi: 'indian', kashmiri: 'indian', deccani: 'indian', kannada: 'indian', malayali: 'indian', oriya: 'indian', sinhala: 'indian', tamil: 'indian', konkani: 'indian',
+  han: 'chinese', korean: 'korean', japanese: 'japanese',
+  viet: 'seasian', cham: 'seasian', khmer: 'seasian', thai: 'seasian', burmese: 'seasian', malay: 'seasian', javanese: 'seasian', moluccan: 'seasian',
+  wolof: 'african', manding: 'african', songhai: 'african', edo: 'african', hausa: 'african', kanuri: 'african', bantu: 'african', swahili: 'african', amhara: 'african',
+  nahua: 'american', purepecha: 'american', maya: 'american', quechua: 'american', chimu: 'american',
+};
+
+export const poolFor = (culture: string): NamePool | null => NAME_POOLS[CULTURE_POOL[culture] ?? ''] ?? null;

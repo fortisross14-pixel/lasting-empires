@@ -1,4 +1,5 @@
 // Shared helpers: RNG, lookups, relations, treaties, wars, logging.
+import { poolFor } from '../data/names';
 import { eraOf } from '../data/eras';
 import type { GameState, Nation, TroopCard, Character, Role, LogEntry, Prompt, Rarity, Province } from '../types';
 import { TROOPS } from '../data/troops';
@@ -269,8 +270,9 @@ export const manpowerMax = (s: GameState, n: string) => provsOf(s, n).reduce((a,
 
 // ---------- characters ----------
 export function genCharacter(s: GameState, role: Role, culture: string, minRarity = 0): Character {
-  const first = pick(s, FIRST_NAMES[culture] ?? FIRST_NAMES.castilian);
-  const last = pick(s, SURNAMES[culture] ?? SURNAMES.castilian);
+  const pool = poolFor(culture);
+  const first = pick(s, FIRST_NAMES[culture] ?? pool?.first ?? FIRST_NAMES.castilian);
+  const last = pick(s, SURNAMES[culture] ?? pool?.last ?? SURNAMES.castilian);
   const tiers = RARITY_ORDER.slice(minRarity, 4).map(r => [r, RARITY[r].weight] as [Rarity, number]);
   const rarity = weighted(s, tiers);
   const traits = rollTraits(s, role, RARITY[rarity].traits);

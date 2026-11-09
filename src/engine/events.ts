@@ -45,6 +45,8 @@ const bad = (title: string, text: string, kind = 'twist'): RevealItem => ({ titl
 const neutral = (title: string, text: string, kind = 'scroll'): RevealItem => ({ title, text, tone: 'neutral', kind });
 const P = (s: GameState) => s.player;
 const alive = (s: GameState, n: string) => !!s.nations[n]?.alive;
+/** The history deck is written for Europe and its neighbours. */
+const westernRealm = (s: GameState) => ['europe', 'north_africa', 'middle_east', 'atlantic', 'russia'].includes(getGeo().seeds.find(x => x.id === s.nations[s.player].capital)?.region ?? 'europe');
 /** Crowns whose provinces touch yours. */
 const borderNations = (s: GameState) => { const out = new Set<string>(); for (const p of provsOf(s, P(s))) for (const nb of getGeo().adj[p.id]) { const o = s.provinces[nb].owner; if (o !== P(s)) out.add(o); } return out; };
 const sameFaith = (s: GameState, n: string) => s.provinces[s.nations[n].capital]?.religion === s.stateReligion;
@@ -572,6 +574,7 @@ export function rollEvents(s: GameState) {
     const lastKey = 'ev_' + e.id;
     if (e.repeat == null && s.firedEvents.includes(e.id)) continue;
     if (e.repeat != null && (s.flags[lastKey] ?? -999) + e.repeat > s.year) continue;
+    if (e.history && !westernRealm(s)) continue;
     if (e.cond && !e.cond(s)) continue;
     let p = e.chance;
     if (e.window && e.history && s.year >= e.window[1]) p = 1; // history always comes due
@@ -587,6 +590,7 @@ export function rollEvents(s: GameState) {
 
 /** Upcoming history cards for the timeline (face-down). */
 export function upcomingHistory(s: GameState): { id: string; title: string; window: [number, number] }[] {
+  if (!westernRealm(s)) return [];
   return EVENTS.filter(e => e.history && e.window && !s.firedEvents.includes(e.id) && e.window[1] >= s.year && (!e.cond || e.cond(s)))
     .map(e => ({ id: e.id, title: typeof e.title === 'string' ? e.title : 'Unknown', window: e.window! }))
     .sort((a, b) => a.window[0] - b.window[0]).slice(0, 4);

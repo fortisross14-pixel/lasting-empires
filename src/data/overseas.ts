@@ -23,6 +23,30 @@ export const REGIONS: Record<string, RegionDef> = {
   plata:           { id: 'plata', name: 'Río de la Plata', where: 'New World', dist: 3, needs: ['brazil'], text: 'A river so wide it looks like the sea.' },
 };
 
+/** The heartlands, known to their own peoples from the start. */
+export const HOME_REGIONS: Record<string, RegionDef> = {
+  europe: { id: 'europe', name: 'Europe', where: 'Europe', dist: 3, text: 'Quarrelsome kingdoms of the far west, rich in guns and ships.' },
+  north_africa: { id: 'north_africa', name: 'The Maghreb', where: 'Africa', dist: 2, text: 'The coast of the Barbary corsairs and the caravan roads.' },
+  middle_east: { id: 'middle_east', name: 'The Levant and Persia', where: 'Asia', dist: 2, text: 'The old crossroads of the world: Cairo, Baghdad, Tabriz.' },
+  atlantic: { id: 'atlantic', name: 'Atlantic Isles', where: 'Africa', dist: 1, text: 'Islands off the African coast.' },
+  russia: { id: 'russia', name: 'Russia', where: 'Europe', dist: 3, text: 'Forests and rivers from the Baltic to the Volga.' },
+  central_asia: { id: 'central_asia', name: 'Central Asia', where: 'Asia', dist: 2, text: 'The Silk Road cities and the endless steppe.' },
+};
+/** What each part of the world already knows in 1453, besides itself and its neighbours. */
+export const WORLD_VIEW: Record<string, string[]> = {
+  europe: ['europe', 'north_africa', 'middle_east', 'atlantic', 'russia', 'central_asia'],
+  north_africa: ['europe', 'north_africa', 'middle_east', 'atlantic', 'russia', 'central_asia', 'west_africa'],
+  middle_east: ['europe', 'north_africa', 'middle_east', 'russia', 'central_asia', 'india', 'east_africa'],
+  russia: ['europe', 'north_africa', 'middle_east', 'russia', 'central_asia', 'siberia'],
+  central_asia: ['middle_east', 'russia', 'central_asia', 'india', 'china', 'siberia'],
+  atlantic: ['europe', 'north_africa', 'atlantic'],
+  india: ['india', 'middle_east', 'central_asia', 'east_africa', 'east_indies'],
+  china: ['china', 'central_asia', 'east_indies', 'siberia'],
+  east_indies: ['east_indies', 'india', 'china'],
+  east_africa: ['east_africa', 'middle_east', 'india', 'north_africa'],
+  west_africa: ['west_africa', 'north_africa'],
+};
+
 /** Native empires: conquered with a Conquista, not settled. */
 export const NATIVE_EMPIRES = ['aztec', 'tarascan', 'maya', 'inca', 'chimor'];
 /** AI crowns that send colonists across the ocean, and when they start. */
