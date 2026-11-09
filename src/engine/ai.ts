@@ -48,7 +48,11 @@ function aiEconomy(s: GameState, n: Nation) {
   n.manpower = Math.min(manpowerMax(s, n.id), n.manpower + manpowerGain(s, n.id));
   for (const t of n.army) t.str = Math.min(100, t.str + 20);
   // AI realms slowly develop their land, the way a player would
-  for (const p of provsOf(s, n.id)) if (p.dev < 8 && rand(s) < 0.007 + (n.personality === 'merchant' ? 0.002 : 0)) p.dev++;
+  // the same pace for every realm, so great empires do not outgrow everyone on size alone
+  if (rand(s) < 0.2 + (n.personality === 'merchant' ? 0.06 : 0)) {
+    const low = provsOf(s, n.id).filter(p => p.dev < 8).sort((x, y) => x.dev - y.dev);
+    if (low.length) low[Math.floor(rand(s) * Math.min(4, low.length))].dev++;
+  }
   if (n.gold < -20 && n.army.length) { n.army.splice(Math.floor(rand(s) * n.army.length), 1); n.gold += 10; }
   // recruit
   const cap = aiArmyCap(s, n);
@@ -75,7 +79,6 @@ function aiEconomy(s: GameState, n: Nation) {
     if (up) t.type = up[1];
   }
   // slow growth
-  for (const p of provsOf(s, n.id)) if (p.dev < 6 && rand(s) < 0.008) p.dev++;
   // prestige
   n.prestige = n.prestige * 0.985 + 0.5 + Math.sqrt(provsOf(s, n.id).length) * 0.6;
 }

@@ -24,6 +24,8 @@ The bot turns spare gold into nation points by selling offices; a player who sit
 
 World map check (after the expansion to 363 provinces): `reasonable` survived 9/9, top 3 in 9, first in 4; `greedy` 6/6, top 3 in 6, first in 2; `passive` survived 6/6, never top 3. AI realms now develop their land (about 1.2% a province a year), AI prestige settles around 150–250, and unclaimed lands are mostly settled by 1600–1650.
 
+World of 663 provinces (Ming 62, Ottomans 13): the score now weighs growth since 1453 (`prestige/2 + development + 5 × development gained + 2 × subject development`), AI realms develop at one flat pace (about +1 every 5 years, regardless of size), and every crown's prestige fades 1.5% a year. `reasonable` survived 12/12, top 3 in 3, first in 2 — below target; `greedy` top 3 in 3/6; `passive` never top 3. To tune next: AI expansion speed in the bigger world and the growth weight in the score.
+
 ## Levers (where to tune)
 
 - **Income:** `provinceIncome`, `tradeValue` (1 + 0.07 × partner development, capped at 4, each extra route ×0.8), building gold in `src/data/techs.ts`, settlement tiers (`TIERS`), price level (income follows 70% of inflation).

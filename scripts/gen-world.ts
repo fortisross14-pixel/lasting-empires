@@ -82,10 +82,11 @@ const seeds: ProvinceSeed[] = [...SEEDS_EUROPE(), ...SEEDS_WORLD_EXTRA()];
 const ids = new Set<string>();
 for (const s of seeds) { if (ids.has(s.id)) throw new Error('duplicate id ' + s.id); ids.add(s.id); }
 
-const europe = (lon: number, lat: number) => lon > -12 && lon < 45 && lat > 30 && lat < 62;
+// fine coastlines in the three focus areas: Europe, North Africa and the Middle East, East Asia
+const europe = (lon: number, lat: number) => (lon > -18 && lon < 62 && lat > 10 && lat < 62) || (lon > 95 && lon < 150 && lat > -12 && lat < 50);
 polys = polys.map(p => p.map((r, ri) => {
-  const [x, y] = r[0];
-  const tol = europe(x, y) ? 0.06 : 0.18;
+  const fine = r.some(([x, y]) => europe(x, y));
+  const tol = fine ? 0.06 : 0.18;
   return dpRing(r, ri ? tol * 2 : tol);
 }).filter((r, ri) => r.length >= 4 && (ri === 0 || area(r) > 0.3)) as Poly).filter(p => p.length && p[0].length >= 4);
 

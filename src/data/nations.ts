@@ -99,10 +99,10 @@ orissa;Orissa;Oriya;#a0a03a;oriya;hindu;cuttack;cautious;30;M
 kotte;Kotte;Sinhalese;#5aa0a0;sinhala;buddhist;kotte;merchant;25;S
 ming;Ming;Chinese;#d8c03a;han;confucian;beijing;cautious;200;levy,levy,levy,levy,crossbow,crossbow,crossbow,men_at_arms,men_at_arms,jinetes,bombard
 jurchens;Jurchens;Jurchen;#6a8ab0;jurchen;animist;liaodong;expansionist;15;H
-mongols;Mongols;Mongol;#8a8a5a;mongol;buddhist;karakorum;expansionist;20;H
+mongols;Mongols;Mongol;#8a8a5a;mongol;buddhist;karakorum;expansionist;15;H
 tibet;Tibet;Tibetan;#c0a0d0;tibetan;buddhist;lhasa;cautious;20;S
 korea;Korea;Korean;#6a6ab0;korean;confucian;hanseong;cautious;50;M
-japan;Japan;Japanese;#c03a3a;japanese;shinto;kyoto;balanced;50;L
+japan;Ashikaga Shogunate;Japanese;#c03a3a;japanese;shinto;kyoto;balanced;40;M
 daiviet;Dai Viet;Vietnamese;#a03a5a;viet;confucian;hanoi;expansionist;40;M
 champa;Champa;Cham;#7aa0a0;cham;hindu;champa;cautious;20;S
 khmer;Khmer;Khmer;#c08a5a;khmer;buddhist;angkor;cautious;25;S
@@ -117,6 +117,45 @@ tarascan;Tarascan State;Purépecha;#a0c03a;purepecha;nahuatl;michoacan;cautious;
 maya;Maya Cities;Maya;#3a8a6a;maya;nahuatl;yucatan;cautious;30;N
 inca;Inca Empire;Inca;#d8b02a;quechua;inti;cusco;expansionist;80;E
 chimor;Chimor;Chimú;#a06a5a;chimu;inti;chanchan;cautious;25;N
+mossi;Mossi States;Mossi;#b06a4a;mossi;animist;ouagadougou;expansionist;20;levy,levy,jinetes,jinetes
+oyo;Oyo;Oyo;#c4a24a;yoruba;animist;oyo;expansionist;25;levy,levy,levy,jinetes
+ajuran;Ajuran;Ajuran;#4a8ab0;somali;muslim;mogadishu;merchant;30;S
+tlaxcala;Tlaxcala;Tlaxcaltec;#b04a4a;nahua;nahuatl;tlaxcala;cautious;20;N
+mixtec;Mixtec Kingdoms;Mixtec;#7a4ab0;mixtec;nahuatl;mixteca;cautious;25;N
+muisca;Muisca Confederation;Muisca;#4ab07a;muisca;animist;muisca;cautious;30;N
+tver;Tver;Tverian;#8ab0d0;russian;orthodox;tver;cautious;25;M
+moghulistan;Moghulistan;Moghul;#9a5a8a;chagatai;muslim;ili;expansionist;20;H
+hosokawa;Hosokawa;Hosokawa;#e07a5a;japanese;shinto;settsu;merchant;45;M
+ouchi;Ōuchi;Ōuchi;#7a3a8a;japanese;shinto;suo;merchant;45;M
+yamana;Yamana;Yamana;#b8742a;japanese;shinto;tajima;expansionist;40;M
+hatakeyama;Hatakeyama;Hatakeyama;#c05a8a;japanese;shinto;kawachi;balanced;30;S
+shiba;Shiba;Shiba;#9ab04a;japanese;shinto;echizen;cautious;30;S
+uesugi;Uesugi;Uesugi;#3a5a9a;japanese;shinto;edo;balanced;35;M
+takeda;Takeda;Takeda;#8a1f1f;japanese;shinto;kai;expansionist;25;S
+imagawa;Imagawa;Imagawa;#d8a84a;japanese;shinto;suruga;balanced;25;S
+date;Date;Date;#4a4a6a;japanese;shinto;mutsu;expansionist;20;S
+otomo;Ōtomo;Ōtomo;#6aa0d0;japanese;shinto;bungo;balanced;30;S
+shimazu;Shimazu;Shimazu;#2f6f5f;japanese;shinto;satsuma;expansionist;30;S
+ryukyu;Ryukyu;Ryukyuan;#3ab0b0;ryukyuan;buddhist;ryukyu;merchant;40;S
+oirats;Oirats;Oirat;#b89a6a;oirat;buddhist;khovd;expansionist;30;levy,jinetes,jinetes,jinetes,jinetes,jinetes
+lanna;Lan Na;Lanna;#b07aa0;thai;buddhist;chiangmai;balanced;25;S
+lanxang;Lan Xang;Lao;#6aa05a;lao;buddhist;luangprabang;cautious;25;S
+hanthawaddy;Hanthawaddy;Mon;#4a8a9a;mon;buddhist;pegu;merchant;35;S
+arakan;Arakan;Arakanese;#9a6a4a;rakhine;buddhist;mraukoo;cautious;20;S
+pasai;Samudera Pasai;Pasai;#2f7f4f;malay;muslim;pasai;merchant;25;S
+sunda;Sunda;Sundanese;#a0a03a;sundanese;hindu;sunda;cautious;25;S
+tidore;Tidore;Tidorese;#a07ac0;moluccan;muslim;tidore;merchant;20;S
+sulu;Sulu;Tausug;#4a7aa0;filipino;muslim;sulu;merchant;20;S
+candar;Candar;Candarid;#7a6aa8;turkish;muslim;kastamonu;cautious;20;S
+dulkadir;Dulkadir;Dulkadirid;#5f9fa8;turkish;muslim;elbistan;balanced;20;H
+ramadanids;Ramadanids;Ramadanid;#a85a4a;turkish;muslim;adana;cautious;20;H
+hospitallers;Knights Hospitaller;Hospitaller;#9a2a3a;french;catholic;rhodes;zealot;40;knights,knights,men_at_arms,crossbow
+shirvan;Shirvan;Shirvani;#5aa7a0;azeri;muslim;shamakhi;merchant;40;M
+circassia;Circassia;Circassian;#a8784e;circassian;orthodox;circassia;cautious;10;N
+dagestan;Shamkhalate;Dagestani;#6a7a4a;dagestani;muslim;dagestan;cautious;10;N
+kurds;Kurdish Emirates;Kurdish;#6a9a6a;kurdish;muslim;bitlis;cautious;15;H
+gilan;Gilan;Gilaki;#8ab050;persian;muslim;gilan;cautious;20;S
+hadramawt;Hadramawt;Hadrami;#7a5aa0;arab;muslim;hadramawt;merchant;20;S
 natives;Native peoples;native;#e6dfcc;native;animist;cape;cautious;0;N
 `;
 

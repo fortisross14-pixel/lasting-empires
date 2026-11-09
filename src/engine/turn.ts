@@ -147,6 +147,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   initSociety(s);
   initKnownWorld(s);
   s.flags.start_provs = provsOf(s, nationId).length;
+  for (const n of Object.values(s.nations)) s.flags['dev0_' + n.id] = provsOf(s, n.id).reduce((a, p) => a + p.dev, 0);
   s.characters = [
     genCharacter(s, 'general', me.culture, 1),
     genCharacter(s, 'diplomat', me.culture, 1),
@@ -276,8 +277,14 @@ function checkAmbition(s: GameState) {
 }
 
 export function ranking(s: GameState): { id: string; name: string; score: number }[] {
+  // Size counts, but growth since 1453 counts more: a realm that stands still slips down the list.
+  const dev = (n: string) => provsOf(s, n).reduce((a, p) => a + p.dev, 0);
   return Object.values(s.nations).filter(n => n.alive)
-    .map(n => ({ id: n.id, name: n.name, score: Math.round(n.prestige / 2 + provsOf(s, n.id).reduce((a, p) => a + p.dev * 4, 0) + Object.values(s.nations).filter(x => x.alive && x.overlord === n.id).reduce((a, x) => a + provsOf(s, x.id).reduce((b, p) => b + p.dev * 2, 0), 0)) }))
+    .map(n => {
+      const d = dev(n.id), d0 = s.flags['dev0_' + n.id] ?? d;
+      const subj = Object.values(s.nations).filter(x => x.alive && x.overlord === n.id).reduce((a, x) => a + dev(x.id), 0);
+      return { id: n.id, name: n.name, score: Math.round(n.prestige / 2 + d + Math.max(0, d - d0) * 5 + subj * 2) };
+    })
     .sort((a, b) => b.score - a.score);
 }
 
