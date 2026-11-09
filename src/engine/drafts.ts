@@ -1,4 +1,6 @@
 // Buying cards with nation points, hiring people, forging troops, and ambitions.
+import { troopPower } from './core';
+import type { TroopCard } from '../types';
 import { getGeo } from './map';
 import type { GameState, DraftOption, Character, Cat, Role } from '../types';
 import { TROOPS, RECIPES, type Recipe } from '../data/troops';
@@ -75,7 +77,11 @@ export function takeDraftOption(s: GameState, opt: DraftOption) {
 }
 
 // ---------- forging ----------
-export interface MergeResult { out: string; vet: number; cost: number; tech?: string; recipe?: Recipe; }
+export interface MergeResult { out: string; vet: number; cost: number; tech?: string; recipe?: Recipe; might: number; before: number; after: number; }
+
+/** Two companies forged into one keep most of their strength: about 1.8 times the stronger alone. */
+export const FORGE_KEEP = 0.9;
+const MAX_MIGHT = 4;
 
 /** a and b are troop uids or equipment-card uids from the hand. */
 export function mergePreview(s: GameState, aUid: number, bUid: number): MergeResult | { error: string } {
@@ -87,22 +93,31 @@ export function mergePreview(s: GameState, aUid: number, bUid: number): MergeRes
   if (!A || !B || aUid === bUid) return { error: 'Pick two cards' };
   if (!ta && !tb) return { error: 'At least one card must be a troop' };
   if ((ta?.mission ?? tb?.mission) != null) return { error: 'That troop is away on a mission' };
+  const full = (t: TroopCard) => troopPower({ ...t, str: 100 });
+  const base = (type: string, vet: number) => troopPower({ type, vet, str: 100 });
   if (ta && tb && ta.type === tb.type) {
-    const vet = Math.max(ta.vet, tb.vet) + 1;
-    if (vet > 3) return { error: 'Already at 3 stars' };
-    return { out: ta.type, vet, cost: Math.round((5 + TROOPS[ta.type].tier * 5) * inflation(s)) };
+    // two of a kind: one company with the weight of nearly two
+    const vet = Math.max(ta.vet, tb.vet);
+    const before = Math.max(full(ta), full(tb)), target = FORGE_KEEP * (full(ta) + full(tb));
+    const might = Math.min(MAX_MIGHT, Math.round((target / base(ta.type, vet)) * 10) / 10);
+    if (might <= Math.max(ta.might ?? 1, tb.might ?? 1)) return { error: `Already as strong as a company can be (×${MAX_MIGHT})` };
+    return { out: ta.type, vet, might, before, after: base(ta.type, vet) * might, cost: Math.round((8 + TROOPS[ta.type].tier * 8) * inflation(s) * might / 1.8) };
   }
   const troop = ta ?? tb!, other = ta ? (tb?.type ?? eb) : ea!;
   if (other === 'banner') {
     if (troop.vet >= 3) return { error: 'Already at 3 stars' };
-    return { out: troop.type, vet: troop.vet + 1, cost: Math.round(5 * inflation(s)) };
+    return { out: troop.type, vet: troop.vet + 1, might: troop.might ?? 1, before: full(troop), after: base(troop.type, troop.vet + 1) * (troop.might ?? 1), cost: Math.round(5 * inflation(s)) };
   }
   const r = RECIPES.find(x => (x.a === A && x.b === B) || (x.a === B && x.b === A));
   if (!r) return { error: 'These cards do not combine' };
   const vet = Math.max(ta?.vet ?? 0, tb?.vet ?? 0);
   const cost = Math.round(r.cost * inflation(s));
-  if (r.tech && !hasTech(s, r.tech)) return { out: r.out, vet, cost, tech: r.tech, recipe: r };
-  return { out: r.out, vet, cost, recipe: r };
+  // two companies make a better kind of company and keep 90% of their joint strength; equipment upgrades one
+  const before = Math.max(ta ? full(ta) : 0, tb ? full(tb) : 0);
+  const might = ta && tb ? Math.min(MAX_MIGHT, Math.max(1, Math.round((FORGE_KEEP * (full(ta) + full(tb)) / base(r.out, vet)) * 10) / 10)) : (troop.might ?? 1);
+  const res = { out: r.out, vet, cost, recipe: r, might, before, after: base(r.out, vet) * might };
+  if (r.tech && !hasTech(s, r.tech)) return { ...res, tech: r.tech };
+  return res;
 }
 
 export function doMerge(s: GameState, aUid: number, bUid: number): string | null {
@@ -118,7 +133,7 @@ export function doMerge(s: GameState, aUid: number, bUid: number): string | null
   s.troops = s.troops.filter(t => !parts.includes(t.uid));
   s.fleet = s.fleet.filter(t => !parts.includes(t.uid));
   s.hand = s.hand.filter(h => !parts.includes(h.uid));
-  (isShip ? s.fleet : s.troops).push({ uid: uid(s), type: res.out, vet: res.vet, str: Math.max(str, 60) });
+  (isShip ? s.fleet : s.troops).push({ uid: uid(s), type: res.out, vet: res.vet, str: Math.max(str, 60), ...(res.might > 1 ? { might: res.might } : {}) });
   log(s, `Forged a new unit: ${TROOPS[res.out].name}${res.vet ? ' ' + '★'.repeat(res.vet) : ''}.`, 'good');
   return null;
 }

@@ -29,7 +29,9 @@ Open `dist/index.html` in any browser. The core menus (Military, Diplomacy, Inte
 - **Map views.** Realms, culture, religion, raw materials, happiness and population.
 - **Ages.** Crusade → Discovery → Reformation → Absolutism → Enlightenment. An age opens when the first realm reaches its research (Ocean Navigation, Absolutism, Enlightened Government) or event (a prince protecting a reformer). No ocean voyages before Discovery. The pioneer gains prestige; if it is you, also nation points, cards and +0.4 cards a year for 25 years. Tap the year to see what opens the next age.
 - **Monarchs.** When a ruler dies you choose one of three heirs. Each kind boosts different card rates, and some can act as a general, diplomat, merchant or researcher.
-- **Forging, battles, history deck**: as before (Levy + Long Pikes → Pikemen, face-down tactics, branching historical events).
+- **Cards tab.** Every menu's Cards tab shows what you hold, with filters (cards, people, and in Military troops, ships and equipment), and buttons to buy a pack (3 revealed, keep 1), archive cards you do not need now (they stop counting against your hand; restore or discard them later), forge and read the recipes.
+- **Forge.** Two companies of a kind become one company about 1.8× as strong (and a free slot); troops that match a recipe become a better kind keeping 90% of their joint strength; equipment upgrades one troop. The recipe book lists only what your research allows.
+- **Battles and history deck**: face-down tactics, branching historical events.
 - **Navy.** Ship cards (galleys, caravels, carracks, galleasses, galleons, ships of the line) are fitted out by a general, who becomes an admiral for good. Attacks by sea need ships to carry the troops; enemy fleets intercept with sea battles (broadside, boarding, line of battle, weather gauge).
 - **Peace.** Wars keep a score from provinces and battles. The winner spends it on reparations, provinces or vassalage.
 - **Subjects.** Vassals pay a quarter of their income, personal unions 40%; both follow you to war and can later be integrated.

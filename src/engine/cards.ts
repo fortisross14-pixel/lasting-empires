@@ -351,3 +351,31 @@ export function discardCard(s: GameState, handUid: number): string | null {
   s.np += 0.5;
   return null;
 }
+
+// ---------- archive: cards set aside to keep the hand tidy ----------
+/** Set cards aside. Burdens (debts, unrest) cannot be hidden away. */
+export function archiveCards(s: GameState, uids: number[]): string | null {
+  const move = s.hand.filter(h => uids.includes(h.uid) && !CARDS[h.card].burden);
+  if (!move.length) return 'Nothing to archive (burdens cannot be archived)';
+  s.archive = [...(s.archive ?? []), ...move];
+  s.hand = s.hand.filter(h => !move.includes(h));
+  return null;
+}
+/** Bring an archived card back into the hand, if there is room for its kind. */
+export function restoreCard(s: GameState, uid: number): string | null {
+  const c = s.archive?.find(h => h.uid === uid);
+  if (!c) return 'Not in the archive';
+  const cat = CARDS[c.card].cat;
+  if (handOf(s, cat).length >= handLimit(s)) return `Your ${cat} hand is full (${handLimit(s)})`;
+  s.archive = s.archive!.filter(h => h !== c);
+  s.hand.push(c);
+  return null;
+}
+/** Throw an archived card away for half a nation point. */
+export function dropArchived(s: GameState, uid: number): string | null {
+  const c = s.archive?.find(h => h.uid === uid);
+  if (!c) return 'Not in the archive';
+  s.archive = s.archive!.filter(h => h !== c);
+  s.np += 0.5;
+  return null;
+}

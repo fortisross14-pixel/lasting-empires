@@ -12,6 +12,7 @@ export interface TroopCard {
   vet: number;    // 0..3 veterancy stars
   str: number;    // 0..100 strength
   mission?: number;
+  might?: number; // a forged company is worth this many ordinary ones (1 by default)
 }
 
 export interface EquipCard {
@@ -125,6 +126,7 @@ export interface BattleUnit {
   uid: number;
   type: string;
   vet: number;
+  might?: number;
   str: number;
   start: number;
   garrison?: boolean;
@@ -224,6 +226,7 @@ export interface GameState {
   wars: War[];
   truces: Truce[];
   hand: HandCard[];
+  archive?: HandCard[];             // cards set aside: they do not count against the hand limit
   cardAccum: Record<Cat, number>;
   bought: Record<Cat, number>;      // cards bought this year (price rises)
   np: number;                       // nation points

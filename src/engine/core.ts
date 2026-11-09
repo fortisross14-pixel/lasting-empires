@@ -104,11 +104,11 @@ export function borders(s: GameState, a: string, b: string): boolean {
 }
 
 // ---------- troops ----------
-export const troopPower = (t: { type: string; vet: number; str: number }) => {
+export const troopPower = (t: { type: string; vet: number; str: number; might?: number }) => {
   const d = TROOPS[t.type];
-  return (d.melee + d.fire + d.def * 0.8) * (1 + 0.15 * t.vet) * (t.str / 100);
+  return (d.melee + d.fire + d.def * 0.8) * (1 + 0.15 * t.vet) * (t.str / 100) * (t.might ?? 1);
 };
-export const armyPower = (arr: { type: string; vet: number; str: number }[]) => arr.reduce((a, t) => a + troopPower(t), 0);
+export const armyPower = (arr: { type: string; vet: number; str: number; might?: number }[]) => arr.reduce((a, t) => a + troopPower(t), 0);
 
 /** Prices rise over the centuries. */
 export const inflation = (s: GameState) => 1 + Math.max(0, s.year - 1453) / 160;
@@ -117,7 +117,7 @@ export const buildingCost = (s: GameState, b: string) => Math.round(BUILDINGS[b]
 
 export function upkeepOf(s: GameState, arr: TroopCard[]): number {
   const mult = (hasTech(s, 'standing_army') ? 0.8 : 1) * (0.7 + 0.3 * inflation(s));
-  return arr.reduce((a, t) => a + TROOPS[t.type].upkeep, 0) * mult;
+  return arr.reduce((a, t) => a + TROOPS[t.type].upkeep * (1 + ((t.might ?? 1) - 1) * 0.9), 0) * mult;
 }
 
 export function armyCap(s: GameState): number {

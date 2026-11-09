@@ -12,7 +12,7 @@ export const hp = (side: BattleSide) => side.units.reduce((a, u) => a + u.str, 0
 export const ratio = (side: BattleSide) => (side.startHP > 0 ? hp(side) / side.startHP : 0);
 
 export function toBattleUnits(cards: TroopCard[]): BattleUnit[] {
-  return cards.filter(c => c.str > 0).map(c => ({ uid: c.uid, type: c.type, vet: c.vet, str: c.str, start: c.str }));
+  return cards.filter(c => c.str > 0).map(c => ({ uid: c.uid, type: c.type, vet: c.vet, str: c.str, start: c.str, might: c.might }));
 }
 
 export function makeSide(nation: string, units: BattleUnit[], general: BattleGeneral | null, fort: number, isPlayer: boolean): BattleSide {
@@ -102,7 +102,7 @@ function attackOutput(s: GameState, side: BattleSide, round: number, my: Mods, n
     if (u.str <= 0) continue;
     const reserve = inFront.has(u.uid) ? 1 : 0.4;
     const d = TROOPS[u.type];
-    const eff = (1 + 0.15 * u.vet) * (u.str / 100) * reserve;
+    const eff = (1 + 0.15 * u.vet) * (u.str / 100) * reserve * (u.might ?? 1);
     let f = d.fire * eff * ROUND_MULT[round].fire * my.fire;
     let m = d.melee * eff * ROUND_MULT[round].melee * my.melee;
     if (d.kind === 'cav') m *= my.cav;
@@ -140,7 +140,7 @@ function applyDamage(s: GameState, target: BattleSide, attacker: BattleSide, out
   let dealt = 0;
   alive.forEach((u, i) => {
     const def = TROOPS[u.type].def * (1 + 0.15 * u.vet) * (1 + 0.25 * effFort);
-    const dmg = (pool * weights[i] / wsum) / (1 + def * 0.18);
+    const dmg = (pool * weights[i] / wsum) / (1 + def * 0.18) / (u.might ?? 1);
     const before = u.str;
     u.str = Math.max(0, u.str - dmg);
     if (u.str < 8) u.str = 0;

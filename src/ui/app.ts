@@ -16,7 +16,7 @@ import {
 } from '../engine/core';
 import { newGame, endTurn, chooseEventOption, playerDeclareWar, warCost, ranking, powerTable, dismissCharacter, disbandTroop, chooseHeir, SAVE_VERSION, coreBlocked, coreCost, adoptCore, dropCore, migrate } from '../engine/turn';
 import { EVENT, eventTitle, upcomingHistory } from '../engine/events';
-import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBlocked, troopHireCost, discardCard, handLimit, cardFor } from '../engine/cards';
+import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBlocked, troopHireCost, discardCard, handLimit, cardFor, archiveCards, restoreCard, dropArchived } from '../engine/cards';
 import {
   MISSION_INFO, DIPLO, missionBlocked, launchMission, cancelMission, diploChance, missionTurns, techCost, researchRate, attackRoute,
   developCost, foundCost, growCost, importable, cardRole, cardRoles, becomesOnMission, voyageCost, GRADES,
@@ -43,7 +43,8 @@ let sheet: { kind: string; arg?: string } | null = null;
 let win: { cat: Cat; tab: string } | null = null; // the centred window of a core menu
 let pick: { char?: number; card?: number } = {};   // the Missions tab: a person and/or a card chosen
 let preferChar: number | null = null;              // person chosen first, preselected in the planner
-let pendingReport = false;                          // show the turn report when the queue is empty
+let pendingReport = false;
+let cv: { filter: string; mode: 'browse' | 'select' | 'archive' | 'forge' | 'recipes'; sel: number[] } = { filter: 'all', mode: 'browse', sel: [] }; // the Cards tab                          // show the turn report when the queue is empty
 let modalOpen = false;
 let forge: number[] = [];
 let chronTab = 'powers';
@@ -382,7 +383,7 @@ const WIN_TABS: Record<Cat, [string, string][]> = {
 function toggleWin(cat: Cat) { if (win?.cat === cat) closeWin(); else openWin(cat); }
 function openWin(cat: Cat, tab = win?.cat === cat ? win.tab : 'cards') {
   if (sheet) { sheet = null; $('#sheet').hidden = true; }
-  if (win?.cat !== cat) pick = {};
+  if (win?.cat !== cat) { pick = {}; cv = { filter: 'all', mode: 'browse', sel: [] }; }
   win = { cat, tab };
   $('#win').hidden = false;
   refresh();
@@ -418,7 +419,7 @@ const CAT_ROLES: Record<Cat, Character['role'][]> = {
 const missionsOfCat = (cat: Cat) => S.missions.filter(m => CAT_ROLES[cat].includes(MISSION_INFO[m.kind].role as Character['role']) || (cat === 'military' && ['conquer', 'raid', 'conquista'].includes(m.kind)));
 
 function winTab(cat: Cat, tab: string, body: HTMLElement) {
-  if (tab === 'cards') { body.append(cardSection(cat)); body.append(...peopleSection(CAT_ROLES[cat], 'People')); return; }
+  if (tab === 'cards') return cardsTab(cat, body);
   if (tab === 'missions') return missionsTab(cat, body);
   const holder = h('div');
   if (cat === 'military') {
@@ -435,6 +436,88 @@ function winTab(cat: Cat, tab: string, body: HTMLElement) {
     if (tab === 'ledger') ledgerTab(body); else goodsTab(body);
   } else techTab(body);
   void holder;
+}
+
+// ---------- the Cards tab: everything you hold, with filters, packs, archive, forge and recipes ----------
+function cardsTab(cat: Cat, body: HTMLElement) {
+  const mil = cat === 'military';
+  const rate = cardRates(S)[cat];
+  const hand = handOf(S, cat);
+  const arch = (S.archive ?? []).filter(hc => CARDS[hc.card].cat === cat);
+  const pct = Math.round((S.cardAccum[cat] ?? 0) * 100);
+  const setMode = (mode: typeof cv.mode) => { cv = { ...cv, mode: cv.mode === mode ? 'browse' : mode, sel: [], filter: mode === 'select' ? 'hand' : cv.filter }; forge = []; renderWin(); };
+  const why = buyBlocked(S, cat);
+  const bar = h('div', { class: 'ctools' },
+    h('button', { class: 'btn small' + (why ? ' blocked' : ''), title: why ?? 'Three cards are revealed, you keep one', onclick: () => act(() => buyCard(S, cat)) }, h('span', { html: icon('star', 14) }), ` Buy a pack · ${buyCost(S, cat)} NP`),
+    h('button', { class: 'btn small' + (cv.mode === 'select' ? ' on' : ''), onclick: () => setMode('select') }, h('span', { html: icon('scroll', 14) }), ' Archive cards'),
+    h('button', { class: 'btn small' + (cv.mode === 'archive' ? ' on' : ''), onclick: () => setMode('archive') }, h('span', { html: icon('book', 14) }), ` Archive (${arch.length})`),
+    mil ? h('button', { class: 'btn small' + (cv.mode === 'forge' ? ' on' : ''), onclick: () => setMode('forge') }, h('span', { html: icon('merge', 14) }), ' Forge') : null,
+    mil ? h('button', { class: 'btn small' + (cv.mode === 'recipes' ? ' on' : ''), onclick: () => setMode('recipes') }, h('span', { html: icon('list', 14) }), ' Recipes') : null);
+  body.append(h('div', { class: 'cs-head' }, h('b', {}, `${hand.length}/${handLimit(S)} cards in hand`), h('small', { title: rate.parts.map(p => `${p.label} ${signed(p.v)}`).join(', ') }, `+${rate.rate.toFixed(2)} a year · next card ${pct}%`)), bar);
+  if (cv.mode === 'forge') return forgeView(body);
+  if (cv.mode === 'recipes') { body.append(recipeBook(true)); return; }
+  if (cv.mode === 'archive') {
+    body.append(h('p', { class: 'muted' }, 'Archived cards do not count against your hand. Bring one back when you have room, or throw it away for half a nation point.'));
+    if (!arch.length) body.append(h('p', { class: 'muted' }, 'The archive is empty.'));
+    const row = h('div', { class: 'cards-row wrap' });
+    for (const hc of arch) row.append(h('div', { class: 'arch' }, handCard(hc.card, { small: true }),
+      h('button', { class: 'btn small', onclick: () => act(() => restoreCard(S, hc.uid), 'Back in your hand') }, 'Restore'),
+      h('button', { class: 'btn small ghost', onclick: () => act(() => dropArchived(S, hc.uid), '+0.5 nation points') }, 'Discard')));
+    body.append(row);
+    return;
+  }
+  // filters
+  const filters: [string, string, number][] = [['all', 'All', 0], ['hand', 'Cards', hand.length], ['people', 'People', S.characters.filter(c => CAT_ROLES[cat].includes(c.role)).length]];
+  if (mil) filters.push(['troops', 'Troops', S.troops.length], ['ships', 'Ships', S.fleet.length], ['equip', 'Equipment', hand.filter(x => CARDS[x.card].kind === 'equip').length]);
+  if (!filters.some(f => f[0] === cv.filter)) cv.filter = 'all';
+  body.append(h('div', { class: 'seg cfilter' }, filters.map(([id, label, n]) => h('button', { class: 'seg-b' + (cv.filter === id ? ' on' : ''), onclick: () => { cv = { ...cv, filter: id }; renderWin(); } }, label, n ? h('small', {}, ` ${n}`) : null))));
+  if (cv.mode === 'select') {
+    body.append(h('div', { class: 'mcap' }, h('b', {}, `Tap cards to archive (${cv.sel.length} chosen)`), h('span', {},
+      h('button', { class: 'btn small primary' + (cv.sel.length ? '' : ' blocked'), onclick: () => { if (!cv.sel.length) return; const n = cv.sel.length; act(() => archiveCards(S, cv.sel), `${n} card${n > 1 ? 's' : ''} archived`); cv = { ...cv, mode: 'browse', sel: [] }; renderWin(); } }, 'Archive'),
+      h('button', { class: 'btn small ghost', onclick: () => setMode('select') }, 'Cancel'))));
+  }
+  const f = cv.filter;
+  const show = (id: string) => f === 'all' || f === id;
+  const sec = (title: string, els: HTMLElement[], empty: string) => { body.append(h('h3', {}, title)); body.append(els.length ? h('div', { class: 'cards-row wrap' }, els) : h('p', { class: 'muted' }, empty)); };
+  if (show('hand') || show('equip')) {
+    const list = f === 'equip' ? hand.filter(x => CARDS[x.card].kind === 'equip') : hand;
+    sec(f === 'equip' ? 'Equipment' : 'Cards in hand', list.map(c => handCard(c.card, { small: true, selected: cv.sel.includes(c.uid), dim: cv.mode !== 'select' && !!cardBlocked(S, CARDS[c.card]) && CARDS[c.card].kind !== 'mission', onclick: () => {
+      if (cv.mode === 'select') { cv = { ...cv, sel: cv.sel.includes(c.uid) ? cv.sel.filter(x => x !== c.uid) : [...cv.sel, c.uid] }; renderWin(); return; }
+      openCardModal(c.uid);
+    } })), 'No cards. You draw them each quarter, or buy a pack.');
+  }
+  if (show('people')) {
+    const ppl = S.characters.filter(c => CAT_ROLES[cat].includes(c.role));
+    sec('People', ppl.map(c => charCard(c, S, { small: true, badge: c.mission === -1 ? 'viceroy' : c.mission != null ? 'busy' : undefined, onclick: () => charDetail(c) })), 'Nobody yet. Play a hiring card to recruit someone.');
+  }
+  if (mil && show('troops')) sec(`Troops (${S.troops.length}/${armyCap(S)})`, [...S.troops].sort((a, b) => armyPower([b]) - armyPower([a])).map(t => troopCard(t, { small: true, onclick: () => toast(`${TROOPS[t.type].name}: power ${armyPower([t]).toFixed(1)}${(t.might ?? 1) > 1 ? ` (forged ×${t.might})` : ''}${t.mission != null ? ' · on a mission' : ''}`) })), 'No troops. Hire them with troop cards.');
+  if (mil && show('ships')) sec(`Ships (${S.fleet.length}/${navyCap(S)})`, S.fleet.map(t => troopCard(t, { small: true })), 'No ships.');
+}
+
+/** Forge: two troops of a kind, a troop and a matching one, or a troop and equipment. */
+function forgeView(body: HTMLElement) {
+  body.append(h('p', { class: 'muted' }, 'Pick two cards. Two of a kind become one company about 1.8 times as strong. Troops that match a recipe become a better kind, keeping most of their joint strength. Equipment upgrades one troop.'));
+  if (forge.length === 2) {
+    const r = mergePreview(S, forge[0], forge[1]);
+    if ('error' in r) body.append(h('p', { class: 'bad' }, r.error));
+    else body.append(h('div', { class: 'forge-res' }, troopCard({ type: r.out, vet: r.vet, str: 100, might: r.might }, {}),
+      h('div', {}, h('b', {}, `${TROOPS[r.out].name} ${'★'.repeat(r.vet)}${r.might > 1 ? ` ×${r.might.toFixed(1)}` : ''}`),
+        h('p', {}, `Power ${r.before.toFixed(1)} → ${r.after.toFixed(1)} (×${(r.after / Math.max(0.1, r.before)).toFixed(2)})`),
+        h('p', { class: 'muted' }, r.tech ? `Needs research: ${TECH[r.tech].name}` : `${r.cost} ducats · frees a company slot`),
+        h('button', { class: 'btn primary' + (r.tech || player(S).gold < r.cost ? ' blocked' : ''), onclick: () => { const a = forge[0], b = forge[1]; forge = []; act(() => doMerge(S, a, b), 'Forged!'); } }, 'Forge'))));
+  } else body.append(h('p', { class: 'fact' }, forge.length ? 'Pick a second card' : 'Pick the first card'));
+  const pickF = (uid: number) => { forge = forge.includes(uid) ? forge.filter(x => x !== uid) : [...forge.slice(-1), uid]; renderWin(); };
+  const partners = forge.length === 1 ? new Set([...S.troops, ...S.fleet].filter(t => t.uid !== forge[0] && !('error' in mergePreview(S, forge[0], t.uid))).map(t => t.uid).concat(S.hand.filter(x => !('error' in mergePreview(S, forge[0], x.uid))).map(x => x.uid))) : null;
+  body.append(h('h3', {}, 'Troops at home'));
+  body.append(h('div', { class: 'cards-row wrap' }, S.troops.filter(t => t.mission == null).map(t => troopCard(t, { small: true, selected: forge.includes(t.uid), dim: !!partners && !partners.has(t.uid) && !forge.includes(t.uid), onclick: () => pickF(t.uid) }))));
+  const eq = S.hand.filter(x => CARDS[x.card].kind === 'equip');
+  body.append(h('h3', {}, 'Equipment'));
+  body.append(eq.length ? h('div', { class: 'cards-row wrap' }, eq.map(x => handCard(x.card, { small: true, selected: forge.includes(x.uid), dim: !!partners && !partners.has(x.uid) && !forge.includes(x.uid), onclick: () => pickF(x.uid) }))) : h('p', { class: 'muted' }, 'No equipment cards.'));
+  if (S.fleet.length) {
+    body.append(h('h3', {}, 'Ships in harbour'));
+    body.append(h('div', { class: 'cards-row wrap' }, S.fleet.filter(t => t.mission == null).map(t => troopCard(t, { small: true, selected: forge.includes(t.uid), dim: !!partners && !partners.has(t.uid) && !forge.includes(t.uid), onclick: () => pickF(t.uid) }))));
+  }
+  body.append(h('details', { class: 'recipes' }, h('summary', {}, 'Recipes you know'), recipeBook(true)));
 }
 
 /** Choose a person then a mission, or a mission then a person. */
@@ -712,16 +795,7 @@ function diploHint(k: MissionKind) {
 
 // ---------- category panels ----------
 function armyTab(body: HTMLElement) {
-  const fb = h('div', { class: 'forge' + (forge.length ? ' active' : '') });
-  fb.append(h('div', { class: 'forge-h' }, h('span', { html: icon('merge', 18) }), h('b', {}, 'Forge'), h('small', {}, 'Tap two troops of the same kind for a veteran, or play an equipment card to upgrade a troop')));
-  if (forge.length === 2) {
-    const r = mergePreview(S, forge[0], forge[1]);
-    if ('error' in r) fb.append(h('p', { class: 'bad' }, r.error));
-    else fb.append(h('div', { class: 'forge-res' }, troopCard({ type: r.out, vet: r.vet, str: 100 }, { small: true }),
-      h('div', {}, h('b', {}, `${TROOPS[r.out].name} ${'★'.repeat(r.vet)}`), h('p', { class: 'muted' }, r.tech ? `Needs research: ${TECH[r.tech].name}` : `${r.cost} ducats`),
-        h('button', { class: 'btn primary' + (r.tech || player(S).gold < r.cost ? ' blocked' : ''), onclick: () => { const a = forge[0], b = forge[1]; forge = []; act(() => doMerge(S, a, b), 'Forged!'); } }, 'Forge'))));
-  }
-  body.append(fb);
+  body.append(h('p', { class: 'muted' }, 'Tap a troop to select it (to disband it). To merge troops, use Cards → Forge.'));
   body.append(h('h3', {}, `Armies (${S.troops.length}/${armyCap(S)}) · upkeep ${incomeOf(S, S.player).upkeep.toFixed(1)} a year`));
   const tr = h('div', { class: 'cards-grid' });
   [...S.troops].sort((a, b) => TROOPS[b.type].tier - TROOPS[a.type].tier || b.vet - a.vet).forEach(t =>
@@ -820,16 +894,18 @@ function realmTab(body: HTMLElement) {
   if (angry.length) body.append(h('p', { class: 'bad' }, `At risk of rising: ${angry.map(p => `${p.name} (${happinessOf(S, p).value}%)`).join(', ')}.`));
 }
 
-function recipeBook() {
-  const d = h('details', { class: 'recipes' }, h('summary', {}, 'Recipe book'));
+function recipeBook(knownOnly = false) {
+  const d: HTMLElement = knownOnly ? h('div', { class: 'recipes' }) : h('details', { class: 'recipes' }, h('summary', {}, 'Recipe book'));
   const rows: [string, string, string, string?][] = [
     ['Levy Infantry', 'Long Pikes', 'Pikemen', 'pike_square'], ['Levy Infantry', 'Plate Armour', 'Men-at-Arms'], ['Levy or Crossbow', 'Arquebuses', 'Arquebusiers', 'firearms'],
     ['Jinetes', 'Plate Armour', 'Knights'], ['Men-at-Arms', 'Warhorses', 'Knights'], ['Pikemen', 'Arquebusiers', 'Tercio', 'tercio_doctrine'],
     ['Bombard', 'Bronze Casting', 'Field Cannon', 'bronze_cannon'], ['Jinetes', 'Pistols', 'Reiters', 'wheellock'], ['Knights', 'Pistols', 'Cuirassiers', 'wheellock'],
     ['Arquebusiers', 'Muskets', 'Musketeers', 'musket'], ['Tercio', 'Muskets', 'Tercio Viejo', 'musket'], ['Reiters', 'Muskets', 'Dragoons', 'military_drill'],
-    ['Musketeers', 'Bayonets', 'Line Infantry', 'bayonet'], ['Two of the same troop', '', '+1 star'], ['Any troop', 'Regimental Colours', '+1 star'],
+    ['Musketeers', 'Bayonets', 'Line Infantry', 'bayonet'], ['Two of the same troop', '', '×1.8 strength in one company'], ['Any troop', 'Regimental Colours', '+1 star'],
   ];
-  d.append(h('table', { class: 'rtable' }, h('tbody', {}, rows.map(([a, b, c, t]) => h('tr', { class: t && !S.techs.includes(t) ? 'locked' : '' },
+  const shown = knownOnly ? rows.filter(([, , , t]) => !t || S.techs.includes(t)) : rows;
+  if (knownOnly && shown.length < rows.length) d.append(h('p', { class: 'muted' }, `${rows.length - shown.length} more recipes unlock with research.`));
+  d.append(h('table', { class: 'rtable' }, h('tbody', {}, shown.map(([a, b, c, t]) => h('tr', { class: t && !S.techs.includes(t) ? 'locked' : '' },
     h('td', {}, a), h('td', {}, b ? '+ ' + b : ''), h('td', {}, '= ', h('b', {}, c)), h('td', { class: 'muted' }, t && !S.techs.includes(t) ? TECH[t].name : ''))))));
   return d;
 }

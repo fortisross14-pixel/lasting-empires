@@ -21,11 +21,12 @@ function shell(kind: string, o: Opts, ...kids: (HTMLElement | null)[]) {
   return el;
 }
 
-export function troopCard(t: Pick<TroopCard, 'type' | 'vet' | 'str'> & { mission?: number }, o: Opts = {}) {
+export function troopCard(t: Pick<TroopCard, 'type' | 'vet' | 'str'> & { mission?: number; might?: number }, o: Opts = {}) {
   const d = TROOPS[t.type];
   return shell('troop', { ...o, cls: `tier${d.tier} ${o.cls ?? ''}` },
     h('div', { class: 'c-top' }, h('span', { class: 'c-name' }, d.name), h('span', { class: 'c-vet' }, stars(t.vet))),
     h('div', { class: 'c-art', html: icon(d.icon, o.small ? 26 : 34) }),
+    (t.might ?? 1) > 1 ? h('div', { class: 'c-might', title: 'Forged: worth this many ordinary companies' }, `×${(t.might ?? 1).toFixed(1)}`) : null,
     h('div', { class: 'c-stats' },
       h('span', { title: 'Melee' }, h('b', {}, 'M'), d.melee), h('span', { title: 'Fire' }, h('b', {}, 'F'), d.fire), h('span', { title: 'Defence' }, h('b', {}, 'D'), d.def)),
     h('div', { class: 'c-bar' }, h('i', { style: `width:${Math.round(t.str)}%` })),
