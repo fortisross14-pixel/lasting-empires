@@ -156,7 +156,8 @@ export interface BattleRecord {
   year: number; quarter: number; province: string; att: string; def: string;
   attPower: number; defPower: number; winner: 'att' | 'def'; player?: 'won' | 'lost'; naval?: boolean; context: string;
 }
-export interface TurnLog { year: number; quarter: number; battles: BattleRecord[]; done: { kind: string; title: string; ok: boolean }[]; }
+/** What happened over the current year, for the annual report. */
+export interface TurnLog { year: number; quarter: number; battles: BattleRecord[]; done: { kind: string; title: string; ok: boolean }[]; gold?: number; np?: number; cards?: Record<string, number>; }
 
 export interface Battle {
   id: number;

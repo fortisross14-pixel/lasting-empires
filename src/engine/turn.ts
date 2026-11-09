@@ -331,7 +331,7 @@ export function endTurn(s: GameState): YearReport | null {
   const g0 = player(s).gold, np0 = s.np;
   s.quarter ??= 0;
   const q = s.quarter;
-  s.turnLog = { year: s.year, quarter: q, battles: [], done: [] };
+  if (q === 0 || !s.turnLog || s.turnLog.year !== s.year) s.turnLog = { year: s.year, quarter: q, battles: [], done: [], gold: 0, np: 0, cards: {} };
   if (q === 0) { s.bought = { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 }; s.launched = 0; }
   const before = s.missions.map(m => ({ id: m.id, kind: m.kind, target: m.target }));
   advanceMissions(s);
@@ -366,6 +366,9 @@ export function endTurn(s: GameState): YearReport | null {
     const place = r.findIndex(x => x.id === s.player) + 1;
     push(s, { kind: 'gameover', victory: place <= 3, reason: `The year is ${s.year}. ${player(s).name} ranks #${place} among the powers.` });
   }
+  const tl = s.turnLog!;
+  tl.gold = (tl.gold ?? 0) + player(s).gold - g0; tl.np = (tl.np ?? 0) + s.np - np0;
+  for (const [c, n] of Object.entries(cards)) tl.cards![c] = (tl.cards![c] ?? 0) + n;
   return { gold: player(s).gold - g0, np: s.np - np0, cards };
 }
 

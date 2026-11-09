@@ -1399,8 +1399,8 @@ async function onEndTurn() {
   refresh();
   if (rep) {
     lastReport = rep;
-    pendingReport = true;
-    if ((S.quarter ?? 0) === 0) await yearFlash(S.year, ageOf(S).name);
+    if ((S.quarter ?? 0) === 0) { pendingReport = true; yearReport = S.turnLog ?? null; await yearFlash(S.year, ageOf(S).name); }
+    else toast(`${SEASONS[S.quarter ?? 0]} ${S.year} · ${signed(Math.round(rep.gold))} ducats${CATS.some(c => rep.cards[c]) ? ' · cards: ' + CATS.filter(c => rep.cards[c]).map(c => `${rep.cards[c]} ${CAT_INFO[c].name}`).join(', ') : ''}`);
   }
   processQueue();
 }
@@ -1415,25 +1415,26 @@ async function yearFlash(year: number, line: string) {
 }
 
 let lastReport: { gold: number; np: number; cards: Record<string, number> } | null = null;
+let yearReport: GameState['turnLog'] | null = null;
 
 /** End of turn: what happened this quarter, with the battles played out. */
 function showTurnReport() {
   pendingReport = false;
-  const tl = S.turnLog, rep = lastReport;
-  if (!tl || !rep) return;
+  const tl = yearReport;
+  if (!tl) return;
   const box = h('div', { class: 'mbox report' });
-  const prevQ = tl.quarter;
-  box.append(h('h2', {}, `${SEASONS[prevQ]} ${tl.year}`), h('p', { class: 'muted' }, `Now: ${SEASONS[S.quarter ?? 0]} ${S.year}`));
-  const got = CATS.filter(c => rep.cards[c]).map(c => `${rep.cards[c]} ${CAT_INFO[c].name}`).join(', ');
-  box.append(h('div', { class: 'facts' }, h('span', { class: 'fact' }, `${signed(Math.round(rep.gold))} ducats`), h('span', { class: 'fact' }, `+${rep.np.toFixed(1)} nation points`), got ? h('span', { class: 'fact' }, `Cards: ${got}`) : null));
+  box.append(h('h2', {}, `The year ${tl.year}`), h('p', { class: 'muted' }, `Four quarters played. Now: ${SEASONS[S.quarter ?? 0]} ${S.year}`));
+  const cards = tl.cards ?? {};
+  const got = CATS.filter(c => cards[c]).map(c => `${cards[c]} ${CAT_INFO[c].name}`).join(', ');
+  box.append(h('div', { class: 'facts' }, h('span', { class: 'fact' }, `${signed(Math.round(tl.gold ?? 0))} ducats`), h('span', { class: 'fact' }, `+${(tl.np ?? 0).toFixed(1)} nation points`), got ? h('span', { class: 'fact' }, `Cards: ${got}`) : null));
   if (tl.battles.length) {
-    box.append(h('h3', {}, `Battles (${tl.battles.length})`));
+    box.append(h('h3', {}, `Battles this year (${tl.battles.length})`));
     const list = h('div', { class: 'blist' });
     tl.battles.forEach((r, i) => list.append(battleRow(r, i)));
     box.append(list);
   }
   if (tl.done.length) {
-    box.append(h('h3', {}, 'Missions completed'));
+    box.append(h('h3', {}, 'Missions completed this year'));
     box.append(h('ul', { class: 'rlist' }, tl.done.map(d => h('li', {}, h('span', { html: icon(MISSION_INFO[d.kind as MissionKind]?.icon ?? 'star', 14) }), d.title))));
   }
   box.append(h('h3', {}, `Under way (${S.missions.length})`));
@@ -1453,7 +1454,7 @@ function battleRow(r: BattleRecord, i: number) {
   const row = h('div', { class: 'brow' + (mine ? ' mine' : '') });
   const bar = h('div', { class: 'bbar' }, h('i', { class: 'ba', style: `width:${pA * 100}%; background:${a?.color ?? '#7a2e26'}` }), h('i', { class: 'bd', style: `background:${d?.color ?? '#555'}` }), h('b', { class: 'bmark', style: `left:${pA * 100}%` }));
   const res = h('span', { class: 'bres' }, `${Math.round(pA * 100)}% – ${Math.round((1 - pA) * 100)}%`);
-  row.append(h('div', { class: 'bnames' }, h('span', {}, name(r.att)), h('small', {}, `${r.naval ? 'At sea off ' : ''}${S.provinces[r.province]?.name ?? ''}`), h('span', {}, name(r.def))), bar, res);
+  row.append(h('div', { class: 'bnames' }, h('span', {}, name(r.att)), h('small', {}, `${SEASONS[r.quarter]} · ${r.naval ? 'at sea off ' : ''}${S.provinces[r.province]?.name ?? ''}`), h('span', {}, name(r.def))), bar, res);
   const end = r.winner === 'att' ? 100 : 0;
   const steps = reduced() ? [] : [pA * 100 + 12, pA * 100 - 10, pA * 100 + 6, (pA * 100 + end) / 2];
   const mark = bar.querySelector('.bmark') as HTMLElement, fill = bar.querySelector('.ba') as HTMLElement;
