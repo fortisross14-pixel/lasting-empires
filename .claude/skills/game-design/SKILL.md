@@ -28,6 +28,8 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 - Hand limit is 6 per category; `addCard` respects it unless forced (burdens).
 
 ## Balance workflow
+See `docs/BALANCE.md` for targets, current results and every lever. Run `MODE=reasonable|passive|greedy|big SEEDS=5 npm run sim` and compare against the targets table before and after any change.
+
 - Run `npm run sim` (headless bot plays 9 full campaigns, 1453–1750). It must finish with no crash.
 - Watch: player rank spread, nations alive at the end, gold hoarding, hand sizes, settlement growth, veteran troops.
 - Balance is tuned late; prefer adding levers (costs, weights, rates in data files) over hard-coding numbers in logic.

@@ -3,12 +3,12 @@ import type { GameState, DraftOption, Character, Cat, Role } from '../types';
 import { TROOPS, RECIPES, type Recipe } from '../data/troops';
 import { LEGENDS } from '../data/characters';
 import { player, hasTech, rand, uid, genCharacter, courtCap, courtCount, provsOf, log, inflation } from './core';
-import { CARDS, buyCost, randomCard, removeCard, handOf, HAND_LIMIT } from './cards';
+import { CARDS, buyCost, randomCard, removeCard, handOf, handLimit } from './cards';
 
 // ---------- buying cards ----------
 export function buyBlocked(s: GameState, cat: Cat): string | null {
   const c = buyCost(s, cat);
-  if (handOf(s, cat).length >= HAND_LIMIT) return `Your ${cat} hand is full (${HAND_LIMIT})`;
+  if (handOf(s, cat).length >= handLimit(s)) return `Your ${cat} hand is full (${handLimit(s)}; a bigger realm holds more)`;
   return s.np < c ? `Needs ${c} nation points` : null;
 }
 
@@ -149,3 +149,14 @@ export function ambitionOptions(s: GameState): DraftOption[] {
   return out;
 }
 
+
+// ---------- sale of offices: ducats into nation points ----------
+export const officeCost = (s: GameState) => Math.round(40 * inflation(s) * (1 + (s.flags['offices_' + s.year] ?? 0)));
+export function sellOffices(s: GameState): string | null {
+  const c = officeCost(s);
+  if (player(s).gold < c) return `Needs ${c} ducats`;
+  player(s).gold -= c;
+  s.np += 2;
+  s.flags['offices_' + s.year] = (s.flags['offices_' + s.year] ?? 0) + 1;
+  return null;
+}

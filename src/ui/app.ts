@@ -13,12 +13,12 @@ import {
 } from '../engine/core';
 import { newGame, endTurn, chooseEventOption, playerDeclareWar, warCost, ranking, powerTable, dismissCharacter, disbandTroop, chooseHeir, SAVE_VERSION, coreBlocked, coreCost, adoptCore, dropCore, migrate } from '../engine/turn';
 import { EVENT, eventTitle, upcomingHistory } from '../engine/events';
-import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBlocked, troopHireCost, discardCard, HAND_LIMIT, cardFor } from '../engine/cards';
+import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBlocked, troopHireCost, discardCard, handLimit, cardFor } from '../engine/cards';
 import {
   MISSION_INFO, DIPLO, missionBlocked, launchMission, cancelMission, diploChance, missionTurns, techCost, researchRate, attackRoute,
   developCost, foundCost, growCost, importable, cardRole, cardRoles, becomesOnMission, voyageCost, GRADES,
 } from '../engine/missions';
-import { buyCard, buyBlocked, hireWithCard, takeDraftOption, mergePreview, doMerge, AMBITIONS } from '../engine/drafts';
+import { buyCard, buyBlocked, hireWithCard, takeDraftOption, mergePreview, doMerge, AMBITIONS, officeCost, sellOffices } from '../engine/drafts';
 import { regionState, discoverable, exploreChance, colonizeChance, conquistaChance, colonizeBlocked, PROMOTION, colonyCost } from '../engine/overseas';
 import { playRound, autoResolve, finishBattle, ratio, breakLevel, hp } from '../engine/battle';
 import { getGeo } from '../engine/map';
@@ -301,7 +301,7 @@ function cardSection(cat: Cat) {
   const pct = Math.round((S.cardAccum[cat] ?? 0) * 100);
   const wrap = h('div', { class: 'cardsec', style: `--cc:${CAT_INFO[cat].color}` });
   wrap.append(h('div', { class: 'cs-head' },
-    h('b', {}, `Your ${CAT_INFO[cat].name.toLowerCase()} cards (${hand.length}/${HAND_LIMIT})`),
+    h('b', {}, `Your ${CAT_INFO[cat].name.toLowerCase()} cards (${hand.length}/${handLimit(S)})`),
     h('small', { title: rate.parts.map(p => `${p.label} ${signed(p.v)}`).join(', ') }, `+${rate.rate.toFixed(2)} a year · next card ${pct}%`)));
   const row = h('div', { class: 'cards-row wrap' });
   if (!hand.length) row.append(h('p', { class: 'muted' }, 'No cards yet. You draw them every year, or buy one below.'));
@@ -604,7 +604,9 @@ function economySheet(body: HTMLElement) {
     h('tr', {}, h('td', {}, 'Troop upkeep'), h('td', { class: 'bad' }, '−' + inc.upkeep.toFixed(1))),
     h('tr', {}, h('td', {}, 'Building salaries'), h('td', { class: 'bad' }, '−' + inc.salaries.toFixed(1))),
     h('tr', {}, h('td', {}, 'Imported goods'), h('td', { class: 'bad' }, '−' + inc.imports.toFixed(1))),
+    h('tr', {}, h('td', {}, 'Administration (grows with the realm)'), h('td', { class: 'bad' }, '−' + inc.admin.toFixed(1))),
     h('tr', { class: 'total' }, h('td', {}, 'Each year'), h('td', {}, signed(inc.total))))));
+  body.append(actionRow('scales', 'Sell offices', `${officeCost(S)} ducats for 2 nation points · the price doubles, triples… each time this year`, player(S).gold < officeCost(S) ? `Needs ${officeCost(S)} ducats` : null, () => act(() => sellOffices(S), '+2 nation points')));
   body.append(h('h3', {}, 'Goods'));
   const own = ownGoods(S), col = colonyGoods(S);
   const gl = h('div', { class: 'goods' });
@@ -712,7 +714,7 @@ function chronicleSheet(body: HTMLElement) {
     }
     t.append(tb);
     body.append(h('div', { class: 'tscroll' }, t));
-    body.append(h('p', { class: 'muted' }, `Score = prestige + 2 × development. Wars you won: ${S.stats.wars.won}, lost: ${S.stats.wars.lost}. The game ends in ${S.endYear}.`));
+    body.append(h('p', { class: 'muted' }, `Score = half your prestige + 4 per development point you own + 2 per point in your subjects. Wars you won: ${S.stats.wars.won}, lost: ${S.stats.wars.lost}. The game ends in ${S.endYear}.`));
   } else if (chronTab === 'generals') {
     const gens = [
       ...S.characters.filter(c => c.role === 'general' || c.role === 'conqueror' || (c.wins ?? 0) + (c.losses ?? 0) > 0).map(c => ({ name: c.name, rarity: c.rarity as string, wins: c.wins ?? 0, losses: c.losses ?? 0, note: 'Serving' })),

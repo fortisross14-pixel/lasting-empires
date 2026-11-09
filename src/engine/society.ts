@@ -55,6 +55,8 @@ export function happinessOf(s: GameState, p: Province): { value: number; parts: 
   if ((s.flags.festival_until ?? 0) > s.year) parts.push({ label: 'Royal festival', v: 8 });
   if (p.control < 30) parts.push({ label: 'Weak royal control', v: -8 });
   if (p.core !== s.player) parts.push({ label: 'Recently conquered', v: -5 });
+  const size = provsOf(s, s.player).length;
+  if (size > 10) parts.push({ label: 'Overextension', v: -Math.min(20, Math.round((size - 10) * 0.9)) });
   const value = clamp(Math.round(parts.reduce((a, x) => a + x.v, 0)), 0, 100);
   return { value, parts };
 }

@@ -1,7 +1,7 @@
 import { newGame, endTurn, chooseEventOption, playerDeclareWar, ranking, chooseHeir, adoptCore, coreBlocked } from '../src/engine/turn';
 import { EVENT } from '../src/engine/events';
 import { autoResolve, finishBattle } from '../src/engine/battle';
-import { takeDraftOption, doMerge, mergePreview, buyCard, hireWithCard } from '../src/engine/drafts';
+import { takeDraftOption, doMerge, mergePreview, buyCard, hireWithCard, sellOffices, officeCost } from '../src/engine/drafts';
 import { launchMission, missionBlocked, importable, cardRole, cardRoles, attackRoute } from '../src/engine/missions';
 import { discoverable } from '../src/engine/overseas';
 import { hireShip, transportOf } from '../src/engine/navy';
@@ -41,6 +41,7 @@ const free = (s: GameState, role: string) => s.characters.filter(c => c.role ===
 
 function botTurn(s: GameState) {
   const me = player(s);
+  while (me.gold > 300 && me.gold > officeCost(s) * 3 && !sellOffices(s)) { /* turn spare gold into cards */ }
   for (const c of ['consolidation', 'open', 'mercantile', 'land']) if (!coreBlocked(s, c)) adoptCore(s, c);
   for (let k = 0; k < 3; k++) { const c = CATS[Math.floor(R() * 5)]; if (s.np >= buyCost(s, c) + 2) { buyCard(s, c); resolveQueue(s); } }
   for (const h of [...s.hand]) {
@@ -116,25 +117,51 @@ function botTurn(s: GameState) {
   }
 }
 
-for (const n of ['castile', 'portugal', 'aragon']) for (let seed = 1; seed <= 3; seed++) {
-  const s = newGame(n, seed * 7919);
+// ---------- runner ----------
+// MODE=reasonable|passive|greedy  SEEDS=n
+const MODE = process.env.MODE ?? 'reasonable';
+const SEEDS = Number(process.env.SEEDS ?? 4);
+const CHECK = MODE === 'big' ? [1455, 1460, 1470, 1480, 1500, 1513] : [1500, 1550, 1600, 1650, 1700, 1750];
+type Row = Record<string, number>;
+const rows: Record<number, Row[]> = {};
+const finals: Row[] = [];
+function snap(s: GameState): Row {
+  const me = player(s); const inc = incomeOf(s, s.player);
+  const r = ranking(s);
+  return { gold: me.gold, inc: inc.total, gross: inc.provinces + inc.trade + inc.goods + inc.other, upk: inc.upkeep + inc.salaries + inc.imports, provs: provsOf(s, s.player).length, stab: me.stability, happy: s.happiness, hand: s.hand.length, troops: s.troops.length, rank: r.findIndex(x => x.id === s.player) + 1, alive: me.alive ? 1 : 0 };
+}
+function passiveTurn(s: GameState) {
+  for (const h of [...s.hand]) { const d = CARDS[h.card]; if (d.kind === 'instant' && !d.target && !cardBlocked(s, d) && !d.burden) playCard(s, h.uid, ''); }
+}
+function greedyExtra(s: GameState) {
+  if (!enemiesOf(s, s.player).length && player(s).stability >= 0 && R() < 0.4) {
+    const nb = new Set<string>();
+    for (const p of provsOf(s, s.player)) for (const n of neighbours(p.id)) if (s.provinces[n].owner !== s.player && !s.nations[s.provinces[n].owner].overlord) nb.add(s.provinces[n].owner);
+    const mine = s.troops.reduce((a, t) => a + 1 + t.vet * 0.3, 0);
+    const t = [...nb].filter(x => s.nations[x].army.length * 1.2 < mine).sort((a, b) => s.nations[a].army.length - s.nations[b].army.length)[0];
+    if (t) playerDeclareWar(s, t);
+  }
+}
+for (const n of (MODE === 'big' ? ['castile'] : ['castile', 'portugal', 'aragon'])) for (let seed = 1; seed <= SEEDS; seed++) {
+  const s = newGame(n, seed * 7919 + (MODE === 'passive' ? 1 : MODE === 'greedy' ? 2 : 0));
+  if (MODE === 'big') { for (const id of ['granada', 'malaga', 'porto', 'lisbon', 'alentejo', 'algarve', 'navarre', 'zaragoza', 'catalonia', 'valencia', 'tangier', 'fez', 'rif', 'oran']) { const prov = s.provinces[id]; const from = prov.owner; prov.owner = n; if (!Object.values(s.provinces).some(x => x.owner === from)) s.nations[from].alive = false; } s.wars = s.wars.filter(w => s.nations[w.a].alive && s.nations[w.b].alive); for (let i = 0; i < 8; i++) s.troops.push({ uid: 50000 + i, type: 'pikemen', vet: 1, str: 100 }); }
   resolveQueue(s);
   let turns = 0;
   try {
-    while (!s.over && turns < 400) {
-      botTurn(s); resolveQueue(s); endTurn(s); resolveQueue(s); turns++;
-      if (seed === 1 && s.year % 60 === 0) { const inc = incomeOf(s, n); console.log('  ', s.year, 'gold', Math.round(player(s).gold), 'inc', inc.total.toFixed(1), 'up', inc.upkeep.toFixed(1), 'sal', inc.salaries.toFixed(1), 'mp', player(s).manpower.toFixed(1), 'np', s.np.toFixed(1), 'hand', s.hand.length, 'troops', s.troops.length, '/', armyCap(s), 'chars', s.characters.length, 'missions', s.missions.length, 'king', player(s).ruler.name, player(s).ruler.arch); }
+    while (!s.over && turns < (MODE === 'big' ? 60 : 400)) {
+      if (MODE === 'passive') passiveTurn(s); else { botTurn(s); if (MODE === 'greedy') greedyExtra(s); }
+      resolveQueue(s); endTurn(s); resolveQueue(s); turns++;
+      if (CHECK.includes(s.year)) (rows[s.year] ??= []).push(snap(s));
     }
   } catch (e) { console.error('CRASH', n, seed, s.year, e); throw e; }
-  const me = player(s);
-  const r = ranking(s);
-  console.log(n, seed, 'year', s.year, 'provs', provsOf(s, n).length, 'gold', Math.round(me.gold), 'troops', s.troops.length, 'techs', s.techs.length, 'stab', me.stability, 'rank', r.findIndex(x => x.id === n) + 1, 'top', r.slice(0, 3).map(x => x.name + ':' + x.score).join(' '), 'alive', Object.values(s.nations).filter(x => x.alive).length, 'kings', s.stats.kings.length, 'wars', JSON.stringify(s.stats.wars), 'imports', s.imports.length, 'colonies', Object.values(s.overseas).filter(o => o.holder === n && o.colony).length, 'found', Object.values(s.overseas).filter(o => o.found).length, 'rar', s.characters.map(c => c.rarity[0]).join(''), 'towns', provsOf(s, n).map(p => p.settlement).join(''), 'vets', s.troops.filter(t => t.vet >= 2).length, 'core', s.core.join('/'), 'fleet', s.fleet.length, 'subj', subjectsOf(s).map(x => x.id + ':' + x.subject).join(','), 'happy', s.happiness, 'art', Math.round(s.art), 'adm', s.characters.filter(c => c.role === 'admiral').length);
+  const f = snap(s); f.year = s.year; f.provs = provsOf(s, n).length; finals.push(f);
+  if (process.env.TOP) console.log('  top', n, seed, ranking(s).slice(0, 4).map(r => r.name + ':' + r.score + '(' + provsOf(s, r.id).length + 'p,' + Math.round(s.nations[r.id].prestige) + 'pr)').join(' '));
+  if (process.env.WHY && f.provs === 0) console.log('  died', n, seed, s.year, s.log.filter(l => l.tone === 'bad').slice(0, 6).map(l => l.year + ' ' + l.text).join(' | '));
 }
-{
-  const s = newGame('castile', 99);
-  resolveQueue(s);
-  for (let i = 0; i < 120; i++) { botTurn(s); resolveQueue(s); endTurn(s); resolveQueue(s); }
-  const c: Record<string, number> = {};
-  for (const h of s.hand) c[h.card] = (c[h.card] ?? 0) + 1;
-  console.log(Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 12));
-}
+const avg = (a: Row[], k: string) => a.reduce((x, r) => x + (r[k] ?? 0), 0) / Math.max(1, a.length);
+const med = (a: Row[], k: string) => { const v = a.map(r => r[k]).sort((x, y) => x - y); return v[Math.floor(v.length / 2)] ?? 0; };
+console.log(`MODE ${MODE}, ${finals.length} campaigns`);
+console.log('year  n  gold(med) income gross  costs provs stab happy hand troops rank');
+for (const y of CHECK) { const a = rows[y] ?? []; if (!a.length) continue; console.log(String(y).padEnd(5), String(a.length).padStart(2), String(Math.round(med(a, 'gold'))).padStart(8), avg(a, 'inc').toFixed(0).padStart(6), avg(a, 'gross').toFixed(0).padStart(5), avg(a, 'upk').toFixed(0).padStart(6), avg(a, 'provs').toFixed(1).padStart(5), avg(a, 'stab').toFixed(1).padStart(4), avg(a, 'happy').toFixed(0).padStart(5), avg(a, 'hand').toFixed(0).padStart(4), avg(a, 'troops').toFixed(0).padStart(6), avg(a, 'rank').toFixed(1).padStart(4)); }
+const survived = finals.filter(f => f.year > 1750 && f.provs > 0).length;
+console.log(`survived ${survived}/${finals.length} · top3 ${finals.filter(f => f.year > 1750 && f.rank >= 1 && f.rank <= 3).length} · wins(#1) ${finals.filter(f => f.year > 1750 && f.rank === 1).length}`);

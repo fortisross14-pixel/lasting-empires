@@ -247,7 +247,7 @@ function checkAmbition(s: GameState) {
 
 export function ranking(s: GameState): { id: string; name: string; score: number }[] {
   return Object.values(s.nations).filter(n => n.alive)
-    .map(n => ({ id: n.id, name: n.name, score: Math.round(n.prestige + provsOf(s, n.id).reduce((a, p) => a + p.dev * 2, 0)) }))
+    .map(n => ({ id: n.id, name: n.name, score: Math.round(n.prestige / 2 + provsOf(s, n.id).reduce((a, p) => a + p.dev * 4, 0) + Object.values(s.nations).filter(x => x.alive && x.overlord === n.id).reduce((a, x) => a + provsOf(s, x.id).reduce((b, p) => b + p.dev * 2, 0), 0)) }))
     .sort((a, b) => b.score - a.score);
 }
 

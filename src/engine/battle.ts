@@ -92,17 +92,22 @@ const ROUND_MULT = [{ fire: 1, melee: 0.4 }, { fire: 0.6, melee: 1 }, { fire: 0.
 function attackOutput(s: GameState, side: BattleSide, round: number, my: Mods, naval = false): { fire: number; melee: number } {
   let fire = 0, melee = 0;
   const g = side.general;
+  // frontage: only so many companies fight at once; the rest are reserves
+  const FRONT = naval ? 6 : 5;
+  const order = side.units.filter(u => u.str > 0).sort((x, y) => (TROOPS[y.type].melee + TROOPS[y.type].fire) * y.str - (TROOPS[x.type].melee + TROOPS[x.type].fire) * x.str);
+  const inFront = new Set(order.slice(0, FRONT).map(u => u.uid));
   for (const u of side.units) {
     if (u.str <= 0) continue;
+    const reserve = inFront.has(u.uid) ? 1 : 0.4;
     const d = TROOPS[u.type];
-    const eff = (1 + 0.15 * u.vet) * (u.str / 100);
+    const eff = (1 + 0.15 * u.vet) * (u.str / 100) * reserve;
     let f = d.fire * eff * ROUND_MULT[round].fire * my.fire;
     let m = d.melee * eff * ROUND_MULT[round].melee * my.melee;
     if (d.kind === 'cav') m *= my.cav;
     if (d.kind === 'art') f *= my.art * (round === 0 ? 1.2 : 0.8);
     fire += f; melee += m;
   }
-  let mult = 1 + 0.07 * (g?.skill ?? 1);
+  let mult = 1 + 0.1 * (g?.skill ?? 1);
   const tm = g?.mult ?? 1;
   if (g?.traits.includes('bold')) melee *= 1 + 0.2 * tm;
   if (g?.traits.includes('gunner')) fire *= 1 + 0.2 * tm;
@@ -122,6 +127,8 @@ function applyDamage(s: GameState, target: BattleSide, attacker: BattleSide, out
   if (!alive.length) return 0;
   let incoming = out.fire * tm.incoming + out.melee * tm.incoming * tm.incomingMelee;
   if (target.general?.traits.includes('cautious')) incoming *= 1 - 0.15 * (target.general.mult ?? 1);
+  // a skilled commander also places his men well
+  incoming *= 1 - 0.035 * (target.general?.skill ?? 1);
   const pool = incoming * 14 * (0.85 + rand(s) * 0.3);
   const weights = alive.map(u => {
     const k = TROOPS[u.type].kind;

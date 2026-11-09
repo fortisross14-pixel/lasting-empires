@@ -26,7 +26,13 @@ export interface HandCardDef {
   burden?: boolean;
 }
 
-export const HAND_LIMIT = 6;
+export const HAND_LIMIT = 7;
+/** Cards you may hold of each kind grow with the realm: 3 for a tiny crown, up to 7 for an empire. */
+export function handLimit(s: GameState): number {
+  const k = provsOf(s, s.player).length;
+  return 3 + (k >= 5 ? 1 : 0) + (k >= 10 ? 1 : 0) + (k >= 16 ? 1 : 0) + (k >= 25 ? 1 : 0);
+}
+export const RATE_CAP = 2.5;
 export const CAT_INFO: Record<Cat, { name: string; icon: string; role: Role; color: string }> = {
   military: { name: 'Military', icon: 'sword', role: 'general', color: '#6e2b2b' },
   diplomacy: { name: 'Diplomacy', icon: 'hands', role: 'diplomat', color: '#2f4f6b' },
@@ -177,7 +183,7 @@ export const handOf = (s: GameState, cat: Cat) => s.hand.filter(h => CARDS[h.car
 /** Add a card to hand. Respects the hand limit unless forced (burdens always arrive). */
 export function addCard(s: GameState, card: string, force = false): boolean {
   const def = CARDS[card];
-  if (!force && !def?.burden && handOf(s, def.cat).length >= HAND_LIMIT) return false;
+  if (!force && !def?.burden && handOf(s, def.cat).length >= handLimit(s)) return false;
   s.hand.push({ uid: uid(s), card });
   return true;
 }
@@ -188,7 +194,7 @@ export function randomCard(s: GameState, cat: Cat): string {
 }
 
 export function drawCat(s: GameState, cat: Cat): boolean {
-  if (handOf(s, cat).length >= HAND_LIMIT) return false;
+  if (handOf(s, cat).length >= handLimit(s)) return false;
   addCard(s, randomCard(s, cat));
   return true;
 }
@@ -213,7 +219,7 @@ export function cardRates(s: GameState): Record<Cat, { rate: number; parts: Rate
     const core = (s.core ?? []).reduce((a, id) => a + (CORE_RATES[id]?.[c] ?? 0), 0);
     if (core) parts.push({ label: 'Core cards', v: core });
     if (player(s).stability <= -2) parts.push({ label: 'Unrest', v: -0.2 });
-    out[c] = { rate: Math.max(0.2, parts.reduce((a, p) => a + p.v, 0)), parts };
+    out[c] = { rate: Math.min(RATE_CAP, Math.max(0.2, parts.reduce((a, p) => a + p.v, 0))), parts };
   }
   return out;
 }

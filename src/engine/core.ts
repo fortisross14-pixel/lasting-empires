@@ -170,7 +170,7 @@ export const controlMult = (c: number) => 0.35 + 0.65 * Math.max(0, Math.min(100
 
 export function tradeValue(s: GameState, a: string, b: string): number {
   const partnerDev = provsOf(s, b).reduce((x, p) => x + p.dev, 0);
-  let v = 2 + partnerDev * 0.12;
+  let v = 1 + partnerDev * 0.07;
   if (a === s.player) {
     if (hasTech(s, 'mercantilism')) v *= 1.5;
     if (hasCore(s, 'sea')) v += 1;
@@ -178,12 +178,18 @@ export function tradeValue(s: GameState, a: string, b: string): number {
     if (hasCore(s, 'agrarian')) v *= 0.8;
     v += (s.flags['trade_bonus_' + b] ?? 0);
   }
-  return Math.min(v, 6);
+  return Math.min(v, 4);
 }
 
 export interface IncomeBreakdown {
   provinces: number; trade: number; goods: number; other: number;
-  upkeep: number; salaries: number; imports: number; total: number; stabMult: number;
+  upkeep: number; salaries: number; imports: number; admin: number; total: number; stabMult: number;
+}
+
+/** Running a realm costs more than it grows: courts, officials, garrisons. */
+export function administration(s: GameState, n: string) {
+  const k = provsOf(s, n).length;
+  return 0.14 * Math.pow(k, 1.45) * inflation(s);
 }
 
 export function salaries(s: GameState, n: string) {
@@ -193,9 +199,10 @@ export function salaries(s: GameState, n: string) {
 export function incomeOf(s: GameState, n: string): IncomeBreakdown {
   const nat = s.nations[n];
   let provinces = provsOf(s, n).reduce((a, p) => a + provinceIncome(s, p.id), 0);
-  const trade = s.treaties.filter(t => t.kind === 'trade' && (t.a === n || t.b === n))
-    .reduce((a, t) => a + tradeValue(s, n, t.a === n ? t.b : t.a), 0);
-  let other = 0, goods = 0, sal = 0, imp = 0;
+  // each extra trade route is worth a little less than the last
+  let trade = s.treaties.filter(t => t.kind === 'trade' && (t.a === n || t.b === n))
+    .map(t => tradeValue(s, n, t.a === n ? t.b : t.a)).sort((x, y) => y - x).reduce((a, v, i) => a + v * Math.pow(0.8, i), 0);
+  let other = 0, goods = 0, sal = 0, imp = 0, adm = 0;
   if (n === s.player) {
     other += s.flags.new_world_income ?? 0;
     other += s.flags.spice_income ?? 0;
@@ -204,23 +211,27 @@ export function incomeOf(s: GameState, n: string): IncomeBreakdown {
     for (const x of Object.values(s.nations)) if (x.alive && x.overlord === n) other += provsOf(s, x.id).reduce((a, p) => a + p.dev * 0.6, 0) * (x.subject === 'union' ? 0.4 : 0.25);
     provinces *= 1 + rulerMod(s, 'goldPct');
     other -= s.hand.filter(h => h.card === 'debt').length * 2;
-    if (hasGood(s, 'oil')) goods += 2;
-    if (hasGood(s, 'silver')) goods += 3;
-    if (hasGood(s, 'sugar')) goods += 2;
-    if (hasGood(s, 'gold')) goods += 4;
-    if (hasGood(s, 'spices')) goods += 2;
-    if (hasGood(s, 'furs')) goods += 2;
+    if (hasGood(s, 'oil')) goods += 1.5;
+    if (hasGood(s, 'silver')) goods += 2;
+    if (hasGood(s, 'sugar')) goods += 1.5;
+    if (hasGood(s, 'gold')) goods += 3;
+    if (hasGood(s, 'spices')) goods += 1.5;
+    if (hasGood(s, 'furs')) goods += 1.5;
     other += colonyIncome(s);
     if (hasGood(s, 'wool')) goods += provsOf(s, n).filter(p => p.buildings.includes('market')).length;
     sal = salaries(s, n);
     imp = importCost(s);
+    adm = administration(s, n);
   } else {
     other += s.flags['ai_bonus_' + n] ?? 0;
   }
   const stabMult = 1 + 0.06 * nat.stability;
   const upkeep = n === s.player ? upkeepOf(s, s.troops) + upkeepOf(s, s.fleet ?? []) : nat.army.reduce((a, t) => a + TROOPS[t.type].upkeep, 0) * 0.8;
-  const total = (provinces + trade + goods + other) * stabMult - upkeep - sal - imp;
-  return { provinces, trade, goods, other, upkeep, salaries: sal, imports: imp, total, stabMult };
+  // prices rise over the centuries, and so do rents and tolls (a little slower than costs)
+  const priceLevel = 1 + (inflation(s) - 1) * 0.7;
+  provinces *= priceLevel; trade *= priceLevel;
+  const total = (provinces + trade + goods + other) * stabMult - upkeep - sal - imp - adm;
+  return { provinces, trade, goods, other, upkeep, salaries: sal, imports: imp, admin: adm, total, stabMult };
 }
 
 export function colonyIncome(s: GameState): number {
@@ -296,10 +307,10 @@ export type Tier = 'none' | 'village' | 'town' | 'city' | 'metropolis';
 export const TIER_ORDER: Tier[] = ['none', 'village', 'town', 'city', 'metropolis'];
 export const TIERS: Record<Tier, { name: string; gold: number; np: number; rate: number; people: number }> = {
   none: { name: 'No town', gold: 0, np: 0, rate: 0, people: 0 },
-  village: { name: 'Village', gold: 0.3, np: 0, rate: 0, people: 2 },
-  town: { name: 'Town', gold: 1, np: 0.1, rate: 0.02, people: 8 },
-  city: { name: 'City', gold: 2.5, np: 0.3, rate: 0.05, people: 30 },
-  metropolis: { name: 'Metropolis', gold: 5, np: 0.6, rate: 0.1, people: 100 },
+  village: { name: 'Village', gold: 0.2, np: 0, rate: 0, people: 2 },
+  town: { name: 'Town', gold: 0.6, np: 0.1, rate: 0.02, people: 8 },
+  city: { name: 'City', gold: 1.5, np: 0.25, rate: 0.04, people: 30 },
+  metropolis: { name: 'Metropolis', gold: 3, np: 0.5, rate: 0.08, people: 100 },
 };
 export const tierOf = (p: Province): Tier => TIER_ORDER[Math.max(0, Math.min(4, p.settlement ?? 0))];
 /** Development needed before a settlement can grow to the next size. */
