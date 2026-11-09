@@ -9,7 +9,7 @@ const fonts = '<link rel="preconnect" href="https://fonts.googleapis.com"><link 
 const bodyHtml = `<div id="app"></div>\n<script>${js}</script>`;
 
 // Artifact page (the host adds the doctype/head skeleton).
-const artifact = `<title>Lasting Empires</title>\n<meta name="claude:viewport-fit-sides" content="cover">\n${fonts}\n<style>${css}</style>\n${bodyHtml}\n`;
+const artifact = `<title>Lasting Empires</title>\n${fonts}\n<style>${css}</style>\n${bodyHtml}\n`;
 // Standalone page for local play or GitHub Pages.
 const standalone = `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0f171b"><meta name="apple-mobile-web-app-capable" content="yes"><title>Lasting Empires</title>${fonts}<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box}[hidden]{display:none!important}${css}</style></head><body>${bodyHtml}</body></html>\n`;
 mkdirSync('dist', { recursive: true });
