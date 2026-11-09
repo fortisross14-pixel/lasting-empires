@@ -4,7 +4,6 @@ import { TROOPS } from '../data/troops';
 import { BUILDINGS, TECH } from '../data/techs';
 import { RULER_ARCHS } from '../data/nations';
 import { GOODS } from '../data/goods';
-import { REGIONS } from '../data/overseas';
 import { TRAITS, FIRST_NAMES, SURNAMES, RARITY, RARITY_ORDER, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
 import { getGeo, neighbours } from './map';
 
@@ -141,9 +140,9 @@ export function hasGood(s: GameState, good: string): boolean {
   return ownGoods(s).has(good) || s.imports.some(i => i.good === good) || colonyGoods(s).has(good);
 }
 export function colonyGoods(s: GameState): Set<string> {
-  const g = new Set<string>();
-  for (const [id, o] of Object.entries(s.overseas ?? {})) if (o.holder === s.player && o.colony > 0 && REGIONS[id]) g.add(REGIONS[id].good);
-  return g;
+  // colonies are ordinary provinces now; kept for old saves and the ledger
+  void s;
+  return new Set<string>();
 }
 export const importCost = (s: GameState) => s.imports.reduce((a, i) => a + (GOODS[i.good]?.price ?? 0), 0) * inflation(s) * (hasCore(s, 'mercantile') ? 0.7 : 1);
 
@@ -158,13 +157,15 @@ export function provinceIncome(s: GameState, id: string): number {
   const p = s.provinces[id];
   const g = getGeo();
   let v = p.dev * 0.6 + (g.coastal[id] ? 0.4 : 0);
-  for (const b of p.buildings) v += (BUILDINGS[b]?.gold ?? 0) * grade(p, b);
-  if (p.buildings.includes('pasture') && (p.good === 'wool' || p.good === 'horses')) v += 1 * grade(p, 'pasture');
+  for (const b of p.buildings) v += (BUILDINGS[b]?.gold ?? 0) * grade(p, b) * extractMult(p, b);
   if (s.player === p.owner && hasCore(s, 'agrarian')) for (const b of ['farm', 'pasture']) if (p.buildings.includes(b)) v += (BUILDINGS[b].gold ?? 0) * 0.5 * grade(p, b);
-  if (p.buildings.includes('mine') && (p.good === 'iron' || p.good === 'silver')) v += 3 * grade(p, 'mine');
+  if (p.buildings.includes('mine') && (p.good === 'gold' || p.good === 'silver')) v += 2 * grade(p, 'mine');
   v += TIERS[tierOf(p)].gold;
   return v * controlMult(p.control);
 }
+
+/** Extraction buildings work twice as well on a matching raw material. */
+export const extractMult = (p: Province, b: string) => (BUILDINGS[b]?.match?.includes(p.good) ? 2 : 1);
 
 export const controlMult = (c: number) => 0.35 + 0.65 * Math.max(0, Math.min(100, c)) / 100;
 
@@ -217,6 +218,10 @@ export function incomeOf(s: GameState, n: string): IncomeBreakdown {
     if (hasGood(s, 'gold')) goods += 3;
     if (hasGood(s, 'spices')) goods += 1.5;
     if (hasGood(s, 'furs')) goods += 1.5;
+    if (hasGood(s, 'cattle')) goods += 1;
+    if (hasGood(s, 'ivory')) goods += 1;
+    if (hasGood(s, 'porcelain')) goods += 2;
+    if (hasGood(s, 'cotton')) goods += provsOf(s, n).filter(p => p.buildings.includes('workshop')).length;
     other += colonyIncome(s);
     if (hasGood(s, 'wool')) goods += provsOf(s, n).filter(p => p.buildings.includes('market')).length;
     sal = salaries(s, n);
@@ -235,8 +240,9 @@ export function incomeOf(s: GameState, n: string): IncomeBreakdown {
 }
 
 export function colonyIncome(s: GameState): number {
+  // planters (colonist trait) make their colony pay a little more
   let v = 0;
-  for (const [id, o] of Object.entries(s.overseas ?? {})) if (o.holder === s.player && REGIONS[id]) v += REGIONS[id].value * o.colony + (s.flags['planter_' + id] ?? 0) * o.colony;
+  for (const p of Object.values(s.provinces)) if (p.owner === s.player) v += s.flags['planter_' + p.id] ?? 0;
   return v;
 }
 
@@ -245,9 +251,10 @@ export function playerManpower(s: GameState): { gain: number; max: number } {
   const ps = provsOf(s, s.player);
   const dev = ps.reduce((a, p) => a + p.dev, 0);
   let gain = 0.5 + dev * 0.04 + ps.reduce((a, p) => a + p.buildings.filter(b => b === 'barracks').length * 0.5, 0);
-  gain += ps.reduce((a, p) => a + (p.buildings.includes('farm') ? 0.5 : 0), 0);
+  gain += ps.reduce((a, p) => a + (p.buildings.includes('farm') ? 0.5 * extractMult(p, 'farm') : 0) + (p.buildings.includes('fishery') ? 0.3 * extractMult(p, 'fishery') : 0), 0);
   if (hasGood(s, 'grain')) gain += 0.5;
   if (hasGood(s, 'fish')) gain += 0.3;
+  if (hasGood(s, 'cattle')) gain += 0.3;
   if (hasCore(s, 'agrarian')) gain += 0.5;
   if (hasCore(s, 'mercantile')) gain -= 0.3;
   return { gain, max: Math.round(5 + dev * 0.3) };

@@ -47,6 +47,7 @@ export interface BuildingDef {
   rates?: Partial<Record<'military' | 'diplomacy' | 'internal' | 'economy' | 'research', number>>;
   control?: number;             // control gained per year in this province
   np?: number;                  // nation points a year
+  match?: string[];             // raw materials that double its output
 }
 
 export const BUILDINGS: Record<string, BuildingDef> = {
@@ -57,9 +58,12 @@ export const BUILDINGS: Record<string, BuildingDef> = {
   fortress: { id: 'fortress', name: 'Fortress', group: 'internal', site: 'town', cost: 50, turns: 3, salary: 1, icon: 'tower', desc: '+1 fort level (maximum 2, or 3 with Star Forts).' },
   courthouse: { id: 'courthouse', name: 'Courthouse', group: 'internal', site: 'town', cost: 45, turns: 3, salary: 0.8, icon: 'scales', control: 5, np: 0.5, rates: { internal: 0.1 }, desc: '+5 control a year, +0.5 nation points, +0.1 Internal cards.' },
   chancery: { id: 'chancery', name: 'Chancery Office', group: 'internal', site: 'town', cost: 45, turns: 3, tech: 'chancery', salary: 0.8, icon: 'scroll', rates: { diplomacy: 0.25 }, desc: '+0.25 Diplomacy cards a year.' },
-  farm: { id: 'farm', name: 'Farms', group: 'economy', site: 'rural', cost: 25, turns: 2, salary: 0.2, gold: 0.8, icon: 'wheat', control: 1, desc: '+1 ducat, +0.5 manpower, +1 control a year.' },
-  pasture: { id: 'pasture', name: 'Pastures', group: 'economy', site: 'rural', cost: 25, turns: 2, salary: 0.2, gold: 1, icon: 'horse', desc: '+1.5 ducats (+1 more where wool or horses are raised).' },
-  mine: { id: 'mine', name: 'Mine', group: 'economy', site: 'rural', cost: 45, turns: 3, tech: 'guilds', salary: 0.6, gold: 1.5, icon: 'anvil', desc: '+1.5 ducats (+3 more where iron or silver is found).' },
+  farm: { id: 'farm', name: 'Farms', group: 'economy', site: 'rural', cost: 25, turns: 2, salary: 0.2, gold: 0.8, icon: 'wheat', control: 1, match: ['grain', 'cattle', 'sugar', 'cotton'], desc: '+0.8 ducats, +0.5 manpower, +1 control a year. Double on grain, cattle, sugar or cotton.' },
+  pasture: { id: 'pasture', name: 'Pastures', group: 'economy', site: 'rural', cost: 25, turns: 2, salary: 0.2, gold: 1, icon: 'horse', match: ['wool', 'horses', 'cattle'], desc: '+1 ducat. Double on wool, horses or cattle.' },
+  mine: { id: 'mine', name: 'Mine', group: 'economy', site: 'rural', cost: 40, turns: 3, salary: 0.6, gold: 1.5, icon: 'anvil', match: ['iron', 'gold', 'silver', 'salt'], desc: '+1.5 ducats. Double on iron, gold, silver or salt, and +2 more on gold or silver.' },
+  fishery: { id: 'fishery', name: 'Fishery', group: 'economy', site: 'rural', cost: 20, turns: 2, salary: 0.2, gold: 0.7, coastal: true, icon: 'anchor', match: ['fish'], desc: '+0.7 ducats, +0.3 manpower. Coastal only. Double on fish.' },
+  woodcutter: { id: 'woodcutter', name: 'Woodcutters', group: 'economy', site: 'rural', cost: 20, turns: 2, salary: 0.2, gold: 0.7, icon: 'hammer', match: ['timber', 'furs'], desc: '+0.7 ducats. Double on timber or furs.' },
+  plantation: { id: 'plantation', name: 'Plantation', group: 'economy', site: 'rural', cost: 45, turns: 3, tech: 'navigation', salary: 0.5, gold: 1.2, icon: 'cup', match: ['spices', 'sugar', 'cotton', 'wine', 'oil', 'silk', 'porcelain', 'ivory'], desc: '+1.2 ducats. Double on spices, sugar, cotton, wine, oil, silk, porcelain or ivory.' },
   market: { id: 'market', name: 'Market', group: 'economy', site: 'town', cost: 30, turns: 2, salary: 0.3, gold: 1.5, icon: 'coin', rates: { economy: 0.2 }, desc: '+1.5 ducats, +0.2 Economy cards a year.' },
   workshop: { id: 'workshop', name: 'Workshop', group: 'economy', site: 'town', cost: 40, turns: 3, tech: 'guilds', salary: 0.5, gold: 1, icon: 'anvil', desc: '+1 ducat. Forges an equipment card every 4 years.' },
   harbour: { id: 'harbour', name: 'Harbour', group: 'economy', site: 'town', cost: 35, turns: 2, tech: 'navigation', salary: 0.5, gold: 2, coastal: true, icon: 'anchor', rates: { economy: 0.1, diplomacy: 0.1 }, desc: '+2 ducats, +0.1 Economy and Diplomacy cards. Faster naval missions.' },

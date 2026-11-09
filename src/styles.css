@@ -779,3 +779,22 @@ ul.traits { margin: 0; padding-left: 18px; }
 .term.blocked { opacity: .5; }
 .term .cost { font-variant-numeric: tabular-nums; color: var(--muted); }
 .mbox.peace { width: min(520px, 100%); }
+
+/* ---------- world map: fog, natives, labels, map views ---------- */
+#map .plabel { display: none; }
+#map .plabel.fits { display: block; }
+#map.zoom-far .plabel.fits { display: block; }
+#map .prov.fog { fill: #cfc6ad; fill-opacity: .55; stroke: none; pointer-events: none; }
+#map .prov.native { fill-opacity: .35; stroke: rgba(60, 50, 30, .3); }
+#map[data-mode]:not([data-mode="political"]) .prov { fill-opacity: .95; }
+#modes { position: absolute; right: calc(max(8px, env(safe-area-inset-right, 0px)) + 48px); top: 8px; z-index: 3; display: grid; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px; }
+.mode-b { display: flex; gap: 8px; align-items: center; min-height: 40px; padding: 0 12px; background: none; border: 0; color: var(--text); font: inherit; text-align: left; border-radius: 6px; }
+.mode-b.on { background: rgba(214, 173, 85, .18); }
+.mode-b span { color: var(--gold-2); display: grid; }
+#legend { position: absolute; left: 8px; bottom: 8px; z-index: 2; max-width: min(360px, calc(100% - 16px)); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 36px 8px 10px; font-size: 13px; }
+#legend b { width: 100%; }
+#legend .lg { display: inline-flex; gap: 5px; align-items: center; text-transform: capitalize; }
+#legend .lg i { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, .35); }
+#legend .lg-x { position: absolute; right: 4px; top: 4px; width: 32px; height: 32px; display: grid; place-items: center; background: none; border: 0; color: var(--text); }
+[data-style="chancery"] #modes, [data-style="chancery"] #legend { background: var(--panel); border: 1.5px solid var(--text); border-radius: 0; }
+[data-style="chancery"] #map .prov.fog { fill: #e9e2d0; fill-opacity: .7; }

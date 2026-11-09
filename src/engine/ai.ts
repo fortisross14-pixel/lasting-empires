@@ -6,7 +6,8 @@ import {
   declareWar, makePeace, inTruce, hasTreaty, alliesOf, enemiesOf, armyPower, log, push, nationName, player, chance, traitMult,
 } from './core';
 import { neighbours } from './map';
-import { aiOverseas } from './overseas';
+import { aiOverseas, revealBorders } from './overseas';
+import { NO_STATE } from '../data/nations';
 import { getGeo } from './map';
 import { warScore } from './diplo';
 import { createBattle, makeSide, toBattleUnits, genericGeneral, autoResolve, finishBattle } from './battle';
@@ -74,7 +75,7 @@ function aiEconomy(s: GameState, n: Nation) {
   // slow growth
   for (const p of provsOf(s, n.id)) if (p.dev < 6 && rand(s) < 0.008) p.dev++;
   // prestige
-  n.prestige += 0.6 + provsOf(s, n.id).length * 0.35;
+  n.prestige = n.prestige * 0.985 + 0.5 + Math.sqrt(provsOf(s, n.id).length) * 0.6;
 }
 
 function weightedPick(s: GameState, items: [string, number][]): string {
@@ -226,7 +227,7 @@ function aiRebellions(s: GameState) {
     if (size <= 2 || p.id === owner.capital) continue;
     if (rand(s) > 0.008 + Math.max(0, size - 8) * 0.0025) continue;
     const old = s.nations[p.core];
-    if (!old || old.id === s.player) continue;
+    if (!old || old.id === s.player || old.id === NO_STATE) continue;
     if (!old.alive) {
       old.alive = true; old.capital = p.id; old.gold = 30; old.stability = 0;
       old.army = [{ uid: uid(s), type: 'levy', vet: 0, str: 100 }, { uid: uid(s), type: 'levy', vet: 0, str: 100 }]; old.fleet = [];
@@ -242,6 +243,7 @@ export function runAI(s: GameState) {
   aiRebellions(s);
   attacksOnPlayer = 0;
   aiOverseas(s);
+  revealBorders(s);
   const ids = Object.keys(s.nations).filter(id => id !== s.player && s.nations[id].alive);
   ids.sort(() => rand(s) - 0.5);
   for (const id of ids) {

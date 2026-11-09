@@ -1,4 +1,5 @@
 // Buying cards with nation points, hiring people, forging troops, and ambitions.
+import { getGeo } from './map';
 import type { GameState, DraftOption, Character, Cat, Role } from '../types';
 import { TROOPS, RECIPES, type Recipe } from '../data/troops';
 import { LEGENDS } from '../data/characters';
@@ -126,15 +127,18 @@ export function doMerge(s: GameState, aUid: number, bUid: number): string | null
 export interface AmbitionDef { id: string; name: string; text: string; reward: number; deadline?: number; nations?: string[]; check: (s: GameState) => boolean; }
 
 const owns = (s: GameState, ids: string[]) => ids.every(id => s.provinces[id]?.owner === s.player);
-const IBERIA = ['galicia', 'asturias', 'leon', 'burgos', 'biscay', 'toledo', 'extremadura', 'mancha', 'seville', 'cordoba', 'murcia', 'granada', 'malaga', 'porto', 'lisbon', 'alentejo', 'algarve', 'navarre', 'zaragoza', 'catalonia', 'valencia'];
-const AFRICA = ['tangier', 'fez', 'rif', 'tlemcen', 'oran', 'algiers', 'bejaia', 'constantine', 'tunis', 'kairouan'];
+const IBERIAN_CROWNS = ['castile', 'granada', 'portugal', 'navarre', 'aragon'];
+let IBERIA_C: string[] | null = null, AFRICA_C: string[] | null = null;
+const IBERIA = () => (IBERIA_C ??= getGeo().seeds.filter(x => IBERIAN_CROWNS.includes(x.owner) && getGeo().land[x.id] === getGeo().land.madrid && x.lat < 44).map(x => x.id));
+const AFRICA = () => (AFRICA_C ??= getGeo().seeds.filter(x => x.region === 'north_africa' && x.lon < 12).map(x => x.id));
 
 export const AMBITIONS: AmbitionDef[] = [
   { id: 'reconquista', name: 'Reconquista', text: 'Own Granada and Málaga before 1500.', reward: 40, deadline: 1500, check: s => owns(s, ['granada', 'malaga']) },
-  { id: 'iberia', name: 'Lord of Iberia', text: 'Own every province of the Iberian peninsula.', reward: 90, check: s => owns(s, IBERIA) },
+  { id: 'iberia', name: 'Lord of Iberia', text: 'Own every province of the Iberian peninsula.', reward: 90, check: s => owns(s, IBERIA()) },
   { id: 'italy', name: 'The Italian Crown', text: 'Own Naples, Milan and Rome.', reward: 70, check: s => owns(s, ['naples', 'milan', 'rome']) },
-  { id: 'islands', name: 'Mare Nostrum', text: 'Own Sicily, Sardinia, Corsica and Majorca.', reward: 50, check: s => owns(s, ['sicily', 'sardinia', 'corsica', 'majorca']) },
-  { id: 'africa', name: 'The African Shore', text: 'Own 4 provinces in North Africa.', reward: 55, check: s => AFRICA.filter(id => s.provinces[id].owner === s.player).length >= 4 },
+  { id: 'islands', name: 'Mare Nostrum', text: 'Own Sicily, Sardinia, Corsica and Majorca.', reward: 50, check: s => owns(s, ['palermo', 'cagliari', 'corsica', 'majorca']) },
+  { id: 'africa', name: 'The African Shore', text: 'Own 4 provinces in North Africa.', reward: 55, check: s => AFRICA().filter(id => s.provinces[id]?.owner === s.player).length >= 4 },
+  { id: 'indies', name: 'Road to the Indies', text: 'Own 3 provinces in Africa, Asia or the New World.', reward: 70, check: s => provsOf(s, s.player).filter(p => !['europe', 'north_africa', 'middle_east', 'atlantic', 'russia', 'central_asia'].includes(getGeo().seeds.find(x => x.id === p.id)?.region ?? 'europe')).length >= 3 },
   { id: 'merchant', name: 'Merchant Prince', text: 'Hold 6 trade treaties at once.', reward: 50, check: s => s.treaties.filter(t => t.kind === 'trade' && (t.a === s.player || t.b === s.player)).length >= 6 },
   { id: 'army', name: 'Army of Legend', text: 'Field 4 troops of Tercio quality or better (tier 4+).', reward: 50, check: s => s.troops.filter(t => TROOPS[t.type].tier >= 4).length >= 4 },
   { id: 'scholar', name: 'Light of Learning', text: 'Research 15 technologies.', reward: 50, check: s => s.techs.length >= 15 },

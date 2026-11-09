@@ -1,4 +1,5 @@
 // Cards are the actions of the game. Five kinds, each drawn at its own yearly rate.
+import { getGeo } from './map';
 import type { GameState, Cat, Role, MissionKind } from '../types';
 import { CATS } from '../types';
 import { TROOPS, EQUIPMENT } from '../data/troops';
@@ -58,7 +59,7 @@ for (const t of Object.values(TROOPS).filter(t => t.draftable && t.kind !== 'shi
 const SHIP_WEIGHT: Record<string, number> = { galley: 1.4, caravel: 1.2, carrack: 1.2, galleon: 1.2, man_of_war: 1 };
 for (const t of Object.values(TROOPS).filter(t => t.draftable && t.kind === 'ship')) {
   add({ id: 'ship_' + t.id, name: t.name, cat: 'military', kind: 'ship', troop: t.id, icon: t.icon, text: `${t.desc} Carries ${t.transport} companies.`,
-    weight: s => (techOk(s, t.tech) && provsOf(s, s.player).some(p => p.buildings.includes('harbour') || ['lisbon', 'seville', 'catalonia', 'valencia', 'genoa', 'venice', 'naples', 'porto', 'algarve', 'galicia', 'biscay', 'majorca', 'sicily'].includes(p.id)) ? SHIP_WEIGHT[t.id] ?? 1 : 0) });
+    weight: s => (techOk(s, t.tech) && provsOf(s, s.player).some(p => p.buildings.includes('harbour') || (getGeo().coastal[p.id] && p.dev >= 3)) ? SHIP_WEIGHT[t.id] ?? 1 : 0) });
 }
 for (const e of Object.values(EQUIPMENT)) {
   add({ id: 'eq_' + e.id, name: e.name, cat: 'military', kind: 'equip', equip: e.id, icon: e.icon, text: e.desc,

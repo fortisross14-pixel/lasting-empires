@@ -45,8 +45,10 @@ const bad = (title: string, text: string, kind = 'twist'): RevealItem => ({ titl
 const neutral = (title: string, text: string, kind = 'scroll'): RevealItem => ({ title, text, tone: 'neutral', kind });
 const P = (s: GameState) => s.player;
 const alive = (s: GameState, n: string) => !!s.nations[n]?.alive;
-const MED_COAST = ['murcia', 'valencia', 'catalonia', 'majorca', 'sardinia', 'sicily', 'calabria', 'naples', 'malaga', 'granada', 'provence', 'genoa', 'corsica'];
-const ATLANTIC = ['seville', 'lisbon', 'porto', 'algarve', 'galicia', 'asturias', 'biscay'];
+const coastIn = (f: (lon: number, lat: number) => boolean) => getGeo().seeds.filter(x => getGeo().coastal[x.id] && f(x.lon, x.lat)).map(x => x.id);
+let MED_C: string[] | null = null, ATL_C: string[] | null = null;
+const MED = () => (MED_C ??= coastIn((lon, lat) => lon > -5.5 && lon < 19 && lat > 35 && lat < 45.5));
+const ATL = () => (ATL_C ??= coastIn((lon, lat) => lon < -5.3 && lon > -10 && lat > 35.8 && lat < 44));
 
 function annexNation(s: GameState, other: string) {
   const o = s.nations[other];
@@ -134,7 +136,7 @@ export const EVENTS: EventDef[] = [
   },
   {
     id: 'columbus', history: true, title: 'A Genoese Navigator', art: 'anchor', window: [1484, 1496], chance: 0.25,
-    cond: s => provsOf(s, P(s)).some(p => ATLANTIC.includes(p.id)) && !s.flags.new_world && !regionState(s, 'caribbean').found,
+    cond: s => provsOf(s, P(s)).some(p => ATL().includes(p.id)) && !s.flags.new_world && !regionState(s, 'caribbean').found,
     text: () => 'Cristóbal Colón swears he can reach the Indies by sailing west. The scholars say the world is far bigger than he thinks. He needs three ships.',
     options: [
       { label: 'Fund the voyage (−40 ducats)', can: s => player(s).gold < 40 ? 'Needs 40 ducats' : null, run: s => {
@@ -165,7 +167,7 @@ export const EVENTS: EventDef[] = [
         player(s).gold -= 30;
         if (rand(s) < (hasTech(s, 'navigation') ? 0.8 : 0.55)) {
           s.flags.spice_income = 4; player(s).prestige += 15;
-          for (const r of ['guinea', 'cape', 'india']) regionState(s, r).found = true;
+          for (const r of ['west_africa', 'central_africa', 'southern_africa', 'east_africa', 'india']) regionState(s, r).found = true;
           const leg = LEGENDS.find(l => l.id === 'gama')!;
           if (!s.usedLegends.includes('gama')) {
             s.usedLegends.push('gama');
@@ -235,7 +237,7 @@ export const EVENTS: EventDef[] = [
   },
   {
     id: 'lepanto', history: true, title: 'The Holy League at Sea', art: 'anchor', window: [1565, 1576], chance: 0.3,
-    cond: s => provsOf(s, P(s)).some(p => MED_COAST.includes(p.id)),
+    cond: s => provsOf(s, P(s)).some(p => MED().includes(p.id)),
     text: () => 'The Turkish fleet threatens the whole Mediterranean. The Pope calls Christian galleys to gather at Messina.',
     options: [
       { label: 'Send galleys (−50 ducats)', can: s => player(s).gold < 50 ? 'Needs 50 ducats' : null, run: s => {
@@ -272,7 +274,7 @@ export const EVENTS: EventDef[] = [
   {
     id: 'corsairs', title: 'Barbary Corsairs', art: 'anchor', window: [1460, 1720], chance: 0.07, repeat: 6,
     setup: s => {
-      const coast = provsOf(s, P(s)).filter(p => MED_COAST.includes(p.id));
+      const coast = provsOf(s, P(s)).filter(p => MED().includes(p.id));
       if (!coast.length) return null;
       if (s.flags.const_holds && rand(s) < 0.5) return null;
       const p = pick(s, coast);

@@ -1,8 +1,28 @@
 // SVG map with pan, pinch-zoom and tap-to-select.
 import type { GameState } from '../types';
 import { getGeo } from '../engine/map';
-import { MAP_W, MAP_H } from '../data/geo';
-import { atWar, provsOf } from '../engine/core';
+import { atWar, provsOf, population } from '../engine/core';
+import { provKnown } from '../engine/overseas';
+import { happinessOf } from '../engine/society';
+import { NO_STATE } from '../data/nations';
+
+export type MapMode = 'political' | 'culture' | 'religion' | 'goods' | 'happiness' | 'population';
+export const MAP_MODES: { id: MapMode; name: string; icon: string }[] = [
+  { id: 'political', name: 'Realms', icon: 'crown' }, { id: 'culture', name: 'Culture', icon: 'scroll' },
+  { id: 'religion', name: 'Religion', icon: 'church' }, { id: 'goods', name: 'Raw materials', icon: 'anvil' },
+  { id: 'happiness', name: 'Happiness', icon: 'mood' }, { id: 'population', name: 'Population', icon: 'people' },
+];
+export const RELIGION_COLORS: Record<string, string> = {
+  catholic: '#d9c27a', protestant: '#5b8fc9', orthodox: '#9a6ac0', coptic: '#b07a4a', muslim: '#3f9a5a', hindu: '#e08a3a',
+  buddhist: '#e0c040', confucian: '#c05050', shinto: '#e06a8a', animist: '#8a7a5a', nahuatl: '#3aa0a0', inti: '#e0a020',
+};
+export const GOOD_COLORS: Record<string, string> = {
+  grain: '#e2c35a', cattle: '#b07a4a', fish: '#5aa0c8', iron: '#7a7f88', timber: '#4f7f3f', horses: '#a0603a', wool: '#e8e0d0', wine: '#8a2f4a',
+  oil: '#a0a040', salt: '#d8d8e8', silver: '#b8c0c8', sugar: '#f0e8e0', gold: '#e8b020', spices: '#c0502a', furs: '#6a4a3a', silk: '#c070b0',
+  cotton: '#f4f0e8', ivory: '#efe6c8', porcelain: '#7ab0e0',
+};
+const hue = (k: string) => { let x = 7; for (const c of k) x = (x * 31 + c.charCodeAt(0)) % 997; return `hsl(${(x * 47) % 360} 42% ${48 + (x % 3) * 8}%)`; };
+const ramp = (t: number) => `hsl(${Math.round(4 + t * 116)} 55% ${44 + Math.round(t * 6)}%)`; // red → green
 import { MISSION_INFO } from '../engine/missions';
 import { icon } from './icons';
 
@@ -15,7 +35,11 @@ const svgEl = (tag: string, attrs: Record<string, string | number> = {}) => {
 
 export class MapView {
   svg: SVGSVGElement;
-  vb = { x: 0, y: 0, w: MAP_W, h: MAP_H };
+  W: number; H: number;
+  vb = { x: 0, y: 0, w: 1, h: 1 };
+  mode: MapMode = 'political';
+  private size: Record<string, number> = {};
+  private lastPx = 0;
   cells: Record<string, SVGPathElement> = {};
   labels: Record<string, SVGTextElement> = {};
   marks: SVGGElement;
@@ -27,21 +51,23 @@ export class MapView {
 
   constructor(host: HTMLElement) {
     const g = getGeo();
-    this.svg = svgEl('svg', { id: 'map', viewBox: `0 0 ${MAP_W} ${MAP_H}`, preserveAspectRatio: 'xMidYMid meet', role: 'img', 'aria-label': 'Map of the western Mediterranean' }) as SVGSVGElement;
+    this.W = g.W; this.H = g.H;
+    this.vb = { x: 0, y: 0, w: g.W, h: g.H };
+    this.svg = svgEl('svg', { id: 'map', viewBox: `0 0 ${g.W} ${g.H}`, preserveAspectRatio: 'xMidYMid meet', role: 'img', 'aria-label': 'Map of the world' }) as SVGSVGElement;
     const defs = svgEl('defs');
     for (const [id, d] of Object.entries(g.landPaths)) {
       const cp = svgEl('clipPath', { id: 'clip-' + id });
-      cp.append(svgEl('path', { d }));
+      cp.append(svgEl('path', { d, 'clip-rule': 'evenodd' }));
       defs.append(cp);
     }
     this.svg.append(defs);
-    this.svg.append(svgEl('rect', { x: -2000, y: -2000, width: MAP_W + 4000, height: MAP_H + 4000, class: 'sea' }));
+    this.svg.append(svgEl('rect', { x: -4000, y: -4000, width: g.W + 8000, height: g.H + 8000, class: 'sea' }));
     // portolan rhumb lines from two compass roses
     const rh = svgEl('g', { class: 'rhumbs' });
-    for (const [cx, cy] of [[585, 330], [905, 420]]) {
+    for (const [cx, cy] of [[1520, 610], [2560, 1010], [800, 900]]) {
       for (let i = 0; i < 32; i++) {
         const a = (i / 32) * Math.PI * 2;
-        rh.append(svgEl('line', { x1: cx, y1: cy, x2: cx + Math.cos(a) * 1600, y2: cy + Math.sin(a) * 1600, class: i % 4 === 0 ? 'major' : '' }));
+        rh.append(svgEl('line', { x1: cx, y1: cy, x2: cx + Math.cos(a) * 2600, y2: cy + Math.sin(a) * 2600, class: i % 4 === 0 ? 'major' : '' }));
       }
       rh.append(svgEl('circle', { cx, cy, r: 26, class: 'rose' }));
       const star = svgEl('path', { d: `M${cx} ${cy - 30} L${cx + 6} ${cy} L${cx} ${cy + 30} L${cx - 6} ${cy} Z M${cx - 30} ${cy} L${cx} ${cy - 6} L${cx + 30} ${cy} L${cx} ${cy + 6} Z`, class: 'rose-star' });
@@ -49,7 +75,7 @@ export class MapView {
     }
     this.svg.append(rh);
     // land shadow
-    for (const d of Object.values(g.landPaths)) this.svg.append(svgEl('path', { d, class: 'land-shadow' }));
+    for (const d of Object.values(g.landPaths)) this.svg.append(svgEl('path', { d, class: 'land-shadow', 'fill-rule': 'evenodd' }));
     // provinces
     const byLand: Record<string, string[]> = {};
     for (const [id, l] of Object.entries(g.land)) (byLand[l] ??= []).push(id);
@@ -62,11 +88,15 @@ export class MapView {
       }
       this.svg.append(grp);
     }
-    for (const d of Object.values(g.landPaths)) this.svg.append(svgEl('path', { d, class: 'coast' }));
+    for (const d of Object.values(g.landPaths)) this.svg.append(svgEl('path', { d, class: 'coast', 'fill-rule': 'evenodd' }));
     const lab = svgEl('g', { class: 'labels' });
     for (const [id, [x, y]] of Object.entries(g.center)) {
       const t = svgEl('text', { x, y: y + 3, class: 'plabel' }) as SVGTextElement;
       this.labels[id] = t;
+      // rough on-map size of the province, used to show labels only where they fit
+      const nums = (g.cells[id].match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+      const xs = nums.filter((_, i) => i % 2 === 0), ys = nums.filter((_, i) => i % 2 === 1);
+      this.size[id] = Math.min(Math.max(...xs) - Math.min(...xs), (Math.max(...ys) - Math.min(...ys)) * 1.6, 160);
       lab.append(t);
     }
     this.svg.append(lab);
@@ -88,17 +118,22 @@ export class MapView {
     this.svg.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
     const r = this.svg.getBoundingClientRect();
     const pxPerUnit = r.width ? Math.min(r.width / w, r.height / h) : 1;
-    this.svg.classList.toggle('zoom-far', pxPerUnit < 0.42);
-    this.svg.classList.toggle('zoom-mid', pxPerUnit < 0.8);
+    this.svg.classList.toggle('zoom-far', pxPerUnit < 0.9);
+    this.svg.classList.toggle('zoom-mid', pxPerUnit < 2);
     this.svg.style.setProperty('--k', String(1 / pxPerUnit));
+    for (const pin of Array.from(this.marks.querySelectorAll<SVGGElement>('[data-x]'))) pin.setAttribute('transform', `translate(${pin.dataset.x} ${pin.dataset.y}) scale(${(0.62 / pxPerUnit).toFixed(4)})`);
+    if (Math.abs(pxPerUnit - this.lastPx) / (pxPerUnit || 1) > 0.04) {
+      this.lastPx = pxPerUnit;
+      for (const [id, t] of Object.entries(this.labels)) t.classList.toggle('fits', this.size[id] * pxPerUnit > 58 + (t.textContent?.length ?? 6) * 3);
+    }
   }
 
   private clampVb() {
     const v = this.vb;
-    v.w = Math.min(Math.max(v.w, 180), MAP_W * 1.1);
-    v.h = v.w * (MAP_H / MAP_W);
-    v.x = Math.min(Math.max(v.x, -v.w * 0.3), MAP_W - v.w * 0.7);
-    v.y = Math.min(Math.max(v.y, -v.h * 0.3), MAP_H - v.h * 0.7);
+    v.w = Math.min(Math.max(v.w, 60), this.W * 1.05);
+    v.h = v.w * (this.H / this.W);
+    v.x = Math.min(Math.max(v.x, -v.w * 0.3), this.W - v.w * 0.7);
+    v.y = Math.min(Math.max(v.y, -v.h * 0.3), this.H - v.h * 0.7);
   }
 
   zoomBy(f: number, cx?: number, cy?: number) {
@@ -110,16 +145,16 @@ export class MapView {
     this.clampVb(); this.apply();
   }
 
-  focus(ids: string[], pad = 60) {
+  focus(ids: string[], pad = 30) {
     const g = getGeo();
     if (!ids.length) return;
     const xs = ids.map(id => g.center[id][0]), ys = ids.map(id => g.center[id][1]);
     const x0 = Math.min(...xs) - pad, x1 = Math.max(...xs) + pad, y0 = Math.min(...ys) - pad, y1 = Math.max(...ys) + pad;
     const r = this.svg.getBoundingClientRect();
-    const aspect = r.width && r.height ? r.width / r.height : MAP_W / MAP_H;
-    let w = Math.max(x1 - x0, (y1 - y0) * aspect, 260);
+    const aspect = r.width && r.height ? r.width / r.height : this.W / this.H;
+    const w = Math.max(x1 - x0, (y1 - y0) * aspect, 120);
     this.vb = { x: (x0 + x1) / 2 - w / 2, y: 0, w, h: 0 };
-    this.vb.h = w * (MAP_H / MAP_W);
+    this.vb.h = w * (this.H / this.W);
     this.vb.y = (y0 + y1) / 2 - this.vb.h / 2;
     this.clampVb(); this.apply();
   }
@@ -189,26 +224,49 @@ export class MapView {
     }
   }
 
+  setMode(mode: MapMode, s: GameState) { this.mode = mode; this.svg.dataset.mode = mode; this.render(s); }
+
+  private fill(s: GameState, p: GameState['provinces'][string], maxPop: number): string | null {
+    switch (this.mode) {
+      case 'culture': return hue(p.culture);
+      case 'religion': return RELIGION_COLORS[p.religion] ?? hue(p.religion);
+      case 'goods': return GOOD_COLORS[p.good] ?? hue(p.good);
+      case 'happiness': return p.owner === s.player || s.nations[p.owner]?.overlord === s.player ? ramp(happinessOf(s, p).value / 100) : '#8a8478';
+      case 'population': return popShade(Math.sqrt(population(s, p) / maxPop));
+      default: return null;
+    }
+  }
+
   render(s: GameState) {
     const g = getGeo();
+    let maxPop = 1;
+    if (this.mode === 'population') for (const p of Object.values(s.provinces)) maxPop = Math.max(maxPop, population(s, p));
     for (const [id, p] of Object.entries(s.provinces)) {
       const c = this.cells[id];
       const nat = s.nations[p.owner];
-      c.style.fill = nat?.color ?? '#777';
-      c.classList.toggle('mine', p.owner === s.player);
-      c.classList.toggle('subject', nat?.overlord === s.player);
-      c.classList.toggle('enemy', p.owner !== s.player && atWar(s, s.player, p.owner));
-      c.classList.toggle('unrest', p.owner === s.player && p.control < 30);
+      const known = provKnown(s, id);
+      c.classList.toggle('fog', !known);
       const lbl = this.labels[id];
-      lbl.textContent = p.name;
+      lbl.textContent = known ? p.name : '';
+      if (!known) { c.style.fill = ''; for (const k of ['mine', 'subject', 'enemy', 'unrest', 'native']) c.classList.remove(k); continue; }
+      c.style.fill = this.fill(s, p, maxPop) ?? nat?.color ?? '#777';
+      const pol = this.mode === 'political';
+      c.classList.toggle('native', p.owner === NO_STATE && pol);
+      c.classList.toggle('mine', p.owner === s.player);
+      c.classList.toggle('subject', pol && nat?.overlord === s.player);
+      c.classList.toggle('enemy', pol && p.owner !== s.player && atWar(s, s.player, p.owner));
+      c.classList.toggle('unrest', pol && p.owner === s.player && p.control < 30);
       lbl.classList.toggle('cap', nat?.capital === id);
     }
+    this.lastPx = 0;
     // mission markers and capitals
     while (this.marks.firstChild) this.marks.removeChild(this.marks.firstChild);
     for (const n of Object.values(s.nations)) {
-      if (!n.alive || !s.provinces[n.capital] || s.provinces[n.capital].owner !== n.id) continue;
+      if (!n.alive || !s.provinces[n.capital] || s.provinces[n.capital].owner !== n.id || !provKnown(s, n.capital)) continue;
       const [x, y] = g.center[n.capital];
-      this.marks.append(svgEl('path', { d: `M${x} ${y - 21} l2.4 4.8 5.2 .7 -3.8 3.6 .9 5.2 -4.7 -2.5 -4.7 2.5 .9 -5.2 -3.8 -3.6 5.2 -.7 Z`, class: 'capmark' + (n.id === s.player ? ' mine' : '') }));
+      const pin = svgEl('g', { 'data-x': x, 'data-y': y });
+      pin.append(svgEl('path', { d: `M0 -21 l2.4 4.8 5.2 .7 -3.8 3.6 .9 5.2 -4.7 -2.5 -4.7 2.5 .9 -5.2 -3.8 -3.6 5.2 -.7 Z`, class: 'capmark' + (n.id === s.player ? ' mine' : '') }));
+      this.marks.append(pin);
     }
     const counts: Record<string, number> = {};
     for (const m of s.missions) {
@@ -216,7 +274,9 @@ export class MapView {
       if (!prov || !g.center[prov]) continue;
       const k = counts[prov] = (counts[prov] ?? 0) + 1;
       const [x, y] = g.center[prov];
-      const gEl = svgEl('g', { class: 'mmark k-' + MISSION_INFO[m.kind].role, transform: `translate(${x + 12 + (k - 1) * 20} ${y - 18})` });
+      const pin = svgEl('g', { 'data-x': x, 'data-y': y });
+      const gEl = svgEl('g', { class: 'mmark k-' + MISSION_INFO[m.kind].role, transform: `translate(${12 + (k - 1) * 20} -18)` });
+      pin.append(gEl);
       gEl.append(svgEl('circle', { r: 10 }));
       const fo = svgEl('foreignObject', { x: -7, y: -7, width: 14, height: 14 });
       const div = document.createElement('div');
@@ -226,12 +286,29 @@ export class MapView {
       const t = svgEl('text', { x: 9, y: 12, class: 'mturns' });
       t.textContent = String(m.turnsLeft);
       gEl.append(t);
-      this.marks.append(gEl);
+      this.marks.append(pin);
     }
     this.apply();
     void provsOf;
   }
 }
+
+export interface LegendItem { color: string; label: string; }
+
+/** What the current map mode shows, for the legend. */
+export function legendFor(s: GameState, mode: MapMode): LegendItem[] {
+  const count = (f: (p: GameState['provinces'][string]) => string) => {
+    const c: Record<string, number> = {};
+    for (const p of Object.values(s.provinces)) if (provKnown(s, p.id)) c[f(p)] = (c[f(p)] ?? 0) + 1;
+    return Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k]) => k);
+  };
+  if (mode === 'religion') return count(p => p.religion).map(k => ({ color: RELIGION_COLORS[k] ?? hue(k), label: k }));
+  if (mode === 'goods') return count(p => p.good).slice(0, 14).map(k => ({ color: GOOD_COLORS[k] ?? hue(k), label: k }));
+  if (mode === 'happiness') return [{ color: ramp(0), label: 'angry' }, { color: ramp(0.5), label: 'restless' }, { color: ramp(1), label: 'joyful' }, { color: '#8a8478', label: 'not yours' }];
+  if (mode === 'population') return [{ color: popShade(0.1), label: 'few' }, { color: popShade(0.5), label: '' }, { color: popShade(1), label: 'many' }];
+  return [];
+}
+const popShade = (t: number) => `hsl(32 ${30 + t * 40}% ${86 - t * 52}%)`;
 
 function DIPLO_TARGET(s: GameState, target: string): string | null {
   const n = s.nations[target];

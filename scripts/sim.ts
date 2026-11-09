@@ -6,7 +6,6 @@ import { launchMission, missionBlocked, importable, cardRole, cardRoles, attackR
 import { discoverable } from '../src/engine/overseas';
 import { hireShip, transportOf } from '../src/engine/navy';
 import { warScore, peaceTerms, concludePeace, enemyDemands, subjectsOf } from '../src/engine/diplo';
-import { REGIONS } from '../src/data/overseas';
 import { TECHS, BUILDINGS } from '../src/data/techs';
 import { provsOf, player, enemiesOf, armyCap, incomeOf, atWar } from '../src/engine/core';
 import { CARDS, playCard, cardBlocked, buyCost } from '../src/engine/cards';
@@ -71,7 +70,7 @@ function botTurn(s: GameState) {
       if (!c) c = s.characters.find(x => !x.ruler && x.mission == null && cardRoles(d.id).includes(x.role) && s.characters.filter(y => y.role === x.role).length > 1);
       if (!c) continue;
       if (kind === 'explore') { if (discoverable(s).length && me.gold > 60) launchMission(s, 'explore', c.uid, '', [], undefined, h.uid); continue; }
-      const tgt = Object.keys(REGIONS).find(id => !missionBlocked(s, kind, id));
+      const tgt = Object.keys(s.provinces).find(id => !missionBlocked(s, kind, id));
       if (!tgt) continue;
       const troops = kind === 'conquista' ? s.troops.filter(t => t.mission == null).slice(0, 4).map(t => t.uid) : [];
       launchMission(s, kind, c.uid, tgt, troops, undefined, h.uid);
@@ -144,7 +143,7 @@ function greedyExtra(s: GameState) {
 }
 for (const n of (MODE === 'big' ? ['castile'] : ['castile', 'portugal', 'aragon'])) for (let seed = 1; seed <= SEEDS; seed++) {
   const s = newGame(n, seed * 7919 + (MODE === 'passive' ? 1 : MODE === 'greedy' ? 2 : 0));
-  if (MODE === 'big') { for (const id of ['granada', 'malaga', 'porto', 'lisbon', 'alentejo', 'algarve', 'navarre', 'zaragoza', 'catalonia', 'valencia', 'tangier', 'fez', 'rif', 'oran']) { const prov = s.provinces[id]; const from = prov.owner; prov.owner = n; if (!Object.values(s.provinces).some(x => x.owner === from)) s.nations[from].alive = false; } s.wars = s.wars.filter(w => s.nations[w.a].alive && s.nations[w.b].alive); for (let i = 0; i < 8; i++) s.troops.push({ uid: 50000 + i, type: 'pikemen', vet: 1, str: 100 }); }
+  if (MODE === 'big') { for (const id of ['granada', 'malaga', 'almeria', 'porto', 'lisbon', 'evora', 'faro', 'coimbra', 'pamplona', 'zaragoza', 'barcelona', 'valencia', 'tangier', 'fez', 'oran', 'tlemcen']) { const prov = s.provinces[id]; const from = prov.owner; prov.owner = n; if (!Object.values(s.provinces).some(x => x.owner === from)) s.nations[from].alive = false; } s.wars = s.wars.filter(w => s.nations[w.a].alive && s.nations[w.b].alive); for (let i = 0; i < 8; i++) s.troops.push({ uid: 50000 + i, type: 'pikemen', vet: 1, str: 100 }); }
   resolveQueue(s);
   let turns = 0;
   try {

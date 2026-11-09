@@ -1,11 +1,11 @@
 // Missions: characters (and troops) sent to do things over several years.
 import type { GameState, Mission, MissionKind, RevealItem, Character, Role } from '../types';
 import { CARDS, drawCat, CAT_INFO } from './cards';
-import { REGIONS } from '../data/overseas';
 import { vassalizeBlocked, integrateBlocked, makeSubject, integrate } from './diplo';
 import { RELIGION_NAMES, isAccepted } from './society';
 import { transportOf } from './navy';
-import { colonizeBlocked, conquistaBlocked, discoverable, resolveExplore, resolveColonize, resolveConquista, colonyCost } from './overseas';
+import { colonizeBlocked, conquistaBlocked, discoverable, resolveExplore, resolveColonize, resolveConquista, colonyCost, colonizeTurns, oceanReach } from './overseas';
+import { NO_STATE } from '../data/nations';
 import { GOODS } from '../data/goods';
 import { OUTCOMES, RARITY } from '../data/characters';
 import { TECH } from '../data/techs';
@@ -127,7 +127,13 @@ export function attackRoute(s: GameState, target: string): { turns: number; nava
   const mine = provsOf(s, s.player).map(p => p.id);
   if (mine.some(id => g.adj[id].includes(target))) return { turns: 1, naval: false };
   const sources = mine.filter(id => g.sea[id].includes(target));
-  if (!sources.length) return null;
+  if (!sources.length) {
+    // a long ocean voyage to a coast you have charted
+    if (!oceanReach(s, target)) return null;
+    let t = 3 + (hasCore(s, 'land') ? 1 : 0) - (hasCore(s, 'sea') ? 1 : 0);
+    if (provsOf(s, s.player).some(p => p.buildings.includes('harbour'))) t -= 1;
+    return { turns: Math.max(2, t), naval: true };
+  }
   const harbour = sources.some(id => s.provinces[id].buildings.includes('harbour'));
   let t = harbour ? 1 : 2;
   if (hasCore(s, 'sea')) t -= 1;
@@ -145,8 +151,8 @@ export function missionTurns(s: GameState, kind: MissionKind, ch: Character, tar
       return Math.max(1, b.turns - (fast ? (traitMult(ch) >= 1.75 ? 2 : 1) : 0));
     }
     case 'explore': return Math.max(2, 3 - (ch.traits.includes('cartographer') ? 1 : 0));
-    case 'colonize': return 4;
-    case 'conquista': return 3;
+    case 'colonize': return colonizeTurns(s, target);
+    case 'conquista': return attackRoute(s, target)?.turns ?? 3;
     case 'vassalize': return 2;
     case 'integrate': return 5;
     case 'patronage': return 2;
@@ -200,6 +206,7 @@ export function missionBlocked(s: GameState, kind: MissionKind, target: string, 
   if (kind === 'conquer' || kind === 'raid') {
     const p = s.provinces[target];
     if (!p || p.owner === me) return 'Choose a foreign province';
+    if (p.owner === NO_STATE) return 'No state rules here: send a colonist instead';
     if (!atWar(s, me, p.owner)) return `You are not at war with ${nationName(s, p.owner)}`;
     if (!attackRoute(s, target)) return 'Too far: no border or sea route';
     if (s.missions.some(m => (m.kind === 'conquer' || m.kind === 'raid') && m.target === target)) return 'An army is already marching there';
@@ -545,7 +552,7 @@ function resolveOther(s: GameState, m: Mission, ch: Character) {
     const o = rollOutcome(s, ch);
     const ok = m.kind === 'explore' ? resolveExplore(s, ch, items, o) : m.kind === 'colonize' ? resolveColonize(s, m.target, ch, items, o) : resolveConquista(s, m.target, ch, m.troops, items, o);
     if (ok && s.characters.includes(ch)) gainXp(s, ch, items);
-    push(s, { kind: 'reveal', title: MISSION_INFO[m.kind].name, subtitle: m.kind === 'explore' ? `${ch.name} returns` : REGIONS[m.target]?.name, items });
+    push(s, { kind: 'reveal', title: MISSION_INFO[m.kind].name, subtitle: m.kind === 'explore' ? `${ch.name} returns` : s.provinces[m.target]?.name, items });
     finish(s, m); return;
   }
 

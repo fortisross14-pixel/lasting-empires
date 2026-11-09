@@ -2,8 +2,7 @@
 import type { GameState, Nation, Ruler, RevealItem, Heir, Character } from '../types';
 import { CATS } from '../types';
 import { NATIONS, START_REL, RULERS, RULER_NAMES, RULER_ARCHS, archFromTraits } from '../data/nations';
-import { PROVINCES } from '../data/geo';
-import { PROVINCE_GOODS } from '../data/goods';
+import { getGeo } from './map';
 import { BUILDINGS } from '../data/techs';
 import { CORE } from '../data/core';
 import {
@@ -112,9 +111,11 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
       ruler: { name: '', traits: [], arch: 'balanced', skill: 2, from: 1453, to: 1453 },
     };
     s.nations[d.id] = n;
+    if (d.native) { n.alive = false; n.army = []; n.fleet = []; } // stateless lands: never act
   }
-  for (const [id, name, owner, dev, fort, land, lon, lat] of PROVINCES) {
-    s.provinces[id] = { id, name, owner, core: owner, dev, fort, buildings: [], land, lon, lat, control: 80, good: PROVINCE_GOODS[id] ?? 'grain', settlement: initialSettlement(dev, NATIONS.some(n => n.capital === id)), grades: {}, culture: undefined as unknown as string, religion: undefined as unknown as string };
+  const geo = getGeo();
+  for (const { id, name, owner, dev, fort, lon, lat, good } of geo.seeds) {
+    s.provinces[id] = { id, name, owner, core: owner, dev, fort, buildings: [], land: geo.land[id], lon, lat, control: 80, good, settlement: initialSettlement(dev, NATIONS.some(n => n.capital === id)), grades: {}, culture: undefined as unknown as string, religion: undefined as unknown as string };
   }
   for (const n of Object.values(s.nations)) if (n.id !== nationId) n.ruler = initialRuler(s, n.id);
   for (const [a, b, v] of START_REL) addRel(s, a, b, v);
@@ -124,6 +125,13 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   addTreaty(s, 'granada', 'morocco', 'alliance');
   addTreaty(s, 'venice', 'florence', 'trade');
   addTreaty(s, 'genoa', 'castile', 'trade');
+  addTreaty(s, 'poland', 'lithuania', 'alliance');
+  addTreaty(s, 'france', 'scotland', 'alliance');
+  addTreaty(s, 'england', 'portugal', 'alliance');
+  addTreaty(s, 'burgundy', 'england', 'trade');
+  addTreaty(s, 'ming', 'korea', 'alliance');
+  declareWar(s, 'ottomans', 'byzantium'); // the siege of Constantinople is under way
+  declareWar(s, 'england', 'france');     // the last years of the Hundred Years' War
   if (nationId === 'castile') declareWar(s, 'castile', 'granada'); // the frontier war of the Reconquista simmers on
 
   const me = player(s);
@@ -216,7 +224,7 @@ function playerEconomy(s: GameState) {
   }
   if (s.flags.new_world && s.year % 5 === 0 && (s.flags.new_world_income ?? 0) < 12) s.flags.new_world_income = (s.flags.new_world_income ?? 0) + 1;
   // prestige
-  me.prestige += provsOf(s, s.player).filter(p => p.buildings.includes('temple')).length * 0.5 + (hasTech(s, 'absolutism') ? 2 : 0) + (hasGood(s, 'silk') ? 1 : 0);
+  me.prestige += provsOf(s, s.player).filter(p => p.buildings.includes('temple')).length * 0.5 + (hasTech(s, 'absolutism') ? 2 : 0) + (hasGood(s, 'silk') ? 1 : 0) + (hasGood(s, 'ivory') ? 0.5 : 0) + (hasGood(s, 'porcelain') ? 0.5 : 0);
   if (me.gold < 0) {
     me.gold += 40;
     addCard(s, 'debt');

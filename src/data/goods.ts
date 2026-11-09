@@ -18,15 +18,9 @@ export const GOODS: Record<string, GoodDef> = {
   spices: { id: 'spices', name: 'Spices', price: 5, icon: 'star', desc: '+2 ducats and +1 prestige a year' },
   furs:   { id: 'furs', name: 'Furs', price: 3, icon: 'horse', desc: '+2 ducats a year' },
   silk:   { id: 'silk', name: 'Silk', price: 4, icon: 'ring', desc: '+1 prestige a year' },
+  cattle: { id: 'cattle', name: 'Cattle', price: 2, icon: 'horse', desc: '+0.3 manpower and +1 ducat a year' },
+  cotton: { id: 'cotton', name: 'Cotton', price: 3, icon: 'scroll', desc: '+1 ducat a year for each Workshop' },
+  ivory:  { id: 'ivory', name: 'Ivory', price: 4, icon: 'ring', desc: '+1 ducat and +0.5 prestige a year' },
+  porcelain: { id: 'porcelain', name: 'Porcelain', price: 5, icon: 'cup', desc: '+2 ducats and +0.5 prestige a year' },
 };
 
-export const PROVINCE_GOODS: Record<string, string> = {
-  galicia: 'fish', asturias: 'timber', leon: 'grain', burgos: 'wool', biscay: 'iron', toledo: 'iron', extremadura: 'wool',
-  mancha: 'wine', seville: 'oil', cordoba: 'horses', murcia: 'salt', granada: 'silk', malaga: 'wine', porto: 'wine',
-  lisbon: 'salt', alentejo: 'grain', algarve: 'fish', navarre: 'timber', zaragoza: 'grain', catalonia: 'wool', valencia: 'silk',
-  poitou: 'salt', gascony: 'wine', toulouse: 'grain', lyon: 'silk', provence: 'oil', savoy: 'timber', milan: 'iron',
-  genoa: 'fish', verona: 'wool', venice: 'salt', dalmatia: 'timber', croatia: 'horses', florence: 'wool', romagna: 'grain',
-  marche: 'grain', rome: 'wine', abruzzo: 'wool', naples: 'wine', apulia: 'oil', calabria: 'silk', sicily: 'grain',
-  sardinia: 'silver', corsica: 'timber', majorca: 'oil', tangier: 'fish', fez: 'horses', rif: 'iron', tlemcen: 'horses',
-  oran: 'grain', algiers: 'fish', bejaia: 'timber', constantine: 'grain', tunis: 'oil', kairouan: 'wool',
-};

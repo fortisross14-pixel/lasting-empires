@@ -1,0 +1,12 @@
+const { chromium } = require('playwright');
+(async()=>{const b=await chromium.launch();const p=await b.newPage({viewport:{width:1180,height:820}});
+const errs=[];p.on('pageerror',e=>errs.push(e.message));
+await p.goto('file://'+process.cwd()+'/dist/index.html');await p.waitForTimeout(600);
+await (await p.$('text=Castile')).click();await p.waitForTimeout(1500);
+await p.evaluate(()=>{document.getElementById('modal').hidden=true});
+const info=await p.evaluate(()=>{const c=document.querySelector('[data-id="madrid"]');return {cls:c.getAttribute('class'),fill:c.style.fill,d:c.getAttribute('d').slice(0,80),clip:c.parentNode.getAttribute('clip-path')}});console.log(info);
+await p.screenshot({path:'/tmp/claude-0/-home-user-lasting-empires/05c1f48a-c3cb-55e5-8d71-7a1a4818f4dc/scratchpad/s3.png'});
+for(let i=0;i<5;i++){await p.click('[aria-label="Zoom out"]');await p.waitForTimeout(150);}
+await p.waitForTimeout(500);await p.screenshot({path:'/tmp/claude-0/-home-user-lasting-empires/05c1f48a-c3cb-55e5-8d71-7a1a4818f4dc/scratchpad/s4.png'});
+await p.click('#modebtn');await p.waitForTimeout(300);await p.click('text=Religion');await p.waitForTimeout(500);await p.screenshot({path:'/tmp/claude-0/-home-user-lasting-empires/05c1f48a-c3cb-55e5-8d71-7a1a4818f4dc/scratchpad/s5.png'});
+console.log('errors',errs.join('\n'));await b.close();})();

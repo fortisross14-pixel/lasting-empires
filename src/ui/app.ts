@@ -5,7 +5,8 @@ import { TROOPS, EQUIPMENT, COUNTER_TEXT } from '../data/troops';
 import { TECHS, TECH, BUILDINGS, type TechTrack } from '../data/techs';
 import { TRAITS, RARITY, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
 import { GOODS } from '../data/goods';
-import { REGIONS } from '../data/overseas';
+import { REGIONS, NATIVE_EMPIRES } from '../data/overseas';
+import { NO_STATE } from '../data/nations';
 import {
   player, provsOf, incomeOf, playerManpower, getRel, atWar, hasTreaty, enemiesOf, alliesOf, armyPower,
   armyCap, courtCap, courtCount, provinceIncome, buildingAllowed, buildingCost, roleName, nationName, inTruce,
@@ -19,7 +20,7 @@ import {
   developCost, foundCost, growCost, importable, cardRole, cardRoles, becomesOnMission, voyageCost, GRADES,
 } from '../engine/missions';
 import { buyCard, buyBlocked, hireWithCard, takeDraftOption, mergePreview, doMerge, AMBITIONS, officeCost, sellOffices } from '../engine/drafts';
-import { regionState, discoverable, exploreChance, colonizeChance, conquistaChance, colonizeBlocked, PROMOTION, colonyCost } from '../engine/overseas';
+import { discoverable, exploreChance, colonizeChance, conquistaChance, PROMOTION, colonyCost, regionKnown, provRegion, provKnown } from '../engine/overseas';
 import { playRound, autoResolve, finishBattle, ratio, breakLevel, hp } from '../engine/battle';
 import { getGeo } from '../engine/map';
 import { h, $, clear, sleep, reduced, fmt, signed } from './dom';
@@ -29,7 +30,7 @@ import { AXES, CORE } from '../data/core';
 import { navyCap, transportOf, hireShip, shipHireCost } from '../engine/navy';
 import { warScore, peaceTerms, enemyDemands, concludePeace, subjectsOf, integrateBlocked, vassalizeBlocked, tributeShare } from '../engine/diplo';
 import { happinessOf, moodName, CULTURE_NAMES, RELIGION_NAMES, isAccepted } from '../engine/society';
-import { MapView } from './map';
+import { MapView, MAP_MODES, legendFor } from './map';
 
 const KEY = 'lasting-empires.save.v2';
 let S: GameState;
@@ -125,7 +126,9 @@ function start(s: GameState) {
       h('button', { class: 'zbtn', 'aria-label': 'Zoom in', onclick: () => map.zoomBy(0.75), html: icon('plus', 18) }),
       h('button', { class: 'zbtn', 'aria-label': 'Zoom out', onclick: () => map.zoomBy(1.33), html: '<svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7"><path d="M5 12 H19"/></svg>' }),
       h('button', { class: 'zbtn', 'aria-label': 'Show my realm', onclick: () => map.focus(provsOf(S, S.player).map(p => p.id)), html: icon('crown', 18) }),
-      h('button', { class: 'zbtn', 'aria-label': 'Overseas', title: 'Overseas', onclick: () => toggleSheet('overseas'), html: icon('anchor', 18) })),
+      h('button', { class: 'zbtn', 'aria-label': 'Overseas', title: 'Overseas', onclick: () => toggleSheet('overseas'), html: icon('anchor', 18) }),
+      h('button', { class: 'zbtn', id: 'modebtn', 'aria-label': 'Map view', title: 'Map view', onclick: () => toggleModes(), html: icon('map', 18) })),
+      h('div', { id: 'modes', hidden: true }), h('div', { id: 'legend', hidden: true }),
       h('div', { id: 'tracker' })),
     h('aside', { id: 'sheet', hidden: true }),
     h('nav', { id: 'tabs' }),
@@ -140,8 +143,26 @@ function start(s: GameState) {
   processQueue();
 }
 
+function toggleModes() {
+  const box = $('#modes');
+  if (!box.hidden) { box.hidden = true; return; }
+  clear(box).append(...MAP_MODES.map(m => h('button', { class: 'mode-b' + (map.mode === m.id ? ' on' : ''), onclick: () => { map.setMode(m.id, S); box.hidden = true; renderLegend(); } }, h('span', { html: icon(m.icon, 16) }), m.name)));
+  box.hidden = false;
+}
+
+function renderLegend() {
+  const box = $('#legend');
+  const items = legendFor(S, map.mode);
+  box.hidden = map.mode === 'political';
+  if (box.hidden) return;
+  const title = MAP_MODES.find(m => m.id === map.mode)!.name;
+  const name = (k: string) => map.mode === 'religion' ? RELIGION_NAMES[k] ?? k : map.mode === 'goods' ? GOODS[k]?.name ?? k : k;
+  clear(box).append(h('b', {}, title), ...items.map(i => h('span', { class: 'lg' }, h('i', { style: `background:${i.color}` }), name(i.label))),
+    h('button', { class: 'lg-x', 'aria-label': 'Back to realms', onclick: () => { map.setMode('political', S); renderLegend(); }, html: icon('close', 14) }));
+}
+
 function refresh() {
-  renderTop(); renderTabs(); map.render(S); renderTimeline(); renderTracker();
+  renderTop(); renderTabs(); map.render(S); renderTimeline(); renderTracker(); renderLegend();
   if (sheet) renderSheet();
   save();
 }
@@ -220,7 +241,7 @@ function renderTimeline() {
 }
 
 function missionTitle(m: GameState['missions'][number]) {
-  const tname = S.provinces[m.target]?.name ?? S.nations[m.target]?.name ?? TECH[m.target]?.name ?? REGIONS[m.target]?.name ?? '';
+  const tname = S.provinces[m.target]?.name ?? S.nations[m.target]?.name ?? TECH[m.target]?.name ?? '';
   return `${MISSION_INFO[m.kind].name}${m.kind === 'build' ? ': ' + BUILDINGS[m.building!].name : ''}${tname ? ' · ' + tname : ''}`;
 }
 
@@ -667,32 +688,31 @@ function missionsSheet(body: HTMLElement) {
 function overseasSheet(body: HTMLElement) {
   const exp = cardFor(S, 'explore');
   body.append(actionRow('anchor', 'Voyage of discovery', `An explorer sails out · ${voyageCost(S)} ducats · ${discoverable(S).length} lands within reach`, !exp ? 'Needs a Voyage of Discovery card (Diplomacy)' : missionBlocked(S, 'explore', ''), () => openPlanner('explore', '', undefined, exp!.uid)));
-  body.append(h('p', { class: 'muted' }, 'Send a diplomat on a voyage and they become an explorer; an administrator who founds a colony becomes a colonist; a general on a conquista becomes a conqueror. For good.'));
+  body.append(h('p', { class: 'muted' }, 'Explorers reveal a region on the map. Then tap an empty native land to settle it with a colonist, or a native empire to take it with a conquistador. A diplomat sent to explore becomes an explorer, an administrator who founds a colony a colonist, a general on a conquista a conqueror. For good.'));
   const groups: Record<string, string[]> = {};
   for (const r of Object.values(REGIONS)) (groups[r.where] ??= []).push(r.id);
   for (const [where, ids] of Object.entries(groups)) {
     body.append(h('h3', {}, where));
     for (const id of ids) {
-      const r = REGIONS[id], st = regionState(S, id);
-      if (!st.found) {
-        body.append(h('div', { class: 'region unknown' }, h('span', { class: 'a-ico', html: icon('star', 18) }), h('div', { class: 'a-t' }, h('b', {}, 'Uncharted'), h('small', {}, st.holder ? `Rumours say ${nationName(S, st.holder)} has been there` : 'Send an explorer'))));
+      const r = REGIONS[id];
+      if (!regionKnown(S, id)) {
+        const can = discoverable(S).some(x => x.id === id);
+        body.append(h('div', { class: 'region unknown' }, h('span', { class: 'a-ico', html: icon('star', 18) }), h('div', { class: 'a-t' }, h('b', {}, 'Uncharted'), h('small', {}, can ? 'An explorer could reach it' : 'Too far for now'))));
         continue;
       }
-      const mine = st.holder === S.player;
-      const status = st.holder && !mine ? `Held by ${nationName(S, st.holder)}` : st.colony ? `Your colony, level ${st.colony}/3` : st.subdued ? 'Conquered, ready to settle' : r.natives ? `Home of the ${r.people}` : 'Empty land';
+      const ps = Object.values(S.provinces).filter(p => provRegion(p.id) === id);
+      const mine = ps.filter(p => p.owner === S.player).length, free = ps.filter(p => p.owner === NO_STATE);
+      const others = [...new Set(ps.map(p => p.owner).filter(o => o !== S.player && o !== NO_STATE))];
+      const status = `${mine ? `${mine} yours · ` : ''}${free.length} unclaimed${others.length ? ' · ' + others.slice(0, 3).map(o => nationName(S, o)).join(', ') : ''}`;
       const row = h('div', { class: 'region' + (mine ? ' mine' : '') }, h('span', { class: 'a-ico', html: icon('anchor', 18) }),
-        h('div', { class: 'a-t' }, h('b', {}, r.name), h('small', {}, `${status} · ${GOODS[r.good]?.name} · +${r.value}/level`), h('small', { class: 'muted' }, r.text)));
+        h('div', { class: 'a-t' }, h('b', {}, r.name), h('small', {}, status), h('small', { class: 'muted' }, r.text)));
       const acts = h('div', { class: 'r-acts' });
-      const cc = cardFor(S, 'colonize');
-      const cw = colonizeBlocked(S, id, S.characters.find(c => c.role === 'colonist' && c.traits.includes('missionary')));
-      if (!st.holder || mine) acts.append(h('button', { class: 'btn small' + (!cc || cw ? ' blocked' : ''), onclick: () => (!cc ? toast('Needs a Colonial Charter card (Internal)', 'bad') : cw ? toast(cw, 'bad') : openPlanner('colonize', id, undefined, cc.uid)) }, 'Colonise'));
-      const kc = cardFor(S, 'conquista');
-      if (r.natives && !st.subdued && (!st.holder || mine)) acts.append(h('button', { class: 'btn small' + (!kc ? ' blocked' : ''), onclick: () => (!kc ? toast('Needs a Conquista card (Military)', 'bad') : openPlanner('conquista', id, undefined, kc.uid)) }, 'Conquer'));
+      acts.append(h('button', { class: 'btn small', onclick: () => { closeSheet(); map.focus(ps.map(p => p.id)); } }, 'Show'));
       row.append(acts);
       body.append(row);
     }
   }
-  return [sheetHead('Overseas', 'Lands beyond the map'), body];
+  return [sheetHead('Overseas', 'The wider world'), body];
 }
 
 function chronicleSheet(body: HTMLElement) {
@@ -834,11 +854,9 @@ function missionTargets(handUid: number): TargetRow[] {
       rows.push({ label: p.name, sub: `dev ${p.dev} · ${TIERS[tierOf(p)].name}`, acts: [{ label: kind === 'develop' ? `Develop (${developCost(S, p.id)})` : kind === 'found' ? `Found (${foundCost(S)})` : `Grow (${growCost(S, p.id)})`, kind, target: p.id, why }] });
     }
   } else if (kind === 'colonize' || kind === 'conquista') {
-    for (const r of Object.values(REGIONS)) {
-      if (!regionState(S, r.id).found) continue;
-      const why = missionBlocked(S, kind, r.id);
-      rows.push({ label: r.name, sub: `${r.where} · ${GOODS[r.good]?.name}`, acts: [{ label: kind === 'colonize' ? 'Settle' : 'Conquer', kind, target: r.id, why }] });
-    }
+    const list = Object.values(S.provinces).filter(p => provKnown(S, p.id) && (kind === 'colonize' ? p.owner === NO_STATE : NATIVE_EMPIRES.includes(p.owner)));
+    const scored = list.map(p => ({ p, why: missionBlocked(S, kind, p.id) })).sort((x, y) => (x.why ? 1 : 0) - (y.why ? 1 : 0) || y.p.dev - x.p.dev).slice(0, 30);
+    for (const { p, why } of scored) rows.push({ label: p.name, sub: `${REGIONS[provRegion(p.id)]?.name ?? ''} · ${GOODS[p.good]?.name ?? p.good} · dev ${p.dev}${kind === 'conquista' ? ' · ' + nationName(S, p.owner) : ''}`, acts: [{ label: kind === 'colonize' ? 'Settle' : 'Conquer', kind, target: p.id, why }] });
   } else {
     rows.push({ label: MISSION_INFO[kind].name, sub: MISSION_INFO[kind].verb, acts: [{ label: 'Start', kind, target: '', why: missionBlocked(S, kind, '') }] });
   }
@@ -970,7 +988,7 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
   const goods = kind === 'trade' ? importable(S, target) : [];
   let good: string | undefined = goods[0];
 
-  const tname = S.provinces[target]?.name ?? S.nations[target]?.name ?? TECH[target]?.name ?? REGIONS[target]?.name ?? 'the realm';
+  const tname = S.provinces[target]?.name ?? S.nations[target]?.name ?? TECH[target]?.name ?? 'the realm';
   const box = h('div', { class: 'mbox planner' });
   const draw = () => {
     clear(box);
@@ -1033,7 +1051,7 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
         const foeFleet = S.nations[S.provinces[target].owner].fleet ?? [];
         facts.push(foeFleet.length ? `Their fleet (${foeFleet.length} ships) may intercept: a sea battle comes first` : 'No enemy fleet seen');
       }
-      if (kind === 'conquista') facts.push(`${Math.round(conquistaChance(S, target, ch, picked) * 100)}% chance against the ${REGIONS[target].people}`);
+      if (kind === 'conquista') facts.push(`${Math.round(conquistaChance(S, target, ch, picked) * 100)}% chance against the ${nationName(S, S.provinces[target].owner)}`);
       else {
         const prov = S.provinces[target];
         const enemy = S.nations[prov.owner];
