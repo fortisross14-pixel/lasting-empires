@@ -226,6 +226,17 @@ export class MapView {
     }
   }
 
+  /** Diagonal stripes of the occupier's and the old owner's colours, for land taken in a war not yet ended. */
+  private stripes(a: string, b: string, key: string): string {
+    const id = 'occ_' + key.replace(/[^a-z0-9_]/gi, '');
+    if (!this.svg.querySelector('#' + id)) {
+      const pat = svgEl('pattern', { id, patternUnits: 'userSpaceOnUse', width: 6, height: 6, patternTransform: 'rotate(45)' });
+      pat.append(svgEl('rect', { width: 6, height: 6, fill: b }), svgEl('rect', { width: 3, height: 6, fill: a }));
+      this.svg.querySelector('defs')!.append(pat);
+    }
+    return id;
+  }
+
   setMode(mode: MapMode, s: GameState) { this.mode = mode; this.svg.dataset.mode = mode; this.render(s); }
 
   private fill(s: GameState, p: GameState['provinces'][string], maxPop: number): string | null {
@@ -251,7 +262,8 @@ export class MapView {
       const lbl = this.labels[id];
       lbl.textContent = known ? p.name : '';
       if (!known) { c.style.fill = ''; for (const k of ['mine', 'subject', 'enemy', 'unrest', 'native']) c.classList.remove(k); continue; }
-      c.style.fill = this.fill(s, p, maxPop) ?? nat?.color ?? '#777';
+      const occupied = this.mode === 'political' && p.occupiedFrom && s.nations[p.occupiedFrom]?.alive && atWar(s, p.owner, p.occupiedFrom);
+      c.style.fill = occupied ? `url(#${this.stripes(nat?.color ?? '#777', s.nations[p.occupiedFrom!].color, p.owner + '_' + p.occupiedFrom)})` : this.fill(s, p, maxPop) ?? nat?.color ?? '#777';
       const pol = this.mode === 'political';
       c.classList.toggle('native', p.owner === NO_STATE && pol);
       c.classList.toggle('mine', !this.revealAll && p.owner === s.player);

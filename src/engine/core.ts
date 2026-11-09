@@ -101,6 +101,8 @@ export function declareWar(s: GameState, a: string, b: string) {
 export function makePeace(s: GameState, a: string, b: string) {
   s.wars = s.wars.filter(w => !((w.a === a && w.b === b) || (w.a === b && w.b === a)));
   s.truces.push({ a, b, until: s.year + 10 });
+  // the peace confirms what was taken
+  for (const p of Object.values(s.provinces)) if (p.occupiedFrom && [a, b].includes(p.occupiedFrom) && [a, b].includes(p.owner)) delete p.occupiedFrom;
 }
 
 export function borders(s: GameState, a: string, b: string): boolean {

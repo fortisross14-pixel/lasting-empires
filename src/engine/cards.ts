@@ -26,6 +26,7 @@ export interface HandCardDef {
   targetOk?: (s: GameState, t: string) => boolean;
   play?: (s: GameState, target: string) => string;
   burden?: boolean;
+  permanent?: boolean; // stays in hand after use: the mission costs ducats only
 }
 
 export const HAND_LIMIT = 7;
@@ -87,11 +88,11 @@ add({ id: 'conquistadors', name: 'Conquistadors', cat: 'military', kind: 'instan
 
 // ---------- diplomacy ----------
 add({ id: 'hire_diplomat', name: 'Engage a Diplomat', cat: 'diplomacy', kind: 'hire', role: 'diplomat', icon: 'scroll', text: 'Meet three envoys, keep one. Costs 1 manpower.', weight: () => 1.1 });
-add({ id: 'embassy', name: 'Embassy', cat: 'diplomacy', kind: 'mission', missions: ['relations'], icon: 'scroll', text: 'Send a diplomat to improve relations (+25).', weight: () => 2 });
+add({ id: 'embassy', name: 'Embassy', cat: 'diplomacy', kind: 'mission', permanent: true, missions: ['relations'], icon: 'scroll', text: 'Send a diplomat to improve relations (+25).', weight: () => 2 });
 add({ id: 'trade_route', name: 'Trade Route', cat: 'diplomacy', kind: 'mission', missions: ['trade'], icon: 'coin', text: 'Sign a trade treaty, and import one of their goods you lack.', weight: () => 2 });
 add({ id: 'alliance_pact', name: 'Alliance Pact', cat: 'diplomacy', kind: 'mission', missions: ['alliance'], icon: 'hands', text: 'Seek an alliance. They will join your wars.', weight: () => 1.2 });
 add({ id: 'marriage', name: 'Royal Marriage', cat: 'diplomacy', kind: 'mission', missions: ['marriage'], icon: 'ring', text: 'Join the royal houses: relations grow every year.', weight: () => 1 });
-add({ id: 'peace_envoy', name: 'Peace Envoy', cat: 'diplomacy', kind: 'mission', missions: ['peace'], icon: 'dove', text: 'Negotiate an end to a war.', weight: s => (s.wars.some(w => w.a === s.player || w.b === s.player) ? 2 : 0.6) });
+add({ id: 'peace_envoy', name: 'Peace Envoy', cat: 'diplomacy', kind: 'mission', permanent: true, missions: ['peace'], icon: 'dove', text: 'Negotiate an end to a war.', weight: s => (s.wars.some(w => w.a === s.player || w.b === s.player) ? 2 : 0.6) });
 add({ id: 'expedition', name: 'Voyage of Discovery', cat: 'diplomacy', kind: 'mission', missions: ['explore'], agent: 'explorer', icon: 'anchor', text: 'An explorer sails into the unknown. What they find is up to fate.', weight: s => (ageId(s) === 'reconquest' ? 0 : 0.9) });
 add({ id: 'fealty', name: 'Demand Fealty', cat: 'diplomacy', kind: 'mission', missions: ['vassalize'], icon: 'crown', text: 'Make a much weaker crown your vassal.', weight: () => 0.7 });
 add({ id: 'scouts', name: 'Spy Troop Positions', cat: 'military', kind: 'instant', target: 'nation', icon: 'eye', text: 'Scouts find where a realm\'s armies stand, and how strong they are, for 2 years. Strike where they are weak.', weight: s => (enemiesOf(s, s.player).length ? 1.5 : 0.4),
@@ -188,7 +189,8 @@ export const handOf = (s: GameState, cat: Cat) => s.hand.filter(h => CARDS[h.car
 /** Add a card to hand. Respects the hand limit unless forced (burdens always arrive). */
 export function addCard(s: GameState, card: string, force = false): boolean {
   const def = CARDS[card];
-  if (!force && !def?.burden && handOf(s, def.cat).length >= handLimit(s)) return false;
+  if (def?.permanent && s.hand.some(h => h.card === card)) { s.np += 1; return false; } // you already hold it: a nation point instead
+  if (!force && !def?.burden && !def?.permanent && handOf(s, def.cat).filter(h => !CARDS[h.card].permanent).length >= handLimit(s)) return false;
   s.hand.push({ uid: uid(s), card });
   return true;
 }

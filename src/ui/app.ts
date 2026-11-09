@@ -20,7 +20,7 @@ import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBloc
 import {
   MISSION_INFO, DIPLO, missionBlocked, launchMission, cancelMission, diploChance, missionTurns, techCost, researchRate, attackRoute,
   developCost, foundCost, growCost, importable, cardRole, cardRoles, becomesOnMission, voyageCost, GRADES,
-  graceCost,
+  graceCost, envoyCost, envoyTravel,
 } from '../engine/missions';
 import { buyCard, buyBlocked, hireWithCard, takeDraftOption, mergePreview, doMerge, AMBITIONS, officeCost, sellOffices } from '../engine/drafts';
 import { discoverable, exploreChance, colonizeChance, conquistaChance, PROMOTION, colonyCost, regionKnown, provRegion, provKnown, regionDef } from '../engine/overseas';
@@ -518,7 +518,7 @@ function cardsTab(cat: Cat, body: HTMLElement) {
   const sec = (title: string, els: HTMLElement[], empty: string) => { body.append(h('h3', {}, title)); body.append(els.length ? h('div', { class: 'cards-row wrap' }, els) : h('p', { class: 'muted' }, empty)); };
   if (show('hand') || show('equip')) {
     const list = f === 'equip' ? hand.filter(x => CARDS[x.card].kind === 'equip') : hand;
-    sec(f === 'equip' ? 'Equipment' : 'Cards in hand', list.map(c => handCard(c.card, { small: true, selected: cv.sel.includes(c.uid), dim: cv.mode !== 'select' && !!cardBlocked(S, CARDS[c.card]) && CARDS[c.card].kind !== 'mission', onclick: () => {
+    sec(f === 'equip' ? 'Equipment' : 'Cards in hand', list.map(c => handCard(c.card, { small: true, badge: CARDS[c.card].permanent ? 'permanent' : undefined, selected: cv.sel.includes(c.uid), dim: cv.mode !== 'select' && !!cardBlocked(S, CARDS[c.card]) && CARDS[c.card].kind !== 'mission', onclick: () => {
       if (cv.mode === 'select') { cv = { ...cv, sel: cv.sel.includes(c.uid) ? cv.sel.filter(x => x !== c.uid) : [...cv.sel, c.uid] }; renderWin(); return; }
       openCardModal(c.uid);
     } })), 'No cards. You draw them each quarter, or buy a pack.');
@@ -574,8 +574,8 @@ function missionsTab(cat: Cat, body: HTMLElement) {
   for (const c of people) {
     const busy = c.mission != null;
     const ok = !pc || canDo(c, pc.card);
-    prow.append(charCard(c, S, { small: true, selected: pp?.uid === c.uid, dim: busy || !ok, badge: busy ? (c.mission === -1 ? 'viceroy' : 'busy') : undefined, onclick: () => {
-      if (busy) return toast(c.mission === -1 ? 'Serving as a viceroy' : 'Away on a mission');
+    prow.append(charCard(c, S, { small: true, selected: pp?.uid === c.uid, dim: busy || !ok, badge: busy ? (c.mission === -1 ? 'viceroy' : c.mission === -4 ? `back in ${c.back}q` : c.mission === -5 ? 'defending' : 'busy') : undefined, onclick: () => {
+      if (busy) return toast(c.mission === -1 ? 'Serving as a viceroy' : c.mission === -4 ? `Riding home: back in ${qText(c.back ?? 1)}` : c.mission === -5 ? 'Standing ready to defend' : 'Away on a mission');
       if (pc) { if (!ok) return toast('This person cannot do that mission', 'bad'); return go(pc.uid, c.uid); }
       pick = { char: pp?.uid === c.uid ? undefined : c.uid }; renderWin();
     } }));
@@ -586,7 +586,7 @@ function missionsTab(cat: Cat, body: HTMLElement) {
   if (!cards.length) crow.append(h('p', { class: 'muted' }, 'No mission cards. You draw them each quarter, or buy one in the Cards tab.'));
   for (const hc of cards) {
     const ok = !pp || canDo(pp, hc.card);
-    crow.append(handCard(hc.card, { small: true, selected: pc?.uid === hc.uid, dim: !ok, onclick: () => {
+    crow.append(handCard(hc.card, { small: true, badge: CARDS[hc.card].permanent ? 'permanent' : undefined, selected: pc?.uid === hc.uid, dim: !ok, onclick: () => {
       if (pp) { if (!ok) return toast(`${pp.name} cannot do that: it needs a ${cardRoles(hc.card).map(r => roleName[r].toLowerCase()).join(' or ')}`, 'bad'); return go(hc.uid, pp.uid); }
       pick = { card: pc?.uid === hc.uid ? undefined : hc.uid }; renderWin();
     } }));
@@ -849,7 +849,7 @@ function armyTab(body: HTMLElement) {
     body.append(h('div', { class: 'garrison' }, h('b', {}, placeName(g)), h('small', {}, `${g === player(S).capital ? 'capital · ' : g.startsWith('base:') ? '' : 'barracks · '}${ts.filter(t => t.mission == null).length} companies · power ${Math.round(armyPower(ts.filter(t => t.mission == null)))}`)));
     const row = h('div', { class: 'cards-row wrap' });
     if (!ts.length) row.append(h('p', { class: 'muted' }, 'Empty.'));
-    for (const t of ts) row.append(troopCard(t, { small: true, selected: sel.includes(t.uid), dim: t.mission != null, onclick: () => t.mission != null ? toast('Away on a mission') : toggle(t.uid) }));
+    for (const t of ts) row.append(troopCard(t, { small: true, selected: sel.includes(t.uid), dim: t.mission != null || t.str < 100, badge: t.mission === -5 ? 'defending' : t.str < 100 ? `resting ${Math.ceil((100 - t.str) / 20)}q` : undefined, onclick: () => t.mission === -5 ? toast('Standing ready to defend') : t.mission != null ? toast('Away on a mission') : toggle(t.uid) }));
     body.append(row);
   }
   if (moving.length) {
@@ -1430,7 +1430,7 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
   const military = kind === 'conquer' || kind === 'raid' || kind === 'conquista' || kind === 'base';
   let ch = free.find(c => c.uid === preferChar) ?? [...free].sort((a, b) => b.skill - a.skill)[0];
   preferChar = null;
-  const home = (kind === 'conquer' || kind === 'raid' ? troopsNear(S, S.player, target) : S.troops.filter(t => t.mission == null && !t.moving)).filter(t => t.str >= 30).sort((a, b) => armyPower([b]) - armyPower([a]));
+  const home = (kind === 'conquer' || kind === 'raid' ? troopsNear(S, S.player, target) : S.troops.filter(t => t.mission == null && !t.moving && t.str >= 100)).filter(t => t.str >= 30).sort((a, b) => armyPower([b]) - armyPower([a]));
   const maxTroops = () => ch.skill + 3;
   let picked: number[] = military ? home.slice(0, maxTroops()).map(t => t.uid) : [];
   const naval = ((kind === 'conquer' || kind === 'raid') && !!attackRoute(S, target)?.naval) || (kind === 'base' && home.some(t => travel(locOf(S, t), target) >= 1 && S.provinces[target] && getGeo().land[S.provinces[target].id] !== getGeo().land[locOf(S, t).replace('base:', '')]));
@@ -1463,7 +1463,7 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
     if (!['conquer', 'raid'].includes(kind)) box.append(h('div', { class: 'oddsbox' }, h('small', { class: 'muted' }, `Outcome odds with a ${RARITY[ch.rarity].name} ${roleName[ch.role].toLowerCase()}:`), oddsLine(ch)));
     const turns = missionTurns(S, kind, ch, target, building);
     const facts: (string | HTMLElement)[] = [qText(turns)];
-    if (DIPLO.includes(kind)) facts.push(`${Math.round(diploChance(S, kind, ch, target) * 100)}% chance`);
+    if (DIPLO.includes(kind)) facts.push(`${Math.round(diploChance(S, kind, ch, target) * 100)}% chance`, `Journey ${envoyCost(S, target)} ducats · back at court ${qText(Math.max(1, envoyTravel(S, target)))} after`, CARDS[card.card].permanent ? 'The card stays in your hand' : 'The card is used up');
     if (kind === 'research') facts.push(`${researchRate(S, ch, TECH[target]?.track)} research a year · ${techCost(S, target)} needed`);
     facts.push(`Missions left this year: ${missionsLeft(S)}`);
     if (kind === 'build') facts.push(`${buildingCost(S, building!)} ducats now · salary ${BUILDINGS[building!].salary} a year`);

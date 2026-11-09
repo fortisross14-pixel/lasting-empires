@@ -35,6 +35,7 @@ export interface Character {
   mission?: number;
   legendId?: string;
   ruler?: boolean;     // the monarch, who can also act in their role
+  back?: number;       // quarters until back at court after a mission abroad
   wins?: number;
   losses?: number;
 }
@@ -87,6 +88,7 @@ export interface Province {
   fort: number;       // 0..3
   buildings: string[];
   favor?: number;     // happiness from royal grace, fades by 1 a year
+  occupiedFrom?: string; // taken in a war that is not over yet: shown striped until peace
   land: string;       // landmass id
   lon: number;
   lat: number;

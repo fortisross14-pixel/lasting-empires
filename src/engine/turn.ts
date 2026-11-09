@@ -5,6 +5,7 @@ import { poolFor } from '../data/names';
 import { yearlyAges } from './ages';
 import { scriptedHistory } from './history';
 import { yearlyCoalitions } from './coalition';
+import { HEAL } from './army';
 import { settleArmies, resolveIncoming, quarterlyMarch, quarterlyBases } from './army';
 import { yearlyViceroys, quarterlyUnrest } from './realm';
 import { eraOfYear } from '../data/eras';
@@ -19,7 +20,7 @@ import {
   addTreaty, hasTech, genCharacter, declareWar, nationName, atWar, getRel, hasGood, armyPower, hasCore, coreSlots, hasTreaty, ageId,
 } from './core';
 import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS } from './cards';
-import { advanceMissions, MISSION_INFO } from './missions';
+import { advanceMissions, MISSION_INFO, quarterlyReturns } from './missions';
 import { runAI } from './ai';
 import { rollEvents, EVENT } from './events';
 import { AMBITIONS, ambitionOptions } from './drafts';
@@ -174,6 +175,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   me.ruler.from = r.from;
   for (const c of CATS) { drawCat(s, c); drawCat(s, c); }
   addCard(s, 'eq_plate');
+  addCard(s, 'peace_envoy', true);
   settleArmies(s);
   push(s, { kind: 'draft', draft: 'ambition', options: ambitionOptions(s) });
   rollEvents(s);
@@ -223,7 +225,7 @@ function playerEconomy(s: GameState) {
   me.gold += inc.total / 4;
   const mp = playerManpower(s);
   me.manpower = Math.min(mp.max, me.manpower + mp.gain / 4);
-  for (const t of s.troops) if (t.mission == null && t.str < 100) t.str = Math.min(100, t.str + 4);
+  for (const t of [...s.troops, ...s.fleet]) if (t.mission == null && !t.moving && t.str < 100) t.str = Math.min(100, t.str + HEAL);
   // control
   for (const p of provsOf(s, s.player)) {
     let d = 2 + me.stability + (hasCore(s, 'consolidation') ? 3 : 0) + (hasCore(s, 'agrarian') ? 1 : 0);
@@ -338,6 +340,7 @@ export function endTurn(s: GameState): YearReport | null {
   if (q === 0) { s.bought = { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0 }; s.launched = 0; }
   settleArmies(s);
   resolveIncoming(s);
+  quarterlyReturns(s); // envoys already riding home get closer before new results come in
   const before = s.missions.map(m => ({ id: m.id, kind: m.kind, target: m.target }));
   advanceMissions(s);
   for (const m of before) if (!s.missions.some(x => x.id === m.id)) s.turnLog.done.push({ kind: m.kind, title: `${MISSION_INFO[m.kind].name}${s.provinces[m.target] ? ' · ' + s.provinces[m.target].name : s.nations[m.target] ? ' · ' + s.nations[m.target].name : ''}`, ok: true });

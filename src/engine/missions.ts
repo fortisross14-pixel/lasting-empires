@@ -168,8 +168,9 @@ export function missionTurns(s: GameState, kind: MissionKind, ch: Character, tar
     case 'tax': return 2;
     case 'progress': return 4;
     default: {
-      const base = { relations: 2, trade: 4, alliance: 4, marriage: 3, peace: 1 }[kind as 'relations'] ?? 2;
-      return Math.max(1, base - (hasTech(s, 'chancery') ? 1 : 0) - (ch.traits.includes('envoy') ? 1 : 0));
+      // the journey out, then talks; the envoy comes home afterwards
+      const talks = { relations: 0, trade: 1, alliance: 1, marriage: 1, peace: 0 }[kind as 'relations'] ?? 0;
+      return Math.max(1, envoyTravel(s, target) + talks - (hasTech(s, 'chancery') ? 1 : 0) - (ch.traits.includes('envoy') ? 1 : 0));
     }
   }
 }
@@ -229,6 +230,7 @@ export function missionBlocked(s: GameState, kind: MissionKind, target: string, 
   if (DIPLO.includes(kind)) {
     const n = s.nations[target];
     if (!n || !n.alive || target === me) return 'Choose another nation';
+    if (player(s).gold < envoyCost(s, target)) return `The journey costs ${envoyCost(s, target)} ducats`;
     if (s.missions.some(m => DIPLO.includes(m.kind) && m.target === target)) return 'An envoy is already there';
     const war = atWar(s, me, target);
     if (kind === 'peace') return war ? null : 'You are not at war';
@@ -348,7 +350,8 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   };
   if (kind === 'conquer' || kind === 'raid') m.turnsLeft = Math.max(1, ...sent.map(t => travel(locOf(s, t), target)));
   if (kind === 'base') m.turnsLeft = Math.max(1, Math.max(...sent.map(t => travel(locOf(s, t), target))) - 1);
-  s.hand = s.hand.filter(h => h.uid !== cardUid);
+  if (!cdef.permanent) s.hand = s.hand.filter(h => h.uid !== cardUid);
+  if (DIPLO.includes(kind)) player(s).gold -= envoyCost(s, target);
   m.total = m.turnsLeft;
   if (kind === 'build') {
     m.progress = buildingCost(s, building!);
@@ -420,7 +423,21 @@ export function advanceMissions(s: GameState) {
   }
 }
 
-function finish(s: GameState, m: Mission) { freeMission(s, m.id); s.missions = s.missions.filter(x => x.id !== m.id); }
+function finish(s: GameState, m: Mission) {
+  freeMission(s, m.id); s.missions = s.missions.filter(x => x.id !== m.id);
+  // envoys abroad still have to ride home before they can go out again
+  if (DIPLO.includes(m.kind)) { const ch = s.characters.find(c => c.uid === m.char); if (ch && ch.mission == null) { ch.back = Math.max(1, envoyTravel(s, m.target)); ch.mission = -4; } }
+}
+
+/** Quarters for an envoy to reach a realm's court from yours. */
+export const envoyTravel = (s: GameState, nation: string) => { const a = player(s).capital, b = s.nations[nation]?.capital; return a && b ? travel(a, b) : 1; };
+/** Every journey has a cost: horses, gifts, lodging. */
+export const envoyCost = (s: GameState, nation: string) => Math.round((4 + 4 * envoyTravel(s, nation)) * inflation(s));
+
+/** Each quarter: envoys on the way home get closer. */
+export function quarterlyReturns(s: GameState) {
+  for (const c of s.characters) if (c.mission === -4) { c.back = (c.back ?? 1) - 1; if (c.back <= 0) { delete c.mission; delete c.back; } }
+}
 
 function completeResearch(s: GameState, m: Mission, ch: Character) {
   const t = TECH[m.target];

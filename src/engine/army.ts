@@ -72,7 +72,7 @@ export function settleArmies(s: GameState) {
 export function troopsNear(s: GameState, n: string, target: string, reach = 1): TroopCard[] {
   const list = n === s.player ? s.troops : s.nations[n]?.army ?? [];
   const unready = new Set((s.bases ?? []).filter(b => !b.ready).map(b => 'base:' + b.target));
-  return list.filter(t => t.mission == null && !t.moving && t.str > 0 && !(n === s.player && unready.has(t.loc ?? '')) && travel(locOf(s, t, n), target) <= reach);
+  return list.filter(t => t.mission == null && !t.moving && t.str > 0 && !(n === s.player && (unready.has(t.loc ?? '') || recovering(t))) && travel(locOf(s, t, n), target) <= reach);
 }
 
 /** Order troops to another garrison. Nearby is instant; far takes quarters. */
@@ -87,6 +87,11 @@ export function moveTroops(s: GameState, uids: number[], to: string): string | n
   }
   return null;
 }
+
+/** A company that came out of battle below full strength rests until it is whole again. */
+export const recovering = (t: TroopCard) => t.str < 100;
+/** Quarterly healing in garrison: about a fifth of a company. */
+export const HEAL = 20;
 
 /** Each quarter: marching troops get closer, and arrive. */
 export function quarterlyMarch(s: GameState) {
@@ -109,10 +114,20 @@ export function announceAttack(s: GameState, nation: string, target: string, for
 }
 
 /** Player's defence choice for an announced attack. Empty = everyone in reach. */
+export const DEFENDING = -5; // mission marker: standing ready to meet an announced attack
 export function setDefence(s: GameState, id: number, defenders: number[], general?: number) {
   const inc = s.incoming?.find(x => x.id === id);
   if (!inc) return;
   inc.defenders = defenders; inc.general = general; inc.chosen = true;
+  for (const t of s.troops) if (defenders.includes(t.uid)) t.mission = DEFENDING;
+  const g = s.characters.find(c => c.uid === general);
+  if (g) g.mission = DEFENDING;
+}
+/** Release the troops and general held back for an attack. */
+function release(s: GameState, inc: Incoming) {
+  for (const t of s.troops) if (t.mission === DEFENDING && inc.defenders?.includes(t.uid)) delete t.mission;
+  const g = s.characters.find(c => c.uid === inc.general);
+  if (g && g.mission === DEFENDING) delete g.mission;
 }
 
 /** Start of a turn: armies that set out last quarter arrive and fight. */
@@ -121,12 +136,13 @@ export function resolveIncoming(s: GameState) {
   for (const inc of [...(s.incoming ?? [])]) {
     if (inc.due > now) continue;
     s.incoming = s.incoming!.filter(x => x !== inc);
+    release(s, inc);
     const n = s.nations[inc.nation], prov = s.provinces[inc.target];
     if (!n?.alive || !prov || prov.owner !== s.player || !atWar(s, n.id, s.player)) continue;
     const force = n.army.filter(t => inc.force.includes(t.uid) && t.str > 0);
     if (!force.length) continue;
     const near = troopsNear(s, s.player, prov.id);
-    const chosen = inc.chosen ? near.filter(t => inc.defenders!.includes(t.uid)) : near;
+    const chosen = inc.chosen ? s.troops.filter(t => inc.defenders!.includes(t.uid) && t.str > 0) : near;
     const gen = s.characters.find(c => c.uid === inc.general && c.mission == null) ?? (inc.chosen ? undefined : s.characters.filter(c => c.role === 'general' && c.mission == null).sort((a, b) => b.skill - a.skill)[0]);
     const last = provsOf(s, s.player).length <= 3 || prov.id === player(s).capital;
     const militia = [0, 1].slice(0, last ? 2 : 1).map(i => ({ uid: -300 - i, type: 'levy', vet: 1, str: 100, start: 100, garrison: true }));

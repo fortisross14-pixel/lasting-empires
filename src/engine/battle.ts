@@ -243,6 +243,7 @@ export function transferProvince(s: GameState, provId: string, to: string) {
   }
   const w = findWar(s, from, to);
   if (w) { if (w.a === to) w.gainsA++; else w.gainsB++; addInfamy(s, to, provId); }
+  if (w && p.occupiedFrom !== to) p.occupiedFrom = p.occupiedFrom ?? from; else delete p.occupiedFrom;
   const fromNat = s.nations[from];
   if (fromNat && fromNat.capital === provId) {
     const rest = Object.values(s.provinces).filter(x => x.owner === from).sort((a, b) => b.dev - a.dev);

@@ -14,6 +14,9 @@ export function scenarioCastilePortugal(): GameState {
   s.ambition = null;
   for (const e of enemiesOf(s, 'castile')) makePeace(s, 'castile', e);
   const me = player(s);
+  // the clock jumped 16 years: the court and the crown must still be alive
+  for (const c of s.characters) c.dies = Math.max(c.dies, s.year + 15 + (c.uid % 10));
+  me.ruler = { ...me.ruler, name: 'Enrique IV', from: 1454, to: 1474 };
   me.gold = 450; me.manpower = 12; me.stability = 1; s.np = 12;
   // barracks in Seville (the south) and Salamanca (the Portuguese border)
   for (const id of ['seville', 'salamanca']) if (!s.provinces[id].buildings.includes('barracks')) s.provinces[id].buildings.push('barracks');
@@ -26,10 +29,11 @@ export function scenarioCastilePortugal(): GameState {
   // generals
   const g1 = genCharacter(s, 'general', 'castilian', 3); g1.name = 'Gonzalo de Córdoba'; g1.skill = 5; g1.rarity = 'epic';
   const g2 = genCharacter(s, 'general', 'castilian', 2);
+  g1.dies = s.year + 30; g2.dies = s.year + 25;
   s.characters.push(g1, g2);
   // cards to play with
   s.hand = s.hand.filter(h => h.card === 'debt');
-  for (const c of ['march_orders', 'march_orders', 'march_orders', 'scouts', 'spy_network', 'hire_men_at_arms']) addCard(s, c, true);
+  for (const c of ['peace_envoy', 'march_orders', 'march_orders', 'march_orders', 'scouts', 'spy_network', 'hire_men_at_arms']) addCard(s, c, true);
   // the war
   if (!atWar(s, 'castile', 'portugal')) declareWar(s, 'castile', 'portugal');
   const pt = s.nations.portugal;
