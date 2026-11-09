@@ -30,6 +30,8 @@ Quarterly turns, 702 provinces, civil wars and viceroys (current): `reasonable` 
 
 Armies with locations, announced attacks, invasion bases and coalitions (current): `reasonable` 9 runs top 3 in 4, first in 2 (later 6 runs: top 3 in 2, first in 2); `greedy` now meets coalitions (top 3 in 1–2 of 3–6). No AI runaway in a 300-year world run (largest: Ming 63 provinces); coalition wars fired against France and Bornu.
 
+Goods economy (current): `reasonable` 9 runs, all survive, top 3 in 3, first in 1 (the version before goods: top 3 in 1 of 9). Late income 115 against 196 before goods: the simulated player buys and builds clumsily, so a careful player should do better. Trade routes do not use a yearly mission.
+
 ## Levers (where to tune)
 
 - **Income:** `provinceIncome`, `tradeValue` (1 + 0.07 × partner development, capped at 4, each extra route ×0.8), building gold in `src/data/techs.ts`, settlement tiers (`TIERS`), price level (income follows 70% of inflation).
