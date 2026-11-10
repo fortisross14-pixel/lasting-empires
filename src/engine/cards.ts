@@ -61,11 +61,48 @@ export function cardType(d: HandCardDef): CardType {
 }
 export const CARD_TYPE_NAME: Record<CardType, string> = { people: 'People', troops: 'Troops', improvement: 'Improvement', action: 'Action', burden: 'Burden' };
 
-/** There is no limit to the cards you hold: the yearly draw and missions a year are the limits. */
-export function handLimit(s: GameState): number {
-  if (!(globalThis as { HANDLIMIT?: boolean }).HANDLIMIT) return Infinity;
-  const k = provsOf(s, s.player).length; // the old limit, kept for balance tests
-  return 3 + (k >= 5 ? 1 : 0) + (k >= 10 ? 1 : 0) + (k >= 16 ? 1 : 0) + (k >= 25 ? 1 : 0);
+/** How many cards you may keep, by realm rank: per deck and in all. Permanent cards and burdens do not count.
+ *  Cards always arrive; over the limit you sell the extras (half a nation point each) before the turn ends. */
+export const HAND_LIMITS: [number, number][] = [[8, 22], [10, 28], [12, 34], [15, 40]]; // Small Kingdom, Kingdom, Great Kingdom, Empire
+const RANK_MIN = [0, 5, 13, 30]; // as RANKS in realm.ts
+function limitRow(s: GameState): [number, number] {
+  if ((globalThis as { NOHANDLIMIT?: boolean }).NOHANDLIMIT) return [Infinity, Infinity];
+  const k = provsOf(s, s.player).length;
+  let i = 0; while (i < RANK_MIN.length - 1 && k >= RANK_MIN[i + 1]) i++;
+  return HAND_LIMITS[i];
+}
+export const handLimit = (s: GameState) => limitRow(s)[0];
+export const handTotalLimit = (s: GameState) => limitRow(s)[1];
+export const countsToLimit = (h: { card: string }) => !!CARDS[h.card] && !CARDS[h.card].permanent && !CARDS[h.card].burden;
+export const heldOf = (s: GameState, cat: Cat) => handOf(s, cat).filter(countsToLimit).length;
+export const heldTotal = (s: GameState) => s.hand.filter(countsToLimit).length;
+/** Cards over the limit: per deck, and how many more over the total once the decks are within theirs. */
+export function handExcess(s: GameState): { byCat: Partial<Record<Cat, number>>; total: number } {
+  const byCat: Partial<Record<Cat, number>> = {};
+  let fixed = 0;
+  for (const c of CATS) { const n = heldOf(s, c) - handLimit(s); if (n > 0) { byCat[c] = n; fixed += n; } }
+  return { byCat, total: Math.max(fixed, heldTotal(s) - handTotalLimit(s)) };
+}
+/** Sell cards from the hand: half a nation point each. */
+export function sellCards(s: GameState, uids: number[]): string | null {
+  const ok = uids.filter(u => { const h = s.hand.find(x => x.uid === u); return h && !CARDS[h.card].burden; });
+  if (!ok.length) return 'Nothing to sell (burdens must be paid off)';
+  for (const u of ok) removeCard(s, u);
+  s.np += 0.5 * ok.length;
+  return null;
+}
+/** For the simulation and as a safety net: sell the extras, most duplicated cards first. */
+export function trimHand(s: GameState) {
+  for (let guard = 0; guard < 500; guard++) {
+    const ex = handExcess(s);
+    if (ex.total <= 0) return;
+    const cat = (Object.keys(ex.byCat) as Cat[])[0];
+    const pool = s.hand.filter(h => countsToLimit(h) && (!cat || CARDS[h.card].cat === cat));
+    const n: Record<string, number> = {}; for (const h of pool) n[h.card] = (n[h.card] ?? 0) + 1;
+    const worst = pool.sort((a, b) => n[b.card] - n[a.card] || b.uid - a.uid)[0];
+    if (!worst) return;
+    sellCards(s, [worst.uid]);
+  }
 }
 export const RATE_CAP = 1.4;
 export const CAT_INFO: Record<Cat, { name: string; icon: string; role: Role; color: string }> = {
@@ -261,7 +298,7 @@ export const handOf = (s: GameState, cat: Cat) => s.hand.filter(h => CARDS[h.car
 export function addCard(s: GameState, card: string, force = false): boolean {
   const def = CARDS[card];
   if (def?.permanent && s.hand.some(h => h.card === card)) { s.np += 1; return false; } // you already hold it: a nation point instead
-  if (!force && !def?.burden && !def?.permanent && handOf(s, def.cat).filter(h => !CARDS[h.card].permanent).length >= handLimit(s)) return false;
+  void force;
   s.hand.push({ uid: uid(s), card });
   return true;
 }
@@ -272,7 +309,6 @@ export function randomCard(s: GameState, cat: Cat, type?: CardType): string {
 }
 
 export function drawCat(s: GameState, cat: Cat): boolean {
-  if (handOf(s, cat).length >= handLimit(s)) return false;
   addCard(s, randomCard(s, cat));
   return true;
 }
@@ -442,7 +478,7 @@ export function restoreCard(s: GameState, uid: number): string | null {
   const c = s.archive?.find(h => h.uid === uid);
   if (!c) return 'Not in the archive';
   const cat = CARDS[c.card].cat;
-  if (handOf(s, cat).length >= handLimit(s)) return `Your ${cat} hand is full (${handLimit(s)})`;
+  if (heldOf(s, cat) >= handLimit(s) || heldTotal(s) >= handTotalLimit(s)) return 'Your hand is full';
   s.archive = s.archive!.filter(h => h !== c);
   s.hand.push(c);
   return null;

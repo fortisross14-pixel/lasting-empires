@@ -22,9 +22,9 @@ import {
   rand, pick, randInt, uid, clamp, player, provsOf, incomeOf, log, push, addRel, playerManpower, initialSettlement, grade,
   addTreaty, hasTech, genCharacter, declareWar, nationName, atWar, getRel, hasGood, armyPower, hasCore, coreSlots, hasTreaty, ageId,
   resetProvIndex, techFx } from './core';
-import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS } from './cards';
+import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS, trimHand } from './cards';
 import { advanceMissions, MISSION_INFO, quarterlyReturns } from './missions';
-import { runAI } from './ai';
+import { runAI, PRESTIGE_FADE } from './ai';
 import { rollEvents, EVENT } from './events';
 import { AMBITIONS, ambitionOptions } from './drafts';
 import { START_FLEETS, yearlyFleet } from './navy';
@@ -261,7 +261,7 @@ function yearlyPlayer(s: GameState) {
   }
   if (s.flags.new_world && s.year % 5 === 0 && (s.flags.new_world_income ?? 0) < 12) s.flags.new_world_income = (s.flags.new_world_income ?? 0) + 1;
   // prestige
-  me.prestige *= 0.985; // prestige fades unless renewed, for every crown
+  me.prestige *= 1 - PRESTIGE_FADE; // prestige fades unless renewed, for every crown
   me.prestige += provsOf(s, s.player).filter(p => p.buildings.includes('temple')).length * 0.5 + techFx(s, 'prestige') + (1 - 2 * (s.short?.luxuries ?? 0));
 }
 
@@ -345,6 +345,7 @@ export interface YearReport { gold: number; np: number; cards: Record<string, nu
 
 export function endTurn(s: GameState): YearReport | null {
   if (s.over || s.queue.length) return null;
+  trimHand(s); // the screen asks you to choose first; this only catches what is left
   const g0 = player(s).gold, np0 = s.np;
   s.quarter ??= 0;
   const q = s.quarter;
@@ -479,6 +480,7 @@ function addNewProvinces(s: GameState) {
 export function migrate(s: GameState): GameState {
   s.core ??= []; s.coreChanged ??= -99; s.overseas ??= {}; s.imports ??= [];
   s.fleet ??= []; s.accepted ??= [];
+  if (s.archive?.length) { s.hand.push(...s.archive); s.archive = []; } // the archive is gone: cards come back, the hand limit applies
   s.age ??= { id: eraOfYear(s.year).id, since: s.year };
   addNewProvinces(s);
   settleArmies(s);

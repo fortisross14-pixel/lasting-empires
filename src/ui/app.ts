@@ -20,7 +20,7 @@ import {
 import { newGame, endTurn, chooseEventOption, playerDeclareWar, warCost, ranking, powerTable, dismissCharacter, disbandTroop, chooseHeir, SAVE_VERSION, coreBlocked, coreCost, adoptCore, dropCore, migrate } from '../engine/turn';
 import { EVENT, eventTitle, upcomingHistory } from '../engine/events';
 import { typesFor, poolOf, cardType, cardTroop, unitFor, UNIT_LINES, CLASS_NAME, type CardType, type UnitClass } from '../engine/cards';
-import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBlocked, troopHireCost, discardCard, handLimit, cardFor, archiveCards, restoreCard, dropArchived } from '../engine/cards';
+import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBlocked, troopHireCost, discardCard, handLimit, handTotalLimit, heldOf, heldTotal, handExcess, sellCards, cardFor } from '../engine/cards';
 import {
   MISSION_INFO, DIPLO, missionBlocked, launchMission, cancelMission, diploChance, missionTurns, techCost, researchRate, attackRoute,
   developCost, foundCost, growCost, projectGoods, projectShortfall, pilgrimageCost, helpersOf, cardRole, cardRoles, becomesOnMission, voyageCost, GRADES,
@@ -381,7 +381,7 @@ function renderTabs() {
   for (const c of CATS) {
     const n = handOf(S, c).length;
     nav.append(h('button', { class: 'tab' + (win?.cat === c ? ' on' : ''), onclick: () => toggleWin(c), style: `--cc:${CAT_INFO[c].color}` },
-      h('span', { class: 'tab-i', html: icon(CAT_INFO[c].icon, 20) }, n ? h('span', { class: 'tab-c', 'aria-label': `${n} cards in hand` }, String(n)) : null),
+      h('span', { class: 'tab-i', html: icon(CAT_INFO[c].icon, 20) }, n ? h('span', { class: 'tab-c' + (heldOf(S, c) > handLimit(S) ? ' over' : ''), 'aria-label': `${n} cards in hand, limit ${handLimit(S)}` }, String(n)) : null),
       h('span', { class: 'tab-l' }, c === 'diplomacy' ? 'Diplomacy' : CAT_INFO[c].name),
       h('span', { class: 'tab-n', title: 'New cards a year' }, `+${rates[c].rate.toFixed(1)}/yr`)));
   }
@@ -501,7 +501,6 @@ function cardsTab(cat: Cat, body: HTMLElement) {
   const mil = cat === 'military';
   const rate = cardRates(S)[cat];
   const hand = handOf(S, cat);
-  const arch = (S.archive ?? []).filter(hc => CARDS[hc.card].cat === cat);
   const pct = Math.round((S.cardAccum[cat] ?? 0) * 100);
   const setMode = (mode: typeof cv.mode) => { cv = { ...cv, mode: cv.mode === mode ? 'browse' : mode, sel: [], filter: mode === 'select' ? 'hand' : cv.filter }; forge = []; renderWin(); };
   // 1. get cards: one button per kind of card this deck sells
@@ -519,32 +518,24 @@ function cardsTab(cat: Cat, body: HTMLElement) {
   }
   body.append(h('div', { class: 'shop-head' }, h('h3', {}, 'Get cards'), h('small', { class: 'muted' }, `You have ${S.np.toFixed(1)} nation points · each purchase this year costs more · free draws: +${rate.rate.toFixed(2)} a year, next card ${pct}%`)), shop);
   const bar = h('div', { class: 'ctools' },
-    h('button', { class: 'btn small' + (cv.mode === 'select' ? ' on' : ''), onclick: () => setMode('select') }, h('span', { html: icon('scroll', 14) }), ' Archive cards'),
-    h('button', { class: 'btn small' + (cv.mode === 'archive' ? ' on' : ''), onclick: () => setMode('archive') }, h('span', { html: icon('book', 14) }), ` Archive (${arch.length})`),
+    h('button', { class: 'btn small' + (cv.mode === 'select' ? ' on' : ''), onclick: () => setMode('select') }, h('span', { html: icon('coin', 14) }), ' Sell cards'),
     mil ? h('button', { class: 'btn small' + (cv.mode === 'forge' ? ' on' : ''), onclick: () => setMode('forge') }, h('span', { html: icon('merge', 14) }), ' Forge') : null,
     mil ? h('button', { class: 'btn small' + (cv.mode === 'recipes' ? ' on' : ''), onclick: () => setMode('recipes') }, h('span', { html: icon('list', 14) }), ' Recipes') : null);
   // 2. what you hold
-  body.append(h('div', { class: 'cs-head' }, h('h3', {}, `Your cards (${hand.length})`), h('small', { class: 'muted', title: rate.parts.map(p => `${p.label} ${signed(p.v)}`).join(', ') }, 'Tap a card to use it')), bar);
+  const held = heldOf(S, cat), lim = handLimit(S), tot = heldTotal(S), tlim = handTotalLimit(S);
+  const ex = handExcess(S);
+  body.append(h('div', { class: 'cs-head' }, h('h3', {}, `Your cards `, h('span', { class: 'hlim' + (held > lim ? ' over' : held >= lim ? ' full' : '') }, `${held} of ${lim}`), h('small', { class: 'hlim-t' + (tot > tlim ? ' over' : '') }, ` · ${tot} of ${tlim} in all decks`)), h('small', { class: 'muted', title: rate.parts.map(p => `${p.label} ${signed(p.v)}`).join(', ') }, 'Tap a card to use it')), bar);
   if (cv.mode === 'forge') return forgeView(body);
   if (cv.mode === 'recipes') { body.append(recipeBook(true)); return; }
-  if (cv.mode === 'archive') {
-    body.append(h('p', { class: 'muted' }, 'Archived cards are put away to keep your hand tidy. Bring one back when you need it, or throw it away for half a nation point.'));
-    if (!arch.length) body.append(h('p', { class: 'muted' }, 'The archive is empty.'));
-    const row = h('div', { class: 'cards-row wrap' });
-    for (const hc of arch) row.append(h('div', { class: 'arch' }, handCard(hc.card, { small: true }),
-      h('button', { class: 'btn small', onclick: () => act(() => restoreCard(S, hc.uid), 'Back in your hand') }, 'Restore'),
-      h('button', { class: 'btn small ghost', onclick: () => act(() => dropArchived(S, hc.uid), '+0.5 nation points') }, 'Discard')));
-    body.append(row);
-    return;
-  }
+  if (ex.total > 0) body.append(h('p', { class: 'hlim-warn' }, ex.byCat[cat] ? `${ex.byCat[cat]} too many ${CAT_INFO[cat].name} cards` : `${ex.total} card${ex.total > 1 ? 's' : ''} over the limit across your decks`, `: sell before you end the turn (½ nation point each). A bigger realm may hold more.`));
   // filters
   const filters: [string, string, number][] = [['all', 'All', 0], ['hand', 'Cards', hand.length], ['people', 'People', S.characters.filter(c => CAT_ROLES[cat].includes(c.role)).length]];
   if (mil) filters.push(['troops', 'Troops', S.troops.length], ['ships', 'Ships', S.fleet.length], ['equip', 'Improvements', hand.filter(x => cardType(CARDS[x.card]) === 'improvement').length]);
   if (!filters.some(f => f[0] === cv.filter)) cv.filter = 'all';
   body.append(h('div', { class: 'seg cfilter' }, filters.map(([id, label, n]) => h('button', { class: 'seg-b' + (cv.filter === id ? ' on' : ''), onclick: () => { cv = { ...cv, filter: id }; renderWin(); } }, label, n ? h('small', {}, ` ${n}`) : null))));
   if (cv.mode === 'select') {
-    body.append(h('div', { class: 'mcap' }, h('b', {}, `Tap cards to archive (${cv.sel.length} chosen)`), h('span', {},
-      h('button', { class: 'btn small primary' + (cv.sel.length ? '' : ' blocked'), onclick: () => { if (!cv.sel.length) return; const n = cv.sel.length; act(() => archiveCards(S, cv.sel), `${n} card${n > 1 ? 's' : ''} archived`); cv = { ...cv, mode: 'browse', sel: [] }; renderWin(); } }, 'Archive'),
+    body.append(h('div', { class: 'mcap' }, h('b', {}, `Tap cards to sell (${cv.sel.length} chosen · +${(cv.sel.length / 2).toFixed(1)} nation points)`), h('span', {},
+      h('button', { class: 'btn small primary' + (cv.sel.length ? '' : ' blocked'), onclick: () => { if (!cv.sel.length) return; const n = cv.sel.length; act(() => sellCards(S, cv.sel), `${n} card${n > 1 ? 's' : ''} sold: +${(n / 2).toFixed(1)} nation points`); cv = { ...cv, mode: handExcess(S).total > 0 ? 'select' : 'browse', sel: [] }; renderWin(); } }, 'Sell'),
       h('button', { class: 'btn small ghost', onclick: () => setMode('select') }, 'Cancel'))));
   }
   const f = cv.filter;
@@ -1974,6 +1965,15 @@ async function onEndTurn() {
   if (pickHand != null) stopMapPick();
   if (modalOpen) return;
   if (S.queue.length) { processQueue(); return; }
+  const ex = handExcess(S);
+  if (ex.total > 0) {
+    // too many cards: choose what to sell before the turn ends
+    const cat = (Object.keys(ex.byCat) as Cat[])[0] ?? [...CATS].sort((a, b) => heldOf(S, b) - heldOf(S, a))[0];
+    win = { cat, tab: 'cards' }; cv = { filter: 'hand', mode: 'select', sel: [] };
+    openWin(cat, 'cards');
+    toast(`Your hand is over the limit: sell ${ex.total} card${ex.total > 1 ? 's' : ''} to end the turn`, 'bad');
+    return;
+  }
   const rep = endTurn(S);
   saveNow();
   if (sheet?.kind === 'province' && !S.provinces[sheet.arg!]) closeSheet();

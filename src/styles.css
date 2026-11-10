@@ -1098,3 +1098,11 @@ ul.traits { margin: 0; padding-left: 18px; }
 .build-row .br-head { display: flex; align-items: center; gap: 8px; }
 .build-row .br-head small { margin-left: auto; font-size: 12px; }
 @media (max-width: 480px) { .cb { grid-template-columns: 1fr; gap: 6px; } }
+
+/* ---------- hand limit ---------- */
+.hlim { font-size: .8em; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); font-variant-numeric: lining-nums; }
+.hlim.full { border-color: var(--gold-2); }
+.hlim.over, .hlim-t.over { color: var(--bad); border-color: var(--bad); font-weight: 700; }
+.hlim-t { font-weight: 400; color: var(--muted); font-size: 13px; }
+.hlim-warn { color: var(--bad); font-weight: 600; margin: 6px 0; }
+.tab-c.over { background: var(--bad); outline: 2px solid var(--bar); }

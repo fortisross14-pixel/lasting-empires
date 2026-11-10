@@ -43,14 +43,18 @@ export const playerPower = (s: GameState) =>
   armyPower(s.troops) + provsOf(s, s.player).reduce((a, p) => a + p.fort * 3, 0);
 const powerOf = (s: GameState, n: string) => (n === s.player ? playerPower(s) : nationPower(s, n));
 
+/** Balance levers: AI development a year (chance of +1) and how fast every crown's prestige fades. */
+export const AI_DEV_BASE = 0.14, AI_DEV_SIZE = 0.025, PRESTIGE_FADE = 0.02;
+
 function aiEconomy(s: GameState, n: Nation) {
   const inc = incomeOf(s, n.id);
   n.gold += inc.total;
   n.manpower = Math.min(manpowerMax(s, n.id), n.manpower + manpowerGain(s, n.id));
   for (const t of n.army) t.str = Math.min(100, t.str + 20);
-  // AI realms slowly develop their land, the way a player would
-  // the same pace for every realm, so great empires do not outgrow everyone on size alone
-  if (rand(s) < 0.12 + (n.personality === 'merchant' ? 0.04 : 0)) {
+  // AI realms develop their land, the way a player would: bigger realms a little faster,
+  // but far less than in proportion, so great empires do not win on size alone
+  const pv = provsOf(s, n.id).length;
+  if (rand(s) < AI_DEV_BASE + AI_DEV_SIZE * Math.sqrt(pv) + (n.personality === 'merchant' ? 0.04 : 0)) {
     const low = provsOf(s, n.id).filter(p => p.dev < 8).sort((x, y) => x.dev - y.dev);
     if (low.length) low[Math.floor(rand(s) * Math.min(4, low.length))].dev++;
   }
@@ -81,7 +85,7 @@ function aiEconomy(s: GameState, n: Nation) {
   }
   // slow growth
   // prestige
-  n.prestige = n.prestige * 0.985 + 0.3 + Math.sqrt(provsOf(s, n.id).length) * 0.35;
+  n.prestige = n.prestige * (1 - PRESTIGE_FADE) + 0.3 + Math.sqrt(provsOf(s, n.id).length) * 0.35;
 }
 
 function weightedPick(s: GameState, items: [string, number][]): string {
