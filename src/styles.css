@@ -1227,3 +1227,16 @@ ul.traits { margin: 0; padding-left: 18px; }
 .mcard.wild { border-style: dashed; border-color: var(--gold-2); }
 .mc-wild { margin-left: auto; align-self: flex-start; font: 700 11px/1 Alegreya, Georgia, serif; text-transform: uppercase; letter-spacing: .08em; padding: 4px 8px; border-radius: 999px; background: var(--gold-2); color: #fff; }
 [data-style="chancery"] .mc-wild { background: var(--wax); }
+
+/* ---------- mission progress ---------- */
+.mprog { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; margin: 10px 0; border: 2px solid var(--gold-2); border-radius: 10px; background: var(--panel-2); }
+[data-style="chancery"] .mprog { border-color: var(--wax); }
+.mprog-t { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px; }
+.mprog-t b { font-size: 18px; font-variant-numeric: lining-nums; }
+.mprog-t small { color: var(--muted); font-variant-numeric: lining-nums; }
+.mprog-bar { display: block; height: 10px; border-radius: 5px; background: #0002; overflow: hidden; }
+.mprog-bar i { display: block; height: 100%; background: var(--good); }
+.mcard.done { border: 2px solid var(--good); background: color-mix(in srgb, var(--good) 9%, var(--panel-2)); }
+.mcard.done .mc-i { color: var(--good) !important; }
+.mc-done { font-weight: 700; color: var(--good); font-size: 14px; }
+.mfilter .seg-b small { opacity: .7; font-variant-numeric: lining-nums; }

@@ -154,6 +154,22 @@ function slotsSection() {
 }
 
 // ---------- mission mode: pick a challenge, or build your own ----------
+// The long goal of the game: complete every mission. Completions are kept on this device, across campaigns.
+const DONE_KEY = 'lasting-empires.missions-done';
+type DoneRec = { nation: string; realm: string; year: number; when: number };
+function missionsDone(): Record<string, DoneRec> { try { return JSON.parse(localStorage.getItem(DONE_KEY) ?? '{}'); } catch { return {}; } }
+function recordMission() {
+  const sc = S?.scenario;
+  if (!sc || sc.status !== 'won' || sc.custom || !MISSIONS.some(m => m.id === sc.id)) return;
+  const done = missionsDone();
+  if (done[sc.id]) return;
+  done[sc.id] = { nation: S.player, realm: player(S).name, year: sc.done ?? S.year, when: Date.now() };
+  try { localStorage.setItem(DONE_KEY, JSON.stringify(done)); } catch { /* storage may be blocked */ }
+  const n = Object.keys(done).filter(id => MISSIONS.some(m => m.id === id)).length;
+  toast(`Mission recorded: ${n} of ${MISSIONS.length} completed`, 'good');
+}
+const doneCount = () => { const d = missionsDone(); return MISSIONS.filter(m => d[m.id]).length; };
+
 const CUSTOM_KEY = 'lasting-empires.custom-missions';
 function customMissions(): (Scenario & { nation: string })[] { try { return JSON.parse(localStorage.getItem(CUSTOM_KEY) ?? '[]'); } catch { return []; } }
 function saveCustom(list: (Scenario & { nation: string })[]) { try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(list.slice(-12))); } catch { /* */ } }
@@ -170,8 +186,10 @@ const previewState = () => previewFor(missionYear);
 const goalTitle = (g: Goal, deadline: number) => goalView(previewState(), g, deadline).title;
 
 function missionCard(m: MissionDef) {
-  return h('div', { class: 'mcard' + (m.wild ? ' wild' : '') },
-    h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon(m.icon, 24) }), h('div', {}, h('b', {}, m.name), h('small', {}, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`)), m.wild ? h('span', { class: 'mc-wild' }, 'Wild') : null),
+  const done = missionsDone()[m.id];
+  return h('div', { class: 'mcard' + (m.wild ? ' wild' : '') + (done ? ' done' : '') },
+    h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon(done ? 'laurel' : m.icon, 24) }), h('div', {}, h('b', {}, m.name), h('small', {}, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`)), m.wild ? h('span', { class: 'mc-wild' }, 'Wild') : null),
+    done ? h('div', { class: 'mc-done' }, `✓ Completed with ${done.realm} in ${done.year}`) : null,
     h('p', { class: 'mc-t' }, m.text),
     h('ul', { class: 'mc-g' }, m.goals.map(g => h('li', {}, goalTitle(g, m.deadline)))),
     h('div', { class: 'mc-play' }, m.nations.map(n => { const nm = previewFor(m.start).nations[n]?.name ?? n; return h('button', { class: 'btn primary small', onclick: () => startMission(n, m.id) }, `Play ${nm}`); })));
@@ -183,8 +201,14 @@ function showMissions() {
   const mine = customMissions();
   root.append(h('div', { class: 'missions-screen' },
     h('header', { class: 'pick-top' }, h('button', { class: 'btn ghost small', onclick: () => showTitle() }, '← Back'), h('h1', {}, 'Missions')),
-    h('p', { class: 'muted' }, 'A realm, a deadline and a few goals. Track them in the Goals window during the game. Win or lose, the world goes on.'),
-    h('div', { class: 'seg mfilter' }, START_YEARS.map(y => h('button', { class: 'seg-b' + (y === missionYear ? ' on' : ''), onclick: () => { missionYear = y; showMissions(); } }, `Start ${y}`))),
+    (() => {
+      const all = MISSIONS.length, n = doneCount(), d = missionsDone();
+      return h('div', { class: 'mprog' },
+        h('div', { class: 'mprog-t' }, h('b', {}, `${n} of ${all} missions completed`), h('small', {}, START_YEARS.map(y => `${y}: ${MISSIONS.filter(m => m.start === y && d[m.id]).length}/${MISSIONS.filter(m => m.start === y).length}`).join(' · '))),
+        h('i', { class: 'mprog-bar' }, h('i', { style: `width:${Math.round((n / all) * 100)}%` })),
+        h('small', { class: 'muted' }, n === all ? 'Every mission done. A true Lasting Empire!' : 'The great goal: complete every mission, in any order. A realm, a deadline and a few goals each; track them in the Goals window. Win or lose, the world goes on.'));
+    })(),
+    h('div', { class: 'seg mfilter' }, START_YEARS.map(y => h('button', { class: 'seg-b' + (y === missionYear ? ' on' : ''), onclick: () => { missionYear = y; showMissions(); } }, `Start ${y}`, h('small', {}, ` ${MISSIONS.filter(m => m.start === y && missionsDone()[m.id]).length}/${MISSIONS.filter(m => m.start === y).length}`)))),
     h('div', { class: 'mgrid' },
       h('button', { class: 'mcard mc-new', onclick: () => showBuilder() }, h('span', { class: 'mc-i', html: icon('plus', 28) }), h('b', {}, 'Create your own mission'), h('small', {}, 'Choose a realm, a deadline and up to 6 goals')),
       ...mine.filter(c => ((c as { start?: number }).start ?? 1451) === missionYear).map(c => h('div', { class: 'mcard mc-custom' },
@@ -341,7 +365,7 @@ function showTitle() {
       SLOTS.some(n => loadSlot(n)) || pendingNation ? h('h2', { class: 'pick-h' }, 'Campaigns') : null,
       SLOTS.some(n => loadSlot(n)) || pendingNation ? slotsSection() : null,
       h('button', { class: 'btn primary wide newgame', onclick: () => showPicker() }, 'Start a new game'),
-      h('button', { class: 'btn wide newgame missions-b', onclick: () => showMissions() }, h('span', { html: icon('star', 18) }), ' Missions: historic challenges'),
+      h('button', { class: 'btn wide newgame missions-b', onclick: () => showMissions() }, h('span', { html: icon('star', 18) }), ` Missions · ${doneCount()} of ${MISSIONS.length} completed`),
       h('details', { class: 'howto' }, h('summary', {}, 'Test scenarios'),
         h('p', { class: 'muted' }, 'Ready-made games to try a system quickly. They use a free campaign slot.'),
         h('button', { class: 'btn wide', onclick: () => { const free = SLOTS.find(n => !loadSlot(n)) ?? (window.confirm('All slots are full. Replace slot 3?') ? 3 : 0); if (free) startIn(free, scenarioCastilePortugal()); } }, 'Battles: Castile at war with Portugal, summer 1467')),
@@ -436,6 +460,7 @@ function renderTutorial() {
 
 function refresh() {
   setCardGame(S);
+  recordMission();
   renderTop(); renderTabs(); map.render(S); renderTimeline(); renderTracker(); renderLegend();
   if (sheet) renderSheet();
   if (win) renderWin();
