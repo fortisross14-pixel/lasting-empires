@@ -54,7 +54,12 @@ export const MISSION_INFO: Record<MissionKind, { name: string; role: Role; icon:
   artwork: { name: 'Work of Art', role: 'artist', icon: 'quill', verb: 'Create' },
   pilgrimage: { name: 'Mission to the Church', role: 'priest', icon: 'church', verb: 'Win the favour of' },
   accept: { name: 'Embrace a Culture', role: 'leader', icon: 'people', verb: 'Embrace the' },
+  assist: { name: 'Collaboration', role: 'researcher', icon: 'people', verb: 'Help with the study of' },
 };
+
+/** Scholars helping a study add this share of their research. */
+export const ASSIST_SHARE = 0.75;
+export const helpersOf = (s: GameState, studyId: number) => s.missions.filter(m => m.kind === 'assist' && m.target === String(studyId));
 
 /** Goods a project uses up when it starts. */
 export function projectGoods(kind: MissionKind, building?: string): Record<string, number> {
@@ -190,6 +195,7 @@ export function missionTurns(s: GameState, kind: MissionKind, ch: Character, tar
     case 'tax': return 2;
     case 'progress': return 4;
     case 'route': return 1;
+    case 'assist': return s.missions.find(m => String(m.id) === target)?.turnsLeft ?? 1;
     case 'artwork': return Math.max(1, Math.round((target === 'monument' ? 8 : 4) / (ch.traits.includes('prolific') ? 2 : 1)));
     case 'pilgrimage': return 2;
     case 'accept': return Math.max(2, RARITY_YEARS[ch.rarity]);
@@ -236,6 +242,12 @@ export function diploChance(s: GameState, kind: MissionKind, ch: Character, targ
 export function missionBlocked(s: GameState, kind: MissionKind, target: string, building?: string): string | null {
   const me = s.player;
   if (kind === 'post') return postBlocked(s, target);
+  if (kind === 'assist') {
+    const st = s.missions.find(m => String(m.id) === target && m.kind === 'research');
+    if (!st) return 'Choose a study under way';
+    if (helpersOf(s, st.id).length >= 2) return 'Two scholars already help with it';
+    return null;
+  }
   if (kind === 'artwork') {
     if (!GENRES[target]) return 'Choose a kind of work';
     const cost = artCost(s, target) + projectShortfall(s, 'artwork', target);
@@ -458,11 +470,18 @@ export function advanceMissions(s: GameState) {
   for (const m of [...s.missions]) {
     const ch = s.characters.find(c => c.uid === m.char);
     if (!ch) { cancelMission(s, m.id); continue; }
+    if (m.kind === 'assist') {
+      const st = s.missions.find(x => String(x.id) === m.target);
+      if (!st) { finish(s, m); continue; }
+      m.turnsLeft = st.turnsLeft; m.total = Math.max(m.total, st.total);
+      continue;
+    }
     if (m.kind === 'research') {
-      m.progress += researchRate(s, ch, TECH[m.target].track) / 4;
+      const help = helpersOf(s, m.id).reduce((a, h) => { const hc = s.characters.find(c => c.uid === h.char); return a + (hc ? researchRate(s, hc, TECH[m.target].track) * ASSIST_SHARE : 0); }, 0);
+      m.progress += (researchRate(s, ch, TECH[m.target].track) + help) / 4;
       if (rand(s) < 0.02) { m.progress += 2; log(s, `Breakthrough in the study of ${TECH[m.target].name}!`, 'good'); }
       const cost = techCost(s, m.target);
-      m.turnsLeft = Math.max(0, Math.ceil((cost - m.progress) / (researchRate(s, ch, TECH[m.target].track) / 4)));
+      m.turnsLeft = Math.max(0, Math.ceil((cost - m.progress) / ((researchRate(s, ch, TECH[m.target].track) + help) / 4)));
       if (m.progress >= cost) completeResearch(s, m, ch);
       continue;
     }
@@ -500,6 +519,7 @@ export function quarterlyReturns(s: GameState) {
 
 function completeResearch(s: GameState, m: Mission, ch: Character) {
   const t = TECH[m.target];
+  for (const h of helpersOf(s, m.id)) { const hc = s.characters.find(c => c.uid === h.char); finish(s, h); if (hc) gainXp(s, hc, []); }
   s.techs.push(t.id);
   onTech(s, t.id);
   player(s).prestige += 1;

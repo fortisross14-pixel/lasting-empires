@@ -1,6 +1,6 @@
 // Cards are the actions of the game. Five kinds, each drawn at its own yearly rate.
 import { happinessOf } from './society';
-import { getGeo } from './map';
+import { getGeo, neighbours } from './map';
 import type { GameState, Cat, Role, MissionKind } from '../types';
 import { CATS } from '../types';
 import { TROOPS, EQUIPMENT } from '../data/troops';
@@ -30,9 +30,33 @@ export interface HandCardDef {
   burden?: boolean;
   permanent?: boolean; // stays in hand after use: the mission costs ducats only
   trade?: 'buy' | 'sell'; // trade route cards: which way the goods go
+  cls?: UnitClass;        // troop cards: hire the best unit of this class you have researched
+  improve?: boolean;      // shown with the improvements (it betters a troop)
 }
 
 export const HAND_LIMIT = 7;
+/** The border province that most needs walls: next to an enemy (or a foreign realm), weakest fort, richest. */
+export function exposedProvince(s: GameState) {
+  const max = hasTech(s, 'star_forts') ? 3 : 2;
+  const foes = new Set(enemiesOf(s, s.player));
+  const ps = provsOf(s, s.player).filter(p => p.fort < max).map(p => {
+    const nb = neighbours(p.id).map(n => s.provinces[n]?.owner).filter(o => o && o !== s.player);
+    return { p, score: (nb.some(o => foes.has(o!)) ? 100 : nb.length ? 10 : 0) - p.fort * 20 + p.dev };
+  }).filter(x => x.score >= 10 - 40).sort((a, b) => b.score - a.score);
+  return ps.length && ps[0].score > -30 ? ps[0].p : null;
+}
+
+/** What a card is for: people to hire, troops, improvements, or actions. */
+export type CardType = 'people' | 'troops' | 'improvement' | 'action' | 'burden';
+export function cardType(d: HandCardDef): CardType {
+  if (d.burden) return 'burden';
+  if (d.kind === 'hire') return 'people';
+  if (d.kind === 'troop' || d.kind === 'ship') return 'troops';
+  if (d.kind === 'equip' || d.improve) return 'improvement';
+  return 'action';
+}
+export const CARD_TYPE_NAME: Record<CardType, string> = { people: 'People', troops: 'Troops', improvement: 'Improvement', action: 'Action', burden: 'Burden' };
+
 /** There is no limit to the cards you hold: the yearly draw and missions a year are the limits. */
 export function handLimit(s: GameState): number {
   if (!(globalThis as { HANDLIMIT?: boolean }).HANDLIMIT) return Infinity;
@@ -59,10 +83,31 @@ export const CARDS: Record<string, HandCardDef> = {};
 const add = (d: HandCardDef) => { CARDS[d.id] = d; };
 
 // ---------- military ----------
-const TROOP_WEIGHT: Record<string, number> = { levy: 4, crossbow: 3, jinetes: 2.5, men_at_arms: 2, knights: 1, bombard: 1, pikemen: 2.5, arquebusiers: 2.5 };
-for (const t of Object.values(TROOPS).filter(t => t.draftable && t.kind !== 'ship')) {
-  add({ id: 'hire_' + t.id, name: t.name, cat: 'military', kind: 'troop', troop: t.id, icon: t.icon, text: t.desc,
-    weight: s => (techOk(s, t.tech) ? TROOP_WEIGHT[t.id] ?? 1 : 0) });
+/** Troop cards are by class: each hires the most advanced unit of that class you have researched. */
+export type UnitClass = 'levy' | 'inf' | 'shot' | 'cav' | 'art';
+export const UNIT_LINES: Record<UnitClass, string[]> = {
+  levy: ['levy'],
+  inf: ['men_at_arms', 'pikemen'],
+  shot: ['crossbow', 'arquebusiers', 'musketeers', 'line_infantry'],
+  cav: ['jinetes', 'reiters', 'dragoons'],
+  art: ['bombard', 'field_cannon'],
+};
+export const CLASS_NAME: Record<UnitClass, string> = { levy: 'Levy Infantry', inf: 'Infantry', shot: 'Ranged', cav: 'Cavalry', art: 'Artillery' };
+/** The unit a class card hires now. */
+export const unitFor = (s: GameState, cls: UnitClass) => [...UNIT_LINES[cls]].reverse().find(t => techOk(s, TROOPS[t].tech)) ?? UNIT_LINES[cls][0];
+/** The unit a troop card hires. */
+export const cardTroop = (s: GameState, d: HandCardDef) => (d.cls ? unitFor(s, d.cls) : d.troop!);
+const CLASS_CARDS: [string, UnitClass, string, number, string][] = [
+  ['hire_levy', 'levy', 'Levy Infantry', 3, 'Peasants with spears: cheap, and the base for many recipes.'],
+  ['hire_infantry', 'inf', 'Hire Infantry', 2.5, 'Your best foot soldiers: Men-at-Arms, then Pikemen with Pike Square.'],
+  ['hire_ranged', 'shot', 'Hire Ranged', 2.5, 'Your best missile troops: Crossbowmen, then Arquebusiers, Musketeers and Line Infantry as you research them.'],
+  ['hire_cavalry', 'cav', 'Hire Cavalry', 1.8, 'Your best horsemen: Jinetes, then Reiters and Dragoons as you research them. Heavy horse comes from recipes.'],
+  ['hire_artillery', 'art', 'Hire Artillery', 1, 'Your best guns: Bombards, then Field Cannon with Bronze Cannon.'],
+];
+for (const [id, cls, name, w, text] of CLASS_CARDS) add({ id, name, cat: 'military', kind: 'troop', cls, troop: UNIT_LINES[cls][0], icon: TROOPS[UNIT_LINES[cls][0]].icon, text, weight: () => w });
+// old single-unit cards stay playable in saved games, but are no longer drawn
+for (const t of Object.values(TROOPS).filter(t => t.draftable && t.kind !== 'ship' && t.id !== 'levy')) {
+  add({ id: 'hire_' + t.id, name: t.name, cat: 'military', kind: 'troop', troop: t.id, icon: t.icon, text: t.desc, weight: never });
 }
 const SHIP_WEIGHT: Record<string, number> = { galley: 1.4, caravel: 1.2, carrack: 1.2, galleon: 1.2, man_of_war: 1 };
 for (const t of Object.values(TROOPS).filter(t => t.draftable && t.kind === 'ship')) {
@@ -78,7 +123,7 @@ add({ id: 'march_orders', name: 'March Orders', cat: 'military', kind: 'mission'
 add({ id: 'forced_march', name: 'Forced March', cat: 'military', kind: 'instant', target: 'mission', icon: 'boot', text: 'A mission takes 1 year less (minimum 1).', weight: () => 0.9,
   targetOk: (s, t) => { const m = s.missions.find(x => String(x.id) === t); return !!m && m.turnsLeft > 1 && m.kind !== 'research'; },
   play: (s, t) => { s.missions.find(x => String(x.id) === t)!.turnsLeft--; return 'The mission speeds up'; } });
-add({ id: 'drill', name: 'Drill Sergeant', cat: 'military', kind: 'instant', target: 'troop', icon: 'banner', text: 'A troop gains a veteran star.', weight: () => 1,
+add({ id: 'drill', name: 'Drill Sergeant', cat: 'military', kind: 'instant', improve: true, target: 'troop', icon: 'banner', text: 'A troop gains a veteran star.', weight: () => 1,
   targetOk: (s, t) => s.troops.some(x => String(x.uid) === t && x.vet < 3),
   play: (s, t) => { const x = s.troops.find(y => String(y.uid) === t)!; x.vet++; return `${TROOPS[x.type].name} gains a star`; } });
 add({ id: 'fresh_recruits', name: 'Fresh Recruits', cat: 'military', kind: 'instant', icon: 'spear', text: 'Troops at home return to full strength.', weight: () => 0.8,
@@ -105,6 +150,9 @@ add({ id: 'marriage', name: 'Royal Marriage', cat: 'diplomacy', kind: 'mission',
 add({ id: 'peace_envoy', name: 'Peace Envoy', cat: 'diplomacy', kind: 'mission', permanent: true, missions: ['peace'], icon: 'dove', text: 'Negotiate an end to a war.', weight: s => (s.wars.some(w => w.a === s.player || w.b === s.player) ? 2 : 0.6) });
 add({ id: 'expedition', name: 'Voyage of Discovery', cat: 'diplomacy', kind: 'mission', missions: ['explore'], agent: 'explorer', icon: 'anchor', text: 'An explorer sails into the unknown. What they find is up to fate.', weight: s => (ageId(s) === 'reconquest' ? 0 : 0.9) });
 add({ id: 'fealty', name: 'Demand Fealty', cat: 'diplomacy', kind: 'mission', missions: ['vassalize'], icon: 'crown', text: 'Make a much weaker crown your vassal.', weight: () => 0.7 });
+add({ id: 'fortify', name: 'Fortify', cat: 'military', kind: 'instant', icon: 'tower', text: 'Pay 25 ducats: the most exposed province on your borders gains a fort level (up to 2, or 3 with Star Forts).', weight: s => (s.wars.some(w => w.a === s.player || w.b === s.player) ? 1.2 : 0.6),
+  can: s => player(s).gold < Math.round(25 * inflation(s)) ? `Needs ${Math.round(25 * inflation(s))} ducats` : !exposedProvince(s) ? 'Every border province is fortified already' : null,
+  play: s => { const p = exposedProvince(s)!; player(s).gold -= Math.round(25 * inflation(s)); p.fort++; return `${p.name} is fortified: fort ${p.fort}`; } });
 add({ id: 'scouts', name: 'Spy Troop Positions', cat: 'military', kind: 'instant', target: 'nation', icon: 'eye', text: 'Scouts find where a realm\'s armies stand, and how strong they are, for 2 years. Strike where they are weak.', weight: s => (enemiesOf(s, s.player).length ? 1.5 : 0.4),
   targetOk: (s, t) => t !== s.player && !!s.nations[t]?.alive, play: (s, t) => { s.nations[t].spiedUntil = Math.max(s.nations[t].spiedUntil ?? 0, s.year + 2); return `Scouts report where the ${s.nations[t].adj} armies stand`; } });
 add({ id: 'integration', name: 'Integration Treaty', cat: 'diplomacy', kind: 'mission', missions: ['integrate'], icon: 'hands', text: 'Fold a loyal vassal or union crown into the realm.', weight: s => (Object.values(s.nations).some(n => n.overlord === s.player) ? 1.2 : 0.1) });
@@ -152,7 +200,7 @@ add({ id: 'tolerance', name: 'Edict of Tolerance', cat: 'culture', kind: 'instan
   play: s => { s.flags.tolerance_until = s.year + 20; addRel(s, s.player, 'papacy', -20); return 'Other faiths may worship in peace'; } });
 add({ id: 'harvest', name: 'Bountiful Harvest', cat: 'internal', kind: 'instant', icon: 'wheat', text: 'Stability +1, manpower +2.', weight: () => 1,
   play: s => { stab(s, 1); player(s).manpower += 2; return 'Stability +1, manpower +2'; } });
-add({ id: 'sermon', name: 'Inspired Sermon', cat: 'internal', kind: 'instant', icon: 'church', text: 'Stability +1, prestige +3.', weight: () => 1,
+add({ id: 'sermon', name: 'Inspired Sermon', cat: 'culture', kind: 'instant', icon: 'church', text: 'Stability +1, prestige +3.', weight: () => 1,
   play: s => { stab(s, 1); player(s).prestige += 3; return 'Stability +1, prestige +3'; } });
 add({ id: 'census', name: 'Royal Census', cat: 'internal', kind: 'instant', icon: 'people', text: 'Manpower +3.', weight: () => 0.9,
   play: s => { player(s).manpower += 3; return 'Manpower +3'; } });
@@ -161,7 +209,7 @@ add({ id: 'pacify', name: 'Royal Pardon', cat: 'internal', kind: 'instant', icon
 add({ id: 'favour', name: 'Royal Favour', cat: 'internal', kind: 'instant', icon: 'crown', text: 'Pay 20 ducats: a random courtier gains +1 skill.', weight: () => 0.6,
   can: s => player(s).gold < 20 ? 'Needs 20 ducats' : !s.characters.some(c => c.skill < 6 && !c.ruler) ? 'No courtier can improve' : null,
   play: s => { player(s).gold -= 20; const c = pick(s, s.characters.filter(x => x.skill < 6 && !x.ruler)); c.skill++; return `${c.name} rises to skill ${c.skill}`; } });
-add({ id: 'relic', name: 'Holy Relic', cat: 'internal', kind: 'instant', icon: 'church', text: 'Prestige +8, stability +1.', weight: () => 0.4,
+add({ id: 'relic', name: 'Holy Relic', cat: 'culture', kind: 'instant', icon: 'church', text: 'Prestige +8, stability +1.', weight: () => 0.4,
   play: s => { player(s).prestige += 8; stab(s, 1); return 'Prestige +8, stability +1'; } });
 add({ id: 'crusade', name: 'Crusade Bull', cat: 'internal', kind: 'instant', icon: 'church', text: 'Gain 30 ducats and stability +1.', weight: never,
   play: s => { player(s).gold += 30; stab(s, 1); return '+30 ducats, stability +1'; } });
@@ -191,6 +239,7 @@ add({ id: 'hire_researcher', name: 'Invite a Scholar', cat: 'research', kind: 'h
 add({ id: 'study_military', name: 'Military Treatise', cat: 'research', kind: 'mission', missions: ['research'], track: 'military', icon: 'sword', text: 'A researcher studies a military technology.', weight: s => trackOpen(s, 'military') });
 add({ id: 'study_economy', name: 'Economic Treatise', cat: 'research', kind: 'mission', missions: ['research'], track: 'economy', icon: 'coin', text: 'A researcher studies an economic technology.', weight: s => trackOpen(s, 'economy') });
 add({ id: 'study_state', name: 'Treatise on Government', cat: 'research', kind: 'mission', missions: ['research'], track: 'state', icon: 'scales', text: 'A researcher studies a statecraft technology.', weight: s => trackOpen(s, 'state') });
+add({ id: 'collaboration', name: 'Collaboration', cat: 'research', kind: 'mission', missions: ['assist'], icon: 'people', text: 'A second scholar joins a study under way: it gains three quarters of their research until it is done.', weight: s => (s.missions.some(m => m.kind === 'research') ? 1.2 : 0.4) });
 add({ id: 'scholar', name: 'Wandering Scholar', cat: 'research', kind: 'instant', target: 'mission', icon: 'book', text: 'A study gains 5 research.', weight: () => 1,
   targetOk: (s, t) => s.missions.some(m => String(m.id) === t && m.kind === 'research'),
   play: (s, t) => { const m = s.missions.find(x => String(x.id) === t)!; m.progress += 5; return `+5 research on ${TECH[m.target].name}`; } });
@@ -304,7 +353,7 @@ export function cardBlocked(s: GameState, def: HandCardDef): string | null {
   if (def.kind === 'troop') {
     if (player(s).manpower < 1) return 'Needs 1 manpower';
     if (s.troops.length >= armyCap(s)) return `Army is at full size (${armyCap(s)})`;
-    if (player(s).gold < troopHireCost(s, def.troop!)) return `Needs ${troopHireCost(s, def.troop!)} ducats`;
+    if (player(s).gold < troopHireCost(s, cardTroop(s, def))) return `Needs ${troopHireCost(s, cardTroop(s, def))} ducats`;
     return null;
   }
   if (def.kind === 'hire') return player(s).manpower < 1 ? 'Needs 1 manpower' : null;
@@ -336,14 +385,15 @@ export function playCard(s: GameState, handUid: number, target: string): string 
   if (def.kind === 'troop') {
     const gen = s.characters.find(c => String(c.uid) === target && c.mission == null && (c.role === 'general' || c.role === 'conqueror'));
     player(s).manpower -= 1;
-    player(s).gold -= troopHireCost(s, def.troop!);
-    takeGoods(s, hireNeeds(def.troop!, TROOPS[def.troop!].kind));
+    const type = cardTroop(s, def);
+    player(s).gold -= troopHireCost(s, type);
+    takeGoods(s, hireNeeds(type, TROOPS[type].kind));
     const o = rollOutcome(s, gen);
     const vet = [0, 0, 1, 2, 3][o];
-    s.troops.push({ uid: uid(s), type: def.troop!, vet, str: o === 0 ? 70 : 100 });
+    s.troops.push({ uid: uid(s), type, vet, str: o === 0 ? 70 : 100 });
     removeCard(s, handUid);
-    log(s, `Hired ${TROOPS[def.troop!].name}${vet ? ' ' + '★'.repeat(vet) : ''}.`);
-    return `${outcomeName(o)} recruits: ${TROOPS[def.troop!].name}${vet ? ' ' + '★'.repeat(vet) : ''}${o === 0 ? ' (under strength)' : ''}${gen ? ', trained by ' + gen.name : ''}`;
+    log(s, `Hired ${TROOPS[type].name}${vet ? ' ' + '★'.repeat(vet) : ''}.`);
+    return `${outcomeName(o)} recruits: ${TROOPS[type].name}${vet ? ' ' + '★'.repeat(vet) : ''}${o === 0 ? ' (under strength)' : ''}${gen ? ', trained by ' + gen.name : ''}`;
   }
   if (def.kind !== 'instant' || !def.play) return '!This card is used another way';
   if (def.target === 'nation' && !s.nations[target]?.alive) return '!Choose a nation';

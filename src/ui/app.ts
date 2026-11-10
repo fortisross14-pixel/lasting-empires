@@ -19,10 +19,11 @@ import {
 } from '../engine/core';
 import { newGame, endTurn, chooseEventOption, playerDeclareWar, warCost, ranking, powerTable, dismissCharacter, disbandTroop, chooseHeir, SAVE_VERSION, coreBlocked, coreCost, adoptCore, dropCore, migrate } from '../engine/turn';
 import { EVENT, eventTitle, upcomingHistory } from '../engine/events';
+import { cardType, cardTroop, unitFor, UNIT_LINES, CLASS_NAME, type CardType, type UnitClass } from '../engine/cards';
 import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBlocked, troopHireCost, discardCard, handLimit, cardFor, archiveCards, restoreCard, dropArchived } from '../engine/cards';
 import {
   MISSION_INFO, DIPLO, missionBlocked, launchMission, cancelMission, diploChance, missionTurns, techCost, researchRate, attackRoute,
-  developCost, foundCost, growCost, projectGoods, projectShortfall, pilgrimageCost, cardRole, cardRoles, becomesOnMission, voyageCost, GRADES,
+  developCost, foundCost, growCost, projectGoods, projectShortfall, pilgrimageCost, helpersOf, cardRole, cardRoles, becomesOnMission, voyageCost, GRADES,
   graceCost, envoyCost, envoyTravel,
 } from '../engine/missions';
 import { buyCard, buyBlocked, hireWithCard, takeDraftOption, mergePreview, doMerge, AMBITIONS, officeCost, sellOffices } from '../engine/drafts';
@@ -31,7 +32,7 @@ import { playRound, autoResolve, finishBattle, ratio, breakLevel, hp } from '../
 import { getGeo } from '../engine/map';
 import { h, $, clear, sleep, reduced, fmt, signed } from './dom';
 import { icon } from './icons';
-import { troopCard, charCard, handCard, tacticCard, backCard, flipCard, coreCard } from './cards';
+import { setCardGame, troopCard, charCard, handCard, tacticCard, backCard, flipCard, coreCard } from './cards';
 import { AXES, CORE } from '../data/core';
 import { navyCap, transportOf, hireShip, shipHireCost } from '../engine/navy';
 import { warScore, peaceTerms, enemyDemands, concludePeace, subjectsOf, integrateBlocked, vassalizeBlocked, tributeShare } from '../engine/diplo';
@@ -301,6 +302,7 @@ function renderTutorial() {
 }
 
 function refresh() {
+  setCardGame(S);
   renderTop(); renderTabs(); map.render(S); renderTimeline(); renderTracker(); renderLegend();
   if (sheet) renderSheet();
   if (win) renderWin();
@@ -392,7 +394,8 @@ function renderTimeline() {
 }
 
 function missionTitle(m: GameState['missions'][number]) {
-  const tname = S.provinces[m.target]?.name ?? S.nations[m.target]?.name ?? TECH[m.target]?.name ?? '';
+  const study = m.kind === 'assist' ? S.missions.find(x => String(x.id) === m.target) : null;
+  const tname = study ? TECH[study.target]?.name ?? '' : m.kind === 'artwork' ? GENRES[m.target]?.name ?? '' : m.kind === 'accept' ? cultureName(m.target) : m.kind === 'route' ? `${GOODS[m.good ?? '']?.name ?? ''} ${m.dir === 'sell' ? 'to' : 'from'} ${nationName(S, m.target)}` : S.provinces[m.target]?.name ?? S.nations[m.target]?.name ?? TECH[m.target]?.name ?? '';
   return `${MISSION_INFO[m.kind].name}${m.kind === 'build' ? ': ' + BUILDINGS[m.building!].name : ''}${tname ? ' · ' + tname : ''}`;
 }
 
@@ -518,7 +521,7 @@ function cardsTab(cat: Cat, body: HTMLElement) {
   }
   // filters
   const filters: [string, string, number][] = [['all', 'All', 0], ['hand', 'Cards', hand.length], ['people', 'People', S.characters.filter(c => CAT_ROLES[cat].includes(c.role)).length]];
-  if (mil) filters.push(['troops', 'Troops', S.troops.length], ['ships', 'Ships', S.fleet.length], ['equip', 'Equipment', hand.filter(x => CARDS[x.card].kind === 'equip').length]);
+  if (mil) filters.push(['troops', 'Troops', S.troops.length], ['ships', 'Ships', S.fleet.length], ['equip', 'Improvements', hand.filter(x => cardType(CARDS[x.card]) === 'improvement').length]);
   if (!filters.some(f => f[0] === cv.filter)) cv.filter = 'all';
   body.append(h('div', { class: 'seg cfilter' }, filters.map(([id, label, n]) => h('button', { class: 'seg-b' + (cv.filter === id ? ' on' : ''), onclick: () => { cv = { ...cv, filter: id }; renderWin(); } }, label, n ? h('small', {}, ` ${n}`) : null))));
   if (cv.mode === 'select') {
@@ -530,8 +533,8 @@ function cardsTab(cat: Cat, body: HTMLElement) {
   const show = (id: string) => f === 'all' || f === id;
   const sec = (title: string, els: HTMLElement[], empty: string, wide = false) => { body.append(h('h3', {}, title)); body.append(els.length ? h('div', { class: wide ? 'cards-grid' : 'cards-row wrap' }, els) : h('p', { class: 'muted' }, empty)); };
   if (show('hand') || show('equip')) {
-    const list = f === 'equip' ? hand.filter(x => CARDS[x.card].kind === 'equip') : hand;
-    sec(f === 'equip' ? 'Equipment' : 'Cards in hand', stacks(list).map(st => {
+    const list = f === 'equip' ? hand.filter(x => cardType(CARDS[x.card]) === 'improvement') : hand;
+    const tile = (st: { card: string; uids: number[] }) => {
       const chosen = st.uids.filter(u => cv.sel.includes(u)).length;
       return handCard(st.card, { wide: true, count: st.uids.length, badge: cv.mode === 'select' && chosen ? `${chosen} chosen` : undefined, selected: chosen > 0, dim: cv.mode !== 'select' && !!cardBlocked(S, CARDS[st.card]) && CARDS[st.card].kind !== 'mission', onclick: () => {
         if (cv.mode === 'select') {
@@ -541,7 +544,13 @@ function cardsTab(cat: Cat, body: HTMLElement) {
         }
         openCardModal(st.uids[0]);
       } });
-    }), 'No cards. You draw them each quarter, or buy a pack.', true);
+    };
+    if (!list.length) sec('Cards in hand', [], 'No cards. You draw them each quarter, or buy a pack.', true);
+    const groups: [CardType, string][] = [['people', 'People cards: hire someone'], ['troops', 'Troops: hire a company'], ['improvement', 'Improvements: better troops'], ['action', 'Actions'], ['burden', 'Burdens']];
+    for (const [ty, title] of groups) {
+      const sts = stacks(list.filter(x => cardType(CARDS[x.card]) === ty));
+      if (sts.length) sec(title, sts.map(tile), '', true);
+    }
   }
   if (show('people')) {
     const ppl = S.characters.filter(c => CAT_ROLES[cat].includes(c.role));
@@ -868,8 +877,25 @@ function diploHint(k: MissionKind) {
 }
 
 // ---------- category panels ----------
+/** What each troop card hires now, and what research brings next. */
+function unitsPanel() {
+  const box = h('div', { class: 'units' });
+  for (const cls of ['levy', 'inf', 'shot', 'cav', 'art'] as UnitClass[]) {
+    const now = unitFor(S, cls);
+    const line = UNIT_LINES[cls];
+    const next = line.slice(line.indexOf(now) + 1)[0];
+    const d = TROOPS[now];
+    box.append(h('div', { class: 'unit-row' },
+      troopCard({ type: now, vet: 0, str: 100 }, { small: true }),
+      h('div', { class: 'g-t' }, h('b', {}, CLASS_NAME[cls]), h('small', {}, `${d.name} · melee ${d.melee}, fire ${d.fire}, defence ${d.def} · upkeep ${d.upkeep}`),
+        h('small', { class: 'muted' }, next ? `Next: ${TROOPS[next].name} with ${TECH[TROOPS[next].tech!]?.name ?? 'research'}` : 'The best of its kind'))));
+  }
+  return box;
+}
+
 function armyTab(body: HTMLElement) {
   const gs = garrisons(S);
+  body.append(h('h3', {}, 'Your units'), h('p', { class: 'muted small' }, 'Troop cards hire the best unit of their kind you have researched. Better kinds (Tercios, Knights, Cuirassiers, Galleons…) come from the recipes in the Forge: two companies, or a company and an improvement card.'), unitsPanel());
   body.append(h('p', { class: 'muted' }, 'Troops stand in the capital, in provinces with Barracks, or at an invasion base. Only troops within a quarter\'s march can attack or defend a province. Tap troops to select them, then move them.'));
   body.append(h('h3', {}, `Armies (${S.troops.length}/${armyCap(S)}) · upkeep ${incomeOf(S, S.player).upkeep.toFixed(1)} a year`));
   const sel = forge.filter(u => S.troops.some(t => t.uid === u));
@@ -1530,6 +1556,11 @@ function missionTargets(handUid: number, all = false): TargetRow[] {
     for (const p of provsOf(S, S.player).sort((a, b) => happinessOf(S, a).value - happinessOf(S, b).value)) {
       rows.push({ label: p.name, sub: `happiness ${happinessOf(S, p).value}%${p.favor ? ` · favour ${Math.round(p.favor)}` : ''}`, acts: [{ label: 'Grace', kind, target: p.id, why: missionBlocked(S, kind, p.id) }] });
     }
+  } else if (kind === 'assist') {
+    for (const m of S.missions.filter(m => m.kind === 'research')) {
+      const lead = S.characters.find(c => c.uid === m.char);
+      rows.push({ label: TECH[m.target].name, sub: `${lead?.name ?? '?'} · ${qText(m.turnsLeft)} left · ${helpersOf(S, m.id).length} helping`, acts: [{ label: 'Join', kind, target: String(m.id), why: missionBlocked(S, 'assist', String(m.id)) }] });
+    }
   } else if (kind === 'artwork') {
     for (const g of Object.values(GENRES)) rows.push({ label: g.name, sub: `${artCost(S, g.id)} ducats · ${g.desc}`, acts: [{ label: 'Commission', kind, target: g.id, why: missionBlocked(S, 'artwork', g.id) }] });
   } else if (kind === 'pilgrimage') {
@@ -1569,7 +1600,8 @@ function openCardModal(handUid: number) {
     !def.burden ? h('button', { class: 'btn ghost', onclick: () => { closeModal(); act(() => discardCard(S, handUid), 'Discarded: +0.5 nation points'); } }, 'Discard (+0.5 NP)') : null);
 
   if (def.kind === 'troop') {
-    body.append(h('p', {}, `Hire for 1 manpower and ${troopHireCost(S, def.troop!)} ducats. Upkeep ${TROOPS[def.troop!].upkeep} a year. A better general trains better troops: veteran stars depend on the outcome.`), goodsNote(hireNeeds(def.troop!, TROOPS[def.troop!].kind)));
+    const unit = cardTroop(S, def);
+    body.append(h('p', {}, `${def.cls ? `Hires your best ${CLASS_NAME[def.cls].toLowerCase()}: ${TROOPS[unit].name}. ` : ''}1 manpower and ${troopHireCost(S, unit)} ducats. Upkeep ${TROOPS[unit].upkeep} a year. A better general trains better troops: veteran stars depend on the outcome.`), goodsNote(hireNeeds(unit, TROOPS[unit].kind)));
     const gens = S.characters.filter(c => (c.role === 'general' || c.role === 'conqueror') && c.mission == null);
     let gsel: Character | null = [...gens].sort((a, b) => RARITY_ORDER_I(b) - RARITY_ORDER_I(a))[0] ?? null;
     const gl = h('div', { class: 'cards-row wrap' });
@@ -1739,7 +1771,7 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
   let ships: number[] = naval ? harbourShips.map(t => t.uid) : [];
   const good: string | undefined = trade?.good;
 
-  const tname = kind === 'artwork' ? GENRES[target]?.name.toLowerCase() ?? 'a work' : kind === 'accept' ? `${cultureName(target)} people` : kind === 'pilgrimage' ? churchHead(S).name : S.provinces[target]?.name ?? S.nations[target]?.name ?? TECH[target]?.name ?? 'the realm';
+  const tname = kind === 'assist' ? TECH[S.missions.find(x => String(x.id) === target)?.target ?? '']?.name ?? 'a study' : kind === 'artwork' ? GENRES[target]?.name.toLowerCase() ?? 'a work' : kind === 'accept' ? `${cultureName(target)} people` : kind === 'pilgrimage' ? churchHead(S).name : S.provinces[target]?.name ?? S.nations[target]?.name ?? TECH[target]?.name ?? 'the realm';
   const box = h('div', { class: 'mbox planner' });
   const draw = () => {
     clear(box);

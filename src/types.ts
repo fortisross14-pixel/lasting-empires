@@ -106,7 +106,7 @@ export type MissionKind =
   | 'relations' | 'trade' | 'alliance' | 'marriage' | 'peace'
   | 'research' | 'build' | 'develop' | 'found' | 'grow' | 'tax' | 'progress'
   | 'explore' | 'colonize' | 'conquista'
-  | 'vassalize' | 'integrate' | 'patronage' | 'convert' | 'assimilate' | 'grace' | 'base' | 'route' | 'post' | 'artwork' | 'pilgrimage' | 'accept';
+  | 'vassalize' | 'integrate' | 'patronage' | 'convert' | 'assimilate' | 'grace' | 'base' | 'route' | 'post' | 'artwork' | 'pilgrimage' | 'accept' | 'assist';
 
 export interface Mission {
   id: number;

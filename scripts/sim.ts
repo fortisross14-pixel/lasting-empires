@@ -133,6 +133,7 @@ function botTurn(s: GameState) {
       if (process.env.NOCULTURE && d.cat === 'culture') continue;
       if (kind === 'artwork') { if (me.gold > 60) { const gs = ['sacred', 'portrait', 'epic', 'treatise', 'monument']; launchMission(s, 'artwork', a.uid, gs[Math.floor(R() * gs.length)], [], undefined, h.uid); } continue; }
       if (kind === 'accept') { const c = provsOf(s, s.player).map(p => p.culture).find(c => !missionBlocked(s, 'accept', c)); if (c) launchMission(s, 'accept', a.uid, c, [], undefined, h.uid); continue; }
+      if (kind === 'assist') { const st = s.missions.find(m => m.kind === 'research' && !missionBlocked(s, 'assist', String(m.id))); if (st) launchMission(s, 'assist', a.uid, String(st.id), [], undefined, h.uid); continue; }
       if (kind === 'pilgrimage') { if (me.gold > 50) launchMission(s, 'pilgrimage', a.uid, '', [], undefined, h.uid); continue; }
       if (kind === 'build') {
         let opts = Object.values(BUILDINGS).filter(b => b.group === d.group).map(b => b.id);

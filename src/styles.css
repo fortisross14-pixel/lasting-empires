@@ -1029,3 +1029,8 @@ ul.traits { margin: 0; padding-left: 18px; }
   #top #endturn .et-l { font-size: 13px; }
   #top #endturn small { display: none; }
 }
+.units { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.unit-row { display: flex; gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
+.unit-row .g-t { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.unit-row .card { flex: none; pointer-events: none; }
+.c-unit { font-size: 12px; font-weight: 700; color: var(--band); padding: 0 0 2px; }

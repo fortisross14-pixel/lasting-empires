@@ -3,7 +3,7 @@ import type { TroopCard, EquipCard, Character, GameState } from '../types';
 import { TROOPS, EQUIPMENT, TACTICS } from '../data/troops';
 import { TRAITS, RARITY } from '../data/characters';
 import { CORE } from '../data/core';
-import { CARDS } from '../engine/cards';
+import { CARDS, cardType, CARD_TYPE_NAME, unitFor } from '../engine/cards';
 import { roleName, troopPower } from '../engine/core';
 import { h } from './dom';
 import { icon } from './icons';
@@ -63,21 +63,28 @@ export function charCard(c: Character, s: GameState, o: Opts = {}) {
 
 const KIND_LABEL: Record<string, string> = { ship: 'Ship', troop: 'Troop', equip: 'Equipment', hire: 'Hire', mission: 'Mission', instant: 'Order' };
 
+/** The game being shown: class troop cards name the unit they hire now. */
+let current: GameState | null = null;
+export const setCardGame = (s: GameState) => { current = s; };
+
 export function handCard(id: string, o: Opts = {}) {
   const d = CARDS[id];
-  const t = d.troop ? TROOPS[d.troop] : null;
+  const unit = d.cls && current ? unitFor(current, d.cls) : d.troop;
+  const t = unit ? TROOPS[unit] : null;
+  const label = d.permanent ? 'Action · permanent' : CARD_TYPE_NAME[cardType(d)];
   if (o.wide) {
     return shell('hand', { ...o, cls: `cat-${d.cat} kind-${d.kind}${d.burden ? ' burden' : ''} ${o.cls ?? ''}` },
-      h('div', { class: 'c-art', html: icon(d.icon, 34) }),
+      h('div', { class: 'c-art', html: icon(t?.icon ?? d.icon, 34) }),
       h('div', { class: 'c-body' },
-        h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, d.burden ? 'Burden' : KIND_LABEL[d.kind]), d.permanent ? h('span', { class: 'c-perm' }, 'permanent') : null),
+        h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, label)),
         h('div', { class: 'c-name c-title' }, d.name),
+        d.cls && t ? h('div', { class: 'c-unit' }, `Hires: ${t.name}`) : null,
         t ? h('div', { class: 'c-stats' }, h('span', {}, h('b', {}, 'M'), t.melee), h('span', {}, h('b', {}, 'F'), t.fire), h('span', {}, h('b', {}, 'D'), t.def), h('span', {}, h('b', {}, 'upkeep'), t.upkeep)) : null,
         h('div', { class: 'c-text' }, d.text)));
   }
   return shell('hand', { ...o, cls: `cat-${d.cat} kind-${d.kind}${d.burden ? ' burden' : ''} ${o.cls ?? ''}` },
-    h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, d.burden ? 'Burden' : KIND_LABEL[d.kind])),
-    h('div', { class: 'c-art', html: icon(d.icon, o.small ? 24 : 32) }),
+    h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, label)),
+    h('div', { class: 'c-art', html: icon(t?.icon ?? d.icon, o.small ? 24 : 32) }),
     h('div', { class: 'c-name c-title' }, d.name),
     t ? h('div', { class: 'c-stats' }, h('span', {}, h('b', {}, 'M'), t.melee), h('span', {}, h('b', {}, 'F'), t.fire), h('span', {}, h('b', {}, 'D'), t.def)) : null,
     o.small || t ? null : h('div', { class: 'c-text' }, d.text),

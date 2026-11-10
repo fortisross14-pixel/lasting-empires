@@ -16,6 +16,7 @@ import { CATS } from '../types';
 import { NATIONS, START_REL, RULERS, RULER_NAMES, RULER_ARCHS, archFromTraits } from '../data/nations';
 import { getGeo } from './map';
 import { BUILDINGS } from '../data/techs';
+import { TROOPS } from '../data/troops';
 import { CORE } from '../data/core';
 import {
   rand, pick, randInt, uid, clamp, player, provsOf, incomeOf, log, push, addRel, playerManpower, initialSettlement, grade,
@@ -470,6 +471,9 @@ export function migrate(s: GameState): GameState {
     s.stock = startStock(s);
   }
   s.routes ??= []; s.posts ??= []; s.short ??= {};
+  // troop cards are by class now: an old Knights card becomes Hire Cavalry, and so on
+  const CLASS_CARD: Record<string, string> = { inf: 'hire_infantry', shot: 'hire_ranged', cav: 'hire_cavalry', art: 'hire_artillery' };
+  for (const h of s.hand) { const t = h.card.startsWith('hire_') ? TROOPS[h.card.slice(5)] : undefined; if (t && t.id !== 'levy' && t.kind !== 'ship' && CLASS_CARD[t.kind]) h.card = CLASS_CARD[t.kind]; }
   // trade became card by card: the old lasting route charter becomes one import and one export contract
   if (s.hand.some(h => h.card === 'merchant_route')) {
     s.hand = s.hand.filter(h => h.card !== 'merchant_route');
