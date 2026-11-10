@@ -157,6 +157,15 @@ kurds;Kurdish Emirates;Kurdish;#6a9a6a;kurdish;muslim;bitlis;cautious;15;H
 gilan;Gilan;Gilaki;#8ab050;persian;muslim;gilan;cautious;20;S
 hadramawt;Hadramawt;Hadrami;#7a5aa0;arab;muslim;hadramawt;merchant;20;S
 natives;Native peoples;native;#e6dfcc;native;animist;cape;cautious;0;N
+pate;Pate;Pate;#2f9c8c;swahili;muslim;pate;merchant;20;S
+ife;Ife;Ife;#d08a5a;yoruba;animist;ife;cautious;20;N
+zapotec;Zapotec Kingdom;Zapotec;#c08a3a;zapotec;nahuatl;tehuantepec;cautious;25;N
+multan;Multan;Multani;#8a6a3a;punjabi;muslim;multan;cautious;35;M
+gwalior;Gwalior;Tomara;#9a3a5a;rajput;hindu;gwalior;cautious;30;M
+nepal;Nepal;Nepali;#d06a9a;nepali;hindu;kathmandu;cautious;25;S
+khandesh;Khandesh;Khandeshi;#5a8a9a;marathi;muslim;khandesh;cautious;20;S
+badakhshan;Badakhshan;Badakhshani;#8a6fb5;persian;muslim;badakhshan;cautious;20;S
+sistan;Sistan;Sistani;#c99a5b;persian;muslim;sistan;cautious;20;S
 `;
 
 const ARMIES: Record<string, string[]> = {

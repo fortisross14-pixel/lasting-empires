@@ -27,6 +27,8 @@ export const NAME_POOLS: Record<string, NamePool> = {
 
 /** Which name pool a culture uses. */
 export const CULTURE_POOL: Record<string, string> = {
+  baluch: 'persian', pashtun: 'persian', bulgarian: 'slavic', nepali: 'indian', punjabi: 'indian',
+  caddo: 'american', calusa: 'american', iroquois: 'american', mississippian: 'american', otomi: 'american', plains: 'american', tairona: 'american', totonac: 'american', zapotec: 'american',
   khoisan: 'african',
   fur: 'african',
   fulani: 'african',
