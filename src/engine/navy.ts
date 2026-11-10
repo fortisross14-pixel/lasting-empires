@@ -2,7 +2,7 @@
 import { shortfallCost, takeGoods, hireNeeds } from './trade';
 import type { GameState, Character } from '../types';
 import { TROOPS } from '../data/troops';
-import { player, provsOf, hasTech, hasCore, inflation, uid, rollOutcome, outcomeName, log, rollTraits, traitMult } from './core';
+import { player, provsOf, hasTech, hasCore, inflation, uid, rollOutcome, outcomeName, log, rollTraits, traitMult, techFx } from './core';
 import { getGeo } from './map';
 import { CARDS, removeCard } from './cards';
 import { RARITY } from '../data/characters';
@@ -11,7 +11,7 @@ export function navyCap(s: GameState): number {
   const ps = provsOf(s, s.player);
   const coastal = ps.filter(p => getGeo().coastal[p.id]).length;
   const harbours = ps.filter(p => p.buildings.includes('harbour')).length;
-  return Math.max(0, 1 + Math.floor(coastal / 2) + harbours + (hasCore(s, 'sea') ? 2 : 0) + (hasTech(s, 'ship_of_line') ? 1 : 0));
+  return Math.max(0, 1 + Math.floor(coastal / 2) + harbours + (hasCore(s, 'sea') ? 2 : 0) + techFx(s, 'navy'));
 }
 
 /** How many companies these ships can carry. */

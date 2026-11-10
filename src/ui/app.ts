@@ -2,7 +2,7 @@ import type { GameState, Province, MissionKind, DraftOption, RevealItem, Battle,
 import { CATS } from '../types';
 import { NATIONS, RULER_ARCHS } from '../data/nations';
 import { TROOPS, EQUIPMENT, COUNTER_TEXT } from '../data/troops';
-import { TECHS, TECH, BUILDINGS, type TechTrack } from '../data/techs';
+import { TECHS, TECH, BUILDINGS, AGE_NAMES, type TechTrack } from '../data/techs';
 import { TRAITS, RARITY, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
 import { GOODS, FOOD, RAW, MADE } from '../data/goods';
 import { GENRES, QUALITY } from '../data/culture';
@@ -15,7 +15,7 @@ import { NO_STATE } from '../data/nations';
 import {
   player, push, pioneerNow, provsOf, incomeOf, playerManpower, getRel, atWar, hasTreaty, enemiesOf, alliesOf, armyPower,
   armyCap, courtCap, courtCount, provinceIncome, buildingAllowed, buildingCost, roleName, nationName, inTruce,
-  tierOf, TIERS, population, townSlots, ruralSlots, builtAt, ownGoods, colonyGoods, coreSlots,
+  tierOf, TIERS, population, townSlots, ruralSlots, builtAt, ownGoods, colonyGoods, coreSlots, techFx, ageIndex,
 } from '../engine/core';
 import { newGame, endTurn, chooseEventOption, playerDeclareWar, warCost, ranking, powerTable, dismissCharacter, disbandTroop, chooseHeir, SAVE_VERSION, coreBlocked, coreCost, adoptCore, dropCore, migrate } from '../engine/turn';
 import { EVENT, eventTitle, upcomingHistory } from '../engine/events';
@@ -381,9 +381,9 @@ function renderTabs() {
   for (const c of CATS) {
     const n = handOf(S, c).length;
     nav.append(h('button', { class: 'tab' + (win?.cat === c ? ' on' : ''), onclick: () => toggleWin(c), style: `--cc:${CAT_INFO[c].color}` },
-      h('span', { class: 'tab-i', html: icon(CAT_INFO[c].icon, 20) }),
+      h('span', { class: 'tab-i', html: icon(CAT_INFO[c].icon, 20) }, n ? h('span', { class: 'tab-c', 'aria-label': `${n} cards in hand` }, String(n)) : null),
       h('span', { class: 'tab-l' }, c === 'diplomacy' ? 'Diplomacy' : CAT_INFO[c].name),
-      h('span', { class: 'tab-n' }, `${n} · +${rates[c].rate.toFixed(1)}`)));
+      h('span', { class: 'tab-n', title: 'New cards a year' }, `+${rates[c].rate.toFixed(1)}/yr`)));
   }
 }
 
@@ -715,6 +715,34 @@ function oddsLine(c?: Character | null) {
 
 const stat = (label: string, value: string | number | HTMLElement) => h('div', { class: 'stat' }, h('span', {}, label), typeof value === 'object' ? value : h('b', {}, String(value)));
 
+/** Cost and benefit of a building, side by side. */
+function costBenefit(bid: string, provId?: string, ch?: Character): HTMLElement {
+  const b = BUILDINGS[bid];
+  const mats = projectGoods('build', bid).materials ?? 0;
+  const have = S.stock.materials ?? 0;
+  const extra = projectShortfall(S, 'build', bid);
+  const q = ch ? missionTurns(S, 'build', ch, provId ?? '', bid) : b.turns * 3;
+  const cost: (string | HTMLElement)[] = [
+    `${buildingCost(S, bid)} ducats`,
+    h('span', { class: have >= mats ? '' : 'bad' }, `${mats} construction materials (you have ${have.toFixed(1)})${have >= mats ? '' : `: the rest bought for +${extra} ducats`}`),
+    `Takes ${qText(q)}`,
+    `Upkeep ${b.salary} ducats a year`,
+  ];
+  const gives = [...b.gives];
+  const p = provId ? S.provinces[provId] : undefined;
+  if (p && b.match?.includes(p.good)) gives.unshift(`${p.name} makes ${GOODS[p.good]?.name.toLowerCase() ?? p.good}: output doubled here`);
+  return h('div', { class: 'cb' },
+    h('div', { class: 'cb-col cb-cost' }, h('h4', {}, 'Cost'), h('ul', {}, cost.map(c => h('li', {}, c)))),
+    h('div', { class: 'cb-col cb-gain' }, h('h4', {}, 'Benefit'), h('ul', {}, gives.map(g => h('li', {}, g)))));
+}
+
+function buildRow(bid: string, provId: string, blocked: string | null, onclick: () => void) {
+  const b = BUILDINGS[bid];
+  return h('button', { class: `action build-row${blocked ? ' blocked' : ''}`, onclick: () => (blocked ? toast(blocked, 'bad') : onclick()) },
+    h('span', { class: 'br-head' }, h('span', { class: 'a-ico', html: icon(b.icon, 20) }), h('b', {}, b.name), blocked ? h('small', { class: 'bad' }, blocked) : null),
+    costBenefit(bid, provId));
+}
+
 function actionRow(ic: string, title: string, sub: string, blocked: string | null, onclick: () => void, tone = '') {
   return h('button', { class: `action ${tone}${blocked ? ' blocked' : ''}`, onclick: () => (blocked ? toast(blocked, 'bad') : onclick()) },
     h('span', { class: 'a-ico', html: icon(ic, 20) }),
@@ -805,11 +833,12 @@ function provinceSheet(id: string, body: HTMLElement) {
       body.append(h('h3', {}, label));
       for (const b of Object.values(BUILDINGS).filter(b => b.site === siteName)) {
         const why = buildingAllowed(S, id, b.id);
-        if (why && (why.startsWith('Needs Ocean') || why === 'Coastal provinces only')) continue;
+        if (b.tech && !S.techs.includes(b.tech)) continue; // not researched yet: not shown
+        if (why === 'Coastal provinces only' || why === 'Already built') continue;
         const card = cardFor(S, 'build', { group: b.group });
         const need = b.group === 'internal' ? 'Royal Works (Internal)' : 'Guild Charter (Economy)';
         const block = why ?? (!card ? `Needs a ${need} card` : player(S).gold < buildingCost(S, b.id) ? `Needs ${buildingCost(S, b.id)} ducats` : null);
-        body.append(actionRow(b.icon, b.name, `${b.desc} · ${buildingCost(S, b.id)} ducats · salary ${b.salary}/yr`, block, () => openPlanner('build', id, b.id, card!.uid)));
+        body.append(buildRow(b.id, id, block, () => openPlanner('build', id, b.id, card!.uid)));
       }
     }
   } else if (p.owner === NO_STATE) {
@@ -1369,24 +1398,76 @@ function artsTab(body: HTMLElement) {
   }
 }
 
-function techTab(body: HTMLElement) {
-  const tracks: [TechTrack, string][] = [['military', 'Military'], ['economy', 'Economy'], ['state', 'Statecraft']];
-  const wrap = h('div', { class: 'tech-cols' });
-  for (const [tr, label] of tracks) {
-    const col = h('div', { class: 'tech-col' }, h('h3', {}, label));
-    for (const t of TECHS.filter(x => x.track === tr)) {
-      const known = S.techs.includes(t.id);
-      const m = S.missions.find(x => x.kind === 'research' && x.target === t.id);
-      const why = known ? null : missionBlocked(S, 'research', t.id);
-      const card = cardFor(S, 'research', { track: tr });
-      const cost = techCost(S, t.id);
-      col.append(h('button', { class: `tech${known ? ' known' : m ? ' active' : why ? ' locked' : ''}`, onclick: () => (known ? toast(t.desc) : m ? toast(`Being studied: ${qText(m.turnsLeft)} left`) : why ? toast(why, 'bad') : !card ? toast(`Needs a ${label} treatise card`, 'bad') : openPlanner('research', t.id, undefined, card.uid)) },
-        h('span', { class: 'tech-t' }, h('b', {}, t.name), h('small', {}, known ? 'Known' : m ? `${Math.floor(m.progress)}/${cost} · ${qLabel(m.turnsLeft)}` : `${t.year} · ${cost} pts${t.year > S.year ? ' (ahead of its time)' : ''}`)),
-        h('span', { class: 'tech-d' }, t.desc), AGE_TECH[t.id] ? h('span', { class: 'tech-age' }, `Opens the ${ERA[AGE_TECH[t.id]].name} for the whole world`) : null));
-    }
-    wrap.append(col);
+// Research tab filters: which age and which field are shown.
+let techAge: number | 'all' | null = null;
+let techTrack: TechTrack | 'all' = 'all';
+const TRACK_NAME: Record<TechTrack, string> = { military: 'Military', economy: 'Economy', state: 'Statecraft' };
+const TRACK_ICON: Record<TechTrack, string> = { military: 'sword', economy: 'coin', state: 'crown' };
+
+/** What a technology lets you build, draft or make. */
+function techUnlocks(id: string): string[] {
+  const out: string[] = [];
+  for (const b of Object.values(BUILDINGS)) if (b.tech === id) out.push(b.name);
+  for (const t of Object.values(TROOPS)) if (t.tech === id) out.push(t.name);
+  for (const e of Object.values(EQUIPMENT)) if (e.tech === id) out.push(e.name);
+  for (const g of Object.values(GOODS)) if (g.tech === id) out.push(g.name);
+  return [...new Set(out)];
+}
+
+/** About how many years a study takes: with your best free scholar, or the range for a new one. */
+function techYears(id: string): string {
+  const cost = techCost(S, id);
+  const free = S.characters.filter(c => c.role === 'researcher' && c.mission == null);
+  if (free.length) {
+    const best = free.reduce((a, c) => (researchRate(S, c, TECH[id].track) > researchRate(S, a, TECH[id].track) ? c : a));
+    const y = cost / researchRate(S, best, TECH[id].track);
+    return `about ${y < 1.5 ? Math.max(1, Math.round(y * 4)) + ' quarters' : Math.round(y) + ' years'} with ${best.name}`;
   }
-  body.append(wrap);
+  const lo = cost / (8 + techFx(S, 'research')), hi = cost / (4 + techFx(S, 'research'));
+  return `about ${Math.max(1, Math.round(lo))}–${Math.max(1, Math.round(hi))} years`;
+}
+
+function techCard(t: (typeof TECHS)[number]): HTMLElement {
+  const known = S.techs.includes(t.id);
+  const m = S.missions.find(x => x.kind === 'research' && x.target === t.id);
+  const why = known ? null : missionBlocked(S, 'research', t.id);
+  const card = cardFor(S, 'research', { track: t.track });
+  const cost = techCost(S, t.id);
+  const status = known ? 'Known' : m ? `Studying · ${Math.floor(m.progress)}/${cost} points · ${qLabel(m.turnsLeft)} left` : `${cost} research points · ${techYears(t.id)}`;
+  const unlocks = techUnlocks(t.id);
+  const tap = () => known ? toast(t.desc) : m ? toast(`Being studied: ${qText(m.turnsLeft)} left`) : why ? toast(why, 'bad') : !card ? toast(`Needs a ${TRACK_NAME[t.track]} study card (buy one in the Cards tab)`, 'bad') : openPlanner('research', t.id, undefined, card.uid);
+  return h('button', { class: `tcard tr-${t.track}${known ? ' known' : m ? ' active' : why ? ' locked' : ''}`, onclick: tap },
+    h('span', { class: 'tc-side' }, h('span', { class: 'tc-ico', html: icon(TRACK_ICON[t.track], 26) }), h('b', { class: 'tc-pts' }, known ? '✓' : String(cost)), h('small', {}, known ? 'known' : 'points')),
+    h('span', { class: 'tc-body' },
+      h('b', { class: 'tc-name' }, t.name),
+      h('small', { class: 'tc-status' }, status),
+      h('span', { class: 'tc-desc' }, t.desc),
+      unlocks.length ? h('span', { class: 'tc-unl' }, h('small', {}, 'Unlocks'), unlocks.map(u => h('i', {}, u))) : null,
+      !known && t.req?.length ? h('small', { class: 'tc-req' + (t.req.every(r => S.techs.includes(r)) ? '' : ' bad') }, 'Needs ' + t.req.map(r => TECH[r].name + (S.techs.includes(r) ? ' ✓' : '')).join(', ')) : null,
+      AGE_TECH[t.id] ? h('span', { class: 'tech-age' }, `Opens the ${ERA[AGE_TECH[t.id]].name} for the whole world`) : null,
+      !known && !m && why && !why.startsWith('Needs ') ? h('small', { class: 'bad' }, why) : null));
+}
+
+function techTab(body: HTMLElement) {
+  const now = ageIndex(S);
+  if (techAge == null || (techAge !== 'all' && techAge > now)) techAge = now;
+  const inAge = (a: number) => TECHS.filter(t => t.age === a);
+  const ages = h('div', { class: 'seg tfilter' },
+    AGE_NAMES.map((name, i) => i > now
+      ? h('button', { class: 'seg-b locked', onclick: () => toast(`The Age of ${name} has not begun. Its research stays hidden until then.`) }, name)
+      : h('button', { class: 'seg-b' + (techAge === i ? ' on' : ''), onclick: () => { techAge = i; renderWin(); } }, name, h('small', {}, ` ${inAge(i).filter(t => S.techs.includes(t.id)).length}/${inAge(i).length}`))),
+    h('button', { class: 'seg-b' + (techAge === 'all' ? ' on' : ''), onclick: () => { techAge = 'all'; renderWin(); } }, 'All'));
+  const tracks = h('div', { class: 'seg tfilter' }, (['all', 'military', 'economy', 'state'] as const).map(tr =>
+    h('button', { class: 'seg-b' + (techTrack === tr ? ' on' : ''), onclick: () => { techTrack = tr; renderWin(); } }, tr === 'all' ? 'All fields' : TRACK_NAME[tr])));
+  body.append(ages, tracks);
+  const list = TECHS.filter(t => t.age <= now && (techAge === 'all' || t.age === techAge) && (techTrack === 'all' || t.track === techTrack));
+  // studies under way first, then what you can start, then the rest, then what you know
+  const rank = (t: (typeof TECHS)[number]) => S.techs.includes(t.id) ? 3 : S.missions.some(x => x.kind === 'research' && x.target === t.id) ? 0 : missionBlocked(S, 'research', t.id) ? 2 : 1;
+  list.sort((a, b) => rank(a) - rank(b) || a.age - b.age || a.cost - b.cost);
+  const grid = h('div', { class: 'tgrid' });
+  for (const t of list) grid.append(techCard(t));
+  body.append(grid);
+  if (now < AGE_NAMES.length - 1) body.append(h('p', { class: 'muted' }, `The research of the Age of ${AGE_NAMES[now + 1]} opens with that age.`));
 }
 
 function missionsSheet(body: HTMLElement) {
@@ -1564,10 +1645,10 @@ function missionTargets(handUid: number, all = false): TargetRow[] {
       rows.push({ label: n.name, sub: `Relations ${getRel(S, S.player, n.id)}`, color: n.color, acts: [{ label: MISSION_INFO[kind].name, kind, target: n.id, why }] });
     }
   } else if (kind === 'research') {
-    for (const t of TECHS.filter(t => t.track === d.track && !S.techs.includes(t.id))) rows.push({ label: t.name, sub: `${techCost(S, t.id)} pts · ${t.desc}`, acts: [{ label: 'Study', kind, target: t.id, why: missionBlocked(S, 'research', t.id) }] });
+    for (const t of TECHS.filter(t => t.track === d.track && !S.techs.includes(t.id) && t.age <= ageIndex(S))) rows.push({ label: t.name, sub: `${techCost(S, t.id)} points · ${techYears(t.id)} · ${t.desc}`, acts: [{ label: 'Study', kind, target: t.id, why: missionBlocked(S, 'research', t.id) }] });
   } else if (kind === 'build') {
     for (const p of provsOf(S, S.player)) {
-      const acts = Object.values(BUILDINGS).filter(b => b.group === d.group).map(b => ({ label: b.name, kind, target: p.id, building: b.id, why: missionBlocked(S, 'build', p.id, b.id) })).filter(a => !a.why || a.why.startsWith('Needs') && !a.why.startsWith('Needs Ocean') || a.why.startsWith('No free'));
+      const acts = Object.values(BUILDINGS).filter(b => b.group === d.group && (!b.tech || S.techs.includes(b.tech))).map(b => ({ label: b.name, kind, target: p.id, building: b.id, why: missionBlocked(S, 'build', p.id, b.id) })).filter(a => !a.why || a.why.startsWith('Needs') && !a.why.startsWith('Needs Ocean') || a.why.startsWith('No free'));
       if (acts.length) rows.push({ label: p.name, sub: `${TIERS[tierOf(p)].name} · town ${builtAt(p, 'town')}/${townSlots(p)} · countryside ${builtAt(p, 'rural')}/${ruralSlots(p)}`, acts });
     }
   } else if (kind === 'grace') {
@@ -1816,9 +1897,9 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
     if (DIPLO.includes(kind)) facts.push(`${Math.round(diploChance(S, kind, ch, target) * 100)}% chance`, `Journey ${envoyCost(S, target)} ducats · back at court ${qText(Math.max(1, envoyTravel(S, target)))} after`, CARDS[card.card].permanent ? 'The card stays in your hand' : 'The card is used up');
     if (kind === 'research') facts.push(`${researchRate(S, ch, TECH[target]?.track)} research a year · ${techCost(S, target)} needed`);
     facts.push(kind === 'route' ? 'A quick errand: does not use up one of the year\'s missions' : `Missions left this year: ${missionsLeft(S)}`);
-    if (kind === 'build') facts.push(`${buildingCost(S, building!)} ducats now · salary ${BUILDINGS[building!].salary} a year`);
     const pgKey = kind === 'artwork' ? target : building;
-    const pg = projectGoods(kind, pgKey);
+    const pg = kind === 'build' ? {} : projectGoods(kind, pgKey);
+    if (kind === 'build') box.append(costBenefit(building!, target, ch));
     for (const [g, n] of Object.entries(pg)) {
       const have = S.stock[g] ?? 0, extra = projectShortfall(S, kind, pgKey);
       facts.push(h('span', { class: have >= n ? '' : 'bad' }, `Uses ${n} ${GOODS[g].name.toLowerCase()} (you have ${have.toFixed(1)})${have >= n ? '' : ` · the rest bought at double price: +${extra} ducats`}`));

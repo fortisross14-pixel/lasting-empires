@@ -27,6 +27,10 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 - Peace and subjects: `src/engine/diplo.ts` (war score from `War.gains*` and `wins*`; terms spend score; `overlord`/`subject` on `Nation`).
 - Society: `src/engine/society.ts` (province `culture`/`religion`, `happinessOf`, yearly stability drift; `s.art`, `s.taxBurden`, `s.accepted`).
 
+## Research
+- Technologies live in `TECHS` (`src/data/techs.ts`), about 4 per field per age, each with `age`, `cost` and plain effects `fx` (income, army, battle, research, control, happiness, routes, card rates…) added up by `techFx(s, key)`. Prefer a new `fx` key over a one-off `hasTech` check. No research beyond the current age (`missionBlocked`).
+- Buildings list their benefits in `gives`; the build screen shows Cost (ducats, materials, time, upkeep) beside Benefit. Unresearched buildings are not offered.
+
 ## Card rates
 - Six decks: Military, Diplomacy, Internal, Economy, Research, People (`culture`). Each draws `0.5 + bonuses` cards a year (capped at 1.4); fractions carry over (`cardAccum`). Add bonuses through `cardRates` parts (buildings, research, monarch, cities, core cards) so the breakdown stays visible to the player.
 - There is no hand limit (`handLimit` returns Infinity; the old limit only for balance tests). The yearly mission cap, army size and building slots are the limits.

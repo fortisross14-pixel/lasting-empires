@@ -12,8 +12,7 @@ import { shipBlocked } from './navy';
 import { shortfallCost, takeGoods, hireNeeds, postCap } from './trade';
 import { setCardPool, acceptCap, giftCost, sendGift, churchHead } from './culture';
 import {
-  ageId, ageDef, pioneerNow, enemiesOf, player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore,
-} from './core';
+  ageId, ageDef, pioneerNow, enemiesOf, player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore, techFx, ageIndex } from './core';
 
 export type CardTarget = 'none' | 'nation' | 'mission' | 'troop';
 export type CardKind = 'troop' | 'ship' | 'equip' | 'hire' | 'mission' | 'instant';
@@ -82,7 +81,7 @@ const stab = (s: GameState, d: number) => { const p = player(s); p.stability = c
 const techOk = (s: GameState, t?: string) => !t || hasTech(s, t);
 const never = () => 0;
 setCardPool((s, cat) => Object.fromEntries(Object.values(CARDS).filter(c => c.cat === cat && !c.burden && !c.permanent && c.weight(s) > 0).map(c => [c.id, true as const])));
-const trackOpen = (s: GameState, t: TechTrack) => (TECHS.some(x => x.track === t && !s.techs.includes(x.id)) ? 1.8 : 0);
+const trackOpen = (s: GameState, t: TechTrack) => (TECHS.some(x => x.track === t && x.age <= ageIndex(s) && !s.techs.includes(x.id)) ? 1.8 : 0);
 
 export const CARDS: Record<string, HandCardDef> = {};
 const add = (d: HandCardDef) => { CARDS[d.id] = d; };
@@ -316,7 +315,7 @@ export function npRate(s: GameState): { rate: number; parts: RatePart[] } {
   const arch = RULER_ARCHS[player(s).ruler.arch];
   if (arch?.np) parts.push({ label: 'Monarch', v: arch.np });
   if ((s.short?.luxuries ?? 1) < 0.05) parts.push({ label: 'Luxuries at court', v: 0.5 });
-  if (hasTech(s, 'councils')) parts.push({ label: 'Royal Councils', v: 1 });
+  if (techFx(s, 'np')) parts.push({ label: 'Research', v: techFx(s, 'np') });
   if (ageId(s) === 'absolutism') parts.push({ label: 'Absolutism', v: 1 });
   if (hasCore(s, 'traditional')) parts.push({ label: 'Traditional', v: 1 });
   if (hasCore(s, 'open')) parts.push({ label: 'Open-minded', v: -0.5 });

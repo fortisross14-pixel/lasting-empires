@@ -3,7 +3,7 @@
 import type { GameState, Province, TradeRoute } from '../types';
 import { GOODS, RAW, MADE, FOOD } from '../data/goods';
 import { BUILDINGS } from '../data/techs';
-import { player, provsOf, inflation, controlMult, grade, hasTech, hasCore, atWar, hasTreaty, log, nationName } from './core';
+import { player, provsOf, inflation, controlMult, grade, hasTech, hasCore, atWar, hasTreaty, log, nationName, techFx } from './core';
 import { NO_STATE } from '../data/nations';
 import { travel } from './army';
 import { rankOf, RANKS } from './realm';
@@ -73,8 +73,8 @@ export function needs(s: GameState): Record<string, number> {
 export const NEED_NAMES: Record<string, string> = { food: 'Food' };
 
 // ---------- trade terms ----------
-export const routeCap = (s: GameState) => 3 + s.posts.length + (hasTech(s, 'banking') ? 1 : 0) + (hasTech(s, 'mercantilism') ? 2 : 0);
-export const postCap = (s: GameState) => 1 + (hasTech(s, 'navigation') ? 1 : 0) + (hasTech(s, 'banking') ? 1 : 0) + (hasTech(s, 'mercantilism') ? 1 : 0);
+export const routeCap = (s: GameState) => 3 + s.posts.length + techFx(s, 'routes');
+export const postCap = (s: GameState) => 1 + techFx(s, 'posts');
 export const distanceTo = (s: GameState, n: string) => { const a = player(s).capital, b = s.nations[n]?.capital; return a && b ? travel(a, b) : 2; };
 /** Quarters to set up a trade post: 2 next door, up to 6 across the oceans. */
 export const postTurns = (s: GameState, n: string) => [2, 3, 4, 6][distanceTo(s, n)] ?? 6;

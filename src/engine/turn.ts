@@ -21,8 +21,7 @@ import { CORE } from '../data/core';
 import {
   rand, pick, randInt, uid, clamp, player, provsOf, incomeOf, log, push, addRel, playerManpower, initialSettlement, grade,
   addTreaty, hasTech, genCharacter, declareWar, nationName, atWar, getRel, hasGood, armyPower, hasCore, coreSlots, hasTreaty, ageId,
-  resetProvIndex,
-} from './core';
+  resetProvIndex, techFx } from './core';
 import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS } from './cards';
 import { advanceMissions, MISSION_INFO, quarterlyReturns } from './missions';
 import { runAI } from './ai';
@@ -241,6 +240,7 @@ function playerEconomy(s: GameState) {
   for (const p of provsOf(s, s.player)) {
     let d = 2 + me.stability + (hasCore(s, 'consolidation') ? 3 : 0) + (hasCore(s, 'agrarian') ? 1 : 0);
     for (const b of p.buildings) d += (BUILDINGS[b]?.control ?? 0) * grade(p, b);
+    d += techFx(s, 'control');
     if (p.core !== s.player) d -= hasCore(s, 'expansion') ? 2 : 1;
     p.control = clamp(p.control + d / 4, 0, 100);
   }
@@ -262,7 +262,7 @@ function yearlyPlayer(s: GameState) {
   if (s.flags.new_world && s.year % 5 === 0 && (s.flags.new_world_income ?? 0) < 12) s.flags.new_world_income = (s.flags.new_world_income ?? 0) + 1;
   // prestige
   me.prestige *= 0.985; // prestige fades unless renewed, for every crown
-  me.prestige += provsOf(s, s.player).filter(p => p.buildings.includes('temple')).length * 0.5 + (hasTech(s, 'absolutism') ? 2 : 0) + (1 - 2 * (s.short?.luxuries ?? 0));
+  me.prestige += provsOf(s, s.player).filter(p => p.buildings.includes('temple')).length * 0.5 + techFx(s, 'prestige') + (1 - 2 * (s.short?.luxuries ?? 0));
 }
 
 /** An empty treasury: imports stop, then loans, then bankruptcy. */

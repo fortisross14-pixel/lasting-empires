@@ -5,7 +5,7 @@ import { campLost } from './army';
 import { addInfamy } from './coalition';
 import type { GameState, Battle, BattleSide, BattleUnit, BattleGeneral, RoundLog, TroopCard, BattleRecord } from '../types';
 import { TROOPS, TACTICS } from '../data/troops';
-import { rand, pick, weighted, uid, clamp, hasTech, rulerMod, log, nationName, addRel, player, findWar, promoteRarity, hasCore, alliesOf, enemiesOf, troopPower } from './core';
+import { rand, pick, weighted, uid, clamp, hasTech, rulerMod, log, nationName, addRel, player, findWar, promoteRarity, hasCore, alliesOf, enemiesOf, troopPower, techFx } from './core';
 import { landPhase } from './missions';
 import { landDefence } from './ai';
 
@@ -119,7 +119,7 @@ function attackOutput(s: GameState, side: BattleSide, round: number, my: Mods, n
   if (g?.traits.includes('boarder')) melee *= 1 + 0.2 * tm;
   if (side.player) {
     mult += rulerMod(s, 'battle');
-    if (hasTech(s, 'military_drill')) mult += 0.1;
+    mult += techFx(s, 'battle');
     if (naval) { if (hasCore(s, 'sea')) mult += 0.15; if (hasCore(s, 'land')) mult -= 0.05; }
     else { if (hasCore(s, 'land')) mult += 0.1; if (hasCore(s, 'sea')) mult -= 0.05; }
   }

@@ -14,13 +14,12 @@ import { GENRES, QUALITY } from '../data/culture';
 import { artCost, createWork, addChurchRel, churchRel, churchHead, acceptBlocked, cultureName } from './culture';
 import { routeBlocked, postBlocked, postTurns, postCost, POST_UPKEEP, dealFor, merchantFactor, price, supplies, routeCap, shortfallCost, takeGoods, materialsFor, defaultMake } from './trade';
 import { OUTCOMES, RARITY } from '../data/characters';
-import { TECH } from '../data/techs';
+import { TECH, AGE_NAMES } from '../data/techs';
 import { BUILDINGS } from '../data/techs';
 import {
   player, provsOf, hasTech, getRel, addRel, addTreaty, hasTreaty, atWar, findWar, makePeace, rulerMod, clamp,
   ageId, rand, pick, uid, log, nationName, armyPower, buildingAllowed, push, buildingCost, inflation, ownGoods, traitMult, promoteRarity,
-  rollOutcome, outcomeName, TIERS, tierOf, GROW_DEV, hasCore, rollBest, rollTraits,
-} from './core';
+  rollOutcome, outcomeName, TIERS, tierOf, GROW_DEV, hasCore, rollBest, rollTraits, techFx, ageIndex } from './core';
 import { getGeo } from './map';
 import { createBattle, makeSide, toBattleUnits, genericGeneral, freeMission, transferProvince } from './battle';
 
@@ -134,12 +133,12 @@ export const DIPLO: MissionKind[] = ['relations', 'trade', 'alliance', 'marriage
 
 export function techCost(s: GameState, techId: string): number {
   const t = TECH[techId];
-  return Math.round(t.cost * (1 + Math.max(0, t.year - s.year) / 25));
+  return Math.round(t.cost * (1 + Math.max(0, t.year - s.year) / 40));
 }
 
 export function researchRate(s: GameState, ch: Character, track?: string): number {
   const unis = Math.min(2, provsOf(s, s.player).filter(p => p.buildings.includes('university')).length);
-  let r = 1 + ch.skill * 1.5 + unis + rulerMod(s, 'research') + (hasTech(s, 'councils') ? 1 : 0) + (s.flags.reform_research ?? 0) + (s.flags.printing_bonus ?? 0);
+  let r = 2 + ch.skill + unis + rulerMod(s, 'research') + techFx(s, 'research') + (s.flags.reform_research ?? 0) + (s.flags.printing_bonus ?? 0);
   const m = traitMult(ch);
   if (ch.traits.includes('scholar')) r += 1 * m;
   if (ch.traits.includes('polymath')) r += 2 * m;
@@ -297,6 +296,7 @@ export function missionBlocked(s: GameState, kind: MissionKind, target: string, 
     const t = TECH[target];
     if (!t) return 'Choose a technology';
     if (s.techs.includes(target)) return 'Already known';
+    if (t.age > ageIndex(s)) return `Belongs to the Age of ${AGE_NAMES[t.age]}`;
     if (t.req?.some(r => !s.techs.includes(r))) return 'Needs ' + t.req!.filter(r => !s.techs.includes(r)).map(r => TECH[r].name).join(', ');
     if (s.missions.some(m => m.kind === 'research' && m.target === target)) return 'Already being studied';
     return null;
@@ -523,7 +523,7 @@ function completeResearch(s: GameState, m: Mission, ch: Character) {
   s.techs.push(t.id);
   onTech(s, t.id);
   player(s).prestige += 1;
-  if (t.id === 'bureaucracy' || t.id === 'absolutism') player(s).stability = clamp(player(s).stability + 1, -3, 3);
+  if (t.fx?.stability) player(s).stability = clamp(player(s).stability + t.fx.stability, -3, 3);
   if (t.id === 'star_forts') { const cap = s.provinces[player(s).capital]; if (cap && cap.owner === s.player) cap.fort = Math.min(3, cap.fort + 1); }
   const items: RevealItem[] = [{ title: t.name, text: t.desc, tone: 'good', kind: 'book' }];
   const o = hasCore(s, 'open') ? rollBest(s, ch) : rollOutcome(s, ch);

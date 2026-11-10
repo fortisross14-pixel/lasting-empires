@@ -3,7 +3,7 @@ import { poolFor } from '../data/names';
 import { eraOfYear, ERA, ERAS, PIONEER_YEARS } from '../data/eras';
 import type { GameState, Nation, TroopCard, Character, Role, LogEntry, Prompt, Rarity, Province } from '../types';
 import { TROOPS } from '../data/troops';
-import { BUILDINGS, TECH } from '../data/techs';
+import { BUILDINGS, TECH, type TechFx } from '../data/techs';
 import { RULER_ARCHS } from '../data/nations';
 import { tradeIncome } from './trade';
 import { artGold } from './culture';
@@ -82,6 +82,17 @@ export function resetProvIndex(s: GameState) {
 }
 export const provsOf = (s: GameState, n: string): Province[] => (provIndex(s).get(n) ?? []).slice();
 export const hasTech = (s: GameState, t: string) => s.techs.includes(t);
+// Sum of one plain effect over everything the player knows; cached until a new tech is learned.
+const FX_CACHE = new WeakMap<string[], { n: number; v: Record<string, number> }>();
+export function techFx(s: GameState, k: Exclude<keyof TechFx, 'rates'>): number {
+  let c = FX_CACHE.get(s.techs);
+  if (!c || c.n !== s.techs.length) {
+    const v: Record<string, number> = {};
+    for (const id of s.techs) for (const [key, x] of Object.entries(TECH[id]?.fx ?? {})) if (typeof x === 'number') v[key] = (v[key] ?? 0) + x;
+    c = { n: s.techs.length, v }; FX_CACHE.set(s.techs, c);
+  }
+  return c.v[k] ?? 0;
+}
 export const nationName = (s: GameState, n: string) => s.nations[n]?.name ?? n;
 
 export function log(s: GameState, text: string, tone: LogEntry['tone'] = 'neutral') {
@@ -172,20 +183,20 @@ export const armyPower = (arr: { type: string; vet: number; str: number; might?:
 /** Prices rise over the centuries. */
 export const inflation = (s: GameState) => 1 + Math.max(0, s.year - 1453) / 160;
 
-export const buildingCost = (s: GameState, b: string) => Math.round(BUILDINGS[b].cost * inflation(s) * (1 + 0.15 * ageIndex(s)));
+export const buildingCost = (s: GameState, b: string) => Math.round(BUILDINGS[b].cost * inflation(s) * (1 + 0.15 * ageIndex(s)) * (1 - techFx(s, 'build')));
 
 export function upkeepOf(s: GameState, arr: TroopCard[]): number {
-  const mult = (hasTech(s, 'standing_army') ? 0.8 : 1) * (0.7 + 0.3 * inflation(s));
+  const mult = (1 - techFx(s, 'upkeep')) * (0.7 + 0.3 * inflation(s));
   return arr.reduce((a, t) => a + TROOPS[t.type].upkeep * (1 + ((t.might ?? 1) - 1) * 0.9), 0) * mult;
 }
 
 export function armyCap(s: GameState): number {
   const ps = provsOf(s, s.player);
   const barracks = ps.reduce((a, p) => a + p.buildings.filter(b => b === 'barracks').length, 0);
-  return 5 + Math.floor(ps.length / 2) + barracks + (hasTech(s, 'standing_army') ? 3 : 0) + (hasCore(s, 'land') ? 2 : 0);
+  return 5 + Math.floor(ps.length / 2) + barracks + techFx(s, 'army') + (hasCore(s, 'land') ? 2 : 0);
 }
 export function courtCap(s: GameState): number {
-  return 6 + (hasTech(s, 'embassies') ? 1 : 0) + (hasTech(s, 'councils') ? 1 : 0);
+  return 6 + techFx(s, 'seats');
 }
 export const courtCount = (s: GameState) => s.characters.filter(c => !c.ruler).length;
 
@@ -275,7 +286,7 @@ export function incomeOf(s: GameState, n: string): IncomeBreakdown {
   if (n === s.player) {
     other += s.flags.new_world_income ?? 0;
     other += s.flags.spice_income ?? 0;
-    if (hasTech(s, 'banking')) provinces *= 1.1;
+    provinces *= 1 + techFx(s, 'income');
     provinces *= 0.9 + (s.happiness ?? 50) / 500;
     for (const x of Object.values(s.nations)) if (x.alive && x.overlord === n) other += provsOf(s, x.id).reduce((a, p) => a + p.dev * 0.6, 0) * (x.subject === 'union' ? 0.4 : 0.25);
     provinces *= 1 + rulerMod(s, 'goldPct');
@@ -318,6 +329,7 @@ export function playerManpower(s: GameState): { gain: number; max: number } {
   gain *= 1 - 0.5 * hunger;
   if (hasCore(s, 'agrarian')) gain += 0.5;
   if (hasCore(s, 'mercantile')) gain -= 0.3;
+  gain += techFx(s, 'manpower');
   return { gain, max: Math.round(5 + dev * 0.3) };
 }
 

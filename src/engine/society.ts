@@ -3,7 +3,7 @@ import { FOOD } from '../data/goods';
 import { artHappy, churchHappy } from './culture';
 import type { GameState, Province } from '../types';
 import { BUILDINGS } from '../data/techs';
-import { player, provsOf, clamp, rand, hasCore, hasGood, log, population, ageId } from './core';
+import { player, provsOf, clamp, rand, hasCore, hasGood, log, population, ageId, techFx } from './core';
 import { NATIONS, NO_STATE } from '../data/nations';
 import { getGeo } from './map';
 
@@ -129,6 +129,8 @@ export function happinessOf(s: GameState, p: Province): { value: number; parts: 
   const art = Math.round(s.art * 0.15);
   if (art) parts.push({ label: 'Learning', v: art });
   if (p.owner === s.player) {
+    const learned = techFx(s, 'happy');
+    if (learned) parts.push({ label: 'Research', v: learned });
     const works = Math.round(artHappy(s));
     if (works) parts.push({ label: 'Works of art', v: works });
     const ch = churchHappy(s, p.religion);
