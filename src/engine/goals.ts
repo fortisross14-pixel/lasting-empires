@@ -43,6 +43,10 @@ export function goalView(s: GameState, g: Goal, deadline: number): GoalView {
       const k = provsOf(s, s.player).length;
       return { title: `Hold at least ${g.n} provinces`, status: `${k} provinces`, have: k, need: g.n, met: k >= g.n };
     }
+    case 'holdIn': {
+      const k = provsOf(s, s.player).filter(p => g.regions.includes(provRegion(p.id))).length;
+      return { title: g.label ?? `${g.n} province${g.n > 1 ? 's' : ''} in ${list(g.regions.map(r => regionDef(r).name), 3)}`, status: `${k} of ${g.n}`, have: k, need: g.n, met: k >= g.n };
+    }
     case 'colonies': {
       const home = provRegion(player(s).capital);
       const k = provsOf(s, s.player).filter(p => { const r = provRegion(p.id); return r !== home && (g.regions ? g.regions.includes(r) : !!REGIONS[r]); }).length;

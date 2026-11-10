@@ -353,11 +353,12 @@ function checkAmbition(s: GameState) {
 export function ranking(s: GameState): { id: string; name: string; score: number }[] {
   // Size counts, but growth since 1453 counts more: a realm that stands still slips down the list.
   const dev = (n: string) => provsOf(s, n).reduce((a, p) => a + p.dev, 0);
+  const dw = STARTS[s.startYear]?.devWeight ?? 1;
   return Object.values(s.nations).filter(n => n.alive)
     .map(n => {
       const d = dev(n.id), d0 = s.flags['dev0_' + n.id] ?? d;
       const subj = Object.values(s.nations).filter(x => x.alive && x.overlord === n.id).reduce((a, x) => a + dev(x.id), 0);
-      return { id: n.id, name: n.name, score: Math.round(n.prestige / 2 + d + Math.max(0, d - d0) * 5 + subj * 2) };
+      return { id: n.id, name: n.name, score: Math.round(n.prestige / 2 + d * dw + Math.max(0, d - d0) * 5 + subj * 2) };
     })
     .sort((a, b) => b.score - a.score);
 }

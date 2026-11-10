@@ -170,8 +170,8 @@ const previewState = () => previewFor(missionYear);
 const goalTitle = (g: Goal, deadline: number) => goalView(previewState(), g, deadline).title;
 
 function missionCard(m: MissionDef) {
-  return h('div', { class: 'mcard' },
-    h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon(m.icon, 24) }), h('div', {}, h('b', {}, m.name), h('small', {}, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`))),
+  return h('div', { class: 'mcard' + (m.wild ? ' wild' : '') },
+    h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon(m.icon, 24) }), h('div', {}, h('b', {}, m.name), h('small', {}, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`)), m.wild ? h('span', { class: 'mc-wild' }, 'Wild') : null),
     h('p', { class: 'mc-t' }, m.text),
     h('ul', { class: 'mc-g' }, m.goals.map(g => h('li', {}, goalTitle(g, m.deadline)))),
     h('div', { class: 'mc-play' }, m.nations.map(n => { const nm = previewFor(m.start).nations[n]?.name ?? n; return h('button', { class: 'btn primary small', onclick: () => startMission(n, m.id) }, `Play ${nm}`); })));
@@ -192,7 +192,8 @@ function showMissions() {
         h('ul', { class: 'mc-g' }, c.goals.map(g => h('li', {}, goalTitle(g, c.deadline)))),
         h('div', { class: 'mc-play' }, h('button', { class: 'btn primary small', onclick: () => startMission(c.nation, { ...c, status: 'active' }) }, `Play ${NATIONS.find(x => x.id === c.nation)?.name}`),
           h('button', { class: 'btn ghost small', onclick: () => { saveCustom(customMissions().filter(x => x.id !== c.id)); showMissions(); } }, 'Delete')))),
-      ...MISSIONS.filter(m => m.start === missionYear).map(missionCard))));
+      ...MISSIONS.filter(m => m.start === missionYear && !m.wild).map(missionCard),
+      ...MISSIONS.filter(m => m.start === missionYear && m.wild).map(missionCard))));
 }
 
 /** Goal templates for the builder: a label and how to make the goal from one value. */
@@ -200,6 +201,7 @@ const GOAL_KINDS: { id: string; label: string; input: 'n' | 'region' | 'province
   { id: 'provinces', label: 'Hold at least N provinces', input: 'n', def: 20, make: v => ({ k: 'provinces', n: +v }) },
   { id: 'own', label: 'Take a province', input: 'province', make: v => ({ k: 'own', provinces: [v] }) },
   { id: 'colonies', label: 'N colonies overseas', input: 'n', def: 5, make: v => ({ k: 'colonies', n: +v }) },
+  { id: 'holdIn', label: 'Hold 3 provinces in a region', input: 'region', make: v => ({ k: 'holdIn', regions: [v], n: 3 }) },
   { id: 'discover', label: 'Discover a region', input: 'region', make: v => ({ k: 'discover', regions: [v] }) },
   { id: 'posts', label: 'N trade posts', input: 'n', def: 3, make: v => ({ k: 'posts', n: +v }) },
   { id: 'techs', label: 'Know N technologies', input: 'n', def: 15, make: v => ({ k: 'techs', n: +v }) },
@@ -1737,7 +1739,7 @@ function chronicleSheet(body: HTMLElement) {
     }
     t.append(tb);
     body.append(h('div', { class: 'tscroll' }, t));
-    body.append(h('p', { class: 'muted' }, `Score = half your prestige + 4 per development point you own + 2 per point in your subjects. Wars you won: ${S.stats.wars.won}, lost: ${S.stats.wars.lost}. The game ends in ${S.endYear}.`));
+    body.append(h('p', { class: 'muted' }, `Score = half your prestige + ${STARTS[S.startYear]?.devWeight ?? 1} per development point you own + 5 per point gained since ${S.startYear} + 2 per point in your subjects. Wars you won: ${S.stats.wars.won}, lost: ${S.stats.wars.lost}. The game ends in ${S.endYear}.`));
   } else if (chronTab === 'generals') {
     const gens = [
       ...S.characters.filter(c => c.role === 'general' || c.role === 'conqueror' || (c.wins ?? 0) + (c.losses ?? 0) > 0).map(c => ({ name: c.name, rarity: c.rarity as string, wins: c.wins ?? 0, losses: c.losses ?? 0, note: 'Serving' })),

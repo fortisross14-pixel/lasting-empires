@@ -8,6 +8,7 @@ import { REGIONS } from '../data/overseas';
 import { NO_STATE } from '../data/nations';
 import { provsOf, addTreaty, declareWar, initialSettlement, uid } from './core';
 import { provRegion, regionState } from './overseas';
+import { getGeo } from './map';
 
 /** Realms that appear only in the later starts, in the nations.ts row format. */
 export interface LaterNation { id: string; name: string; adj: string; color: string; culture: string; religion: string; capital: string; personality: Personality; gold: number; army: string }
@@ -68,7 +69,10 @@ export function applyStart(s: GameState, year: number) {
     n.army = n.army.map(t => ({ ...t, type: modernize(t.type, year) }));
     const want2 = Math.max(n.army.length, Math.round(2 + mine.length / 2.5));
     while (n.army.length < want2) n.army.push({ uid: uid(s), type: modernize(n.army.length % 3 ? 'levy' : 'crossbow', year), vet: 0, str: 100 });
-    n.fleet = (n.fleet ?? []).map(t => ({ ...t, type: year >= 1650 ? 'man_of_war' : 'galleon' }));
+    // fleets of the age: about one ship for every four coastal provinces
+    const coast = mine.filter(p => getGeo().coastal[p.id]).length;
+    const ships = Math.max((n.fleet ?? []).length, Math.floor(coast / 4));
+    n.fleet = Array.from({ length: ships }, () => ({ uid: uid(s), type: year >= 1650 ? 'man_of_war' : 'galleon', vet: 0, str: 100 }));
     n.gold = Math.round(n.gold * (1 + (year - 1451) / 160));
   }
   for (const p of Object.values(s.provinces)) p.settlement = initialSettlement(p.dev, s.nations[p.owner]?.capital === p.id);
@@ -101,7 +105,9 @@ export function setupLaterPlayer(s: GameState, year: number) {
   s.troops = s.troops.map(t => ({ ...t, type: modernize(t.type, year) } as TroopCard));
   const extra = Math.max(0, Math.round(ps.length / 3) - s.troops.length);
   for (let i = 0; i < extra; i++) s.troops.push({ uid: uid(s), type: modernize(i % 2 ? 'levy' : 'crossbow', year), vet: 0, str: 100 });
-  s.fleet = s.fleet.map(t => ({ ...t, type: year >= 1650 ? 'man_of_war' : 'galleon' }));
+  const coast = ps.filter(p => getGeo().coastal[p.id]).length;
+  const ships = Math.max(s.fleet.length, Math.floor(coast / 4));
+  s.fleet = Array.from({ length: Math.min(ships, 12) }, () => ({ uid: uid(s), type: year >= 1650 ? 'man_of_war' : 'galleon', vet: 0, str: 100 }));
   me.gold = Math.round(me.gold * (1 + (year - 1451) / 160));
   // Europeans have charted the world; others know their own corner and whoever trades there
   const european = ['europe', 'russia'].includes(provRegion(me.capital));

@@ -305,6 +305,7 @@ export type Goal =
   | { k: 'own'; provinces: string[]; label?: string }          // hold these provinces
   | { k: 'ownLands'; of: string[]; label?: string }            // hold every province these realms held in 1451
   | { k: 'provinces'; n: number }                              // hold at least n provinces
+  | { k: 'holdIn'; regions: string[]; n: number; label?: string } // hold n provinces in these regions
   | { k: 'colonies'; n: number; regions?: string[] }           // n provinces overseas (in these regions)
   | { k: 'discover'; regions: string[] }                       // explorers have found these regions
   | { k: 'posts'; n: number; regions?: string[] }              // trade posts with realms in these regions

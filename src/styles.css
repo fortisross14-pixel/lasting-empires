@@ -1224,3 +1224,6 @@ ul.traits { margin: 0; padding-left: 18px; }
 .pick-era { margin: 0; padding: 6px 14px; font-size: 13.5px; color: var(--muted); background: var(--bar); border-bottom: 1px solid var(--line); }
 .pick-era b { color: var(--text); }
 @media (max-width: 640px) { .pick-top { flex-wrap: wrap; } .pick-hint { display: none; } }
+.mcard.wild { border-style: dashed; border-color: var(--gold-2); }
+.mc-wild { margin-left: auto; align-self: flex-start; font: 700 11px/1 Alegreya, Georgia, serif; text-transform: uppercase; letter-spacing: .08em; padding: 4px 8px; border-radius: 999px; background: var(--gold-2); color: #fff; }
+[data-style="chancery"] .mc-wild { background: var(--wax); }

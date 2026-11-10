@@ -12,11 +12,12 @@ export interface StartDef {
   featured: string[];          // realms shown first in the picker
   rulers: Record<string, [string, number]>; // who reigns at the start, and until when
   units: Record<string, string>; // what each old troop type has become by then
+  devWeight: number;           // score per development point owned (1 in 1451): the giants of later worlds count for less
 }
 
 export const STARTS: Record<number, StartDef> = {
   1600: {
-    year: 1600, end: 1780, name: 'The Age of Reformation', age: 'reformation', techBefore: 1591, devBonus: 1,
+    year: 1600, end: 1780, devWeight: 0.5, name: 'The Age of Reformation', age: 'reformation', techBefore: 1591, devBonus: 1,
     text: 'Spain rules a world empire, the Dutch fight for freedom, Akbar rules India, and the Ming face the Manchus.',
     renames: {
       castile: { name: 'Spain', adj: 'Spanish', capital: 'madrid' }, muscovy: { name: 'Russia', adj: 'Russian' },
@@ -35,7 +36,7 @@ export const STARTS: Record<number, StartDef> = {
     units: { levy: 'pikemen', men_at_arms: 'pikemen', crossbow: 'arquebusiers', bombard: 'field_cannon', jinetes: 'reiters', knights: 'cuirassiers' },
   },
   1700: {
-    year: 1700, end: 1810, name: 'The Age of Absolutism', age: 'absolutism', techBefore: 1691, devBonus: 2,
+    year: 1700, end: 1810, devWeight: 0.5, name: 'The Age of Absolutism', age: 'absolutism', techBefore: 1691, devBonus: 2,
     text: 'The Sun King rules France, Peter the Great builds a new Russia, Prussia rises, and English colonists fill the American coast.',
     renames: {
       castile: { name: 'Spain', adj: 'Spanish', capital: 'madrid' }, muscovy: { name: 'Russia', adj: 'Russian' },

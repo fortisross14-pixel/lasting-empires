@@ -5,6 +5,7 @@ export interface MissionDef {
   id: string; name: string; icon: string; start: number; deadline: number;
   nations: string[];      // who may play it
   text: string; goals: Goal[];
+  wild?: boolean;         // not history: just for fun
 }
 
 const NEW_WORLD = ['caribbean', 'mexico', 'north_america', 'brazil', 'andes', 'plata'];
@@ -76,6 +77,41 @@ export const MISSIONS: MissionDef[] = [
   { id: 'kangxi', name: 'The High Qing', icon: 'crown', start: 1700, deadline: 1780, nations: ['qing'],
     text: 'Rule the largest and richest realm under Heaven for a century of peace.',
     goals: [{ k: 'rank', top: 1 }, { k: 'provinces', n: 90 }, { k: 'income', top: 1 }] },
+
+  // ---------- wild ones: not history, just for fun ----------
+  { id: 'abubakari', name: "Abubakari's Fleet", icon: 'ship', start: 1451, deadline: 1560, nations: ['mali', 'songhai'], wild: true,
+    text: 'Legend says a Mansa of Mali sailed west with two thousand boats. Finish what he started.',
+    goals: [{ k: 'discover', regions: ['caribbean', 'brazil'] }, { k: 'colonies', n: 3, regions: ['caribbean', 'brazil', 'mexico', 'north_america', 'andes', 'plata'] }] },
+  { id: 'aztec_armada', name: 'The Aztec Armada', icon: 'anchor', start: 1451, deadline: 1620, nations: ['aztec', 'inca'], wild: true,
+    text: 'Why wait for the Spaniards? Cross the ocean first and plant your gods in Europe.',
+    goals: [{ k: 'discover', regions: ['europe'] }, { k: 'holdIn', regions: ['europe'], n: 2, label: '2 provinces in Europe' }, { k: 'capital' }] },
+  { id: 'rome_reborn', name: 'Rome Reborn', icon: 'crown', start: 1451, deadline: 1560, nations: ['byzantium'], wild: true,
+    text: 'The City survives the siege, and the Emperor remembers the old borders.',
+    goals: [{ k: 'own', provinces: ['constantinople', 'rome', 'alexandria', 'jerusalem'] }, { k: 'provinces', n: 40 }] },
+  { id: 'swiss_navy', name: 'The Swiss Navy', icon: 'ship', start: 1451, deadline: 1600, nations: ['swiss'], wild: true,
+    text: 'Landlocked? A detail. The finest navy in Europe will fly the white cross.',
+    goals: [{ k: 'navy', top: 3 }, { k: 'colonies', n: 2 }] },
+  { id: 'irish_revenge', name: "Ireland's Revenge", icon: 'sword', start: 1451, deadline: 1600, nations: ['ireland'], wild: true,
+    text: 'Cross the Irish Sea the other way for once.',
+    goals: [{ k: 'own', provinces: ['london'] }, { k: 'provinces', n: 15 }] },
+  { id: 'ethiopia_crusade', name: 'Prester John Rides', icon: 'church', start: 1451, deadline: 1580, nations: ['ethiopia'], wild: true,
+    text: 'Europe dreamed of a Christian king beyond Egypt. Be him: march to Jerusalem.',
+    goals: [{ k: 'own', provinces: ['jerusalem', 'cairo'] }, { k: 'holdIn', regions: ['middle_east'], n: 6, label: '6 provinces in the Middle East' }] },
+  { id: 'african_world', name: 'The Empire of Three Continents', icon: 'star', start: 1600, deadline: 1750, nations: ['morocco', 'ethiopia', 'kongo', 'oyo', 'benin', 'mali'], wild: true,
+    text: 'An African empire with lands in Europe and Asia. The Ottomans did it the other way round.',
+    goals: [{ k: 'holdIn', regions: ['west_africa', 'central_africa', 'east_africa', 'southern_africa', 'north_africa'], n: 20, label: '20 provinces in Africa' }, { k: 'holdIn', regions: ['europe'], n: 3, label: '3 provinces in Europe' }, { k: 'holdIn', regions: ['middle_east', 'india', 'china', 'east_indies', 'central_asia'], n: 3, label: '3 provinces in Asia' }] },
+  { id: 'japan_australia', name: 'The Southern Land of the Rising Sun', icon: 'anchor', start: 1600, deadline: 1720, nations: ['japan'], wild: true,
+    text: 'Forget the closed country. Sail south and settle the great southern continent before any European.',
+    goals: [{ k: 'discover', regions: ['oceania'] }, { k: 'colonies', n: 3, regions: ['oceania'] }, { k: 'navy', top: 5 }] },
+  { id: 'papal_empire', name: 'The Pope Goes West', icon: 'church', start: 1700, deadline: 1810, nations: ['papacy'], wild: true,
+    text: 'Ten thousand armed priests and a fleet of galleons. The Vatican wants its share of the world.',
+    goals: [{ k: 'provinces', n: 30 }, { k: 'colonies', n: 5 }, { k: 'army', top: 10 }] },
+  { id: 'colonies_strike', name: 'The Colonies Strike Back', icon: 'banner', start: 1700, deadline: 1810, nations: ['thirteen_colonies'], wild: true,
+    text: 'Independence is not enough. Take London itself.',
+    goals: [{ k: 'independent' }, { k: 'own', provinces: ['london'] }] },
+  { id: 'mughal_europe', name: 'The Mughal Grand Tour', icon: 'crown', start: 1700, deadline: 1800, nations: ['mughals'], wild: true,
+    text: 'Aurangzeb\'s heirs fancy a palace on the Bosphorus and a summer house in Vienna.',
+    goals: [{ k: 'own', provinces: ['constantinople', 'vienna'] }] },
 ];
 export const MISSION: Record<string, MissionDef> = Object.fromEntries(MISSIONS.map(m => [m.id, m]));
 
