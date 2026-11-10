@@ -38,7 +38,7 @@ export function handLimit(s: GameState): number {
   const k = provsOf(s, s.player).length; // the old limit, kept for balance tests
   return 3 + (k >= 5 ? 1 : 0) + (k >= 10 ? 1 : 0) + (k >= 16 ? 1 : 0) + (k >= 25 ? 1 : 0);
 }
-export const RATE_CAP = 1.6;
+export const RATE_CAP = 1.4;
 export const CAT_INFO: Record<Cat, { name: string; icon: string; role: Role; color: string }> = {
   military: { name: 'Military', icon: 'sword', role: 'general', color: '#6e2b2b' },
   diplomacy: { name: 'Diplomacy', icon: 'hands', role: 'diplomat', color: '#2f4f6b' },

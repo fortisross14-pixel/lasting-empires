@@ -1739,7 +1739,7 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
     clear(box);
     box.append(h('div', { class: 'pl-head' }, h('span', { class: 'a-ico', html: icon(info.icon, 22) }),
       h('div', {}, h('h2', {}, `${info.name}${kind === 'build' ? ': ' + BUILDINGS[building!].name : ''}`), h('p', { class: 'muted' }, `${info.verb} ${tname} · uses ${CARDS[card.card].name}`))));
-    box.append(h('h3', {}, `Choose a ${roleName[role].toLowerCase()}`));
+    box.append(h('h3', {}, `Choose ${/^[aeiou]/i.test(roleName[role]) ? 'an' : 'a'} ${roleName[role].toLowerCase()}`));
     const row = h('div', { class: 'cards-row' });
     for (const c of chars) {
       const busy = c.mission != null;
@@ -1753,7 +1753,7 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
     }
     box.append(row);
     const turnsInto = becomesOnMission(kind, ch, naval && ships.length > 0);
-    if (turnsInto) box.append(h('p', { class: 'bad' }, `${ch.name} will become ${turnsInto === 'explorer' || turnsInto === 'admiral' ? 'an' : 'a'} ${roleName[turnsInto].toLowerCase()} for good: new skills, no going back.`));
+    if (turnsInto) box.append(h('p', { class: 'bad' }, `${ch.name} will become ${/^[aeiou]/i.test(turnsInto) ? 'an' : 'a'} ${roleName[turnsInto].toLowerCase()} for good: new skills, no going back.`));
     if (!['conquer', 'raid'].includes(kind)) box.append(h('div', { class: 'oddsbox' }, h('small', { class: 'muted' }, `Outcome odds with a ${RARITY[ch.rarity].name} ${roleName[ch.role].toLowerCase()}:`), oddsLine(ch)));
     const turns = missionTurns(S, kind, ch, target, building);
     const facts: (string | HTMLElement)[] = [qText(turns)];

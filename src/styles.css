@@ -1018,3 +1018,4 @@ ul.traits { margin: 0; padding-left: 18px; }
 .k-char.role-courtier, .k-char.role-priest, .k-char.role-artist, .k-char.role-leader { --band: #7a3a5a; }
 .grow-row.work.q4 { border-color: var(--gold-2, #b8902f); box-shadow: inset 3px 0 0 var(--gold-2, #b8902f); }
 .grow-row.work.q3 { box-shadow: inset 3px 0 0 var(--gold-2, #b8902f); }
+.win-body .tlist { flex: none; max-height: none; overflow: visible; }

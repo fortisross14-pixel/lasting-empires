@@ -16,9 +16,9 @@ export interface QualityDef { name: string; happy: number; years: number; gold: 
 export const QUALITY: QualityDef[] = [
   { name: 'Forgettable', happy: 1, years: 1, gold: 0, goldYears: 0, prestige: 0, cards: 0, museum: 0 },
   { name: 'Fine', happy: 2, years: 2, gold: 0, goldYears: 0, prestige: 1, cards: 0, museum: 0 },
-  { name: 'Admired', happy: 3, years: 3, gold: 2, goldYears: 3, prestige: 3, cards: 0, museum: 1 },
-  { name: 'Celebrated', happy: 5, years: 5, gold: 4, goldYears: 5, prestige: 6, cards: 1, museum: 2 },
-  { name: 'Masterpiece', happy: 6, years: 8, gold: 6, goldYears: 5, prestige: 12, cards: 2, museum: 4 },
+  { name: 'Admired', happy: 3, years: 3, gold: 2, goldYears: 3, prestige: 2, cards: 0, museum: 1 },
+  { name: 'Celebrated', happy: 5, years: 5, gold: 4, goldYears: 5, prestige: 4, cards: 1, museum: 2 },
+  { name: 'Masterpiece', happy: 6, years: 8, gold: 6, goldYears: 5, prestige: 8, cards: 2, museum: 4 },
 ];
 
 /** Monuments last half as long again. */
