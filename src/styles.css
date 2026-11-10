@@ -1047,3 +1047,6 @@ ul.traits { margin: 0; padding-left: 18px; }
 [data-style="chancery"] .shop-b { border-radius: 0; border-width: 1px; box-shadow: 3px 3px 0 var(--text); }
 [data-style="chancery"] .shop-b .shop-i { background: var(--wax); color: #f4ead8; }
 @media (max-width: 520px) { .shop { grid-template-columns: 1fr 1fr; } .shop-b { flex-direction: column; align-items: flex-start; gap: 4px; } }
+/* map speed: nothing off screen is drawn, and labels and icons wait while the view zooms */
+#map .plabel.off, #map .gi.off { display: none; }
+#map.moving .labels, #map.moving .goods-icons { visibility: hidden; }

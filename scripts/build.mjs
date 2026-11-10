@@ -3,7 +3,7 @@ import { build } from 'esbuild';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
-const res = await build({ entryPoints: ['src/main.ts'], bundle: true, minify: true, write: false, format: 'iife', target: 'es2020', legalComments: 'none' });
+const res = await build({ entryPoints: ['src/main.ts'], bundle: true, minify: !process.env.NOMIN, write: false, format: 'iife', target: 'es2020', legalComments: 'none' });
 const js = res.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
 const css = readFileSync('src/styles.css', 'utf8');
 const fonts = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Almendra:wght@400;700&family=Almendra+SC&family=Alegreya+Sans:wght@400;500;700;800&family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&family=Grenze+Gotisch:wght@500;700&family=Spectral:wght@400;600;700&family=Alegreya:ital,wght@0,400;0,600;1,400&display=swap">';

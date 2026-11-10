@@ -42,6 +42,11 @@ export class MapView {
   labels: Record<string, SVGTextElement> = {};
   marks: SVGGElement;
   gicons: Record<string, SVGGElement> = {};
+  private settleT = 0;
+  private settledW = 0;
+  private rect: DOMRect | null = null;
+  private shown = new Map<string, boolean>();
+  private paint = new Map<string, string>();
   selected: string | null = null;
   onSelect: (id: string | null) => void = () => {};
   /** target picking: hold (touch) or click (mouse) a province to choose it */
@@ -133,19 +138,42 @@ export class MapView {
     return { x: this.vb.x - ox + (clientX - r.left) * scale, y: this.vb.y - oy + (clientY - r.top) * scale, scale };
   }
 
-  private apply() {
+  /** Move the view now; labels, icons and markers catch up once the view stops changing. */
+  private apply(now = false) {
     const { x, y, w, h } = this.vb;
     this.svg.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
-    const r = this.svg.getBoundingClientRect();
+    const zooming = Math.abs(w - this.settledW) / (this.settledW || 1) > 0.01;
+    if (zooming) this.svg.classList.add('moving');
+    clearTimeout(this.settleT);
+    if (now) this.settle(); else this.settleT = window.setTimeout(() => this.settle(), 140);
+  }
+
+  /** Once the view rests: label sizes, which labels fit, what is on screen, marker sizes. */
+  private settle() {
+    const { x, y, w, h } = this.vb;
+    this.svg.classList.remove('moving');
+    this.settledW = w;
+    const r = this.rect ??= this.svg.getBoundingClientRect();
     const pxPerUnit = r.width ? Math.min(r.width / w, r.height / h) : 1;
     this.svg.classList.toggle('zoom-far', pxPerUnit < 0.9);
     this.svg.classList.toggle('zoom-mid', pxPerUnit < 2);
     this.svg.style.setProperty('--k', String(1 / pxPerUnit));
-    for (const pin of Array.from(this.marks.querySelectorAll<SVGGElement>('[data-x]'))) pin.setAttribute('transform', `translate(${pin.dataset.x} ${pin.dataset.y}) scale(${(0.62 / pxPerUnit).toFixed(4)})`);
-    if (Math.abs(pxPerUnit - this.lastPx) / (pxPerUnit || 1) > 0.04) {
-      this.lastPx = pxPerUnit;
-      for (const [id, t] of Object.entries(this.labels)) t.classList.toggle('fits', this.size[id] * pxPerUnit > 58 + (t.textContent?.length ?? 6) * 3);
+    const sc = (0.62 / pxPerUnit).toFixed(4);
+    for (const pin of Array.from(this.marks.querySelectorAll<SVGGElement>('[data-x]'))) pin.setAttribute('transform', `translate(${pin.dataset.x} ${pin.dataset.y}) scale(${sc})`);
+    // only what is on screen (with a margin) is drawn
+    const g = getGeo();
+    const mx = w * 0.15, my = h * 0.15;
+    const far = pxPerUnit < 0.9;
+    const goods = this.mode === 'goods';
+    for (const [id, [cx, cy]] of Object.entries(g.center)) {
+      const on = cx > x - mx && cx < x + w + mx && cy > y - my && cy < y + h + my;
+      const t = this.labels[id];
+      const fits = on && !far && this.size[id] * pxPerUnit > 58 + (t.textContent?.length ?? 6) * 3;
+      if (this.shown.get(id) !== fits) { this.shown.set(id, fits); t.classList.toggle('fits', fits); t.classList.toggle('off', !fits); }
+      const gi = this.gicons[id];
+      if (gi && goods) gi.classList.toggle('off', !on);
     }
+    this.lastPx = pxPerUnit;
   }
 
   private clampVb() {
@@ -243,7 +271,7 @@ export class MapView {
       const c = this.toMap(e.clientX, e.clientY);
       this.zoomBy(e.deltaY > 0 ? 1.12 : 0.89, c.x, c.y);
     }, { passive: false });
-    window.addEventListener('resize', () => this.apply());
+    window.addEventListener('resize', () => { this.rect = null; this.apply(true); });
   }
 
   select(id: string | null) {
@@ -301,9 +329,14 @@ export class MapView {
       const c = this.cells[id];
       const nat = s.nations[p.owner];
       const known = this.revealAll || provKnown(s, id);
-      c.classList.toggle('fog', !known);
       const lbl = this.labels[id];
-      lbl.textContent = known ? p.name : '';
+      const occ = this.mode === 'political' && p.occupiedFrom && s.nations[p.occupiedFrom]?.alive && atWar(s, p.owner, p.occupiedFrom);
+      // skip provinces whose look has not changed since the last draw
+      const key = `${known ? 1 : 0}|${p.owner}|${p.name}|${occ ? p.occupiedFrom : ''}|${this.mode}|${this.picked}|${this.revealAll ? 1 : 0}|${p.control < 30 ? 1 : 0}|${this.mode === 'political' ? '' : this.fill(s, p, maxPop)}|${nat?.overlord === s.player ? 1 : 0}|${nat?.capital === id ? 1 : 0}|${p.owner !== s.player && atWar(s, s.player, p.owner) ? 1 : 0}|${p.good}|${nat?.color}`;
+      if (this.paint.get(id) === key) continue;
+      this.paint.set(id, key);
+      c.classList.toggle('fog', !known);
+      if (lbl.textContent !== (known ? p.name : '')) { lbl.textContent = known ? p.name : ''; this.shown.delete(id); }
       const gi = this.gicons[id];
       if (gi) {
         gi.style.display = known && GOODS[p.good] ? '' : 'none';
@@ -321,7 +354,6 @@ export class MapView {
       c.classList.toggle('unrest', pol && p.owner === s.player && p.control < 30);
       lbl.classList.toggle('cap', nat?.capital === id);
     }
-    this.lastPx = 0;
     // mission markers and capitals
     while (this.marks.firstChild) this.marks.removeChild(this.marks.firstChild);
     for (const n of Object.values(s.nations)) {
@@ -368,7 +400,7 @@ export class MapView {
       gEl.append(t);
       this.marks.append(pin);
     }
-    this.apply();
+    this.apply(true);
     void provsOf;
   }
 }

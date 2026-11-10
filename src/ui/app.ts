@@ -64,7 +64,12 @@ const slotKey = (n: number) => `lasting-empires.slot.${n}`;
 let slot = 1;
 let pendingNation: string | null = null;
 let wantTutorial = true; // chosen on the title screen while every slot is full
-function save() { try { localStorage.setItem(slotKey(slot), JSON.stringify(S)); } catch { /* storage may be blocked */ } }
+function saveNow() { clearTimeout(saveT); saveT = 0; try { localStorage.setItem(slotKey(slot), JSON.stringify(S)); } catch { /* storage may be blocked */ } }
+/** Saving writes the whole game, so it waits a moment after a change; leaving the page saves at once. */
+let saveT = 0;
+function save() { if (!saveT) saveT = window.setTimeout(saveNow, 1500); }
+addEventListener('pagehide', () => { if (saveT) saveNow(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && saveT) saveNow(); });
 function loadSlot(n: number): GameState | null {
   try {
     const raw = localStorage.getItem(slotKey(n));
@@ -81,7 +86,7 @@ function migrateOldSave() {
     if (old) localStorage.removeItem(KEY);
   } catch { /* */ }
 }
-function startIn(n: number, s: GameState) { slot = n; pendingNation = null; if (s.tutorial == null) s.tutorial = wantTutorial ? 0 : -1; start(s); save(); }
+function startIn(n: number, s: GameState) { slot = n; pendingNation = null; if (s.tutorial == null) s.tutorial = wantTutorial ? 0 : -1; start(s); saveNow(); }
 export function snapshot() { return S ? { save: JSON.stringify(S), slot } : {}; }
 
 // ---------- menu styles ----------
@@ -1889,6 +1894,7 @@ async function onEndTurn() {
   if (modalOpen) return;
   if (S.queue.length) { processQueue(); return; }
   const rep = endTurn(S);
+  saveNow();
   if (sheet?.kind === 'province' && !S.provinces[sheet.arg!]) closeSheet();
   refresh();
   if (rep) {
