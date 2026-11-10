@@ -116,16 +116,17 @@ function aiWar(s: GameState, n: Nation) {
   // attack enemies
   for (const e of enemiesOf(s, n.id)) {
     if (!s.nations[e]?.alive) continue;
-    if (!n.army.length || rand(s) > 0.4) continue;
+    const revolt = n.id === s.revolution?.rebel; // the other side of a revolution fights hard
+    if (!n.army.length || rand(s) > (revolt ? 0.8 : 0.4)) continue;
     // a casual game: a crown on its last legs is rarely hunted down
-    if (e === s.player && provsOf(s, s.player).length <= 3 && rand(s) < 0.7) continue;
+    if (e === s.player && !revolt && provsOf(s, s.player).length <= 3 && rand(s) < 0.7) continue;
     const target = pickTarget(s, n.id, e);
     if (!target) continue;
     const prov = s.provinces[target];
     if (e === s.player) {
       // only the armies standing within a quarter's march can strike, and the player sees them coming
       const near = strongest(troopsNear(s, n.id, target).filter(t => t.str > 40), 8);
-      if (!near.length || attacksOnPlayer >= 1 || s.incoming?.some(x => x.nation === n.id)) continue;
+      if (!near.length || attacksOnPlayer >= (revolt ? 2 : 1) || s.incoming?.some(x => x.nation === n.id)) continue;
       attacksOnPlayer++;
       announceAttack(s, n.id, target, near);
       continue;
@@ -190,6 +191,7 @@ function aiDiplomacy(s: GameState, n: Nation) {
   for (const w of s.wars.filter(w => (w.a === n.id || w.b === n.id))) {
     const other = w.a === n.id ? w.b : w.a;
     if (other === s.player) {
+      if (n.id === s.revolution?.rebel) continue; // a revolution ends only by arms
       const theyWin = -warScore(s, n.id) > 30 || provsOf(s, s.player).length <= 3;
       if (s.year - w.since >= (theyWin ? 2 : 3) && rand(s) < (theyWin ? 0.35 : 0.12) && !s.queue.some(q => q.kind === 'peace' && q.enemy === n.id)) {
         push(s, { kind: 'peace', enemy: n.id, offered: true });

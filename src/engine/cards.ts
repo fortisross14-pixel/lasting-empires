@@ -5,6 +5,7 @@ import type { GameState, Cat, Role, MissionKind } from '../types';
 import { CATS } from '../types';
 import { TROOPS, EQUIPMENT } from '../data/troops';
 import { TECH, TECHS, BUILDINGS, TECH_RATES, type TechTrack, type BuildingGroup } from '../data/techs';
+import { GOVS } from '../data/governments';
 import { RULER_ARCHS } from '../data/nations';
 import { largestForeignCulture, CULTURE_NAMES } from './society';
 import { CORE_RATES } from '../data/core';
@@ -12,7 +13,7 @@ import { shipBlocked } from './navy';
 import { shortfallCost, takeGoods, hireNeeds, postCap } from './trade';
 import { setCardPool, acceptCap, giftCost, sendGift, churchHead } from './culture';
 import {
-  ageId, ageDef, pioneerNow, enemiesOf, player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore, techFx, ageIndex } from './core';
+  ageId, ageDef, pioneerNow, enemiesOf, player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore, techFx, ageIndex, govOf } from './core';
 
 export type CardTarget = 'none' | 'nation' | 'mission' | 'troop';
 export type CardKind = 'troop' | 'ship' | 'equip' | 'hire' | 'mission' | 'instant';
@@ -145,7 +146,7 @@ const CLASS_CARDS: [string, UnitClass, string, number, string][] = [
   ['hire_cavalry', 'cav', 'Hire Cavalry', 1.8, 'Your best horsemen: Jinetes, then Reiters and Dragoons as you research them. Heavy horse comes from recipes.'],
   ['hire_artillery', 'art', 'Hire Artillery', 1, 'Your best guns: Bombards, then Field Cannon with Bronze Cannon.'],
 ];
-for (const [id, cls, name, w, text] of CLASS_CARDS) add({ id, name, cat: 'military', kind: 'troop', cls, troop: UNIT_LINES[cls][0], icon: TROOPS[UNIT_LINES[cls][0]].icon, text, weight: () => w });
+for (const [id, cls, name, w, text] of CLASS_CARDS) add({ id, name, cat: 'military', kind: 'troop', cls, troop: UNIT_LINES[cls][0], icon: TROOPS[UNIT_LINES[cls][0]].icon, text, weight: s => (cls === 'levy' && !govOf(s).levies ? 0 : w) });
 // old single-unit cards stay playable in saved games, but are no longer drawn
 for (const t of Object.values(TROOPS).filter(t => t.draftable && t.kind !== 'ship' && t.id !== 'levy')) {
   add({ id: 'hire_' + t.id, name: t.name, cat: 'military', kind: 'troop', troop: t.id, icon: t.icon, text: t.desc, weight: never });
@@ -231,6 +232,11 @@ add({ id: 'embrace_culture', name: 'Embrace a Culture', cat: 'culture', agent: '
 add({ id: 'church_gift', name: 'Gift to the Church', cat: 'culture', kind: 'instant', icon: 'church', text: 'Pay 25 ducats: your faith\'s leaders favour you more (+10).', weight: () => 0.9,
   can: s => player(s).gold < giftCost(s) ? `Needs ${giftCost(s)} ducats` : null,
   play: s => { sendGift(s); return `Favour with ${churchHead(s).name.replace(/^The /, 'the ')} +10`; } });
+// a revolution changes the form of government; it is started from Internal → Government
+const newGovOpen = (s: GameState) => Object.values(GOVS).some(g => g.id !== (s.gov ?? 'feudal') && g.tech && s.techs.includes(g.tech));
+add({ id: 'revolution', name: 'Revolution', cat: 'internal', kind: 'instant', icon: 'torch', text: 'Change your form of government. The realm splits: win the civil war by taking the rebel capital before they take yours. Choose the government in Internal → Government.',
+  weight: s => (newGovOpen(s) && !s.revolution && !s.hand.some(h => h.card === 'revolution') ? 0.8 : 0),
+  can: s => (s.revolution ? 'A revolution is already under way' : !newGovOpen(s) ? 'Research a new form of government first' : null) });
 add({ id: 'festival', name: 'Royal Festival', cat: 'culture', kind: 'instant', icon: 'cup', text: 'Pay 15 ducats: happiness +8 for 5 years.', weight: () => 0.9,
   can: s => player(s).gold < Math.round(15 * inflation(s)) ? `Needs ${Math.round(15 * inflation(s))} ducats` : null,
   play: s => { player(s).gold -= Math.round(15 * inflation(s)); s.flags.festival_until = s.year + 5; return 'Bells, bonfires and bullfights: happiness +8 for 5 years'; } });
@@ -327,6 +333,8 @@ export function cardRates(s: GameState): Record<Cat, { rate: number; parts: Rate
     let t = 0;
     for (const tid of s.techs) t += TECH_RATES[tid]?.[c] ?? 0;
     if (t) parts.push({ label: 'Research', v: t });
+    const g = govOf(s).fx.rates?.[c] ?? 0;
+    if (g) parts.push({ label: 'Government', v: g });
     const tier = provsOf(s, s.player).reduce((a, p) => a + TIERS[tierOf(p)].rate, 0);
     if (tier) parts.push({ label: 'Cities', v: tier });
     const r = (arch?.rates[c] ?? 0) + (arch?.all ?? 0);
@@ -391,6 +399,7 @@ export function grantRandomCards(s: GameState, n: number): string[] {
 // ---------- playing ----------
 export function cardBlocked(s: GameState, def: HandCardDef): string | null {
   if (def.kind === 'troop') {
+    if (def.cls === 'levy' && !govOf(s).levies) return 'Only a Feudal Monarchy raises levies';
     if (player(s).manpower < 1) return 'Needs 1 manpower';
     if (s.troops.length >= armyCap(s)) return `Army is at full size (${armyCap(s)})`;
     if (player(s).gold < troopHireCost(s, cardTroop(s, def))) return `Needs ${troopHireCost(s, cardTroop(s, def))} ducats`;

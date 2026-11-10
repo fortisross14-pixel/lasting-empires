@@ -1,7 +1,10 @@
-import { newGame, endTurn, chooseEventOption, playerDeclareWar, ranking, chooseHeir, adoptCore, coreBlocked } from '../src/engine/turn';
+import { newGame, newMissionGame, endTurn, chooseEventOption, playerDeclareWar, ranking, chooseHeir, adoptCore, coreBlocked } from '../src/engine/turn';
 if (process.env.NOWARCARDS) (globalThis as { NOWARCARDS?: boolean }).NOWARCARDS = true;
 if (process.env.NOHANDLIMIT) (globalThis as { NOHANDLIMIT?: boolean }).NOHANDLIMIT = true;
 import { EVENT } from '../src/engine/events';
+import { GOV_ORDER } from '../src/data/governments';
+import { goalView } from '../src/engine/goals';
+import { revolutionBlocked, startRevolution } from '../src/engine/government';
 import { autoResolve, finishBattle } from '../src/engine/battle';
 import { takeDraftOption, doMerge, mergePreview, buyCard, hireWithCard, sellOffices, officeCost } from '../src/engine/drafts';
 import { launchMission, missionBlocked, cardRole, cardRoles, attackRoute } from '../src/engine/missions';
@@ -18,7 +21,7 @@ import { troopsNear } from '../src/engine/army';
 import { happinessOf } from '../src/engine/society';
 import { partners, routeBlocked, postBlocked, quarterFlow, defaultMake } from '../src/engine/trade';
 import { GOODS } from '../src/data/goods';
-import { appointViceroy, viceroyBlocked } from '../src/engine/realm';
+import { appointViceroy, viceroyBlocked, missionsLeft } from '../src/engine/realm';
 
 // the bot's own choices: seeded with SIMSEED for repeatable runs, otherwise random
 let simSeed = Number(process.env.SIMSEED ?? 0) || Math.floor(Math.random() * 2 ** 31);
@@ -53,6 +56,9 @@ function botTurn(s: GameState) {
   if ((s.quarter ?? 0) === 1) { const seat = provsOf(s, s.player).find(p => !viceroyBlocked(s, p.id)); const who = s.characters.filter(c => c.mission == null && !c.ruler && c.role === 'admin').sort((a, b) => a.skill - b.skill)[0]; if (seat && who) appointViceroy(s, seat.id, who.uid); }
   while (me.gold > 300 && me.gold > officeCost(s) * 3 && !sellOffices(s)) { /* turn spare gold into cards */ }
   for (const c of ['consolidation', 'open', 'mercantile', 'land']) if (!coreBlocked(s, c)) adoptCore(s, c);
+  // revolutions: towards the most advanced government it can, when strong at home
+  if (!process.env.NOREVOLUTION && s.year - (s.flags.bot_rev ?? -99) >= 30) for (const g of [...GOV_ORDER].reverse()) if (GOV_ORDER.indexOf(g) > GOV_ORDER.indexOf(s.gov ?? 'feudal') && !revolutionBlocked(s, g) && me.stability >= 0 && R() < 0.5) { s.flags.bot_rev = s.year; startRevolution(s, g); resolveQueue(s); break; }
+  if (s.revolution && s.np >= buyCost(s, 'military') + 1) { buyCard(s, 'military', 'action'); resolveQueue(s); }
   for (let k = 0; k < 3; k++) { const c = CATS[Math.floor(R() * 5)]; if (s.np >= buyCost(s, c) + 2) { buyCard(s, c); resolveQueue(s); } }
   for (const h of [...s.hand]) {
     if (!s.hand.includes(h)) continue;
@@ -90,7 +96,8 @@ function botTurn(s: GameState) {
     if (kind === 'conquer') {
       const g = free(s, 'admiral') ?? free(s, role); if (!g) continue;
       const en = enemiesOf(s, s.player);
-      const targets = Object.values(s.provinces).filter(p => en.includes(p.owner) && !missionBlocked(s, 'conquer', p.id)).sort((a, b) => a.fort - b.fort);
+      const rc = s.revolution?.rebelCapital;
+      const targets = Object.values(s.provinces).filter(p => en.includes(p.owner) && !missionBlocked(s, 'conquer', p.id)).sort((a, b) => (b.id === rc ? 1 : 0) - (a.id === rc ? 1 : 0) || a.fort - b.fort);
       const t0 = targets[0];
       const home = t0 ? troopsNear(s, s.player, t0.id).filter(t => t.str > 40) : [];
       if (targets.length && home.length >= 3) {
@@ -185,7 +192,7 @@ function greedyExtra(s: GameState) {
 }
 const PICK = process.env.NATIONS === 'all' ? NATIONS.filter(d => !d.native).map(d => d.id) : process.env.NATIONS ? process.env.NATIONS.split(',') : ['castile', 'portugal', 'aragon'];
 for (const n of (MODE === 'big' ? ['castile'] : PICK)) for (let seed = 1; seed <= SEEDS; seed++) {
-  const s = newGame(n, seed * 7919 + (MODE === 'passive' ? 1 : MODE === 'greedy' ? 2 : 0));
+  const s = process.env.MISSION ? newMissionGame(n, process.env.MISSION) : newGame(n, seed * 7919 + (MODE === 'passive' ? 1 : MODE === 'greedy' ? 2 : 0));
   if (MODE === 'big') { for (const id of ['granada', 'malaga', 'almeria', 'porto', 'lisbon', 'evora', 'faro', 'coimbra', 'pamplona', 'zaragoza', 'barcelona', 'valencia', 'tangier', 'fez', 'oran', 'tlemcen']) { const prov = s.provinces[id]; const from = prov.owner; prov.owner = n; if (!Object.values(s.provinces).some(x => x.owner === from)) s.nations[from].alive = false; } s.wars = s.wars.filter(w => s.nations[w.a].alive && s.nations[w.b].alive); for (let i = 0; i < 8; i++) s.troops.push({ uid: 50000 + i, type: 'pikemen', vet: 1, str: 100 }); }
   resolveQueue(s);
   let turns = 0;
@@ -193,6 +200,7 @@ for (const n of (MODE === 'big' ? ['castile'] : PICK)) for (let seed = 1; seed <
     while (!s.over && turns < Number(process.env.TURNS ?? (MODE === 'big' ? 240 : 1300))) {
       if (MODE === 'passive') passiveTurn(s); else { botTurn(s); if (MODE === 'greedy') greedyExtra(s); }
       resolveQueue(s); endTurn(s); resolveQueue(s); turns++;
+      if (process.env.REVTRACE && s.revolution) { const r = s.revolution; console.log('  rev', s.year, 'q' + s.quarter, 'orders', s.hand.filter(h => h.card === 'march_orders').length, 'gens', s.characters.filter(c => (c.role === 'general' || c.role === 'conqueror') && c.mission == null).length, 'cap', s.provinces[r.rebelCapital].name, 'block', missionBlocked(s, 'conquer', r.rebelCapital), 'near', troopsNear(s, s.player, r.rebelCapital).length, 'mine', s.troops.length, 'theirs', s.nations[r.rebel]?.army.length, 'missions', s.missions.map(m => m.kind + ':' + (s.provinces[m.target]?.name ?? '')).join(','), 'left', missionsLeft(s)); }
       if (CHECK.includes(s.year) && s.quarter === 0) (rows[s.year] ??= []).push(snap(s));
       if (process.env.TRACE && s.quarter === 0 && s.year % 20 === 0) { const own: Record<string, number> = {}; for (const p of Object.values(s.provinces)) if (p.core === s.player && p.owner !== s.player) own[p.owner] = (own[p.owner] ?? 0) + 1; console.log('  trace', n, s.year, 'provs', provsOf(s, s.player).length, 'troops', s.troops.length, 'stab', player(s).stability, 'lost to', JSON.stringify(own), 'wars', s.wars.filter(w => w.a === s.player || w.b === s.player).map(w => w.a === s.player ? w.b : w.a).join(',')); }
     }
@@ -205,6 +213,8 @@ for (const n of (MODE === 'big' ? ['castile'] : PICK)) for (let seed = 1; seed <
   if (process.env.GOODSLOG) console.log('  culture', n, seed, 'works', (s.works ?? []).length, 'best', (s.works ?? []).filter(w => w.quality >= 3).map(w => w.name).slice(0, 4).join('; '), 'accepted', s.accepted.length, 'church', Math.round(s.flags['faith_' + s.stateReligion] ?? (s.rel['papacy'] ? 0 : 0)), 'people', s.characters.filter(c => ['courtier', 'priest', 'artist', 'leader'].includes(c.role)).map(c => c.role).join(','));
   if (process.env.WHERE) { const reg: Record<string, number> = {}; for (const p of provsOf(s, n)) { const r = provRegion(p.id); reg[r] = (reg[r] ?? 0) + 1; } const how: Record<string, number> = {}; for (const l of s.log) { const k = /colony|Colony/.test(l.text) ? 'colony' : /conquer|taken|falls|captured/i.test(l.text) ? 'conquest' : /integrat|vassal|union/i.test(l.text) ? 'diplo' : ''; if (k) how[k] = (how[k] ?? 0) + 1; } console.log('  where', n, seed, JSON.stringify(reg), JSON.stringify(how)); }
   if (process.env.PARTS) { const dev = (x: string) => provsOf(s, x).reduce((a, p) => a + p.dev, 0); console.log('  parts', n, seed, JSON.stringify(Object.values(s.nations).filter(x => x.alive).map(x => ({ id: x.id, me: x.id === n ? 1 : 0, pr: Math.round(x.prestige), dev: dev(x.id), d0: s.flags['dev0_' + x.id] ?? dev(x.id), subj: Object.values(s.nations).filter(y => y.alive && y.overlord === x.id).reduce((a, y) => a + dev(y.id), 0), pv: provsOf(s, x.id).length })))); }
+  if (s.scenario) console.log('  mission', n, seed, s.scenario.name, s.scenario.status, s.scenario.done ?? '', s.scenario.goals.map(g => { const v = goalView(s, g, s.scenario!.deadline); return (v.met ? '✓ ' : '✗ ') + v.status; }).join(' | '));
+  if (process.env.GOVLOG) console.log('  gov', n, seed, s.gov ?? 'feudal', 'won', s.flags.rev_won ?? 0, 'lost capital', s.flags.rev_lost_capital ?? 0, 'lost time', s.flags.rev_lost_time ?? 0, 'years', s.flags.rev_years ?? 0);
   if (process.env.TOP) console.log('  top', n, seed, ranking(s).slice(0, 4).map(r => r.name + ':' + r.score + '(' + provsOf(s, r.id).length + 'p,' + Math.round(s.nations[r.id].prestige) + 'pr)').join(' '));
   if (process.env.CIVIL) { const hs = provsOf(s, s.player).map(p => happinessOf(s, p).value); console.log('  happy', n, 'provs', hs.length, 'min', Math.min(...hs), 'under30', hs.filter(h => h < 30).length, 'under40', hs.filter(h => h < 40).length, 'vblock', viceroyBlocked(s, provsOf(s, s.player).filter(p => p.id !== player(s).capital)[0]?.id ?? '')); }
   if (process.env.CIVIL) console.log('  civil', n, seed, s.log.filter(l => /Civil war|joins the|rising|crowns himself|declares independence|breaks away/i.test(l.text)).map(l => l.year + ' ' + l.text).slice(0, 8).join(' | '), 'viceroys', (s.viceroys ?? []).length);

@@ -3,7 +3,7 @@
 import type { GameState, Province, TradeRoute } from '../types';
 import { GOODS, RAW, MADE, FOOD } from '../data/goods';
 import { BUILDINGS } from '../data/techs';
-import { player, provsOf, inflation, controlMult, grade, hasTech, hasCore, atWar, hasTreaty, log, nationName, techFx } from './core';
+import { player, provsOf, inflation, controlMult, grade, hasTech, hasCore, atWar, hasTreaty, log, nationName, techFx, govOf } from './core';
 import { NO_STATE } from '../data/nations';
 import { travel } from './army';
 import { rankOf, RANKS } from './realm';
@@ -22,6 +22,8 @@ export function provinceOutput(s: GameState, p: Province): number {
   let v = 0.5 + 0.15 * p.dev;
   const tools = p.owner === s.player ? 1 - 0.5 * (s.short?.tools ?? 0) : 1;
   for (const b of p.buildings) if (EXTRACT.includes(b) && BUILDINGS[b].match?.includes(p.good)) v *= 1 + grade(p, b) * tools;
+  // a feudal realm's lords make the most of farms and herds
+  if (p.owner === s.player && (GOODS[p.good].food || p.good === 'leather')) v *= 1 + (govOf(s).farms ?? 0);
   return v * controlMult(p.control);
 }
 

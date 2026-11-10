@@ -1155,3 +1155,65 @@ ul.traits { margin: 0; padding-left: 18px; }
 .card.wide.k-char .c-rarity { color: var(--rar); white-space: nowrap; }
 .card.wide.k-char .c-top { gap: 8px; }
 .card.wide.k-char .c-cat { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- government ---------- */
+.gov { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; background: var(--panel-2); }
+.gov.now { border: 2px solid var(--gold-2); }
+.gov.revo { border: 2px solid var(--bad); margin-bottom: 10px; }
+.gov.locked { opacity: .75; }
+.gov-h { display: flex; gap: 10px; align-items: center; }
+.gov-h small { display: block; color: var(--muted); font-size: 12px; }
+.gov-h b { font-size: 17px; }
+.gov-i { color: var(--gold-2); }
+[data-style="chancery"] .gov-i { color: var(--wax); }
+.gov.revo .gov-i { color: var(--bad); }
+.gov-t { margin: 0; font-style: italic; color: var(--muted); font-size: 13.5px; }
+.gov-b { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.gov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.gov .btn { align-self: flex-start; min-height: 40px; }
+
+/* ---------- mission mode ---------- */
+.missions-screen { grid-row: 1 / -1; width: 100%; max-width: 1100px; margin: 0 auto; padding: 16px max(16px, env(safe-area-inset-left, 0px)) 40px; overflow-y: auto; height: 100%; min-height: 0; box-sizing: border-box; }
+.missions-screen .pick-top { display: flex; align-items: center; gap: 12px; }
+.missions-screen h1 { margin: 0; font-size: 28px; }
+.mfilter { margin: 10px 0; max-width: 520px; }
+.mfilter .seg-b.locked { opacity: .5; }
+.mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.mcard { display: flex; flex-direction: column; gap: 8px; text-align: left; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
+.mc-new { align-items: center; justify-content: center; text-align: center; border-style: dashed; min-height: 160px; }
+.mc-new small { color: var(--muted); }
+.mc-h { display: flex; gap: 10px; align-items: center; }
+.mc-h b { font-size: 18px; display: block; }
+.mc-h small { color: var(--muted); }
+.mc-i { color: var(--gold-2); flex: none; }
+[data-style="chancery"] .mc-i { color: var(--wax); }
+.mc-t { margin: 0; font-style: italic; color: var(--muted); }
+.mc-g { margin: 0; padding-left: 18px; font-size: 14px; display: flex; flex-direction: column; gap: 3px; }
+.mc-play { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+.mc-play .btn { min-height: 40px; }
+.missions-b { margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+/* builder */
+.builder { display: flex; flex-direction: column; gap: 10px; max-width: 640px; }
+.builder label { display: flex; flex-direction: column; gap: 4px; }
+.builder label span { font-size: 13px; color: var(--muted); }
+.builder select, .builder input { min-height: 42px; font: inherit; font-size: 16px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); max-width: 100%; }
+.bgoal { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.badd { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.badd select { flex: 1 1 220px; }
+.bval input { width: 90px; }
+/* goals window */
+.goal-intro { font-style: italic; color: var(--muted); margin: 0 0 8px; }
+.goal-dl { font-weight: 700; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); margin-bottom: 10px; }
+.goal-dl.won { color: var(--good); border-color: var(--good); }
+.goal-dl.lost { color: var(--bad); border-color: var(--bad); }
+.goal { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.goal-c { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-weight: 700; color: #fff; }
+.goal.met .goal-c { background: var(--good); border-color: var(--good); }
+.goal-t { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.goal-t small { color: var(--muted); font-size: 13px; font-variant-numeric: lining-nums; }
+.goal-bar { display: block; height: 6px; border-radius: 3px; background: #0002; overflow: hidden; margin-top: 2px; }
+.goal-bar i { display: block; height: 100%; background: var(--gold-2); }
+[data-style="chancery"] .goal-bar i { background: var(--wax); }
+.goal.met .goal-bar i { background: var(--good); }
+.tbtn.goals-b.st-won .badge { background: var(--good); }
+.tbtn.goals-b.st-lost .badge { background: var(--bad); }

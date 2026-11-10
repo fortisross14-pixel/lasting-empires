@@ -4,6 +4,7 @@ import { eraOfYear, ERA, ERAS, PIONEER_YEARS } from '../data/eras';
 import type { GameState, Nation, TroopCard, Character, Role, LogEntry, Prompt, Rarity, Province } from '../types';
 import { TROOPS } from '../data/troops';
 import { BUILDINGS, TECH, type TechFx } from '../data/techs';
+import { GOVS } from '../data/governments';
 import { RULER_ARCHS } from '../data/nations';
 import { tradeIncome } from './trade';
 import { artGold } from './culture';
@@ -83,13 +84,18 @@ export function resetProvIndex(s: GameState) {
 export const provsOf = (s: GameState, n: string): Province[] => (provIndex(s).get(n) ?? []).slice();
 export const hasTech = (s: GameState, t: string) => s.techs.includes(t);
 // Sum of one plain effect over everything the player knows; cached until a new tech is learned.
-const FX_CACHE = new WeakMap<string[], { n: number; v: Record<string, number> }>();
+// The form of government adds its own effects to the same sums.
+const FX_CACHE = new WeakMap<string[], { n: number; gov: string; v: Record<string, number> }>();
+export const govOf = (s: GameState) => GOVS[s.gov ?? 'feudal'] ?? GOVS.feudal;
 export function techFx(s: GameState, k: Exclude<keyof TechFx, 'rates'>): number {
   let c = FX_CACHE.get(s.techs);
-  if (!c || c.n !== s.techs.length) {
+  const gov = s.gov ?? 'feudal';
+  if (!c || c.n !== s.techs.length || c.gov !== gov) {
     const v: Record<string, number> = {};
-    for (const id of s.techs) for (const [key, x] of Object.entries(TECH[id]?.fx ?? {})) if (typeof x === 'number') v[key] = (v[key] ?? 0) + x;
-    c = { n: s.techs.length, v }; FX_CACHE.set(s.techs, c);
+    const add = (fx?: TechFx) => { for (const [key, x] of Object.entries(fx ?? {})) if (typeof x === 'number') v[key] = (v[key] ?? 0) + x; };
+    for (const id of s.techs) add(TECH[id]?.fx);
+    add(GOVS[gov]?.fx);
+    c = { n: s.techs.length, gov, v }; FX_CACHE.set(s.techs, c);
   }
   return c.v[k] ?? 0;
 }

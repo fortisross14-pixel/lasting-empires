@@ -31,6 +31,10 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 - Technologies live in `TECHS` (`src/data/techs.ts`), about 4 per field per age, each with `age`, `cost` and plain effects `fx` (income, army, battle, research, control, happiness, routes, card rates…) added up by `techFx(s, key)`. Prefer a new `fx` key over a one-off `hasTech` check. No research beyond the current age (`missionBlocked`).
 - Buildings list their benefits in `gives`; the build screen shows Cost (ducats, materials, time, upkeep) beside Benefit. Unresearched buildings are not offered.
 
+## Missions and government
+- Mission mode: `MISSIONS` in `src/data/missions.ts`; goal kinds in `Goal` (`src/types.ts`), measured by `goalView` in `src/engine/goals.ts` (title, status in words, progress). A new goal kind needs a `goalView` case and, for custom missions, a `GOAL_KINDS` entry in the builder.
+- Governments: `GOVS` with `fx` like research; changing needs the Revolution card and `startRevolution`.
+
 ## Hand limit
 - `HAND_LIMITS` by rank (per deck, in all); permanent cards and burdens do not count (`countsToLimit`). Draws never fail: over the limit the player sells extras (`sellCards`) before End Turn; `trimHand` is the engine's safety net and the sim's choice.
 

@@ -3,6 +3,11 @@ import { CATS } from '../types';
 import { NATIONS, RULER_ARCHS } from '../data/nations';
 import { TROOPS, EQUIPMENT, COUNTER_TEXT } from '../data/troops';
 import { TECHS, TECH, BUILDINGS, AGE_NAMES, type TechTrack } from '../data/techs';
+import { GOVS, GOV_ORDER } from '../data/governments';
+import { MISSIONS, GOAL_REGIONS, type MissionDef } from '../data/missions';
+import { goalView, type GoalView } from '../engine/goals';
+import type { Goal, Scenario } from '../types';
+import { revolutionBlocked, revolutionLands, startRevolution, REVOLUTION_YEARS } from '../engine/government';
 import { TRAITS, RARITY, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
 import { GOODS, FOOD, RAW, MADE } from '../data/goods';
 import { GENRES, QUALITY } from '../data/culture';
@@ -17,7 +22,7 @@ import {
   armyCap, courtCap, courtCount, provinceIncome, buildingAllowed, buildingCost, roleName, nationName, inTruce,
   tierOf, TIERS, population, townSlots, ruralSlots, builtAt, ownGoods, colonyGoods, coreSlots, techFx, ageIndex,
 } from '../engine/core';
-import { newGame, endTurn, chooseEventOption, playerDeclareWar, warCost, ranking, powerTable, dismissCharacter, disbandTroop, chooseHeir, SAVE_VERSION, coreBlocked, coreCost, adoptCore, dropCore, migrate } from '../engine/turn';
+import { newGame, newMissionGame, endTurn, chooseEventOption, playerDeclareWar, warCost, ranking, powerTable, dismissCharacter, disbandTroop, chooseHeir, SAVE_VERSION, coreBlocked, coreCost, adoptCore, dropCore, migrate } from '../engine/turn';
 import { EVENT, eventTitle, upcomingHistory } from '../engine/events';
 import { typesFor, poolOf, cardType, cardTroop, unitFor, UNIT_LINES, CLASS_NAME, type CardType, type UnitClass } from '../engine/cards';
 import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBlocked, troopHireCost, discardCard, handLimit, handTotalLimit, heldOf, heldTotal, handExcess, sellCards, cardFor } from '../engine/cards';
@@ -147,6 +152,111 @@ function slotsSection() {
   return box;
 }
 
+// ---------- mission mode: pick a challenge, or build your own ----------
+const CUSTOM_KEY = 'lasting-empires.custom-missions';
+function customMissions(): (Scenario & { nation: string })[] { try { return JSON.parse(localStorage.getItem(CUSTOM_KEY) ?? '[]'); } catch { return []; } }
+function saveCustom(list: (Scenario & { nation: string })[]) { try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(list.slice(-12))); } catch { /* */ } }
+
+function startMission(nation: string, mission: string | Scenario) {
+  const free = SLOTS.find(n => !loadSlot(n)) ?? (window.confirm('All three campaign slots are full. Replace slot 3?') ? 3 : 0);
+  if (free) startIn(free, newMissionGame(nation, mission));
+}
+
+let missionPreview: GameState | null = null;
+const previewState = () => { if (!missionPreview) { missionPreview = newGame('castile', 777); missionPreview.queue = []; } return missionPreview; };
+const goalTitle = (g: Goal, deadline: number) => goalView(previewState(), g, deadline).title;
+
+function missionCard(m: MissionDef) {
+  return h('div', { class: 'mcard' },
+    h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon(m.icon, 24) }), h('div', {}, h('b', {}, m.name), h('small', {}, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`))),
+    h('p', { class: 'mc-t' }, m.text),
+    h('ul', { class: 'mc-g' }, m.goals.map(g => h('li', {}, goalTitle(g, m.deadline)))),
+    h('div', { class: 'mc-play' }, m.nations.map(n => { const d = NATIONS.find(x => x.id === n); return h('button', { class: 'btn primary small', style: `--nc:${d?.color}`, onclick: () => startMission(n, m.id) }, `Play ${d?.name ?? n}`); })));
+}
+
+function showMissions() {
+  const root = clear($('#app'));
+  const mine = customMissions();
+  root.append(h('div', { class: 'missions-screen' },
+    h('header', { class: 'pick-top' }, h('button', { class: 'btn ghost small', onclick: () => showTitle() }, '← Back'), h('h1', {}, 'Missions')),
+    h('p', { class: 'muted' }, 'A realm, a deadline and a few goals. Track them in the Goals window during the game. Win or lose, the world goes on.'),
+    h('div', { class: 'seg mfilter' }, h('button', { class: 'seg-b on' }, 'Start 1451'), h('button', { class: 'seg-b locked', onclick: () => toast('The 1600 start is coming: a new map of the world in 1600.') }, '1600 · soon'), h('button', { class: 'seg-b locked', onclick: () => toast('The 1700 start is coming, with the Age of Revolutions.') }, '1700 · soon')),
+    h('div', { class: 'mgrid' },
+      h('button', { class: 'mcard mc-new', onclick: () => showBuilder() }, h('span', { class: 'mc-i', html: icon('plus', 28) }), h('b', {}, 'Create your own mission'), h('small', {}, 'Choose a realm, a deadline and up to 6 goals')),
+      ...mine.map(c => h('div', { class: 'mcard mc-custom' },
+        h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon('quill', 24) }), h('div', {}, h('b', {}, c.name), h('small', {}, `Your mission · 1451 – ${c.deadline}`))),
+        h('ul', { class: 'mc-g' }, c.goals.map(g => h('li', {}, goalTitle(g, c.deadline)))),
+        h('div', { class: 'mc-play' }, h('button', { class: 'btn primary small', onclick: () => startMission(c.nation, { ...c, status: 'active' }) }, `Play ${NATIONS.find(x => x.id === c.nation)?.name}`),
+          h('button', { class: 'btn ghost small', onclick: () => { saveCustom(customMissions().filter(x => x.id !== c.id)); showMissions(); } }, 'Delete')))),
+      ...MISSIONS.filter(m => m.start === 1451).map(missionCard))));
+}
+
+/** Goal templates for the builder: a label and how to make the goal from one value. */
+const GOAL_KINDS: { id: string; label: string; input: 'n' | 'region' | 'province' | 'gov' | 'none'; def?: number; make: (v: string) => Goal }[] = [
+  { id: 'provinces', label: 'Hold at least N provinces', input: 'n', def: 20, make: v => ({ k: 'provinces', n: +v }) },
+  { id: 'own', label: 'Take a province', input: 'province', make: v => ({ k: 'own', provinces: [v] }) },
+  { id: 'colonies', label: 'N colonies overseas', input: 'n', def: 5, make: v => ({ k: 'colonies', n: +v }) },
+  { id: 'discover', label: 'Discover a region', input: 'region', make: v => ({ k: 'discover', regions: [v] }) },
+  { id: 'posts', label: 'N trade posts', input: 'n', def: 3, make: v => ({ k: 'posts', n: +v }) },
+  { id: 'techs', label: 'Know N technologies', input: 'n', def: 15, make: v => ({ k: 'techs', n: +v }) },
+  { id: 'rank', label: 'Be among the top N powers', input: 'n', def: 3, make: v => ({ k: 'rank', top: +v }) },
+  { id: 'army', label: 'An army in the top N', input: 'n', def: 3, make: v => ({ k: 'army', top: +v }) },
+  { id: 'navy', label: 'A navy in the top N', input: 'n', def: 3, make: v => ({ k: 'navy', top: +v }) },
+  { id: 'income', label: 'An income in the top N', input: 'n', def: 5, make: v => ({ k: 'income', top: +v }) },
+  { id: 'gov', label: 'Change your government', input: 'gov', make: v => ({ k: 'gov', gov: v }) },
+  { id: 'capital', label: 'Keep your capital to the end', input: 'none', make: () => ({ k: 'capital' }) },
+  { id: 'independent', label: 'Be free of any overlord', input: 'none', make: () => ({ k: 'independent' }) },
+];
+
+function showBuilder() {
+  const root = clear($('#app'));
+  const realms = NATIONS.filter(n => !n.native).sort((a, b) => a.name.localeCompare(b.name));
+  const provs = getGeo().seeds.map(x => ({ id: x.id, name: x.name })).sort((a, b) => a.name.localeCompare(b.name));
+  let nation = 'venice', deadline = 1550, name = '';
+  let goals: Goal[] = [];
+  const form = h('div', { class: 'builder' });
+  const draw = () => {
+    clear(form);
+    const sel = (opts: [string, string][], val: string, on: (v: string) => void) => { const e = h('select', { onchange: (ev: Event) => on((ev.target as HTMLSelectElement).value) }, opts.map(([v, l]) => h('option', { value: v, ...(v === val ? { selected: 'selected' } : {}) }, l))) as HTMLSelectElement; return e; };
+    form.append(h('label', {}, h('span', {}, 'Realm'), sel(realms.map(r => [r.id, r.name]), nation, v => { nation = v; })));
+    const dl = h('input', { type: 'number', min: '1460', max: '1750', value: String(deadline), onchange: (e: Event) => { deadline = Math.max(1460, Math.min(1750, +(e.target as HTMLInputElement).value || 1550)); } });
+    form.append(h('label', {}, h('span', {}, 'Deadline (year)'), dl));
+    const nm = h('input', { type: 'text', placeholder: 'e.g. Venice discovers America', value: name, oninput: (e: Event) => { name = (e.target as HTMLInputElement).value; } });
+    form.append(h('label', {}, h('span', {}, 'Name'), nm));
+    form.append(h('h3', {}, `Goals (${goals.length}/6)`));
+    const pv = previewState();
+    goals.forEach((g, i) => form.append(h('div', { class: 'bgoal' }, h('span', {}, goalView(pv, g, deadline).title), h('button', { class: 'btn ghost small', onclick: () => { goals.splice(i, 1); draw(); } }, 'Remove'))));
+    if (goals.length < 6) {
+      let kind = GOAL_KINDS[0];
+      const valBox = h('span', { class: 'bval' });
+      let value = '';
+      const drawVal = () => {
+        clear(valBox); value = '';
+        if (kind.input === 'n') { value = String(kind.def ?? 1); valBox.append(h('input', { type: 'number', min: '1', max: '200', value, oninput: (e: Event) => { value = (e.target as HTMLInputElement).value; } })); }
+        else if (kind.input === 'region') { value = GOAL_REGIONS[0]; valBox.append(sel(GOAL_REGIONS.map(r => [r, regionDef(r).name]), value, v => { value = v; })); }
+        else if (kind.input === 'gov') { value = 'absolutism'; valBox.append(sel(GOV_ORDER.filter(g => g !== 'feudal').map(g => [g, GOVS[g].name]), value, v => { value = v; })); }
+        else if (kind.input === 'province') { value = provs[0].id; valBox.append(sel(provs.map(p => [p.id, p.name]), value, v => { value = v; })); }
+      };
+      drawVal();
+      form.append(h('div', { class: 'badd' }, sel(GOAL_KINDS.map(k => [k.id, k.label]), kind.id, v => { kind = GOAL_KINDS.find(k => k.id === v)!; drawVal(); }), valBox,
+        h('button', { class: 'btn small', onclick: () => { if (kind.input === 'n' && !(+value > 0)) return toast('Enter a number', 'bad'); goals.push(kind.make(value)); draw(); } }, 'Add goal')));
+    }
+    form.append(h('div', { class: 'mrow' },
+      h('button', { class: 'btn ghost', onclick: () => showMissions() }, 'Cancel'),
+      h('button', { class: 'btn primary' + (goals.length ? '' : ' blocked'), onclick: () => {
+        if (!goals.length) return toast('Add at least one goal', 'bad');
+        const realm = realms.find(r => r.id === nation)!;
+        const sc: Scenario & { nation: string } = { id: 'custom_' + Date.now(), name: name.trim() || `${realm.name}'s mission`, text: `Your own mission for ${realm.name}.`, deadline, goals, status: 'active', custom: true, nation };
+        saveCustom([...customMissions(), sc]);
+        startMission(nation, sc);
+      } }, 'Save and play')));
+  };
+  draw();
+  root.append(h('div', { class: 'missions-screen' },
+    h('header', { class: 'pick-top' }, h('button', { class: 'btn ghost small', onclick: () => showMissions() }, '← Back'), h('h1', {}, 'Your own mission')),
+    h('p', { class: 'muted' }, 'Pick a realm and a deadline, then add goals. The game starts in 1451.'), form));
+}
+
 function chooseNation(id: string) {
   const free = SLOTS.find(n => !loadSlot(n));
   if (free) { startIn(free, newGame(id)); return; }
@@ -214,6 +324,7 @@ function showTitle() {
       SLOTS.some(n => loadSlot(n)) || pendingNation ? h('h2', { class: 'pick-h' }, 'Campaigns') : null,
       SLOTS.some(n => loadSlot(n)) || pendingNation ? slotsSection() : null,
       h('button', { class: 'btn primary wide newgame', onclick: () => showPicker() }, 'Start a new game'),
+      h('button', { class: 'btn wide newgame missions-b', onclick: () => showMissions() }, h('span', { html: icon('star', 18) }), ' Missions: historic challenges'),
       h('details', { class: 'howto' }, h('summary', {}, 'Test scenarios'),
         h('p', { class: 'muted' }, 'Ready-made games to try a system quickly. They use a free campaign slot.'),
         h('button', { class: 'btn wide', onclick: () => { const free = SLOTS.find(n => !loadSlot(n)) ?? (window.confirm('All slots are full. Replace slot 3?') ? 3 : 0); if (free) startIn(free, scenarioCastilePortugal()); } }, 'Battles: Castile at war with Portugal, summer 1467')),
@@ -364,6 +475,8 @@ function renderTop() {
       chip('laurel', fmt(me.prestige), '', 'Prestige'),
     ),
     h('div', { class: 'top-btns' },
+      S.scenario ? h('button', { class: 'tbtn goals-b' + (sheet?.kind === 'goals' ? ' on' : '') + ' st-' + S.scenario.status, onclick: () => toggleSheet('goals'), title: 'Goals' },
+        h('span', { html: icon('star', 18) }), h('span', { class: 'tb-l' }, 'Goals'), h('span', { class: 'badge' }, S.scenario.status === 'active' ? `${S.scenario.goals.filter(g => goalView(S, g, S.scenario!.deadline).met).length}/${S.scenario.goals.length}` : S.scenario.status === 'won' ? '✓' : '✗')) : null,
       h('button', { class: 'tbtn' + (sheet?.kind === 'missions' ? ' on' : ''), onclick: () => toggleSheet('missions'), title: 'Missions' },
         h('span', { html: icon('hourglass', 18) }), h('span', { class: 'tb-l' }, 'Missions'), S.missions.length ? h('span', { class: 'badge' }, String(S.missions.length)) : null),
       h('button', { class: 'tbtn' + (sheet?.kind === 'chronicle' ? ' on' : ''), onclick: () => toggleSheet('chronicle'), title: 'Chronicle' },
@@ -444,7 +557,7 @@ const qText = (n: number) => (n >= 8 ? `${Math.round(n / 4)} years` : `${n} quar
 const WIN_TABS: Record<Cat, [string, string][]> = {
   military: [['cards', 'Cards'], ['missions', 'Missions'], ['army', 'Army'], ['navy', 'Navy'], ['wars', 'Wars & battles']],
   diplomacy: [['cards', 'Cards'], ['missions', 'Missions'], ['realms', 'Realms'], ['subjects', 'Subjects']],
-  internal: [['cards', 'Cards'], ['missions', 'Missions'], ['core', 'Core'], ['realm', 'Realm'], ['provinces', 'Provinces']],
+  internal: [['cards', 'Cards'], ['missions', 'Missions'], ['gov', 'Government'], ['core', 'Core'], ['realm', 'Realm'], ['provinces', 'Provinces']],
   economy: [['cards', 'Cards'], ['missions', 'Missions'], ['goods', 'Goods'], ['trade', 'Trade'], ['ledger', 'Ledger']],
   culture: [['cards', 'Cards'], ['missions', 'Missions'], ['cultures', 'Cultures'], ['religion', 'Religion'], ['arts', 'Arts']],
   research: [['cards', 'Cards'], ['missions', 'Missions'], ['tech', 'Technologies']],
@@ -504,7 +617,8 @@ function winTab(cat: Cat, tab: string, body: HTMLElement) {
   } else if (cat === 'diplomacy') {
     if (tab === 'realms') realmsTab(body); else subjectsTab(body);
   } else if (cat === 'internal') {
-    if (tab === 'core') body.append(coreSection());
+    if (tab === 'gov') govTab(body);
+    else if (tab === 'core') body.append(coreSection());
     else if (tab === 'realm') realmTab(body);
     else provincesTab(body);
   } else if (cat === 'economy') {
@@ -513,6 +627,50 @@ function winTab(cat: Cat, tab: string, body: HTMLElement) {
     if (tab === 'religion') religionTab(body); else if (tab === 'arts') artsTab(body); else culturesTab(body);
   } else techTab(body);
   void holder;
+}
+
+// ---------- government and revolution ----------
+function govCard(id: string, current: boolean): HTMLElement {
+  const g = GOVS[id];
+  const why = current ? null : revolutionBlocked(S, id);
+  const box = h('div', { class: 'gov' + (current ? ' now' : '') + (!current && why ? ' locked' : '') },
+    h('div', { class: 'gov-h' }, h('span', { class: 'gov-i', html: icon(g.icon, 26) }), h('div', {}, h('b', {}, g.name), h('small', {}, current ? 'Your government' : g.tech ? `Needs ${TECH[g.tech].name}${S.techs.includes(g.tech) ? ' ✓' : ''}` : 'The old way'))),
+    h('p', { class: 'gov-t' }, g.text),
+    h('ul', { class: 'gov-b' }, g.buffs.map(b => h('li', {}, b))));
+  if (!current) box.append(h('button', { class: 'btn' + (why ? ' blocked' : ' primary'), onclick: () => (why ? toast(why, 'bad') : confirmRevolution(id)) }, why ?? 'Start a revolution'));
+  return box;
+}
+
+function confirmRevolution(to: string) {
+  const lands = revolutionLands(S);
+  const front = lands.filter(id => (getGeo().adj[id] ?? []).some(nb => S.provinces[nb]?.owner === S.player && !lands.includes(nb)));
+  const cap = [...(front.length ? front : lands)].sort((a, b) => S.provinces[b].dev - S.provinces[a].dev)[0];
+  const turn = S.troops.filter(t => t.mission == null && t.loc && lands.includes(t.loc)).length;
+  confirmBox(`Revolution towards ${GOVS[to].name}?`,
+    `${lands.length} province${lands.length > 1 ? 's' : ''} will rise for the old order: ${lands.map(id => S.provinces[id].name).join(', ')}. Their capital will be ${S.provinces[cap].name}. They raise about ${Math.max(4, Math.round(S.troops.length * 0.6 + lands.length * 0.5))} companies${turn ? `, and ${turn} of your companies stationed there change sides` : ''}. Take ${S.provinces[cap].name}, or destroy all their troops, within ${REVOLUTION_YEARS} years to win; if they take ${S.provinces[player(S).capital].name} first, the revolution fails and you lose 40% of your treasure, 3 cards and 2 stability.`,
+    'Start the revolution', () => { act(() => startRevolution(S, to)); processQueue(); });
+}
+
+function govTab(body: HTMLElement) {
+  const r = S.revolution;
+  if (r) {
+    const n = S.nations[r.rebel];
+    const mine = Math.round(armyPower(S.troops)), theirs = Math.round(armyPower(n?.army ?? []));
+    body.append(h('div', { class: 'gov revo' },
+      h('div', { class: 'gov-h' }, h('span', { class: 'gov-i', html: icon('torch', 26) }), h('div', {}, h('b', {}, `Revolution towards ${GOVS[r.to].name}`), h('small', {}, `Year ${S.year - r.since + 1} of ${REVOLUTION_YEARS}`))),
+      h('ul', { class: 'gov-b' },
+        h('li', {}, `To win: take ${S.provinces[r.rebelCapital].name}, the capital of the ${n?.name ?? 'rebels'}, or destroy all their companies`),
+        h('li', {}, `You lose if ${S.provinces[r.myCapital].name} falls, or after ${r.since + REVOLUTION_YEARS}`),
+        h('li', {}, `Army strength: yours ${mine}, theirs ${theirs}`),
+        h('li', {}, `They hold ${provsOf(S, r.rebel).length} provinces`)),
+      h('button', { class: 'btn primary', onclick: () => { closeWin(); map.focus([r.rebelCapital], 200); } }, `Show ${S.provinces[r.rebelCapital].name}`)));
+  }
+  const cur = S.gov ?? 'feudal';
+  body.append(h('h3', {}, 'Your government'), govCard(cur, true));
+  body.append(h('h3', {}, 'Other forms of government'), h('p', { class: 'muted' }, 'Changing government takes a Revolution card (Internal deck, once you have researched a new form) and a civil war: the far provinces rise for the old order.'));
+  const grid = h('div', { class: 'gov-grid' });
+  for (const id of GOV_ORDER) if (id !== cur) grid.append(govCard(id, false));
+  body.append(grid);
 }
 
 // ---------- the Cards tab: everything you hold, with filters, packs, archive, forge and recipes ----------
@@ -709,6 +867,7 @@ function renderSheet() {
   if (k === 'province') parts = provinceSheet(sheet.arg!, body);
   else if (k === 'nation') parts = nationSheet(sheet.arg!, body);
   else if (k === 'missions') parts = missionsSheet(body);
+  else if (k === 'goals') parts = goalsSheet(body);
   else if (k === 'chronicle') parts = chronicleSheet(body);
   else if (k === 'realm') parts = realmSheet(body);
   else if (k === 'overseas') parts = overseasSheet(body);
@@ -1480,6 +1639,24 @@ function techTab(body: HTMLElement) {
   if (now < AGE_NAMES.length - 1) body.append(h('p', { class: 'muted' }, `The research of the Age of ${AGE_NAMES[now + 1]} opens with that age.`));
 }
 
+function goalRow(v: GoalView): HTMLElement {
+  const pct = v.met ? 100 : v.invert ? (v.need === 0 ? Math.max(5, 100 - v.have * 20) : Math.min(95, (v.need / Math.max(1, v.have)) * 100)) : Math.min(100, (v.have / Math.max(1, v.need)) * 100);
+  return h('div', { class: 'goal' + (v.met ? ' met' : '') },
+    h('span', { class: 'goal-c' }, v.met ? '✓' : ''),
+    h('div', { class: 'goal-t' }, h('b', {}, v.title), h('small', {}, v.status), h('i', { class: 'goal-bar' }, h('i', { style: `width:${Math.round(pct)}%` }))));
+}
+
+function goalsSheet(body: HTMLElement) {
+  const sc = S.scenario!;
+  const left = sc.deadline - S.year;
+  const views = sc.goals.map(g => goalView(S, g, sc.deadline));
+  body.append(h('p', { class: 'goal-intro' }, sc.text));
+  body.append(h('div', { class: 'goal-dl ' + sc.status }, sc.status === 'won' ? `Accomplished in ${sc.done}` : sc.status === 'lost' ? `Failed: the deadline of ${sc.deadline} passed` : `Deadline ${sc.deadline} · ${left > 0 ? `${left} year${left > 1 ? 's' : ''} left` : 'this is the last year'} · ${views.filter(v => v.met).length} of ${views.length} goals met`));
+  for (const v of views) body.append(goalRow(v));
+  body.append(h('p', { class: 'muted' }, 'Goals are checked at the start of each year. Meet them all before the deadline to win; either way the game goes on.'));
+  return [sheetHead(sc.name, 'Mission goals', player(S).color), body];
+}
+
 function missionsSheet(body: HTMLElement) {
   if (!S.missions.length) body.append(h('p', { class: 'muted' }, 'No missions under way. Play a mission card from any panel, or tap a province or nation.'));
   for (const m of S.missions) {
@@ -1713,6 +1890,7 @@ function missionTargets(handUid: number, all = false): TargetRow[] {
 }
 
 function openCardModal(handUid: number) {
+  if (S.hand.find(x => x.uid === handUid)?.card === 'revolution') { openWin('internal', 'gov'); return; }
   const hc = S.hand.find(x => x.uid === handUid);
   if (!hc) return;
   const def = CARDS[hc.card];

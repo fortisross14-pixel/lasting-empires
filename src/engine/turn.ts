@@ -25,6 +25,8 @@ import {
 import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS, trimHand } from './cards';
 import { advanceMissions, MISSION_INFO, quarterlyReturns } from './missions';
 import { runAI, PRESTIGE_FADE } from './ai';
+import { quarterlyRevolution } from './government';
+import { yearlyGoals, scenarioFrom } from './goals';
 import { rollEvents, EVENT } from './events';
 import { AMBITIONS, ambitionOptions } from './drafts';
 import { START_FLEETS, yearlyFleet } from './navy';
@@ -114,6 +116,14 @@ const START_WARS: Record<string, string> = {
   'france:england': 'The last years of the Hundred Years\' War. England still holds Normandy and Gascony: this is your chance to drive them out.',
 };
 
+/** A mission-mode game: the realm, its goals and deadline; no personal ambition on top. */
+export function newMissionGame(nationId: string, mission: string | import('../types').Scenario): GameState {
+  const s = newGame(nationId);
+  s.scenario = typeof mission === 'string' ? scenarioFrom(mission) : mission;
+  s.queue = s.queue.filter(q => !(q.kind === 'draft' && q.draft === 'ambition'));
+  return s;
+}
+
 export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)): GameState {
   const s: GameState = {
     version: SAVE_VERSION, seed, rng: seed, nextUid: 1, year: START_YEAR, quarter: 0, startYear: START_YEAR, endYear: 1750, player: nationId,
@@ -121,7 +131,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
     cardAccum: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0, culture: 0 },
     bought: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0, culture: 0 },
     np: 3, imports: [], stock: {}, short: {}, routes: [], posts: [], overseas: {}, core: [], coreChanged: -99, fleet: [], art: 5, taxBurden: 0, accepted: [], stateReligion: 'catholic', happiness: 55, stats: { battles: {}, kings: [], fallen: [], wars: { won: 0, lost: 0 } },
-    troops: [], equipment: [], characters: [], missions: [], techs: [], firedEvents: [], usedLegends: [], queue: [],
+    troops: [], equipment: [], characters: [], missions: [], techs: [], gov: 'feudal', firedEvents: [], usedLegends: [], queue: [],
     log: [], flags: {}, ambition: null, ambitionDone: false, over: false,
   };
   for (const d of NATIONS) {
@@ -163,6 +173,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   s.troops = def.army.map(type => ({ uid: uid(s), type, vet: 0, str: 100 }));
   s.fleet = (START_FLEETS[nationId] ?? []).map(type => ({ uid: uid(s), type, vet: 0, str: 100 }));
   initSociety(s);
+  s.stateReligion = s.provinces[me.capital]?.religion ?? 'catholic'; // the crown shares the faith of its capital
   initKnownWorld(s);
   s.flags.start_provs = provsOf(s, nationId).length;
   for (const n of Object.values(s.nations)) s.flags['dev0_' + n.id] = provsOf(s, n.id).reduce((a, p) => a + p.dev, 0);
@@ -372,6 +383,7 @@ export function endTurn(s: GameState): YearReport | null {
   playerEconomy(s);
   yearlyViceroys(s, q);
   quarterlyUnrest(s);
+  quarterlyRevolution(s);
   const cards = yearlyCards(s, 1 / 4);
   rollEvents(s);
   s.quarter = (q + 1) % 4;
@@ -389,6 +401,7 @@ export function endTurn(s: GameState): YearReport | null {
     characterAging(s);
     successionCheck(s);
     checkAmbition(s);
+    yearlyGoals(s);
   }
   scriptedHistory(s);
   if (!provsOf(s, s.player).length) {
@@ -488,7 +501,9 @@ function addNewProvinces(s: GameState) {
 /** Fill in fields added after a save was made. */
 export function migrate(s: GameState): GameState {
   s.core ??= []; s.coreChanged ??= -99; s.overseas ??= {}; s.imports ??= [];
-  s.fleet ??= []; s.accepted ??= [];
+  s.fleet ??= []; s.accepted ??= []; s.gov ??= 'feudal';
+  // older games gave every crown the Catholic faith: give it back its own, unless it converted
+  { const capRel = s.provinces[s.nations[s.player]?.capital]?.religion; if (capRel && s.stateReligion === 'catholic' && capRel !== 'catholic' && capRel !== 'protestant' && !s.flags.reformation_seen) s.stateReligion = capRel; }
   if (s.archive?.length) { s.hand.push(...s.archive); s.archive = []; } // the archive is gone: cards come back, the hand limit applies
   s.age ??= { id: eraOfYear(s.year).id, since: s.year };
   addNewProvinces(s);

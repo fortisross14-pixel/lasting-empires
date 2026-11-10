@@ -283,7 +283,7 @@ export function missionBlocked(s: GameState, kind: MissionKind, target: string, 
     if (player(s).gold < envoyCost(s, target)) return `The journey costs ${envoyCost(s, target)} ducats`;
     if (s.missions.some(m => DIPLO.includes(m.kind) && m.target === target)) return 'An envoy is already there';
     const war = atWar(s, me, target);
-    if (kind === 'peace') return war ? null : 'You are not at war';
+    if (kind === 'peace') return !war ? 'You are not at war' : target === s.revolution?.rebel ? 'A revolution ends only by arms: take their capital' : null;
     if (war) return 'You are at war: only peace talks are possible';
     if (kind === 'trade' && hasTreaty(s, me, target, 'trade')) return 'Trade treaty already signed';
     if (kind === 'alliance' && hasTreaty(s, me, target, 'alliance')) return 'Already allied';

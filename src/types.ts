@@ -245,6 +245,9 @@ export interface GameState {
   wars: War[];
   truces: Truce[];
   hand: HandCard[];
+  gov?: string;                     // form of government (data/governments.ts); feudal when missing
+  revolution?: { to: string; rebel: string; rebelCapital: string; myCapital: string; since: number; from: string; broken?: number };
+  scenario?: Scenario;              // mission mode: goals and a deadline
   archive?: HandCard[];             // cards set aside: they do not count against the hand limit
   cardAccum: Record<Cat, number>;
   bought: Record<Cat, number>;      // cards bought this year (price rises)
@@ -295,4 +298,28 @@ export interface Stats {
   kings: { name: string; arch: string; from: number; to: number; prestige: number }[];
   fallen: { name: string; role: Role; skill: number; wins: number; losses: number; until: number }[];
   wars: { won: number; lost: number };
+}
+
+/** A goal of a mission. Lands are named by their owner in 1451 ("the lands of Granada"), or by province. */
+export type Goal =
+  | { k: 'own'; provinces: string[]; label?: string }          // hold these provinces
+  | { k: 'ownLands'; of: string[]; label?: string }            // hold every province these realms held in 1451
+  | { k: 'provinces'; n: number }                              // hold at least n provinces
+  | { k: 'colonies'; n: number; regions?: string[] }           // n provinces overseas (in these regions)
+  | { k: 'discover'; regions: string[] }                       // explorers have found these regions
+  | { k: 'posts'; n: number; regions?: string[] }              // trade posts with realms in these regions
+  | { k: 'techs'; n: number }                                  // know n technologies
+  | { k: 'rank'; top: number }                                 // among the top n powers by score
+  | { k: 'army'; top: number }                                 // army strength among the top n
+  | { k: 'navy'; top: number }                                 // navy strength among the top n
+  | { k: 'income'; top: number; regions?: string[] }           // income among the top n (of realms with a capital in these regions)
+  | { k: 'noneIn'; nation: string; of: string[]; label?: string } // that realm holds none of the 1451 lands of these realms
+  | { k: 'subjects'; of: string[] }                            // these realms are your subjects, or their capitals are yours
+  | { k: 'gov'; gov: string }                                  // this form of government
+  | { k: 'capital' }                                           // hold your capital (checked at the deadline)
+  | { k: 'independent' };                                      // no overlord
+export interface Scenario {
+  id: string; name: string; text: string; deadline: number; goals: Goal[];
+  status: 'active' | 'won' | 'lost'; done?: number;            // year it was won or lost
+  custom?: boolean;
 }
