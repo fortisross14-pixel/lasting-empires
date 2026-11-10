@@ -41,7 +41,46 @@ export const AGE_STATE_COST = [1, 1.15, 1.35, 1.6, 1.85];
 export const ageDef = (s: GameState) => ERA[ageId(s)];
 /** The player opened the current age not long ago. */
 export const pioneerNow = (s: GameState) => s.age?.pioneer === s.player && s.year < (s.age?.since ?? 0) + PIONEER_YEARS;
-export const provsOf = (s: GameState, n: string) => Object.values(s.provinces).filter(p => p.owner === n);
+// Provinces by owner, kept up to date as owners change. Each province's `owner` becomes a
+// getter/setter that moves it between lists; lists stay in the original province order so
+// seeded picks give the same results as a plain filter.
+type ProvIndex = Map<string, Province[]>;
+const PROV_INDEX = new WeakMap<GameState['provinces'], ProvIndex>();
+const ORD = new WeakMap<Province, number>();
+function insertOrdered(list: Province[], p: Province) {
+  const o = ORD.get(p)!; let lo = 0, hi = list.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (ORD.get(list[m])! < o) lo = m + 1; else hi = m; }
+  list.splice(lo, 0, p);
+}
+function provIndex(s: GameState): ProvIndex {
+  let idx = PROV_INDEX.get(s.provinces);
+  if (idx) return idx;
+  const ix: ProvIndex = new Map();
+  let i = 0;
+  for (const p of Object.values(s.provinces)) {
+    ORD.set(p, i++);
+    let owner = p.owner;
+    (ix.get(owner) ?? ix.set(owner, []).get(owner)!).push(p);
+    Object.defineProperty(p, 'owner', {
+      enumerable: true, configurable: true,
+      get: () => owner,
+      set: (v: string) => {
+        if (v === owner) return;
+        const from = ix.get(owner); if (from) { const k = from.indexOf(p); if (k >= 0) from.splice(k, 1); }
+        owner = v;
+        insertOrdered(ix.get(v) ?? ix.set(v, []).get(v)!, p);
+      },
+    });
+  }
+  PROV_INDEX.set(s.provinces, ix);
+  return ix;
+}
+/** Call after adding provinces to an existing state. */
+export function resetProvIndex(s: GameState) {
+  for (const p of Object.values(s.provinces)) { const o = p.owner; Object.defineProperty(p, 'owner', { value: o, writable: true, enumerable: true, configurable: true }); }
+  PROV_INDEX.delete(s.provinces);
+}
+export const provsOf = (s: GameState, n: string): Province[] => (provIndex(s).get(n) ?? []).slice();
 export const hasTech = (s: GameState, t: string) => s.techs.includes(t);
 export const nationName = (s: GameState, n: string) => s.nations[n]?.name ?? n;
 

@@ -20,7 +20,9 @@ import { partners, routeBlocked, postBlocked, quarterFlow, defaultMake } from '.
 import { GOODS } from '../src/data/goods';
 import { appointViceroy, viceroyBlocked } from '../src/engine/realm';
 
-const R = Math.random;
+// the bot's own choices: seeded with SIMSEED for repeatable runs, otherwise random
+let simSeed = Number(process.env.SIMSEED ?? 0) || Math.floor(Math.random() * 2 ** 31);
+const R = () => { simSeed = (simSeed * 1103515245 + 12345) % 2147483648; return simSeed / 2147483648; };
 function resolveQueue(s: GameState) {
   let guard = 0;
   while (s.queue.length && guard++ < 60) {
@@ -188,7 +190,7 @@ for (const n of (MODE === 'big' ? ['castile'] : PICK)) for (let seed = 1; seed <
   resolveQueue(s);
   let turns = 0;
   try {
-    while (!s.over && turns < (MODE === 'big' ? 240 : 1300)) {
+    while (!s.over && turns < Number(process.env.TURNS ?? (MODE === 'big' ? 240 : 1300))) {
       if (MODE === 'passive') passiveTurn(s); else { botTurn(s); if (MODE === 'greedy') greedyExtra(s); }
       resolveQueue(s); endTurn(s); resolveQueue(s); turns++;
       if (CHECK.includes(s.year) && s.quarter === 0) (rows[s.year] ??= []).push(snap(s));
@@ -197,6 +199,7 @@ for (const n of (MODE === 'big' ? ['castile'] : PICK)) for (let seed = 1; seed <
   } catch (e) { console.error('CRASH', n, seed, s.year, e); throw e; }
   if (process.env.DUMP) console.log('  state', n, 'provs', provsOf(s, n).length, 'overlord', player(s).overlord, 'year', s.year, 'over', s.over, 'hand', s.hand.length);
   if (process.env.DUMP) { const c: Record<string, number> = {}; for (const h of s.hand) c[h.card] = (c[h.card] ?? 0) + 1; console.log('  hand', n, JSON.stringify(c), 'gold', Math.round(player(s).gold), 'income', JSON.stringify(incomeOf(s, n), (k, v) => typeof v === 'number' ? Math.round(v * 10) / 10 : v)); }
+  if (process.env.HASH) console.log('  hash', n, seed, s.year, require('crypto').createHash('md5').update(JSON.stringify(s)).digest('hex'));
   const f = snap(s); f.year = s.year; f.provs = provsOf(s, n).length; finals.push(f);
   if (process.env.GOODSLOG) { const t = incomeOf(s, n); console.log('  goods', n, seed, s.year, 'short', JSON.stringify(Object.fromEntries(Object.entries(s.short).filter(([, v]) => v > 0.05))), 'routes', s.routes.map(r => r.dir + ':' + r.good + '>' + r.partner).join(','), 'posts', s.posts.map(p => p.nation).join(','), 'workshops', provsOf(s, n).filter(p => p.make && (p.buildings.includes('workshop') || p.buildings.includes('manufactory'))).map(p => p.make).join(','), 'trade+', t.goods.toFixed(1), 'trade-', t.imports.toFixed(1), 'total', t.total.toFixed(1)); }
   if (process.env.GOODSLOG) console.log('  culture', n, seed, 'works', (s.works ?? []).length, 'best', (s.works ?? []).filter(w => w.quality >= 3).map(w => w.name).slice(0, 4).join('; '), 'accepted', s.accepted.length, 'church', Math.round(s.flags['faith_' + s.stateReligion] ?? (s.rel['papacy'] ? 0 : 0)), 'people', s.characters.filter(c => ['courtier', 'priest', 'artist', 'leader'].includes(c.role)).map(c => c.role).join(','));

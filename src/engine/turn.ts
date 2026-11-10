@@ -21,6 +21,7 @@ import { CORE } from '../data/core';
 import {
   rand, pick, randInt, uid, clamp, player, provsOf, incomeOf, log, push, addRel, playerManpower, initialSettlement, grade,
   addTreaty, hasTech, genCharacter, declareWar, nationName, atWar, getRel, hasGood, armyPower, hasCore, coreSlots, hasTreaty, ageId,
+  resetProvIndex,
 } from './core';
 import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS } from './cards';
 import { advanceMissions, MISSION_INFO, quarterlyReturns } from './missions';
@@ -470,6 +471,7 @@ function addNewProvinces(s: GameState) {
     }
     s.provinces[id] = { id, name, owner: o, core: o, dev, fort, buildings: [], land: geo.land[id], lon, lat, control: 70, good, settlement: initialSettlement(dev, false), grades: {}, culture: undefined as unknown as string, religion: undefined as unknown as string };
   }
+  resetProvIndex(s);
   log(s, `The map grows: ${missing.length} new provinces.`, 'neutral');
 }
 
