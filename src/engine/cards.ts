@@ -9,8 +9,8 @@ import { RULER_ARCHS } from '../data/nations';
 import { largestForeignCulture, CULTURE_NAMES } from './society';
 import { CORE_RATES } from '../data/core';
 import { shipBlocked } from './navy';
-import { shortfallCost, takeGoods, hireNeeds } from './trade';
-import { setCardPool, acceptCap } from './culture';
+import { shortfallCost, takeGoods, hireNeeds, postCap } from './trade';
+import { setCardPool, acceptCap, giftCost, sendGift, churchHead } from './culture';
 import {
   ageId, ageDef, pioneerNow, enemiesOf, player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore,
 } from './core';
@@ -29,6 +29,7 @@ export interface HandCardDef {
   play?: (s: GameState, target: string) => string;
   burden?: boolean;
   permanent?: boolean; // stays in hand after use: the mission costs ducats only
+  trade?: 'buy' | 'sell'; // trade route cards: which way the goods go
 }
 
 export const HAND_LIMIT = 7;
@@ -94,8 +95,10 @@ add({ id: 'conquistadors', name: 'Conquistadors', cat: 'military', kind: 'instan
 // ---------- diplomacy ----------
 add({ id: 'hire_diplomat', name: 'Engage a Diplomat', cat: 'diplomacy', kind: 'hire', role: 'diplomat', icon: 'scroll', text: 'Meet three envoys, keep one. Costs 1 manpower.', weight: () => 1.1 });
 add({ id: 'embassy', name: 'Embassy', cat: 'diplomacy', kind: 'mission', permanent: true, missions: ['relations'], icon: 'scroll', text: 'Send a diplomat to improve relations (+25).', weight: () => 2 });
-add({ id: 'merchant_route', name: 'Trade Route', cat: 'economy', kind: 'mission', permanent: true, missions: ['route'], icon: 'coin', text: 'A merchant opens a route to buy or sell a good every quarter. Quick to set up; buying this way is dear.', weight: never });
-add({ id: 'trading_post', name: 'Trade Post', cat: 'economy', kind: 'mission', permanent: true, missions: ['post'], icon: 'anchor', text: 'A merchant founds a post abroad: 2 quarters next door, up to 6 across the oceans. Routes there buy below market price and sell above it.', weight: never });
+add({ id: 'import_contract', name: 'Import Contract', cat: 'economy', kind: 'mission', missions: ['route'], trade: 'buy', icon: 'coin', text: 'A merchant opens a route that buys 1–4 loads a year of one good abroad, every quarter. Quick to set up; dear unless you have a trade post there.', weight: s => (Object.values(s.short ?? {}).some(v => v > 0.1) ? 1.6 : 1.1) });
+add({ id: 'export_contract', name: 'Export Contract', cat: 'economy', kind: 'mission', missions: ['route'], trade: 'sell', icon: 'coin', text: 'A merchant opens a route that sells 1–4 loads a year of one good abroad, every quarter. Better prices through a trade post.', weight: () => 1 });
+add({ id: 'trading_post', name: 'Trade Post Charter', cat: 'economy', kind: 'mission', missions: ['post'], icon: 'anchor', text: 'A merchant founds a post abroad: 2 quarters next door, up to 6 overseas. Routes with that realm then buy below the market price and sell above it.', weight: s => (s.posts.length < postCap(s) ? 0.6 : 0.1) });
+add({ id: 'merchant_route', name: 'Trade Route', cat: 'economy', kind: 'mission', missions: ['route'], icon: 'coin', text: 'An old route charter: buy or sell a good abroad.', weight: never });
 add({ id: 'trade_route', name: 'Trade Treaty', cat: 'diplomacy', kind: 'mission', missions: ['trade'], icon: 'coin', text: 'Sign a trade treaty: ducats every year, and better prices on your trade routes with them.', weight: () => 2 });
 add({ id: 'alliance_pact', name: 'Alliance Pact', cat: 'diplomacy', kind: 'mission', missions: ['alliance'], icon: 'hands', text: 'Seek an alliance. They will join your wars.', weight: () => 1.2 });
 add({ id: 'marriage', name: 'Royal Marriage', cat: 'diplomacy', kind: 'mission', missions: ['marriage'], icon: 'ring', text: 'Join the royal houses: relations grow every year.', weight: () => 1 });
@@ -136,6 +139,9 @@ add({ id: 'hire_artist', name: 'Invite an Artist', cat: 'culture', kind: 'hire',
 add({ id: 'hire_priest', name: 'Call a Churchman', cat: 'culture', kind: 'hire', role: 'priest', icon: 'church', text: 'Meet three clerics, keep one. Costs 1 manpower.', weight: () => 0.6 });
 add({ id: 'holy_see', name: 'Mission to the Church', cat: 'culture', agent: 'priest', kind: 'mission', missions: ['pilgrimage'], icon: 'church', text: 'A churchman wins the favour of your faith\'s leaders. Blessed realms are happier and more prestigious; censured ones lose stability.', weight: () => 1 });
 add({ id: 'embrace_culture', name: 'Embrace a Culture', cat: 'culture', agent: 'leader', kind: 'mission', missions: ['accept'], icon: 'people', text: 'A cultural leader makes a people of your realm one of your own: no more foreign-culture unhappiness.', weight: s => (provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? 0.9 : 0.1) });
+add({ id: 'church_gift', name: 'Gift to the Church', cat: 'culture', kind: 'instant', icon: 'church', text: 'Pay 25 ducats: your faith\'s leaders favour you more (+10).', weight: () => 0.9,
+  can: s => player(s).gold < giftCost(s) ? `Needs ${giftCost(s)} ducats` : null,
+  play: s => { sendGift(s); return `Favour with ${churchHead(s).name.replace(/^The /, 'the ')} +10`; } });
 add({ id: 'festival', name: 'Royal Festival', cat: 'culture', kind: 'instant', icon: 'cup', text: 'Pay 15 ducats: happiness +8 for 5 years.', weight: () => 0.9,
   can: s => player(s).gold < Math.round(15 * inflation(s)) ? `Needs ${Math.round(15 * inflation(s))} ducats` : null,
   play: s => { player(s).gold -= Math.round(15 * inflation(s)); s.flags.festival_until = s.year + 5; return 'Bells, bonfires and bullfights: happiness +8 for 5 years'; } });

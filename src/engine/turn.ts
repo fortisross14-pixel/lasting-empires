@@ -179,8 +179,6 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   for (const c of CATS) { drawCat(s, c); drawCat(s, c); }
   addCard(s, 'eq_plate');
   addCard(s, 'peace_envoy', true);
-  addCard(s, 'merchant_route', true);
-  addCard(s, 'trading_post', true);
   settleArmies(s);
   s.stock = startStock(s);
   push(s, { kind: 'draft', draft: 'ambition', options: ambitionOptions(s) });
@@ -470,10 +468,13 @@ export function migrate(s: GameState): GameState {
     s.imports = []; s.routes = []; s.posts = []; s.short = {};
     for (const p of provsOf(s, s.player)) if ((p.buildings.includes('workshop') || p.buildings.includes('manufactory')) && !p.make) p.make = 'materials';
     s.stock = startStock(s);
-    if (!s.hand.some(h => h.card === 'merchant_route')) addCard(s, 'merchant_route', true);
-    if (!s.hand.some(h => h.card === 'trading_post')) addCard(s, 'trading_post', true);
   }
   s.routes ??= []; s.posts ??= []; s.short ??= {};
+  // trade became card by card: the old lasting route charter becomes one import and one export contract
+  if (s.hand.some(h => h.card === 'merchant_route')) {
+    s.hand = s.hand.filter(h => h.card !== 'merchant_route');
+    addCard(s, 'import_contract', true); addCard(s, 'export_contract', true);
+  }
   // the People menu arrived: a sixth kind of card and a courtier to start with
   s.cardAccum.culture ??= 0; s.bought.culture ??= 0; s.works ??= [];
   if (!s.characters.some(c => ['courtier', 'priest', 'artist', 'leader'].includes(c.role))) s.characters.push(genCharacter(s, 'courtier', player(s).culture, 1));

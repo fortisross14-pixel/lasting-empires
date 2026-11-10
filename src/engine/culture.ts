@@ -20,11 +20,10 @@ export function addChurchRel(s: GameState, d: number) {
 export const churchMood = (s: GameState): 'blessed' | 'censured' | 'neutral' => { const r = churchRel(s); return r >= 50 ? 'blessed' : r <= -40 ? 'censured' : 'neutral'; };
 export const giftCost = (s: GameState) => Math.round(25 * inflation(s));
 export function giftBlocked(s: GameState): string | null {
-  if ((s.giftYear ?? -99) === s.year) return 'One gift a year';
   if (player(s).gold < giftCost(s)) return `Costs ${giftCost(s)} ducats`;
   return null;
 }
-/** A gift to your church: ducats for favour, once a year. */
+/** A gift to your church (the Gift to the Church card): ducats for favour. */
 export function sendGift(s: GameState): string | null {
   const why = giftBlocked(s);
   if (why) return why;

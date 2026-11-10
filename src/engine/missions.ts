@@ -367,6 +367,7 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   if (!cdef || !cdef.missions?.includes(kind)) return 'You need a card for this mission';
   if (kind === 'research' && cdef.track && TECH[target]?.track !== cdef.track) return 'This card studies another field';
   if (kind === 'build' && cdef.group && BUILDINGS[building!]?.group !== cdef.group) return 'This card builds another kind of building';
+  if (kind === 'route' && cdef.trade && cdef.trade !== trade?.dir) return cdef.trade === 'buy' ? 'An Import Contract buys goods: sell with an Export Contract' : 'An Export Contract sells goods: buy with an Import Contract';
   if (kind !== 'route' && missionsLeft(s) <= 0) return `No missions left this year: a ${rankOf(s).name} can start ${missionCap(s)} a year`;
   const ch = s.characters.find(c => c.uid === charUid);
   if (!ch || ch.mission != null) return 'Choose a free character';

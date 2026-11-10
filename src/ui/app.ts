@@ -6,7 +6,7 @@ import { TECHS, TECH, BUILDINGS, type TechTrack } from '../data/techs';
 import { TRAITS, RARITY, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
 import { GOODS, FOOD, RAW, MADE } from '../data/goods';
 import { GENRES, QUALITY } from '../data/culture';
-import { churchHead, churchRel, churchMood, giftCost, giftBlocked, sendGift, artHappy, artGold, displayed, displaySlots, museumsOpen, artCost, acceptBlocked, acceptCap, cultureRows, religionRows, cultureName } from '../engine/culture';
+import { churchHead, churchRel, churchMood, giftCost, giftBlocked, artHappy, artGold, displayed, displaySlots, museumsOpen, artCost, acceptBlocked, acceptCap, cultureRows, religionRows, cultureName } from '../engine/culture';
 import { hireNeeds, quarterFlow, needs, partners, routeBlocked, postBlocked, routeCap, postCap, postTurns, postCost, distanceTo, price, canMake, workshopCap, provinceOutput, sideOutput, dealFor, merchantFactor, POST_UPKEEP, MAX_ROUTE, materialsFor, stockCap } from '../engine/trade';
 import { AGE_TECH, ERA, PIONEER_YEARS } from '../data/eras';
 import { ageOf, nextAge } from '../engine/ages';
@@ -1105,6 +1105,10 @@ function ledgerTab(body: HTMLElement) {
 }
 
 const DIST_NAME = ['next door', 'near', 'far', 'overseas'];
+/** The trade card for buying or selling, if you hold one. */
+const tradeCard = (dir: 'buy' | 'sell') => S.hand.find(h => CARDS[h.card].missions?.includes('route') && (CARDS[h.card].trade ?? dir) === dir);
+const TRADE_CARD_NAME = { buy: 'Import Contract', sell: 'Export Contract' };
+const countCards = (id: string) => S.hand.filter(h => h.card === id).length;
 /** "Uses 1 weapons (you have 0.4): the rest bought at double price." */
 function goodsNote(need: Record<string, number>) {
   const lack = Object.entries(need).filter(([g, n]) => (S.stock[g] ?? 0) < n);
@@ -1120,6 +1124,8 @@ function goodsTab(body: HTMLElement) {
   const hunger = S.short.food ?? 0;
   const foodIn = FOOD.reduce((a, g) => a + yr(f.made, g) + yr(f.bought, g), 0);
   body.append(h('p', { class: hunger >= 0.05 ? 'bad small' : 'muted small' }, `Food: the people eat ${f1(need.food)} a year and your lands and routes bring ${f1(foodIn)}. ` + (hunger >= 0.05 ? `Hunger, ${Math.round(hunger * 100)}% short: unhappy people, fewer recruits.` : 'Three or more kinds of food in store make people happier.')));
+  const canBuy = !!tradeCard('buy'), canSell = !!tradeCard('sell');
+  body.append(h('p', { class: 'muted small' }, `Buying and selling abroad takes a card: Import Contracts ${countCards('import_contract')}, Export Contracts ${countCards('export_contract')}, Trade Post Charters ${countCards('trading_post')}. Draw them in the Economy deck or buy a pack.`));
   const row = (g: string) => {
     const d = GOODS[g];
     const inflow = yr(f.made, g) + yr(f.bought, g);
@@ -1138,8 +1144,8 @@ function goodsTab(body: HTMLElement) {
       h('td', { class: 'num ' + (net < -0.05 ? 'dn' : net > 0.05 ? 'up' : 'muted') }, `${net > 0.05 ? '+' : ''}${f1(net)}`),
       h('td', {}, status),
       h('td', { class: 'g-acts' },
-        h('button', { class: 'btn small ghost', onclick: () => openRouteDialog(g, 'buy') }, 'Buy'),
-        h('button', { class: 'btn small ghost', onclick: () => openRouteDialog(g, 'sell') }, 'Sell')));
+        h('button', { class: 'btn small ghost' + (canBuy ? '' : ' blocked'), title: canBuy ? '' : 'Needs an Import Contract card', onclick: () => openRouteDialog(g, 'buy') }, 'Buy'),
+        h('button', { class: 'btn small ghost' + (canSell ? '' : ' blocked'), title: canSell ? '' : 'Needs an Export Contract card', onclick: () => openRouteDialog(g, 'sell') }, 'Sell')));
   };
   const table = (title: string, list: string[]) => {
     body.append(h('h3', {}, title));
@@ -1163,7 +1169,7 @@ function tradeTab(body: HTMLElement) {
   body.append(h('div', { class: 'stats' },
     stat('Sold a year', '+' + inc.goods.toFixed(1)), stat('Bought a year', '−' + inc.imports.toFixed(1)),
     stat('Trade routes', `${S.routes.length}/${routeCap(S)}`), stat('Trade posts', `${S.posts.length}/${postCap(S)}`)));
-  body.append(h('p', { class: 'muted small' }, 'A Trade Route takes a merchant one quarter and does not use up a mission. Buying directly is dear; found a Trade Post first and every route with that realm buys at 90% and sells at 120% of the price. Start a route from Buy or Sell in the Goods tab.'));
+  body.append(h('p', { class: 'muted small' }, 'Each route takes a card (Import or Export Contract) and a merchant for one quarter; it does not use up a mission. Buying directly is dear; found a Trade Post (Trade Post Charter card) and every route with that realm buys at 90% and sells at 120% of the price. Start a route from Buy or Sell in the Goods tab.'));
   const routeRow = (r: GameState['routes'][number]) => {
     const each = price(S, r.good) * dealFor(S, r.partner, r.dir, r.deal);
     return h('div', { class: 'grow-row' },
@@ -1181,7 +1187,7 @@ function tradeTab(body: HTMLElement) {
     body.append(h('div', { class: 'post' }, h('div', { class: 'post-h' }, h('span', { class: 'swatch', style: `background:${n?.color}` }), h('b', {}, nationName(S, p.nation)), h('small', {}, ` since ${p.since} · upkeep ${POST_UPKEEP}/yr · ${rs.length} route${rs.length === 1 ? '' : 's'}`)),
       rs.length ? h('div', { class: 'glist' }, rs.map(routeRow)) : h('p', { class: 'muted small' }, 'No routes through this post yet.')));
   }
-  body.append(actionRow('anchor', 'Found a trade post', `2 quarters next door, up to 6 overseas · every route with that realm cheaper, +1 route`, S.posts.length >= postCap(S) ? `You can keep ${postCap(S)} trade post${postCap(S) > 1 ? 's' : ''}` : null, openPostPicker));
+  body.append(actionRow('anchor', 'Found a trade post', `Uses a Trade Post Charter (you hold ${countCards('trading_post')}) · 2 quarters next door, up to 6 overseas · every route with that realm cheaper, +1 route`, !cardFor(S, 'post') ? 'Needs a Trade Post Charter card (Economy deck)' : S.posts.length >= postCap(S) ? `You can keep ${postCap(S)} trade post${postCap(S) > 1 ? 's' : ''}` : null, openPostPicker));
   const direct = S.routes.filter(r => !S.posts.some(p => p.nation === r.partner));
   body.append(h('h3', {}, `Direct routes (${direct.length})`));
   if (!direct.length) body.append(h('p', { class: 'muted' }, 'None.'));
@@ -1202,8 +1208,8 @@ function workshopRow(p: Province, f = quarterFlow(S)) {
 
 /** Pick a realm to buy from or sell to. */
 function openRouteDialog(g: string, dir: 'buy' | 'sell') {
-  const card = cardFor(S, 'route');
-  if (!card) return toast('You need the Trade Route card', 'bad');
+  const card = tradeCard(dir);
+  if (!card) return toast(`Needs an ${TRADE_CARD_NAME[dir]} card (Economy deck)`, 'bad');
   const d = GOODS[g];
   let amount = 2;
   const box = h('div', { class: 'mbox narrow' });
@@ -1232,7 +1238,7 @@ function openRouteDialog(g: string, dir: 'buy' | 'sell') {
 /** Pick where to found a trade post. */
 function openPostPicker() {
   const card = cardFor(S, 'post');
-  if (!card) return toast('You need the Trade Post card', 'bad');
+  if (!card) return toast('Needs a Trade Post Charter card (Economy deck)', 'bad');
   const lacking = Object.keys(GOODS).filter(g => (S.short[g] ?? 0) >= 0.05 || S.routes.some(r => r.good === g && r.dir === 'buy'));
   const rows = Object.values(S.nations).filter(n => n.alive && n.id !== S.player && n.capital && provsOf(S, n.id).length && provKnown(S, n.capital))
     .map(n => ({ n, routes: S.routes.filter(r => r.partner === n.id).length, has: lacking.filter(g => partners(S, g, 'buy').some(p => p.nation === n.id)), dist: distanceTo(S, n.id) }))
@@ -1279,7 +1285,8 @@ function religionTab(body: HTMLElement) {
   body.append(h('div', { class: 'stats' }, stat('State faith', RELIGION_NAMES[S.stateReligion] ?? S.stateReligion), stat('Leaders', head.name), stat('Their favour', `${Math.round(rel)}`), stat('Standing', mood === 'blessed' ? 'Blessed' : mood === 'censured' ? 'Censured' : 'Tolerated')));
   body.append(h('div', { class: 'ctl' }, h('span', {}, 'Favour'), h('span', { class: 'ctl-bar' }, h('i', { style: `width:${(rel + 100) / 2}%`, class: rel <= -40 ? 'low' : '' })), h('b', {}, `${Math.round(rel)}`)));
   body.append(h('p', { class: 'muted small' }, `At 50 or more you are blessed: +3 happiness in provinces of your faith and +1 prestige a year, and at 80 they may send missionaries. At −40 or less you are censured: −5 happiness there and stability may fall. Favour drifts back towards 20${S.stateReligion === 'catholic' ? ' (your standing with the Papal States)' : ''}. Converting provinces and sacred art please them.`));
-  body.append(actionRow('coin', 'Send a gift', `${giftCost(S)} ducats · favour +10 · once a year`, giftBlocked(S), () => act(() => { const r = sendGift(S); if (r) toast(r, 'bad'); }, 'Gift sent')));
+  const gift = S.hand.find(h => h.card === 'church_gift');
+  body.append(actionRow('coin', 'Send a gift', `Uses a Gift to the Church card (you hold ${countCards('church_gift')}) · ${giftCost(S)} ducats · favour +10`, !gift ? 'Needs a Gift to the Church card (People deck)' : giftBlocked(S), () => act(() => { const r = playCard(S, gift!.uid, ''); if (r.startsWith('!')) toast(r.slice(1), 'bad'); }, 'Gift sent')));
   body.append(actionRow('church', 'Mission to the Church', `A churchman wins favour: +3 to +40 · ${pilgrimageCost(S)} ducats`, !cardFor(S, 'pilgrimage') ? 'Needs a Mission to the Church card' : missionBlocked(S, 'pilgrimage', ''), () => openPlanner('pilgrimage', '', undefined, cardFor(S, 'pilgrimage')!.uid)));
   body.append(h('h3', {}, 'Faiths of the realm'));
   body.append(h('table', { class: 'gtable' },
@@ -1301,7 +1308,7 @@ function artsTab(body: HTMLElement) {
   const g = artGold(S);
   body.append(h('div', { class: 'stats' }, stat('Works', String(works.length)), stat('Happiness now', '+' + artHappy(S).toFixed(1)), stat('Ducats a year', (g.fees + g.visitors).toFixed(1)), stat('On show', `${displayed(S).length}/${displaySlots(S)}`)));
   body.append(h('p', { class: 'muted small' }, `An artist makes one work per mission. Quality is the outcome: the better it is, the longer it cheers the people; admired works pay fees for a few years, celebrated ones bring a free card of their kind and masterpieces may carry a famous name. Libraries show 1 work, universities 2, museums 4; ${museumsOpen(S) ? 'in this Age of Enlightenment visitors pay for them.' : 'from the Age of Enlightenment visitors will pay to see them.'}`));
-  body.append(h('h3', {}, 'Commission a work'));
+  body.append(h('h3', {}, 'Commission a work'), h('p', { class: countCards('patronage') ? 'muted small' : 'bad small' }, `Each work takes a Commission a Work of Art card (you hold ${countCards('patronage')}) and a free artist or courtier. Draw them in the People deck or buy a pack.`));
   const list = h('div', { class: 'tlist' });
   for (const gd of Object.values(GENRES)) list.append(h('div', { class: 'trow' }, h('span', { class: 'gico', html: icon(gd.icon, 20) }), h('div', { class: 'a-t' }, h('b', {}, gd.name), h('small', {}, `${artCost(S, gd.id)} ducats · ${gd.desc}`)), h('div', { class: 'r-acts' }, peopleAction('artwork', gd.id, 'Commission'))));
   body.append(list);
@@ -1610,7 +1617,7 @@ function openCardModal(handUid: number) {
     body.append(row);
   } else if (def.kind === 'mission' && (def.missions![0] === 'route' || def.missions![0] === 'post')) {
     body.append(h('p', {}, def.text));
-    footer.append(h('button', { class: 'btn primary', onclick: () => { closeModal(); if (def.missions![0] === 'route') openWin('economy', 'goods'); else openPostPicker(); } }, def.missions![0] === 'route' ? 'Open the Trade ledger' : 'Choose where'));
+    footer.append(h('button', { class: 'btn primary', onclick: () => { closeModal(); if (def.missions![0] === 'route') { openWin('economy', 'goods'); toast(def.trade === 'sell' ? 'Choose a good and press Sell' : 'Choose a good and press Buy'); } else openPostPicker(); } }, def.missions![0] === 'route' ? 'Choose the good' : 'Choose where'));
   } else if (def.kind === 'mission') {
     const role = cardRole(def.id);
     body.append(h('p', { class: 'muted' }, `Needs a free ${roleName[role].toLowerCase()}. Choose where to send them.`));

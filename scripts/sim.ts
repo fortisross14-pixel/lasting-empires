@@ -109,17 +109,18 @@ function botTurn(s: GameState) {
       const m = free(s, role); if (!m) continue;
       // buy what runs short; sell what overflows
       const short = Object.entries(s.short).filter(([g, v]) => v > 0.15 && g !== 'food').sort((a, b) => b[1] - a[1])[0]?.[0] ?? ((s.short.food ?? 0) > 0.15 ? 'grain' : null);
-      if (kind === 'route' && short) {
+      const dir = d.trade ?? 'buy';
+      if (kind === 'route' && dir === 'buy' && short) {
         const f = quarterFlow(s);
         const gap = Math.min(4, Math.max(1, Math.ceil((f.missing[short === 'grain' ? 'food' : short] ?? 0) * 4)));
         const pt = partners(s, short, 'buy').find(x => !x.why && !routeBlocked(s, short, 'buy', x.nation, gap));
         if (pt && me.gold > 40 && !s.missions.some(x => x.kind === 'route' && x.good === short)) launchMission(s, 'route', m.uid, pt.nation, [], undefined, h.uid, short, [], { dir: 'buy', amount: gap });
-      } else if (kind === 'route') {
+      } else if (kind === 'route' && dir === 'sell') {
         const f = quarterFlow(s);
         const over = Object.entries(f.overflow).sort((a, b) => b[1] * GOODS[b[0]].price - a[1] * GOODS[a[0]].price)[0]?.[0];
         const pt = over && partners(s, over, 'sell').find(x => !x.why && !routeBlocked(s, over, 'sell', x.nation, 2));
         if (pt) launchMission(s, 'route', m.uid, pt.nation, [], undefined, h.uid, over, [], { dir: 'sell', amount: 2 });
-      } else {
+      } else if (kind === 'post') {
         const r = s.routes[0];
         if (r && !postBlocked(s, r.partner) && me.gold > 100) launchMission(s, 'post', m.uid, r.partner, [], undefined, h.uid);
       }
