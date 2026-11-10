@@ -5,7 +5,7 @@ import { EVENT } from '../src/engine/events';
 import { autoResolve, finishBattle } from '../src/engine/battle';
 import { takeDraftOption, doMerge, mergePreview, buyCard, hireWithCard, sellOffices, officeCost } from '../src/engine/drafts';
 import { launchMission, missionBlocked, cardRole, cardRoles, attackRoute } from '../src/engine/missions';
-import { discoverable } from '../src/engine/overseas';
+import { discoverable, provRegion } from '../src/engine/overseas';
 import { hireShip, transportOf } from '../src/engine/navy';
 import { warScore, peaceTerms, concludePeace, enemyDemands, subjectsOf } from '../src/engine/diplo';
 import { TECHS, BUILDINGS } from '../src/data/techs';
@@ -198,6 +198,7 @@ for (const n of (MODE === 'big' ? ['castile'] : PICK)) for (let seed = 1; seed <
   const f = snap(s); f.year = s.year; f.provs = provsOf(s, n).length; finals.push(f);
   if (process.env.GOODSLOG) { const t = incomeOf(s, n); console.log('  goods', n, seed, s.year, 'short', JSON.stringify(Object.fromEntries(Object.entries(s.short).filter(([, v]) => v > 0.05))), 'routes', s.routes.map(r => r.dir + ':' + r.good + '>' + r.partner).join(','), 'posts', s.posts.map(p => p.nation).join(','), 'workshops', provsOf(s, n).filter(p => p.make && (p.buildings.includes('workshop') || p.buildings.includes('manufactory'))).map(p => p.make).join(','), 'trade+', t.goods.toFixed(1), 'trade-', t.imports.toFixed(1), 'total', t.total.toFixed(1)); }
   if (process.env.GOODSLOG) console.log('  culture', n, seed, 'works', (s.works ?? []).length, 'best', (s.works ?? []).filter(w => w.quality >= 3).map(w => w.name).slice(0, 4).join('; '), 'accepted', s.accepted.length, 'church', Math.round(s.flags['faith_' + s.stateReligion] ?? (s.rel['papacy'] ? 0 : 0)), 'people', s.characters.filter(c => ['courtier', 'priest', 'artist', 'leader'].includes(c.role)).map(c => c.role).join(','));
+  if (process.env.WHERE) { const reg: Record<string, number> = {}; for (const p of provsOf(s, n)) { const r = provRegion(p.id); reg[r] = (reg[r] ?? 0) + 1; } const how: Record<string, number> = {}; for (const l of s.log) { const k = /colony|Colony/.test(l.text) ? 'colony' : /conquer|taken|falls|captured/i.test(l.text) ? 'conquest' : /integrat|vassal|union/i.test(l.text) ? 'diplo' : ''; if (k) how[k] = (how[k] ?? 0) + 1; } console.log('  where', n, seed, JSON.stringify(reg), JSON.stringify(how)); }
   if (process.env.TOP) console.log('  top', n, seed, ranking(s).slice(0, 4).map(r => r.name + ':' + r.score + '(' + provsOf(s, r.id).length + 'p,' + Math.round(s.nations[r.id].prestige) + 'pr)').join(' '));
   if (process.env.CIVIL) { const hs = provsOf(s, s.player).map(p => happinessOf(s, p).value); console.log('  happy', n, 'provs', hs.length, 'min', Math.min(...hs), 'under30', hs.filter(h => h < 30).length, 'under40', hs.filter(h => h < 40).length, 'vblock', viceroyBlocked(s, provsOf(s, s.player).filter(p => p.id !== player(s).capital)[0]?.id ?? '')); }
   if (process.env.CIVIL) console.log('  civil', n, seed, s.log.filter(l => /Civil war|joins the|rising|crowns himself|declares independence|breaks away/i.test(l.text)).map(l => l.year + ' ' + l.text).slice(0, 8).join(' | '), 'viceroys', (s.viceroys ?? []).length);
