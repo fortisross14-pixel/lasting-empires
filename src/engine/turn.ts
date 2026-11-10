@@ -28,7 +28,8 @@ import { runAI, PRESTIGE_FADE } from './ai';
 import { quarterlyRevolution } from './government';
 import { applyStart, setupLaterPlayer, laterNation, LATER_DEFS } from './starts';
 import { STARTS } from '../data/starts';
-import { yearlyGoals, scenarioFrom } from './goals';
+import { MISSION } from '../data/missions';
+import { yearlyGoals, checkGoals, scenarioFrom } from './goals';
 import { rollEvents, EVENT } from './events';
 import { AMBITIONS, ambitionOptions } from './drafts';
 import { START_FLEETS, yearlyFleet } from './navy';
@@ -125,6 +126,13 @@ export function newMissionGame(nationId: string, mission: string | import('../ty
   const s = newGame(nationId, undefined, startYear);
   s.scenario = typeof mission === 'string' ? scenarioFrom(mission) : mission;
   s.queue = s.queue.filter(q => !(q.kind === 'draft' && q.draft === 'ambition'));
+  // starting points for goals that count what you do during the mission
+  // beginner missions hand over the cards their lesson needs
+  if (typeof mission === 'string') for (const c of MISSION[mission]?.cards ?? []) addCard(s, c, true);
+  if (typeof mission === 'string' && mission === 'b_court') s.np += 8; // nation points to buy person cards
+  s.flags.goal_techs0 = s.techs.length;
+  s.flags.goal_built0 = provsOf(s, s.player).reduce((a, p) => a + p.buildings.length, 0);
+  s.flags.goal_works0 = (s.works ?? []).length;
   return s;
 }
 
@@ -418,16 +426,20 @@ export function endTurn(s: GameState): YearReport | null {
     successionCheck(s);
     checkAmbition(s);
     yearlyGoals(s);
-  }
+  } else checkGoals(s, false);
   scriptedHistory(s);
   if (!provsOf(s, s.player).length) {
     s.over = true;
+    if (s.scenario?.status === 'active') checkGoals(s, true);
     push(s, { kind: 'gameover', victory: false, reason: `${player(s).name} has been conquered.` });
   } else if (s.year > s.endYear) {
     s.over = true;
     const r = ranking(s);
     const place = r.findIndex(x => x.id === s.player) + 1;
-    push(s, { kind: 'gameover', victory: place <= 3, reason: `The year is ${s.year}. ${player(s).name} ranks #${place} among the powers.` });
+    // in mission mode only the mission counts; in the open game, the ranking
+    const sc = s.scenario;
+    if (sc) push(s, { kind: 'gameover', victory: sc.status === 'won', reason: sc.status === 'won' ? `The year is ${s.year}. You accomplished ${sc.name} in ${sc.done}, and the world went on.` : `The year is ${s.year}. ${sc.name} was not accomplished.` });
+    else push(s, { kind: 'gameover', victory: place <= 3, reason: `The year is ${s.year}. ${player(s).name} ranks #${place} among the powers.` });
   }
   const tl = s.turnLog!;
   tl.gold = (tl.gold ?? 0) + player(s).gold - g0; tl.np = (tl.np ?? 0) + s.np - np0;

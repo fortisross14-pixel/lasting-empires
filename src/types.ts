@@ -217,7 +217,8 @@ export type Prompt =
   | { kind: 'succession'; heirs: Heir[]; old: string }
   | { kind: 'peace'; enemy: string; offered: boolean }
   | { kind: 'incoming'; id: number }
-  | { kind: 'gameover'; victory: boolean; reason: string };
+  | { kind: 'gameover'; victory: boolean; reason: string }
+  | { kind: 'mission_end'; won: boolean };
 
 export type DraftOption =
   | { t: 'troop'; type: string; vet: number }
@@ -318,7 +319,12 @@ export type Goal =
   | { k: 'subjects'; of: string[] }                            // these realms are your subjects, or their capitals are yours
   | { k: 'gov'; gov: string }                                  // this form of government
   | { k: 'capital' }                                           // hold your capital (checked at the deadline)
-  | { k: 'independent' };                                      // no overlord
+  | { k: 'independent' }
+  | { k: 'newTechs'; n: number }                               // learn n technologies during the mission
+  | { k: 'built'; n: number }                                  // finish n buildings during the mission
+  | { k: 'routes'; n: number }                                 // have n trade routes running
+  | { k: 'works'; n: number }                                  // n works of art made during the mission
+  | { k: 'court'; n: number };                                 // n people at court                                      // no overlord
 export interface Scenario {
   id: string; name: string; text: string; deadline: number; goals: Goal[];
   status: 'active' | 'won' | 'lost'; done?: number;            // year it was won or lost

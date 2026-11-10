@@ -6,6 +6,8 @@ export interface MissionDef {
   nations: string[];      // who may play it
   text: string; goals: Goal[];
   wild?: boolean;         // not history: just for fun
+  beginner?: string;      // a first mission: what it teaches
+  cards?: string[];       // cards handed over at the start, so the lesson can begin at once
 }
 
 const NEW_WORLD = ['caribbean', 'mexico', 'north_america', 'brazil', 'andes', 'plata'];
@@ -13,6 +15,29 @@ const ITALY = ['venice', 'milan', 'florence', 'naples', 'papacy', 'genoa', 'savo
 const AFRICA = ['west_africa', 'central_africa', 'east_africa', 'southern_africa', 'north_africa'];
 
 export const MISSIONS: MissionDef[] = [
+  // ---------- beginner missions: short, one system each; they unlock the rest ----------
+  { id: 'b_constantinople', name: 'The Red Apple', icon: 'sword', start: 1451, deadline: 1465, nations: ['ottomans'], cards: ['march_orders', 'march_orders'], beginner: 'War: March Orders, troops and sieges',
+    text: 'Take Constantinople. Send a general with troops using a March Orders card (Military), and bring cannon for the walls.',
+    goals: [{ k: 'own', provinces: ['constantinople'] }] },
+  { id: 'b_navarre', name: 'A Royal Wedding', icon: 'ring', start: 1451, deadline: 1480, nations: ['castile'], cards: ['marriage', 'fealty', 'embassy'], beginner: 'Diplomacy: relations, marriage, vassals',
+    text: 'Bring Navarre under your crown without a war: improve relations, marry your houses, then make it your subject (Diplomacy cards and a diplomat).',
+    goals: [{ k: 'subjects', of: ['navarre'] }] },
+  { id: 'b_court', name: 'A Court of Talents', icon: 'people', start: 1451, deadline: 1461, nations: ['portugal'], beginner: 'People: hiring, roles and rarity',
+    text: 'Gather able people. Buy person cards in any deck (nation points), meet three candidates and keep the best.',
+    goals: [{ k: 'court', n: 8 }] },
+  { id: 'b_trade', name: 'Merchants of the Lagoon', icon: 'coin', start: 1451, deadline: 1461, nations: ['venice'], cards: ['export_contract', 'export_contract', 'import_contract'], beginner: 'Economy: goods, trade routes and trade posts',
+    text: 'Sell what you have too much of. Open trade routes from Economy → Goods with Import and Export Contract cards and a merchant.',
+    goals: [{ k: 'routes', n: 2 }] },
+  { id: 'b_build', name: 'The Builder King', icon: 'hammer', start: 1600, deadline: 1620, nations: ['benin', 'kongo', 'ethiopia'], cards: ['royal_works', 'guild_charter', 'guild_charter'], beginner: 'Buildings: cost, benefit and upkeep',
+    text: 'Raise three buildings. Tap a province, compare cost and benefit, and build with a Royal Works or Guild Charter card.',
+    goals: [{ k: 'built', n: 3 }] },
+  { id: 'b_art', name: 'Patron of the Arts', icon: 'quill', start: 1600, deadline: 1612, nations: ['papacy', 'florence'], cards: ['patronage'], beginner: 'People and culture: artists and works of art',
+    text: 'Commission a work of art. A courtier or artist with a Commission card (People deck) paints, writes or builds it.',
+    goals: [{ k: 'works', n: 1 }] },
+  { id: 'b_research', name: 'The Academy', icon: 'book', start: 1700, deadline: 1725, nations: ['france'], cards: ['study_military', 'study_economy', 'study_state', 'collaboration'], beginner: 'Research: technologies and scholars',
+    text: 'Research two technologies. Pick one in Research → Technologies and send a scholar with a study card; a Collaboration card lets a second scholar help.',
+    goals: [{ k: 'newTechs', n: 2 }] },
+
   { id: 'golden_age', name: "Spain's Golden Age", icon: 'crown', start: 1451, deadline: 1520, nations: ['castile', 'aragon'],
     text: 'Unite the crowns of Iberia, finish the Reconquista and plant your banner across the Ocean Sea.',
     goals: [{ k: 'ownLands', of: ['castile', 'aragon', 'granada', 'navarre'], label: 'Spain united: Castile, Aragon, Granada and Navarre (yours or your subjects\')' }, { k: 'colonies', n: 1, regions: NEW_WORLD }] },

@@ -36,7 +36,7 @@ export const STARTS: Record<number, StartDef> = {
     units: { levy: 'pikemen', men_at_arms: 'pikemen', crossbow: 'arquebusiers', bombard: 'field_cannon', jinetes: 'reiters', knights: 'cuirassiers' },
   },
   1700: {
-    year: 1700, end: 1810, devWeight: 0.5, name: 'The Age of Absolutism', age: 'absolutism', techBefore: 1691, devBonus: 2,
+    year: 1700, end: 1810, devWeight: 0.5, name: 'The Dawn of the Enlightenment', age: 'enlightenment', techBefore: 1691, devBonus: 2,
     text: 'The Sun King rules France, Peter the Great builds a new Russia, Prussia rises, and English colonists fill the American coast.',
     renames: {
       castile: { name: 'Spain', adj: 'Spanish', capital: 'madrid' }, muscovy: { name: 'Russia', adj: 'Russian' },

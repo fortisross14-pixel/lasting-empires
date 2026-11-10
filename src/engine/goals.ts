@@ -41,7 +41,7 @@ export function goalView(s: GameState, g: Goal, deadline: number): GoalView {
     }
     case 'provinces': {
       const k = provsOf(s, s.player).length;
-      return { title: `Hold at least ${g.n} provinces`, status: `${k} provinces`, have: k, need: g.n, met: k >= g.n };
+      return { title: `Hold at least ${g.n} province${g.n > 1 ? 's' : ''}`, status: `${k} provinces`, have: k, need: g.n, met: k >= g.n };
     }
     case 'holdIn': {
       const k = provsOf(s, s.player).filter(p => g.regions.includes(provRegion(p.id))).length;
@@ -95,6 +95,26 @@ export function goalView(s: GameState, g: Goal, deadline: number): GoalView {
       const held = s.provinces[cap]?.owner === s.player;
       return { title: `Still rule from your capital in ${deadline}`, status: held ? `${s.provinces[cap].name} is yours · ${Math.max(0, deadline - s.year)} years to go` : 'Your capital has fallen', have: held && s.year >= deadline ? 1 : 0, need: 1, met: held && s.year >= deadline };
     }
+    case 'newTechs': {
+      const k = s.techs.length - (s.flags.goal_techs0 ?? 0);
+      return { title: `Research ${g.n} technolog${g.n > 1 ? 'ies' : 'y'}`, status: `${k} of ${g.n} learned`, have: k, need: g.n, met: k >= g.n };
+    }
+    case 'built': {
+      const k = provsOf(s, s.player).reduce((a, p) => a + p.buildings.length, 0) - (s.flags.goal_built0 ?? 0);
+      return { title: `Build ${g.n} building${g.n > 1 ? 's' : ''}`, status: `${Math.max(0, k)} of ${g.n} built`, have: k, need: g.n, met: k >= g.n };
+    }
+    case 'routes': {
+      const k = s.routes.length;
+      return { title: `${g.n} trade route${g.n > 1 ? 's' : ''} running`, status: `${k} of ${g.n}`, have: k, need: g.n, met: k >= g.n };
+    }
+    case 'works': {
+      const k = (s.works ?? []).length - (s.flags.goal_works0 ?? 0);
+      return { title: `${g.n} work${g.n > 1 ? 's' : ''} of art`, status: `${k} of ${g.n} made`, have: k, need: g.n, met: k >= g.n };
+    }
+    case 'court': {
+      const k = s.characters.filter(c => !c.ruler).length;
+      return { title: `${g.n} people at court`, status: `${k} of ${g.n}`, have: k, need: g.n, met: k >= g.n };
+    }
     case 'independent': {
       const lord = player(s).overlord;
       return { title: 'Be free of any overlord', status: lord ? `Subject of ${nationName(s, lord)}` : 'Independent', have: lord ? 0 : 1, need: 1, met: !lord };
@@ -107,26 +127,21 @@ export function scenarioFrom(id: string): Scenario | undefined {
   return m && { id: m.id, name: m.name, text: m.text, deadline: m.deadline, goals: m.goals, status: 'active' };
 }
 
-/** Each year: all goals met wins; the deadline passing loses. The game then goes on freely. */
-export function yearlyGoals(s: GameState) {
+/** Each quarter: all goals met wins the mission at once. When the deadline year has passed, it is lost.
+ *  Either way a screen says so, and the game goes on for fun. */
+export function checkGoals(s: GameState, yearTurned: boolean) {
   const sc = s.scenario;
   if (!sc || sc.status !== 'active') return;
   const views = sc.goals.map(g => goalView(s, g, sc.deadline));
   if (views.every(v => v.met)) {
     sc.status = 'won'; sc.done = s.year;
     player(s).prestige += 50;
-    push(s, { kind: 'reveal', title: 'Mission accomplished!', subtitle: `${sc.name}, in ${s.year}`, items: [
-      { title: sc.name, text: `Every goal met, ${sc.deadline - s.year} years before the deadline. Prestige +50.`, tone: 'good', kind: 'crown' },
-      { title: 'Play on', text: 'The world goes on: keep playing as long as you like.', tone: 'neutral', kind: 'star' },
-    ] });
+    push(s, { kind: 'mission_end', won: true });
     log(s, `Mission accomplished: ${sc.name}.`, 'good');
-  } else if (s.year > sc.deadline) {
+  } else if ((yearTurned && s.year > sc.deadline) || !provsOf(s, s.player).length) {
     sc.status = 'lost'; sc.done = s.year;
-    const left = views.filter(v => !v.met).map(v => v.title);
-    push(s, { kind: 'reveal', alarm: true, title: 'Mission failed', subtitle: `${sc.name}: the deadline of ${sc.deadline} has passed`, items: [
-      { title: 'Not done', text: left.join('. ') + '.', tone: 'bad', kind: 'twist' },
-      { title: 'Play on', text: 'The world goes on: keep playing freely.', tone: 'neutral', kind: 'star' },
-    ] });
+    push(s, { kind: 'mission_end', won: false });
     log(s, `Mission failed: ${sc.name}.`, 'bad');
   }
 }
+export const yearlyGoals = (s: GameState) => checkGoals(s, true);
