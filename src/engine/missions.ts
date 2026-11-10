@@ -4,7 +4,7 @@ import { troopsNear, travel, locOf, bySea, nearestGarrison, baseFor, buildBase }
 import { missionsLeft, missionCap, rankOf } from './realm';
 import type { GameState, Mission, MissionKind, RevealItem, Character, Role } from '../types';
 import { CARDS, drawCat, CAT_INFO } from './cards';
-import { vassalizeBlocked, integrateBlocked, makeSubject, integrate } from './diplo';
+import { vassalizeBlocked, integrateBlocked, makeSubject, integrate, heldShare } from './diplo';
 import { RELIGION_NAMES, isAccepted } from './society';
 import { transportOf } from './navy';
 import { colonizeBlocked, conquistaBlocked, discoverable, resolveExplore, resolveColonize, resolveConquista, colonyCost, colonizeTurns, oceanReach } from './overseas';
@@ -214,6 +214,7 @@ export function diploChance(s: GameState, kind: MissionKind, ch: Character, targ
   p += ch.skill * 0.06 + rel / 250 + bonus + rulerMod(s, 'diplo');
   if (ch.traits.includes('silver')) p += 0.1 * traitMult(ch);
   if (kind === 'marriage' && ch.traits.includes('matchmaker')) p += 0.2 * traitMult(ch);
+  if (kind === 'vassalize' && hasTreaty(s, s.player, target, 'marriage')) p += 0.25; // married houses: the crown is half theirs already
   if (hasTech(s, 'chancery')) p += 0.1;
   if ((nat.spiedUntil ?? 0) > s.year) p += 0.1;
   if (kind === 'trade' && nat.personality === 'merchant') p += 0.1;
@@ -225,6 +226,7 @@ export function diploChance(s: GameState, kind: MissionKind, ch: Character, targ
   }
   if (kind === 'peace') {
     const w = findWar(s, s.player, target);
+    if (w && heldShare(s, target) >= 0.5) return 1; // you hold their heartland: they must talk
     if (w) {
       const mine = w.a === s.player ? w.gainsA : w.gainsB, theirs = w.a === s.player ? w.gainsB : w.gainsA;
       p += (mine - theirs) * 0.12 + (s.year - w.since) * 0.04;
@@ -426,6 +428,7 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   if (kind === 'found') { m.progress = foundCost(s); player(s).gold -= m.progress; }
   if (kind === 'grow') { m.progress = growCost(s, target); player(s).gold -= m.progress; }
   ch.mission = m.id;
+  s.flags['stat_m_' + kind] = (s.flags['stat_m_' + kind] ?? 0) + 1;
   if (kind !== 'route') s.launched = (s.launched ?? 0) + 1; // a trade route is a quick errand: it does not use up a yearly mission
   for (const t of s.troops) if (troopUids.includes(t.uid)) t.mission = m.id;
   for (const t of s.fleet) if (shipUids.includes(t.uid)) t.mission = m.id;

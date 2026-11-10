@@ -237,6 +237,7 @@ const newGovOpen = (s: GameState) => Object.values(GOVS).some(g => g.id !== (s.g
 add({ id: 'revolution', name: 'Revolution', cat: 'internal', kind: 'instant', icon: 'torch', text: 'Change your form of government. The realm splits: win the civil war by taking the rebel capital before they take yours. Choose the government in Internal → Government.',
   weight: s => (newGovOpen(s) && !s.revolution && !s.hand.some(h => h.card === 'revolution') ? 0.8 : 0),
   can: s => (s.revolution ? 'A revolution is already under way' : !newGovOpen(s) ? 'Research a new form of government first' : null) });
+add({ id: 'move_capital', name: 'Move the Capital', cat: 'internal', kind: 'instant', icon: 'crown', text: 'Move your court to another town or city of yours: it becomes your capital. Costs ducats and 1 stability. Tap the province and choose Move the capital here.', weight: () => 0.2 });
 add({ id: 'festival', name: 'Royal Festival', cat: 'culture', kind: 'instant', icon: 'cup', text: 'Pay 15 ducats: happiness +8 for 5 years.', weight: () => 0.9,
   can: s => player(s).gold < Math.round(15 * inflation(s)) ? `Needs ${Math.round(15 * inflation(s))} ducats` : null,
   play: s => { player(s).gold -= Math.round(15 * inflation(s)); s.flags.festival_until = s.year + 5; return 'Bells, bonfires and bullfights: happiness +8 for 5 years'; } });
@@ -440,6 +441,7 @@ export function playCard(s: GameState, handUid: number, target: string): string 
     const o = rollOutcome(s, gen);
     const vet = [0, 0, 1, 2, 3][o];
     s.troops.push({ uid: uid(s), type, vet, str: o === 0 ? 70 : 100 });
+    s.flags.stat_hired = (s.flags.stat_hired ?? 0) + 1;
     removeCard(s, handUid);
     log(s, `Hired ${TROOPS[type].name}${vet ? ' ' + '★'.repeat(vet) : ''}.`);
     return `${outcomeName(o)} recruits: ${TROOPS[type].name}${vet ? ' ' + '★'.repeat(vet) : ''}${o === 0 ? ' (under strength)' : ''}${gen ? ', trained by ' + gen.name : ''}`;

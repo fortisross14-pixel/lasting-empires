@@ -1,3 +1,4 @@
+import { NATIONS } from '../data/nations';
 // War score, peace terms, and subject crowns (vassals and personal unions).
 import type { GameState, RevealItem, Nation } from '../types';
 import { player, provsOf, findWar, makePeace, addRel, getRel, inflation, log, nationName, clamp, rand, armyPower, push } from './core';
@@ -17,6 +18,15 @@ export function warScore(s: GameState, enemy: string): number {
 export interface PeaceTerm { id: string; label: string; cost: number; detail: string; }
 
 /** What the winner can demand at the table. */
+/** Share of a realm's own lands (by core) that the player now holds. */
+export function heldShare(s: GameState, enemy: string): number {
+  const core = Object.values(s.provinces).filter(p => p.core === enemy);
+  // holding their old capital counts as holding their heart
+  const cap0 = NATIONS.find(d => d.id === enemy)?.capital;
+  if (cap0 && s.provinces[cap0]?.core === enemy && s.provinces[cap0].owner === s.player) return 1;
+  return core.length ? core.filter(p => p.owner === s.player).length / core.length : 0;
+}
+
 export function peaceTerms(s: GameState, enemy: string): PeaceTerm[] {
   const n = s.nations[enemy];
   const terms: PeaceTerm[] = [];
@@ -27,6 +37,8 @@ export function peaceTerms(s: GameState, enemy: string): PeaceTerm[] {
   for (const p of border) terms.push({ id: 'prov:' + p.id, label: `Cede ${p.name}`, cost: 20 + p.dev * 4, detail: `Development ${p.dev}${p.core === s.player ? ' · once ours' : ''}` });
   const size = provsOf(s, enemy).length;
   if (size <= 6 && !n.overlord) terms.push({ id: 'vassal', label: `${n.name} becomes your vassal`, cost: 45 + size * 8, detail: 'Pays tribute and follows you to war' });
+  // a small realm whose heartland you already hold can be absorbed whole: for free
+  if (size <= 8) { const held = heldShare(s, enemy); const dev = provsOf(s, enemy).reduce((a, p) => a + p.dev, 0); terms.push({ id: 'annex', label: `Annex ${n.name}: all its lands join your realm`, cost: held >= 0.5 ? 0 : 40 + dev * 6, detail: held >= 0.5 ? 'You already hold most of its land: they cannot refuse' : `${size} province${size > 1 ? 's' : ''}, development ${dev}` }); }
   return terms.sort((a, b) => a.cost - b.cost);
 }
 
@@ -59,6 +71,10 @@ export function concludePeace(s: GameState, enemy: string, termIds: string[], th
         transferProvince(s, pid, winner);
         items.push({ title: `${s.provinces[pid].name} is ceded`, text: `It now belongs to ${nationName(s, winner)}.`, tone: theyDemand ? 'bad' : 'good', kind: 'scroll' });
       }
+    } else if (id === 'annex' && !theyDemand) {
+      for (const p of provsOf(s, enemy)) transferProvince(s, p.id, s.player);
+      n.alive = false; n.army = []; n.fleet = [];
+      items.push({ title: `${n.name} is no more`, text: 'All its lands are now yours. Its people may take time to accept your rule.', tone: 'good', kind: 'crown' });
     } else if (id === 'vassal' && !theyDemand) {
       makeSubject(s, enemy, 'vassal');
       items.push({ title: `${n.name} bends the knee`, text: 'A new vassal: it pays a quarter of its income and joins your wars.', tone: 'good', kind: 'crown' });

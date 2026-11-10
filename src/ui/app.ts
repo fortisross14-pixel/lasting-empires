@@ -8,7 +8,7 @@ import { STARTS, START_YEARS } from '../data/starts';
 import { MISSIONS, GOAL_REGIONS, type MissionDef } from '../data/missions';
 import { goalView, type GoalView } from '../engine/goals';
 import type { Goal, Scenario } from '../types';
-import { revolutionBlocked, revolutionLands, startRevolution, REVOLUTION_YEARS } from '../engine/government';
+import { revolutionBlocked, revolutionLands, startRevolution, REVOLUTION_YEARS, moveCapital, moveCapitalBlocked, capitalMoveCost } from '../engine/government';
 import { TRAITS, RARITY, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
 import { GOODS, FOOD, RAW, MADE } from '../data/goods';
 import { GENRES, QUALITY } from '../data/culture';
@@ -184,7 +184,9 @@ function saveCustom(list: (Scenario & { nation: string })[]) { try { localStorag
 function startMission(nation: string, mission: string | Scenario) {
   const free = SLOTS.find(n => !loadSlot(n)) ?? (window.confirm('All three campaign slots are full. Replace slot 3?') ? 3 : 0);
   const start = typeof mission === 'string' ? MISSIONS.find(m => m.id === mission)?.start ?? 1451 : (mission as Scenario & { start?: number }).start ?? 1451;
-  if (free) startIn(free, newMissionGame(nation, mission, start));
+  const g = newMissionGame(nation, mission, start);
+  if (g.scenario?.steps?.length) g.tutorial = -1; // the steps teach instead
+  if (free) startIn(free, g);
 }
 
 const missionPreviews: Record<number, GameState> = {};
@@ -533,7 +535,7 @@ function renderTop() {
     ),
     h('div', { class: 'top-btns' },
       S.scenario ? h('button', { class: 'tbtn goals-b' + (sheet?.kind === 'goals' ? ' on' : '') + ' st-' + S.scenario.status, onclick: () => toggleSheet('goals'), title: 'Goals' },
-        h('span', { html: icon('star', 18) }), h('span', { class: 'tb-l' }, 'Goals'), h('span', { class: 'badge' }, S.scenario.status === 'active' ? `${S.scenario.goals.filter(g => goalView(S, g, S.scenario!.deadline).met).length}/${S.scenario.goals.length}` : S.scenario.status === 'won' ? '✓' : '✗')) : null,
+        h('span', { html: icon('star', 18) }), h('span', { class: 'tb-l' }, 'Goals'), h('span', { class: 'badge' }, S.scenario.status === 'active' ? (S.scenario.steps?.length ? `${S.scenario.step ?? 0}/${S.scenario.steps.length}` : `${S.scenario.goals.filter(g => goalView(S, g, S.scenario!.deadline).met).length}/${S.scenario.goals.length}`) : S.scenario.status === 'won' ? '✓' : '✗')) : null,
       h('button', { class: 'tbtn' + (sheet?.kind === 'missions' ? ' on' : ''), onclick: () => toggleSheet('missions'), title: 'Missions' },
         h('span', { html: icon('hourglass', 18) }), h('span', { class: 'tb-l' }, 'Missions'), S.missions.length ? h('span', { class: 'badge' }, String(S.missions.length)) : null),
       h('button', { class: 'tbtn' + (sheet?.kind === 'chronicle' ? ' on' : ''), onclick: () => toggleSheet('chronicle'), title: 'Chronicle' },
@@ -560,6 +562,13 @@ function renderTabs() {
 /** The strip over the map: your wars first, then missions under way. */
 function renderTimeline() {
   const tl = clear($('#timeline'));
+  // a guided mission: the next step, always in view
+  const sc = S.scenario;
+  if (sc?.steps?.length && sc.status === 'active' && (sc.step ?? 0) < sc.steps.length) {
+    const st = sc.steps[sc.step ?? 0];
+    tl.append(h('span', { class: 'tl-h step-h' }, `Step ${(sc.step ?? 0) + 1}/${sc.steps.length}`),
+      h('button', { class: 'tl-card tl-step', onclick: () => openSheet('goals') }, h('span', { class: 'tl-rose', html: icon('star', 14) }), h('span', { class: 'tl-t' }, goalView(S, st.g, sc.deadline).title), h('small', {}, 'Tap for how')));
+  }
   const foes = enemiesOf(S, S.player);
   const inc = S.incoming ?? [];
   if (foes.length) {
@@ -1046,6 +1055,7 @@ function provinceSheet(id: string, body: HTMLElement) {
       const ac = cardFor(S, 'assimilate');
       body.append(actionRow('scroll', 'Cultural integration', `Bring the ${CULTURE_NAMES[p.culture] ?? p.culture} people into your ways · 3–7 years, faster with a rarer administrator`, !ac ? 'Needs a Cultural Integration card (Internal)' : missionBlocked(S, 'assimilate', id), () => openPlanner('assimilate', id, undefined, ac!.uid)));
     }
+    if (player(S).capital !== id) body.append(actionRow('crown', 'Move the capital here', `Your court moves to ${p.name} · ${capitalMoveCost(S)} ducats, 1 stability`, moveCapitalBlocked(S, id), () => confirmBox(`Move the capital to ${p.name}?`, `The court leaves ${S.provinces[player(S).capital].name}. Costs ${capitalMoveCost(S)} ducats and 1 stability.`, 'Move the court', () => { act(() => moveCapital(S, id), `${p.name} is your new capital`); })));
     const gr = cardFor(S, 'grace');
     body.append(actionRow('mood', 'Royal grace', `Raise happiness here (+4 to +28, fading 1 a year) · ${graceCost(S)} ducats · 1–3 years`, !gr ? 'Needs a Royal Grace card (Internal)' : missionBlocked(S, 'grace', id), () => openPlanner('grace', id, undefined, gr!.uid)));
     if (!p.settlement) {
@@ -1708,9 +1718,18 @@ function goalsSheet(body: HTMLElement) {
   const left = sc.deadline - S.year;
   const views = sc.goals.map(g => goalView(S, g, sc.deadline));
   body.append(h('p', { class: 'goal-intro' }, sc.text));
-  body.append(h('div', { class: 'goal-dl ' + sc.status }, sc.status === 'won' ? `Accomplished in ${sc.done}` : sc.status === 'lost' ? `Failed: the deadline of ${sc.deadline} passed` : `Deadline ${sc.deadline} · ${left > 0 ? `${left} year${left > 1 ? 's' : ''} left` : 'this is the last year'} · ${views.filter(v => v.met).length} of ${views.length} goals met`));
-  for (const v of views) body.append(goalRow(v));
-  body.append(h('p', { class: 'muted' }, 'Goals are checked at the start of each year. Meet them all before the deadline to win; either way the game goes on.'));
+  body.append(h('div', { class: 'goal-dl ' + sc.status }, sc.status === 'won' ? `Accomplished in ${sc.done}` : sc.status === 'lost' ? `Failed: the deadline of ${sc.deadline} passed` : `Deadline ${sc.deadline} · ${left > 0 ? `${left} year${left > 1 ? 's' : ''} left` : 'this is the last year'} · ${sc.steps?.length ? `step ${Math.min((sc.step ?? 0) + 1, sc.steps.length)} of ${sc.steps.length}` : `${views.filter(v => v.met).length} of ${views.length} goals met`}`));
+  if (sc.steps?.length) {
+    const at = sc.step ?? 0;
+    sc.steps.forEach((st, i) => {
+      const v = goalView(S, st.g, sc.deadline);
+      const state = i < at ? 'done' : i === at && sc.status === 'active' ? 'now' : 'later';
+      body.append(h('div', { class: `step ${state}` },
+        h('span', { class: 'step-n' }, i < at ? '✓' : String(i + 1)),
+        h('div', { class: 'goal-t' }, h('b', {}, v.title), state === 'now' ? h('small', { class: 'step-hint' }, st.hint) : null, state === 'now' ? h('small', {}, v.status) : null)));
+    });
+  } else for (const v of views) body.append(goalRow(v));
+  body.append(h('p', { class: 'muted' }, sc.steps?.length ? 'Steps are done in order and checked every season. Finish them all before the deadline; either way the game goes on.' : 'Goals are checked every season. Meet them all before the deadline to win; either way the game goes on.'));
   return [sheetHead(sc.name, 'Mission goals', player(S).color), body];
 }
 
@@ -1948,6 +1967,7 @@ function missionTargets(handUid: number, all = false): TargetRow[] {
 
 function openCardModal(handUid: number) {
   if (S.hand.find(x => x.uid === handUid)?.card === 'revolution') { openWin('internal', 'gov'); return; }
+  if (S.hand.find(x => x.uid === handUid)?.card === 'move_capital') { closeWin(); toast('Tap one of your towns on the map, then choose Move the capital here'); return; }
   const hc = S.hand.find(x => x.uid === handUid);
   if (!hc) return;
   const def = CARDS[hc.card];
@@ -2593,7 +2613,7 @@ function showMissionEnd(won: boolean) {
   const def = MISSIONS.find(m => m.id === sc.id);
   const next = () => { S.queue.shift(); closeModal(); refresh(); afterPrompt(); };
   const toMissions = () => { S.queue.shift(); closeModal(); saveNow(); missionYear = def?.start ?? S.startYear; showMissions(); };
-  const retry = () => { S.queue.shift(); closeModal(); const fresh = newMissionGame(S.player, sc.custom ? { ...sc, status: 'active', done: undefined } : sc.id, S.startYear); startIn(slot, fresh); };
+  const retry = () => { S.queue.shift(); closeModal(); const fresh = newMissionGame(S.player, sc.custom ? { ...sc, status: 'active', done: undefined } : sc.id, S.startYear); if (fresh.scenario?.steps?.length) fresh.tutorial = -1; startIn(slot, fresh); };
   const box = won
     ? h('div', { class: 'mbox celebrate' },
       h('div', { class: 'cel-rays' }), h('div', { class: 'cel-laurel', html: icon('laurel', 72) }),

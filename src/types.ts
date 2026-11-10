@@ -326,9 +326,20 @@ export type Goal =
   | { k: 'works'; n: number }                                  // n works of art made during the mission
   | { k: 'court'; n: number }
   | { k: 'companies'; n: number }                              // n companies in your army
-  | { k: 'devGain'; n: number };                               // n development gained during the mission                                 // n people at court                                      // no overlord
+  | { k: 'devGain'; n: number }                                // n development gained during the mission
+  | { k: 'hired'; n: number }                                  // hire n troop companies
+  | { k: 'forged'; n: number }                                 // forge n times
+  | { k: 'launched'; kind: string; n?: number; label?: string } // start n missions of a kind
+  | { k: 'atWar'; with: string }                               // be at war with a realm
+  | { k: 'gone'; nation: string }                              // that realm is no more (or your subject)
+  | { k: 'capitalAt'; province: string }                       // your capital is there
+  | { k: 'relation'; with: string; n: number }                 // relations of at least n
+  | { k: 'treaty'; with: string; kind: 'marriage' | 'alliance' | 'trade' } // a treaty with a realm
+  | { k: 'route'; dir: 'buy' | 'sell'; n: number };            // n trade routes that buy (import) or sell (export)                                 // n people at court                                      // no overlord
 export interface Scenario {
   id: string; name: string; text: string; deadline: number; goals: Goal[];
   status: 'active' | 'won' | 'lost'; done?: number;            // year it was won or lost
   custom?: boolean;
+  steps?: { g: Goal; hint: string }[]; // a guided mission: steps in order
+  step?: number;                       // how many steps are done
 }

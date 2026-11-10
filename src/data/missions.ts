@@ -9,6 +9,7 @@ export interface MissionDef {
   beginner?: string;      // a first mission: what it teaches
   cards?: string[];       // cards handed over at the start, so the lesson can begin at once
   gold?: number;          // ducats handed over at the start
+  steps?: { g: Goal; hint: string }[]; // guided: done in order, each with a hint
 }
 
 const NEW_WORLD = ['caribbean', 'mexico', 'north_america', 'brazil', 'andes', 'plata'];
@@ -145,6 +146,64 @@ export const MISSIONS: MissionDef[] = [
     text: 'Aurangzeb\'s heirs fancy a palace on the Bosphorus and a summer house in Vienna.',
     goals: [{ k: 'own', provinces: ['constantinople', 'vienna'] }] },
 ];
+// ---------- the beginner missions, step by step ----------
+const STEPS: Record<string, { cards?: string[]; deadline?: number; steps: { g: Goal; hint: string }[] }> = {
+  b_constantinople: { cards: ['hire_infantry', 'march_orders', 'march_orders', 'move_capital'], deadline: 1470, steps: [
+    { g: { k: 'hired', n: 1 }, hint: 'Military → Cards: tap Hire Infantry and pick a general to train them. Each company costs 1 manpower and some ducats.' },
+    { g: { k: 'atWar', with: 'byzantium' }, hint: 'Tap Constantinople on the map and choose Declare war. Going to war gives you March Orders cards.' },
+    { g: { k: 'own', provinces: ['constantinople'], label: 'Take Constantinople' }, hint: 'Play March Orders (Military → Cards): choose a general and the troops standing near the city, and attack. Cannon help against the great walls.' },
+    { g: { k: 'gone', nation: 'byzantium' }, hint: 'Diplomacy → Cards: send your Peace Envoy to Byzantium and pick "Annex Byzantium". Holding their capital, they cannot refuse.' },
+    { g: { k: 'capitalAt', province: 'constantinople' }, hint: 'Tap Constantinople and choose Move the capital here (it uses your Move the Capital card).' },
+  ] },
+  b_navarre: { cards: ['embassy', 'marriage', 'marriage', 'fealty', 'fealty'], steps: [
+    { g: { k: 'relation', with: 'navarre', n: 40 }, hint: 'Diplomacy → Cards: play the Embassy card and send a diplomat to Navarre. Each embassy improves relations.' },
+    { g: { k: 'treaty', with: 'navarre', kind: 'marriage' }, hint: 'Play the Royal Marriage card with a diplomat: married houses trust each other, and one day may share a crown.' },
+    { g: { k: 'subjects', of: ['navarre'] }, hint: 'Play Demand Fealty: with good relations and a far stronger realm, Navarre accepts you as overlord.' },
+  ] },
+  b_court: { cards: ['embassy'], steps: [
+    { g: { k: 'court', n: 8 }, hint: 'Open any panel → Cards → Buy a person card (it costs nation points). Meet three candidates and keep one: rarer people are better at their missions.' },
+    { g: { k: 'launched', kind: 'relations', label: 'Send someone on a mission' }, hint: 'People act through missions: play the Embassy card (Diplomacy) and choose a diplomat to send to a neighbour.' },
+  ] },
+  b_trade: { steps: [
+    { g: { k: 'route', dir: 'sell', n: 1 }, hint: 'Economy → Goods: find a good with spare (green) and press Sell. A merchant opens the route with an Export Contract.' },
+    { g: { k: 'route', dir: 'buy', n: 1 }, hint: 'Find a good you lack (red) and press Buy: an Import Contract brings it in every season.' },
+  ] },
+  b_build: { steps: [
+    { g: { k: 'built', n: 1 }, hint: 'Tap one of your provinces: each building shows its Cost and its Benefit. Build with a Guild Charter (Economy) or Royal Works (Internal) card.' },
+    { g: { k: 'built', n: 2 }, hint: 'A second building: markets, farms and mines pay for themselves; temples keep people content.' },
+    { g: { k: 'built', n: 3 }, hint: 'One more. Watch the upkeep: every building pays a salary each year.' },
+  ] },
+  b_art: { steps: [
+    { g: { k: 'launched', kind: 'artwork', label: 'Commission a work of art' }, hint: 'People → Cards: play Commission a Work of Art and send a courtier or an artist. A courtier who paints becomes an artist for good.' },
+    { g: { k: 'works', n: 1 }, hint: 'Wait while it is made: a better artist makes a finer work, which pleases the people and adds prestige.' },
+  ] },
+  b_research: { cards: ['hire_researcher'], steps: [
+    { g: { k: 'launched', kind: 'research', label: 'Start a study' }, hint: 'Research → Technologies: tap a technology and send a scholar with a study card. Each card shows its points and what it unlocks.' },
+    { g: { k: 'launched', kind: 'assist', label: 'Add a second scholar' }, hint: 'Hire a second scholar (Invite a Scholar card), then play Collaboration: they help the study already under way.' },
+    { g: { k: 'newTechs', n: 1 }, hint: 'Wait for the study to finish: end a few turns.' },
+    { g: { k: 'newTechs', n: 2 }, hint: 'Start the next study as soon as a scholar is free.' },
+  ] },
+  b_army: { steps: [
+    { g: { k: 'hired', n: 1 }, hint: 'Military → Cards: tap a troop card (Hire Infantry, Ranged or Cavalry). It hires the best unit of that kind you have researched.' },
+    { g: { k: 'forged', n: 1 }, hint: 'Military → Cards → Forge: pick two companies of the same kind; they merge into one stronger company and free a place in your army.' },
+    { g: { k: 'companies', n: 15 }, hint: 'Grow the army to 15 companies: buy troop cards with nation points if you run out.' },
+  ] },
+  b_develop: { steps: [
+    { g: { k: 'launched', kind: 'develop', label: 'Start developing a province' }, hint: 'Internal → Cards: play Settlers and send an administrator to a province. Development means more taxes, men and goods.' },
+    { g: { k: 'devGain', n: 1 }, hint: 'Wait for the settlers to arrive (two years). Irrigation (Economy) develops a province too.' },
+    { g: { k: 'launched', kind: 'grow', label: 'Grow a town' }, hint: 'Play Grow your Settlement: a village becomes a town, a town a city, with room for more buildings.' },
+    { g: { k: 'devGain', n: 4 }, hint: 'Keep developing until you have gained 4 development.' },
+  ] },
+};
+for (const m of MISSIONS) {
+  const x = STEPS[m.id];
+  if (!x) continue;
+  m.steps = x.steps;
+  m.goals = x.steps.map(st => st.g);
+  if (x.cards) m.cards = [...(m.cards ?? []), ...x.cards.filter(c => !(m.cards ?? []).includes(c))];
+  if (x.deadline) m.deadline = x.deadline;
+}
+
 export const MISSION: Record<string, MissionDef> = Object.fromEntries(MISSIONS.map(m => [m.id, m]));
 
 /** Regions a custom goal can name. */

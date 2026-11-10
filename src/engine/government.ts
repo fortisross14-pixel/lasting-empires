@@ -131,3 +131,33 @@ export function quarterlyRevolution(s: GameState) {
 }
 
 export const govName = (s: GameState) => govOf(s).name;
+
+// ---------- moving the capital ----------
+export const capitalMoveCost = (s: GameState) => Math.round(40 * (1 + Math.max(0, s.year - 1453) / 160));
+export function moveCapitalBlocked(s: GameState, provId: string): string | null {
+  const p = s.provinces[provId];
+  if (!p || p.owner !== s.player) return 'Choose one of your provinces';
+  if (player(s).capital === provId) return 'This is already your capital';
+  if (p.settlement < 2) return 'Needs a town or city';
+  if (s.revolution) return 'Not during a revolution';
+  if (!s.hand.some(h => h.card === 'move_capital')) return 'Needs a Move the Capital card (Internal)';
+  if (player(s).gold < capitalMoveCost(s)) return `Needs ${capitalMoveCost(s)} ducats`;
+  return null;
+}
+/** The court moves: the new seat becomes the capital (the heart of your garrisons, admin and score). */
+export function moveCapital(s: GameState, provId: string): string | null {
+  const why = moveCapitalBlocked(s, provId);
+  if (why) return why;
+  const me = player(s);
+  const card = s.hand.find(h => h.card === 'move_capital')!;
+  s.hand = s.hand.filter(h => h !== card);
+  me.gold -= capitalMoveCost(s);
+  const old = s.provinces[me.capital];
+  me.capital = provId;
+  const p = s.provinces[provId];
+  p.control = Math.max(p.control, 80);
+  me.stability = clamp(me.stability - 1, -3, 3);
+  s.flags.stat_capital_moved = (s.flags.stat_capital_moved ?? 0) + 1;
+  log(s, `The court moves from ${old?.name ?? 'the old capital'} to ${p.name}.`, 'good');
+  return null;
+}

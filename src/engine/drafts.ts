@@ -127,6 +127,7 @@ export function doMerge(s: GameState, aUid: number, bUid: number): string | null
   if ('error' in res) return res.error;
   if (res.tech) return 'Research needed first';
   if (player(s).gold < res.cost) return `Needs ${res.cost} ducats`;
+  s.flags.stat_forged = (s.flags.stat_forged ?? 0) + 1;
   const parts = [aUid, bUid];
   const isShip = TROOPS[res.out].kind === 'ship';
   const strs = [...s.troops, ...s.fleet].filter(t => parts.includes(t.uid)).map(t => t.str);

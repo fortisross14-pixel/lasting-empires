@@ -3,7 +3,7 @@ import type { GameState, Goal, Scenario } from '../types';
 import { MISSION } from '../data/missions';
 import { GOVS } from '../data/governments';
 import { REGIONS } from '../data/overseas';
-import { player, provsOf, armyPower, incomeOf, push, log, nationName } from './core';
+import { player, provsOf, armyPower, incomeOf, push, log, nationName, getRel, hasTreaty } from './core';
 import { getGeo } from './map';
 import { provRegion, regionKnown, regionDef } from './overseas';
 import { ranking } from './turn';
@@ -123,6 +123,44 @@ export function goalView(s: GameState, g: Goal, deadline: number): GoalView {
       const k = provsOf(s, s.player).reduce((a, p) => a + p.dev, 0) - (s.flags.goal_dev0 ?? 0);
       return { title: `Gain ${g.n} development`, status: `${Math.max(0, k)} of ${g.n} gained`, have: k, need: g.n, met: k >= g.n };
     }
+    case 'hired': {
+      const k = s.flags.stat_hired ?? 0;
+      return { title: `Hire ${g.n} troop compan${g.n > 1 ? 'ies' : 'y'}`, status: `${k} of ${g.n} hired`, have: k, need: g.n, met: k >= g.n };
+    }
+    case 'forged': {
+      const k = s.flags.stat_forged ?? 0;
+      return { title: `Forge troops ${g.n} time${g.n > 1 ? 's' : ''}`, status: `${k} of ${g.n}`, have: k, need: g.n, met: k >= g.n };
+    }
+    case 'launched': {
+      const k = s.flags['stat_m_' + g.kind] ?? 0, n = g.n ?? 1;
+      return { title: g.label ?? `Start ${n} ${g.kind} mission${n > 1 ? 's' : ''}`, status: `${k} of ${n} started`, have: k, need: n, met: k >= n };
+    }
+    case 'atWar': {
+      const w = s.wars.some(x => (x.a === s.player && x.b === g.with) || (x.b === s.player && x.a === g.with)) || !s.nations[g.with]?.alive;
+      return { title: `Declare war on ${nationName(s, g.with)}`, status: w ? 'At war' : 'At peace', have: w ? 1 : 0, need: 1, met: w };
+    }
+    case 'gone': {
+      const n = s.nations[g.nation];
+      const done = !n?.alive || n.overlord === s.player;
+      return { title: `${nationName(s, g.nation)} absorbed into your realm`, status: done ? 'Done' : `${provsOf(s, g.nation).length} provinces left`, have: done ? 1 : 0, need: 1, met: done };
+    }
+    case 'capitalAt': {
+      const at = player(s).capital === g.province;
+      return { title: `Move your capital to ${s.provinces[g.province]?.name ?? g.province}`, status: at ? 'Done' : `Now: ${s.provinces[player(s).capital]?.name}`, have: at ? 1 : 0, need: 1, met: at };
+    }
+    case 'relation': {
+      const r = getRel(s, s.player, g.with);
+      return { title: `Relations of ${g.n} with ${nationName(s, g.with)}`, status: `Now ${r}`, have: r, need: g.n, met: r >= g.n };
+    }
+    case 'treaty': {
+      const t = hasTreaty(s, s.player, g.with, g.kind) || s.nations[g.with]?.overlord === s.player;
+      const what = g.kind === 'marriage' ? 'A royal marriage' : g.kind === 'alliance' ? 'An alliance' : 'A trade treaty';
+      return { title: `${what} with ${nationName(s, g.with)}`, status: t ? 'Signed' : 'Not yet', have: t ? 1 : 0, need: 1, met: t };
+    }
+    case 'route': {
+      const k = s.routes.filter(r => r.dir === g.dir).length;
+      return { title: `${g.n} ${g.dir === 'sell' ? 'export' : 'import'} route${g.n > 1 ? 's' : ''}`, status: `${k} of ${g.n}`, have: k, need: g.n, met: k >= g.n };
+    }
     case 'independent': {
       const lord = player(s).overlord;
       return { title: 'Be free of any overlord', status: lord ? `Subject of ${nationName(s, lord)}` : 'Independent', have: lord ? 0 : 1, need: 1, met: !lord };
@@ -132,7 +170,7 @@ export function goalView(s: GameState, g: Goal, deadline: number): GoalView {
 
 export function scenarioFrom(id: string): Scenario | undefined {
   const m = MISSION[id];
-  return m && { id: m.id, name: m.name, text: m.text, deadline: m.deadline, goals: m.goals, status: 'active' };
+  return m && { id: m.id, name: m.name, text: m.text, deadline: m.deadline, goals: m.steps ? m.steps.map(x => x.g) : m.goals, steps: m.steps, step: 0, status: 'active' };
 }
 
 /** Each quarter: all goals met wins the mission at once. When the deadline year has passed, it is lost.
@@ -140,8 +178,16 @@ export function scenarioFrom(id: string): Scenario | undefined {
 export function checkGoals(s: GameState, yearTurned: boolean) {
   const sc = s.scenario;
   if (!sc || sc.status !== 'active') return;
+  // a guided mission moves step by step; the next step shows when the last is done
+  if (sc.steps?.length) {
+    const before = sc.step ?? 0;
+    let k = before;
+    while (k < sc.steps.length && goalView(s, sc.steps[k].g, sc.deadline).met) k++;
+    sc.step = k;
+    if (k > before && k < sc.steps.length) push(s, { kind: 'reveal', title: `Step ${k} of ${sc.steps.length} done`, subtitle: sc.name, items: [{ title: `Next: ${goalView(s, sc.steps[k].g, sc.deadline).title}`, text: sc.steps[k].hint, tone: 'good', kind: 'star' }] });
+  }
   const views = sc.goals.map(g => goalView(s, g, sc.deadline));
-  if (views.every(v => v.met)) {
+  if (sc.steps?.length ? (sc.step ?? 0) >= sc.steps.length : views.every(v => v.met)) {
     sc.status = 'won'; sc.done = s.year;
     player(s).prestige += 50;
     push(s, { kind: 'mission_end', won: true });
