@@ -39,7 +39,7 @@ import { warScore, peaceTerms, enemyDemands, concludePeace, subjectsOf, integrat
 import { happinessOf, moodName, CULTURE_NAMES, RELIGION_NAMES, isAccepted, nationalHappiness } from '../engine/society';
 import { MapView, MAP_MODES, legendFor } from './map';
 import { scenarioCastilePortugal } from '../engine/scenarios';
-import { troopsNear, setDefence, garrisons, moveTroops, travel, locOf, nearestGarrison, baseFor } from '../engine/army';
+import { troopsNear, setDefence, garrisons, moveTroops, travel, locOf, nearestGarrison, baseFor, READY_STR, HEAL } from '../engine/army';
 import { rankOf, nextRank, missionCap, missionsLeft, VICEROY_COST, viceroyBlocked, territoryOf, appointViceroy, recallViceroy, viceroyFocus, FOCUS_TEXT } from '../engine/realm';
 
 const KEY = 'lasting-empires.save.v2';
@@ -387,14 +387,32 @@ function renderTabs() {
   }
 }
 
+/** The strip over the map: your wars first, then missions under way. */
 function renderTimeline() {
   const tl = clear($('#timeline'));
-  const up = upcomingHistory(S);
-  if (!up.length) return;
-  tl.append(h('span', { class: 'tl-h' }, 'History'));
-  for (const e of up) {
-    tl.append(h('button', { class: 'tl-card', onclick: () => toast(`${e.title}: due ${e.window[0]}–${e.window[1]}. What happens is up to fate and you.`) },
-      h('span', { class: 'tl-rose', html: icon('star', 14) }), h('span', { class: 'tl-t' }, e.title), h('small', {}, `${e.window[0]}–${e.window[1]}`)));
+  const foes = enemiesOf(S, S.player);
+  const inc = S.incoming ?? [];
+  if (foes.length) {
+    tl.append(h('span', { class: 'tl-h war' }, 'At war'));
+    for (const f of foes) {
+      const sc = warScore(S, f);
+      const w = S.wars.find(x => (x.a === f && x.b === S.player) || (x.b === f && x.a === S.player));
+      const coming = inc.filter(i => i.nation === f).length;
+      tl.append(h('button', { class: 'tl-card tl-war', style: `--nc:${S.nations[f].color}`, onclick: () => openWin('military', 'wars') },
+        h('span', { class: 'tl-rose', html: icon('sword', 14) }), h('span', { class: 'tl-t' }, S.nations[f].name),
+        h('small', {}, coming ? `${coming} attack${coming > 1 ? 's' : ''} coming!` : `score ${sc > 0 ? '+' : ''}${sc} · since ${w?.since ?? S.year}`)));
+    }
+  }
+  const ms = S.missions.filter(m => m.kind !== 'route').slice(0, 6);
+  if (ms.length) {
+    tl.append(h('span', { class: 'tl-h' }, 'Missions'));
+    for (const m of ms) {
+      const pct = m.kind === 'research' ? Math.min(100, (m.progress / techCost(S, m.target)) * 100) : ((m.total - m.turnsLeft) / Math.max(1, m.total)) * 100;
+      tl.append(h('button', { class: 'tl-card tl-m', onclick: () => openSheet('missions') },
+        h('span', { class: 'tl-rose', html: icon(MISSION_INFO[m.kind].icon, 14) }), h('span', { class: 'tl-t' }, missionTitle(m)),
+        h('small', {}, h('i', { class: 'tl-bar' }, h('i', { style: `width:${Math.round(pct)}%` })), ` ${qLabel(m.turnsLeft)}`)));
+    }
+    if (S.missions.length > ms.length) tl.append(h('button', { class: 'tl-card tl-more', onclick: () => openSheet('missions') }, h('span', { class: 'tl-t' }, `+${S.missions.length - ms.length} more`)));
   }
 }
 
@@ -406,6 +424,7 @@ function missionTitle(m: GameState['missions'][number]) {
 
 function renderTracker() {
   const tr = clear($('#tracker'));
+  return; // missions now show in the strip over the map
   for (const m of S.missions.slice(0, 8)) {
     tr.append(h('button', { class: 'trk', onclick: () => openSheet('missions') },
       h('span', { html: icon(MISSION_INFO[m.kind].icon, 14) }), h('span', { class: 'trk-t' }, missionTitle(m)), h('b', {}, qLabel(m.turnsLeft))));
@@ -563,7 +582,7 @@ function cardsTab(cat: Cat, body: HTMLElement) {
   }
   if (show('people')) {
     const ppl = S.characters.filter(c => CAT_ROLES[cat].includes(c.role));
-    sec('People', ppl.map(c => charCard(c, S, { small: true, badge: c.mission === -1 ? 'viceroy' : c.mission != null ? 'busy' : undefined, onclick: () => charDetail(c) })), 'Nobody yet. Play a hiring card to recruit someone.');
+    sec('Your court', ppl.map(c => charCard(c, S, { wide: true, badge: c.mission === -1 ? 'viceroy' : c.mission != null ? 'busy' : undefined, onclick: () => charDetail(c) })), 'Nobody yet. Play a hiring card to recruit someone.', true);
   }
   if (mil && show('troops')) sec(`Troops (${S.troops.length}/${armyCap(S)})`, [...S.troops].sort((a, b) => armyPower([b]) - armyPower([a])).map(t => troopCard(t, { small: true, onclick: () => toast(`${TROOPS[t.type].name}: power ${armyPower([t]).toFixed(1)}${(t.might ?? 1) > 1 ? ` (forged ×${t.might})` : ''}${t.mission != null ? ' · on a mission' : ''}`) })), 'No troops. Hire them with troop cards.');
   if (mil && show('ships')) sec(`Ships (${S.fleet.length}/${navyCap(S)})`, S.fleet.map(t => troopCard(t, { small: true })), 'No ships.');
@@ -1608,6 +1627,20 @@ function charDetail(c: Character) {
 interface TargetRow { label: string; sub: string; color?: string; acts: { label: string; kind: MissionKind; target: string; building?: string; why: string | null }[]; }
 
 /** Targets a mission card can be used on. */
+/** Why March Orders finds nothing to strike, in plain words. */
+function noTargetReason(): string {
+  const foes = enemiesOf(S, S.player);
+  if (!foes.length) return 'You are not at war. Declare war from a province or the Diplomacy panel.';
+  const names = foes.map(f => nationName(S, f)).join(', ');
+  const free = S.troops.filter(t => t.mission == null);
+  if (!free.length) return `You are at war with ${names}, but all your troops are away on missions.`;
+  const hurt = free.filter(t => t.str < READY_STR);
+  const moving = free.filter(t => t.moving);
+  if (hurt.length === free.length - moving.length) return `You are at war with ${names}, but your troops are still recovering from battle (below ${READY_STR}% strength). They heal about ${HEAL}% a quarter in garrison.`;
+  if (moving.length) return `You are at war with ${names}, but your free troops are still marching. Try again next quarter.`;
+  return `You are at war with ${names}, but none of their land is within reach of your troops. Move troops to a garrison near the front.`;
+}
+
 function missionTargets(handUid: number, all = false): TargetRow[] {
   const hc = S.hand.find(x => x.uid === handUid)!;
   const d = CARDS[hc.card];
@@ -1744,7 +1777,7 @@ function openCardModal(handUid: number) {
     const role = cardRole(def.id);
     body.append(h('p', { class: 'muted' }, `Needs a free ${roleName[role].toLowerCase()}. Choose where to send them.`));
     const rows = missionTargets(handUid);
-    if (!rows.length) body.append(h('p', { class: 'bad' }, def.missions![0] === 'conquer' ? 'You are not at war with anyone you can reach. Declare war from a province or the Diplomacy panel.' : def.missions![0] === 'colonize' || def.missions![0] === 'conquista' ? 'No land discovered yet. Send an explorer first.' : 'No valid target right now.'));
+    if (!rows.length) body.append(h('p', { class: 'bad' }, def.missions![0] === 'conquer' ? noTargetReason() : def.missions![0] === 'colonize' || def.missions![0] === 'conquista' ? 'No land discovered yet. Send an explorer first.' : 'No valid target right now.'));
     const list = h('div', { class: 'tlist' });
     for (const r of rows) {
       list.append(h('div', { class: 'trow' }, r.color ? h('span', { class: 'swatch', style: `background:${r.color}` }) : null,
@@ -2055,7 +2088,7 @@ function processQueue() {
   if (!modalOpen && !S.queue.length && pendingReport) { showTurnReport(); return; }
   if (modalOpen || !S.queue.length) return;
   const p = S.queue[0];
-  if (p.kind === 'reveal') showReveal(p.title, p.subtitle, p.items, () => { S.queue.shift(); afterPrompt(); });
+  if (p.kind === 'reveal') showReveal(p.title, p.subtitle, p.items, () => { S.queue.shift(); afterPrompt(); }, p.alarm);
   else if (p.kind === 'event') showEvent();
   else if (p.kind === 'draft') showDraft(p.draft, p.options);
   else if (p.kind === 'battle') showBattle(p.battle);
@@ -2077,10 +2110,10 @@ async function flipAll(flips: { flip: () => void }[], delay = 380) {
   for (const f of flips) { await sleep(reduced() ? 0 : delay); f.flip(); }
 }
 
-function showReveal(title: string, subtitle: string | undefined, items: RevealItem[], done: () => void) {
+function showReveal(title: string, subtitle: string | undefined, items: RevealItem[], done: () => void, alarm = false) {
   const row = h('div', { class: 'reveal-row' });
   const flips = items.map(it => { const f = flipCard(infoCard(it), ''); row.append(f.el); return f; });
-  openModal(h('div', { class: 'mbox reveal' }, h('h2', {}, title), subtitle ? h('p', { class: 'muted' }, subtitle) : null, row, h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: done }, 'Continue'))));
+  openModal(h('div', { class: 'mbox reveal' + (alarm ? ' alarm' : '') }, alarm ? h('div', { class: 'alarm-band', html: icon('sword', 28) }) : null, h('h2', {}, title), subtitle ? h('p', { class: 'muted' }, subtitle) : null, row, h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: done }, 'Continue'))));
   flipAll(flips);
 }
 
@@ -2280,7 +2313,8 @@ function showPeace(enemy: string, offered: boolean) {
   let chosen: string[] = [];
   const draw = () => {
     clear(box);
-    box.append(h('h2', {}, `Peace with ${n.name}`), h('p', { class: 'muted' }, `${offered ? `${n.name} asks for peace. ` : ''}War score ${score > 0 ? '+' : ''}${score}: ${score > 10 ? 'you are winning and set the terms.' : score < -10 ? 'they are winning and set the terms.' : 'neither side has the upper hand.'}`));
+    if (offered) box.append(h('div', { class: 'alarm-band peace-band', html: icon('dove', 28) }));
+    box.append(h('h2', {}, offered ? `${n.name} offers peace` : `Peace with ${n.name}`), h('p', { class: 'muted' }, `${offered ? 'Accept their terms, or fight on. ' : ''}War score ${score > 0 ? '+' : ''}${score}: ${score > 10 ? 'you are winning and set the terms.' : score < -10 ? 'they are winning and set the terms.' : 'neither side has the upper hand.'}`));
     if (score > 10) {
       const spent = peaceTerms(S, enemy).filter(t => chosen.includes(t.id)).reduce((a, t) => a + t.cost, 0);
       box.append(h('h3', {}, `Your demands (${spent}/${score} points)`));

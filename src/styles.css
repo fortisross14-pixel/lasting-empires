@@ -1106,3 +1106,52 @@ ul.traits { margin: 0; padding-left: 18px; }
 .hlim-t { font-weight: 400; color: var(--muted); font-size: 13px; }
 .hlim-warn { color: var(--bad); font-weight: 600; margin: 6px 0; }
 .tab-c.over { background: var(--bad); outline: 2px solid var(--bar); }
+
+/* ---------- war and peace news ---------- */
+.mbox.alarm { border-top: 6px solid var(--bad); }
+.alarm-band { display: grid; place-items: center; width: 58px; height: 58px; margin: -4px auto 6px; border-radius: 50%; background: var(--bad); color: #fff; box-shadow: 0 0 0 4px #b3261e33; }
+.mbox.alarm h2 { color: var(--bad); text-align: center; font-size: 30px; letter-spacing: .04em; }
+.mbox.alarm > .muted { text-align: center; font-size: 16px; }
+.peace-band { background: var(--good); box-shadow: 0 0 0 4px #3e7a3e33; }
+
+/* ---------- strip over the map: wars and missions ---------- */
+.tl-h.war { color: var(--bad) !important; font-weight: 700; }
+.tl-card.tl-war { border-left: 5px solid var(--bad) !important; }
+.tl-card.tl-war .tl-rose { color: var(--bad) !important; }
+.tl-card.tl-war small { color: var(--bad) !important; font-weight: 600; }
+.tl-bar { display: inline-block; width: 44px; height: 5px; border-radius: 3px; background: #0002; vertical-align: middle; overflow: hidden; }
+.tl-bar i { display: block; height: 100%; background: var(--gold-2); }
+[data-style="chancery"] .tl-bar i { background: var(--wax); }
+.tl-more { min-width: 0 !important; }
+@media (max-width: 640px) { .tl-card:nth-of-type(n+3) { display: grid; } .tl-card.tl-m:nth-of-type(n+4) { display: none; } }
+
+/* ---------- card types: one colour per type, the same in every deck; one size ---------- */
+.card.ty-people, .card.ty-person { --band: #2f5d8a; }
+.card.ty-action { --band: #8a5a14; }
+.card.ty-troops { --band: #7a2626; }
+.card.ty-improvement { --band: #4a5a5e; }
+.card.ty-permanent { --band: #5a3f7a; }
+.card.ty-burden { --band: #2b2b2b; }
+.card.wide { height: 140px; min-height: 140px; }
+.card.wide .c-art { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+.card.wide .c-ty { font: 700 10px/1 Alegreya, Georgia, serif; text-transform: uppercase; letter-spacing: .08em; color: #f8f0dc; opacity: .9; }
+.card.wide .c-cat { color: var(--band) !important; font-weight: 700; }
+.card.wide .c-text { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.card.wide .c-rarity { font-size: 11px; font-weight: 700; }
+.card.wide.k-char .c-away { font-size: 11px; color: var(--wax); font-weight: 700; margin-top: auto; }
+.cards-grid { align-items: stretch; }
+/* goods table: real table cells, one column plan for every section */
+.gtable { table-layout: fixed; }
+.gtable th:nth-child(1), .gtable td:nth-child(1) { width: 40%; }
+.gtable th:nth-child(2), .gtable td:nth-child(2) { width: 12%; }
+.gtable th:nth-child(3), .gtable td:nth-child(3) { width: 14%; }
+.gtable th:nth-child(4), .gtable td:nth-child(4) { width: 14%; }
+.gtable td.g-n { display: table-cell; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gtable td.g-n > * { vertical-align: middle; }
+.gtable td.g-n .gico { display: inline-block; margin-right: 6px; }
+@media (max-width: 480px) { .gtable th:nth-child(1), .gtable td:nth-child(1) { width: 36%; } }
+.card.wide.k-char { width: auto; }
+.card.wide.k-char .c-away { position: static; inset: auto; background: none; padding: 0; color: var(--wax); }
+.card.wide.k-char .c-rarity { color: var(--rar); white-space: nowrap; }
+.card.wide.k-char .c-top { gap: 8px; }
+.card.wide.k-char .c-cat { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

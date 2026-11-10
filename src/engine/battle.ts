@@ -272,7 +272,9 @@ export const startOdds = (b: Battle) => { const a = sidePower(b.att), d = sidePo
 
 function recordBattle(s: GameState, b: Battle, mine: boolean, won?: boolean) {
   const allies = alliesOf(s, s.player), foes = enemiesOf(s, s.player);
-  const notable = mine || [b.att.nation, b.def.nation].some(n => allies.includes(n) || foes.includes(n) || s.nations[n]?.overlord === s.player);
+  // only battles of your own wars: a friend of yours fighting one of your enemies
+  const friend = (n: string) => allies.includes(n) || s.nations[n]?.overlord === s.player;
+  const notable = mine || (friend(b.att.nation) && foes.includes(b.def.nation)) || (friend(b.def.nation) && foes.includes(b.att.nation));
   if (!notable) return;
   const r: BattleRecord = { year: s.year, quarter: s.quarter ?? 0, province: b.province, att: b.att.nation, def: b.def.nation, attPower: Math.round(sidePower(b.att)), defPower: Math.round(sidePower(b.def)), winner: b.winner ?? 'def', naval: b.naval, context: b.context };
   if (mine) { r.player = won ? 'won' : 'lost'; (s.battleLog ??= []).push(r); if (s.battleLog.length > 120) s.battleLog.shift(); }

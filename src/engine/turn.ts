@@ -107,6 +107,12 @@ export function chooseHeir(s: GameState, idx: number) {
 
 /** The game opens in 1451, as Mehmed II takes the Ottoman throne. */
 export const START_YEAR = 1451;
+/** Why a war is already burning in 1451, for the realm that inherits it. */
+const START_WARS: Record<string, string> = {
+  'castile:granada': 'The frontier war of the Reconquista still smoulders. Granada raids Andalusia from its mountains: expect attacks on Seville, Jaén and Murcia. Keep troops near the south, strike back with March Orders, or send a Peace Envoy.',
+  'england:france': 'The last years of the Hundred Years\' War. French armies push into Normandy and Gascony: guard the coast and the last English lands in France.',
+  'france:england': 'The last years of the Hundred Years\' War. England still holds Normandy and Gascony: this is your chance to drive them out.',
+};
 
 export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)): GameState {
   const s: GameState = {
@@ -182,6 +188,9 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   addCard(s, 'peace_envoy', true);
   settleArmies(s);
   s.stock = startStock(s);
+  // wars you inherit on the first day: say so plainly
+  const foes = s.wars.filter(w => w.a === nationId || w.b === nationId).map(w => (w.a === nationId ? w.b : w.a));
+  if (foes.length) push(s, { kind: 'reveal', alarm: true, title: 'You are at war', subtitle: `Your crown inherits ${foes.length > 1 ? 'these wars' : 'this war'}`, items: foes.map(f => ({ title: `At war with ${s.nations[f].name}`, text: START_WARS[`${nationId}:${f}`] ?? `${s.nations[f].name} is your enemy. Its troops may attack your border provinces: keep garrisons ready. Use March Orders to strike, or a Peace Envoy to end it.`, tone: 'bad' as const, kind: 'sword' })) });
   push(s, { kind: 'draft', draft: 'ambition', options: ambitionOptions(s) });
   rollEvents(s);
   log(s, `${me.ruler.name} rules ${me.name}. It is the spring of ${START_YEAR}.`);

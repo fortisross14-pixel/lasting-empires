@@ -1,5 +1,5 @@
 // AI nations: economy, recruiting, upgrades, war and peace.
-import type { GameState, Nation, TroopCard } from '../types';
+import type { GameState, Nation, TroopCard, RevealItem } from '../types';
 import { TROOPS } from '../data/troops';
 import {
   rand, pick, uid, clamp, provsOf, incomeOf, manpowerGain, manpowerMax, getRel, addRel, atWar, findWar,
@@ -220,12 +220,17 @@ function aiDiplomacy(s: GameState, n: Nation) {
   const t = pick(s, options);
   declareWar(s, n.id, t);
   if (t === s.player) {
-    push(s, { kind: 'reveal', title: 'War!', subtitle: `${n.name} declares war on you`, items: [{ title: `${n.adj} heralds arrive`, text: `${n.name} has declared war. Expect attacks on your border provinces. Keep troops at home to defend them.`, tone: 'bad', kind: 'sword' }] });
     log(s, `${n.name} declares war on you!`, 'bad');
     // the player's allies may be asked to help: AI allies simply join
+    const joined: string[] = [];
     for (const ally of alliesOf(s, s.player)) {
-      if (!atWar(s, ally, n.id) && rand(s) < 0.7) { declareWar(s, ally, n.id); log(s, `Your ally ${nationName(s, ally)} joins the war.`, 'good'); }
+      if (!atWar(s, ally, n.id) && rand(s) < 0.7) { declareWar(s, ally, n.id); joined.push(nationName(s, ally)); log(s, `Your ally ${nationName(s, ally)} joins the war.`, 'good'); }
     }
+    const theirs = s.wars.filter(w => (w.a === s.player || w.b === s.player) && w.since === s.year).map(w => (w.a === s.player ? w.b : w.a)).filter(x => x !== n.id && !joined.includes(nationName(s, x)));
+    const items: RevealItem[] = [{ title: `${n.adj} heralds arrive`, text: `${n.name} has declared war on you. Expect attacks on your border provinces within months: keep troops in your garrisons to defend them. You received March Orders to strike back.`, tone: 'bad', kind: 'sword' }];
+    if (theirs.length) items.push({ title: 'Their friends join them', text: `${theirs.map(x => nationName(s, x)).join(', ')} ${theirs.length > 1 ? 'are' : 'is'} at war with you too.`, tone: 'bad', kind: 'banner' });
+    if (joined.length) items.push({ title: 'Your allies stand by you', text: `${joined.join(', ')} ${joined.length > 1 ? 'join' : 'joins'} the war on your side.`, tone: 'good', kind: 'shield' });
+    push(s, { kind: 'reveal', alarm: true, title: 'War!', subtitle: `${n.name} declares war on you`, items });
   } else if (alliesOf(s, t).includes(s.player)) {
     push(s, { kind: 'event', eventId: 'call_to_arms', vars: { attacker: n.id, ally: t } });
   }

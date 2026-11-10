@@ -212,7 +212,7 @@ export interface RevealItem {
 export type Prompt =
   | { kind: 'event'; eventId: string; vars: Record<string, string | number> }
   | { kind: 'battle'; battle: Battle }
-  | { kind: 'reveal'; title: string; subtitle?: string; items: RevealItem[] }
+  | { kind: 'reveal'; title: string; subtitle?: string; items: RevealItem[]; alarm?: boolean }
   | { kind: 'draft'; draft: 'buy' | 'court' | 'ambition' | 'gift'; cat?: Cat; options: DraftOption[] }
   | { kind: 'succession'; heirs: Heir[]; old: string }
   | { kind: 'peace'; enemy: string; offered: boolean }

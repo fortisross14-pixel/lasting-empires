@@ -89,7 +89,9 @@ export function moveTroops(s: GameState, uids: number[], to: string): string | n
 }
 
 /** A company that came out of battle below full strength rests until it is whole again. */
-export const recovering = (t: TroopCard) => t.str < 100;
+/** Badly mauled troops rest before they attack again; from half strength they can march. */
+export const READY_STR = 50;
+export const recovering = (t: TroopCard) => t.str < READY_STR;
 /** Quarterly healing in garrison: about a fifth of a company. */
 export const HEAL = 20;
 

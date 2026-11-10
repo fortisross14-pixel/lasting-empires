@@ -47,7 +47,7 @@ export function yearlyCoalitions(s: GameState) {
       if (ai.length < 2) continue;
       s.flags['coalwar_' + n.id] = s.year;
       for (const m of ai) declareWar(s, m, n.id);
-      if (n.id === s.player) push(s, { kind: 'reveal', title: 'The coalition declares war', items: [{ title: 'Together against you', text: `${ai.map(m => nationName(s, m)).join(', ')} declare war on you at once.`, tone: 'bad', kind: 'sword' }] });
+      if (n.id === s.player) push(s, { kind: 'reveal', alarm: true, title: 'War! The coalition attacks', items: [{ title: 'Together against you', text: `${ai.map(m => nationName(s, m)).join(', ')} declare war on you at once.`, tone: 'bad', kind: 'sword' }] });
       else log(s, `The coalition attacks ${n.name}.`, 'neutral');
     }
   }

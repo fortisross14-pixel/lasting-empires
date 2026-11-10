@@ -50,6 +50,13 @@ export function equipCard(e: Pick<EquipCard, 'type'>, o: Opts = {}) {
 export const ROLE_ICON: Record<string, string> = { general: 'helm', diplomat: 'scroll', admin: 'quill', merchant: 'coin', researcher: 'book', explorer: 'anchor', conqueror: 'lance', colonist: 'tower', admiral: 'ship', courtier: 'people', priest: 'church', artist: 'quill', leader: 'laurel' };
 
 export function charCard(c: Character, s: GameState, o: Opts = {}) {
+  if (o.wide) return shell('char', { ...o, cls: `r-${c.rarity} role-${c.role} ty-person ${o.cls ?? ''}` },
+    h('div', { class: 'c-art', html: icon(ROLE_ICON[c.role] ?? 'crown', 34) }),
+    h('div', { class: 'c-body' },
+      h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, `Person · ${c.ruler ? 'Monarch' : roleName[c.role]}`), h('span', { class: 'c-rarity' }, RARITY[c.rarity].name)),
+      h('div', { class: 'c-name c-title' }, c.name),
+      h('div', { class: 'c-text' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || 'No traits', ` · age ${s.year - c.born}`),
+      c.mission != null ? h('div', { class: 'c-away' }, c.mission === -1 ? 'Viceroy' : 'On mission') : null));
   return shell('char', { ...o, cls: `r-${c.rarity} role-${c.role} ${o.cls ?? ''}` },
     h('div', { class: 'c-top' }, h('span', { class: 'c-role' }, c.ruler ? 'Monarch' : roleName[c.role]), h('span', { class: 'c-gem', title: RARITY[c.rarity].name })),
     h('div', { class: 'c-art', html: icon(ROLE_ICON[c.role] ?? 'crown', o.small ? 24 : 32) }),
@@ -73,8 +80,9 @@ export function handCard(id: string, o: Opts = {}) {
   const t = unit ? TROOPS[unit] : null;
   const label = d.permanent ? 'Action · permanent' : CARD_TYPE_NAME[cardType(d)];
   if (o.wide) {
-    return shell('hand', { ...o, cls: `cat-${d.cat} kind-${d.kind}${d.burden ? ' burden' : ''} ${o.cls ?? ''}` },
-      h('div', { class: 'c-art', html: icon(t?.icon ?? d.icon, 34) }),
+    const ty = d.permanent ? 'permanent' : cardType(d);
+    return shell('hand', { ...o, cls: `cat-${d.cat} kind-${d.kind} ty-${ty}${d.burden ? ' burden' : ''} ${o.cls ?? ''}` },
+      h('div', { class: 'c-art', html: icon(t?.icon ?? d.icon, 34) }, h('span', { class: 'c-ty' }, d.permanent ? 'Keep' : CARD_TYPE_NAME[cardType(d)])),
       h('div', { class: 'c-body' },
         h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, label)),
         h('div', { class: 'c-name c-title' }, d.name),
