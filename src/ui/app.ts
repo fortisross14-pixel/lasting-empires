@@ -284,7 +284,7 @@ const TUTORIAL: TutStep[] = [
   { title: 'Send someone out', text: 'Start a mission now if you have a card for it. It takes a few quarters. You can start only so many missions a year; a bigger realm can start more.', done: () => S.missions.length > 0, next: true },
   { title: 'Armies', text: 'Open Military. Troops stand in your capital or in provinces with Barracks, and only those within a quarter\'s march can fight. Cards → Forge merges two companies into a stronger one.', done: () => win?.cat === 'military' },
   { title: 'The map', text: 'Close the menu and tap any province for its details and actions. "Map: Realms" at the bottom right switches to culture, religion, raw materials, happiness or population.', next: true },
-  { title: 'End the turn', text: 'Press End Turn at the bottom right. Every winter you get the year\'s report: money, cards, battles and missions.', done: () => (S.quarter ?? 0) !== 0 || S.year !== S.startYear },
+  { title: 'End the turn', text: 'Press End Turn at the top right. Every winter you get the year\'s report: money, cards, battles and missions.', done: () => (S.quarter ?? 0) !== 0 || S.year !== S.startYear },
   { title: 'Rule well', text: 'Ages open by research, rivals form coalitions if you conquer too fast, and unhappy provinces may rise. The Chronicle (top right) shows the rankings. Good luck.', next: true },
 ];
 function renderTutorial() {
@@ -360,7 +360,8 @@ function renderTop() {
       h('button', { class: 'tbtn' + (sheet?.kind === 'missions' ? ' on' : ''), onclick: () => toggleSheet('missions'), title: 'Missions' },
         h('span', { html: icon('hourglass', 18) }), h('span', { class: 'tb-l' }, 'Missions'), S.missions.length ? h('span', { class: 'badge' }, String(S.missions.length)) : null),
       h('button', { class: 'tbtn' + (sheet?.kind === 'chronicle' ? ' on' : ''), onclick: () => toggleSheet('chronicle'), title: 'Chronicle' },
-        h('span', { html: icon('laurel', 18) }), h('span', { class: 'tb-l' }, 'Chronicle'))),
+        h('span', { html: icon('laurel', 18) }), h('span', { class: 'tb-l' }, 'Chronicle')),
+      h('button', { id: 'endturn', class: 'btn primary', onclick: onEndTurn }, h('span', { class: 'et-l' }, 'End Turn'), h('small', {}, `${SEASONS[S.quarter ?? 0]} ${S.year}`))),
   );
 }
 function chip(ic: string, v: string, sub: string, label: string, tone = '') {
@@ -377,8 +378,6 @@ function renderTabs() {
       h('span', { class: 'tab-l' }, c === 'diplomacy' ? 'Diplomacy' : CAT_INFO[c].name),
       h('span', { class: 'tab-n' }, `${n} · +${rates[c].rate.toFixed(1)}`)));
   }
-  const q = S.quarter ?? 0;
-  nav.append(h('button', { id: 'endturn', class: 'btn primary', onclick: onEndTurn }, h('span', { class: 'et-l' }, 'End Turn'), h('small', {}, `${SEASONS[q]} ${S.year}`)));
 }
 
 function renderTimeline() {
