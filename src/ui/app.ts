@@ -19,7 +19,7 @@ import {
 } from '../engine/core';
 import { newGame, endTurn, chooseEventOption, playerDeclareWar, warCost, ranking, powerTable, dismissCharacter, disbandTroop, chooseHeir, SAVE_VERSION, coreBlocked, coreCost, adoptCore, dropCore, migrate } from '../engine/turn';
 import { EVENT, eventTitle, upcomingHistory } from '../engine/events';
-import { cardType, cardTroop, unitFor, UNIT_LINES, CLASS_NAME, type CardType, type UnitClass } from '../engine/cards';
+import { typesFor, poolOf, cardType, cardTroop, unitFor, UNIT_LINES, CLASS_NAME, type CardType, type UnitClass } from '../engine/cards';
 import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBlocked, troopHireCost, discardCard, handLimit, cardFor, archiveCards, restoreCard, dropArchived } from '../engine/cards';
 import {
   MISSION_INFO, DIPLO, missionBlocked, launchMission, cancelMission, diploChance, missionTurns, techCost, researchRate, attackRoute,
@@ -280,7 +280,7 @@ const TUTORIAL: TutStep[] = [
   { title: 'Welcome, Majesty', text: 'One turn is one quarter of a year. Everything you do starts with a card: you draw them each quarter in five kinds. Let me show you around.', next: true },
   { title: 'Your treasury', text: 'At the top: ducats, manpower (1 per troop or person you hire), nation points (to buy cards), stability and the people\'s happiness. Tap the year to see the current age.', next: true },
   { title: 'Open a menu', text: 'The five menus are at the bottom. Open Internal.', done: () => win?.cat === 'internal' },
-  { title: 'Cards', text: 'The Cards tab shows what you hold: cards and people. Buy a pack with nation points (3 revealed, you keep 1), or archive cards you do not need now.', next: true },
+  { title: 'Cards', text: 'The Cards tab starts with Get cards: spend nation points on a person card (to hire someone) or an action card (in Military also troops and improvements). Below are the cards you hold: tap one to use it.', next: true },
   { title: 'Missions', text: 'Open the Missions tab. Tap a person, then a mission card, or the other way round. The better the person, the better the outcome.', done: () => win?.tab === 'missions' },
   { title: 'Send someone out', text: 'Start a mission now if you have a card for it. It takes a few quarters. You can start only so many missions a year; a bigger realm can start more.', done: () => S.missions.length > 0, next: true },
   { title: 'Armies', text: 'Open Military. Troops stand in your capital or in provinces with Barracks, and only those within a quarter\'s march can fight. Cards → Forge merges two companies into a stronger one.', done: () => win?.cat === 'military' },
@@ -499,14 +499,27 @@ function cardsTab(cat: Cat, body: HTMLElement) {
   const arch = (S.archive ?? []).filter(hc => CARDS[hc.card].cat === cat);
   const pct = Math.round((S.cardAccum[cat] ?? 0) * 100);
   const setMode = (mode: typeof cv.mode) => { cv = { ...cv, mode: cv.mode === mode ? 'browse' : mode, sel: [], filter: mode === 'select' ? 'hand' : cv.filter }; forge = []; renderWin(); };
-  const why = buyBlocked(S, cat);
+  // 1. get cards: one button per kind of card this deck sells
+  const BUY: Record<CardType, { label: string; icon: string }> = {
+    people: { label: 'Buy a person card', icon: 'people' }, troops: { label: 'Buy a troop card', icon: 'helm' },
+    improvement: { label: 'Buy an improvement', icon: 'anvil' }, action: { label: 'Buy an action card', icon: 'star' }, burden: { label: '', icon: 'star' },
+  };
+  const shop = h('div', { class: 'shop' });
+  for (const ty of typesFor(cat)) {
+    const why = buyBlocked(S, cat, ty);
+    const pool = poolOf(S, cat, ty);
+    const sub = why ?? (pool.length === 1 ? `${buyCost(S, cat)} NP · ${pool[0].name}` : `${buyCost(S, cat)} NP · 3 shown, keep 1`);
+    shop.append(h('button', { class: 'shop-b' + (why ? ' blocked' : ''), onclick: () => { if (why) return toast(why, 'bad'); const n = S.hand.length; act(() => buyCard(S, cat, ty)); if (S.hand.length > n) toast(`${CARDS[S.hand[S.hand.length - 1].card].name} added to your hand`, 'good'); } },
+      h('span', { class: 'shop-i', html: icon(BUY[ty].icon, 22) }), h('span', { class: 'shop-t' }, h('b', {}, BUY[ty].label), h('small', {}, sub))));
+  }
+  body.append(h('div', { class: 'shop-head' }, h('h3', {}, 'Get cards'), h('small', { class: 'muted' }, `You have ${S.np.toFixed(1)} nation points · each purchase this year costs more · free draws: +${rate.rate.toFixed(2)} a year, next card ${pct}%`)), shop);
   const bar = h('div', { class: 'ctools' },
-    h('button', { class: 'btn small' + (why ? ' blocked' : ''), title: why ?? 'Three cards are revealed, you keep one', onclick: () => act(() => buyCard(S, cat)) }, h('span', { html: icon('star', 14) }), ` Buy a pack · ${buyCost(S, cat)} NP`),
     h('button', { class: 'btn small' + (cv.mode === 'select' ? ' on' : ''), onclick: () => setMode('select') }, h('span', { html: icon('scroll', 14) }), ' Archive cards'),
     h('button', { class: 'btn small' + (cv.mode === 'archive' ? ' on' : ''), onclick: () => setMode('archive') }, h('span', { html: icon('book', 14) }), ` Archive (${arch.length})`),
     mil ? h('button', { class: 'btn small' + (cv.mode === 'forge' ? ' on' : ''), onclick: () => setMode('forge') }, h('span', { html: icon('merge', 14) }), ' Forge') : null,
     mil ? h('button', { class: 'btn small' + (cv.mode === 'recipes' ? ' on' : ''), onclick: () => setMode('recipes') }, h('span', { html: icon('list', 14) }), ' Recipes') : null);
-  body.append(h('div', { class: 'cs-head' }, h('b', {}, `${hand.length} card${hand.length === 1 ? "" : "s"} in hand`), h('small', { title: rate.parts.map(p => `${p.label} ${signed(p.v)}`).join(', ') }, `+${rate.rate.toFixed(2)} a year · next card ${pct}%`)), bar);
+  // 2. what you hold
+  body.append(h('div', { class: 'cs-head' }, h('h3', {}, `Your cards (${hand.length})`), h('small', { class: 'muted', title: rate.parts.map(p => `${p.label} ${signed(p.v)}`).join(', ') }, 'Tap a card to use it')), bar);
   if (cv.mode === 'forge') return forgeView(body);
   if (cv.mode === 'recipes') { body.append(recipeBook(true)); return; }
   if (cv.mode === 'archive') {

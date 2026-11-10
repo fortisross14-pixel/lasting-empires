@@ -1034,3 +1034,16 @@ ul.traits { margin: 0; padding-left: 18px; }
 .unit-row .g-t { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
 .unit-row .card { flex: none; pointer-events: none; }
 .c-unit { font-size: 12px; font-weight: 700; color: var(--band); padding: 0 0 2px; }
+/* Cards tab: the shop at the top */
+.shop-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.shop-head h3 { margin-bottom: 4px; }
+.shop { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.shop-b { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 8px 12px; text-align: left; border: 1.5px solid var(--text); border-radius: 10px; background: var(--panel); color: var(--text); cursor: pointer; }
+.shop-b:hover { background: var(--panel-2); }
+.shop-b .shop-i { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: var(--heading, var(--text)); color: var(--panel); }
+.shop-b .shop-t { display: flex; flex-direction: column; min-width: 0; }
+.shop-b .shop-t small { color: var(--muted); }
+.shop-b.blocked { opacity: .55; }
+[data-style="chancery"] .shop-b { border-radius: 0; border-width: 1px; box-shadow: 3px 3px 0 var(--text); }
+[data-style="chancery"] .shop-b .shop-i { background: var(--wax); color: #f4ead8; }
+@media (max-width: 520px) { .shop { grid-template-columns: 1fr 1fr; } .shop-b { flex-direction: column; align-items: flex-start; gap: 4px; } }

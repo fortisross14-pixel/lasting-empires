@@ -6,7 +6,11 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 # Lasting Empires — game design rules
 
 ## Pillars
-1. **Everything is a card.** Every player action is spent from a card. New actions get a card definition in `src/engine/cards.ts` (category, kind, weight function). Never add a free button that bypasses cards, except declaring war and dismissing/disbanding.
+1. **Everything is a card.** Every player action is spent from a card. New actions get a card definition in `src/engine/cards.ts` (category, kind, weight function). Never add a free button that bypasses cards, except declaring war, moving troops, setting what a workshop makes, closing a trade route and dismissing/disbanding. Buttons that need a card stay visible and say which card they need.
+   - **Card types** (`cardType`): People (hire someone), Actions (missions and orders), and in Military also Troops (by kind: Levy, Infantry, Ranged, Cavalry, Artillery; each hires the best unit of its kind researched, see `UNIT_LINES`) and Improvements (equipment, Drill Sergeant). Elite units come from Forge recipes.
+   - **Getting cards:** free draws each quarter, or the Cards tab shop: buy a card of one type with nation points (`buyCard(s, cat, type)`: 3 shown, keep 1; a type with one card in the deck is given straight away).
+   - **Permanent cards** (stay after use, the mission costs ducats): only Embassy and Peace Envoy. Everything else is used up.
+   - **No hand limit**: identical cards stack. Wars give March Orders (3 to the attacker, 2 to the defender); at peace only 2 are kept.
 2. **People decide quality.** A mission card needs a person of the right role. The person's **rarity** (Common → Legendary) sets the outcome odds (`OUTCOME_ODDS` in `src/data/characters.ts`) and trait strength (`traitMult`). New missions must roll an outcome with `rollOutcome` (or `rollBest` when a core card grants advantage) and scale their result by it. Show the outcome with `outcomeItem` in the reveal.
 3. **Surprises are revealed, not hidden.** Results arrive as face-down cards that flip (`push(s, { kind: 'reveal', ... })`). History events are known in advance (timeline) but their outcomes branch.
 4. **Middle by default.** Core cards (`src/data/core.ts`) move the realm off the centre of an axis. Every core card has real pros and cons.
@@ -24,8 +28,8 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 - Society: `src/engine/society.ts` (province `culture`/`religion`, `happinessOf`, yearly stability drift; `s.art`, `s.taxBurden`, `s.accepted`).
 
 ## Card rates
-- Each category draws `1 + bonuses` cards a year; fractions carry over (`cardAccum`). Add bonuses through `cardRates` parts (buildings, research, monarch, cities, goods, core cards) so the breakdown stays visible to the player.
-- Hand limit is 6 per category; `addCard` respects it unless forced (burdens).
+- Six decks: Military, Diplomacy, Internal, Economy, Research, People (`culture`). Each draws `0.5 + bonuses` cards a year (capped at 1.4); fractions carry over (`cardAccum`). Add bonuses through `cardRates` parts (buildings, research, monarch, cities, core cards) so the breakdown stays visible to the player.
+- There is no hand limit (`handLimit` returns Infinity; the old limit only for balance tests). The yearly mission cap, army size and building slots are the limits.
 
 ## Balance workflow
 See `docs/BALANCE.md` for targets, current results and every lever. Run `MODE=reasonable|passive|greedy|big SEEDS=5 npm run sim` and compare against the targets table before and after any change.

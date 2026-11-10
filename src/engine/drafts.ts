@@ -6,25 +6,27 @@ import type { GameState, DraftOption, Character, Cat, Role } from '../types';
 import { TROOPS, RECIPES, type Recipe } from '../data/troops';
 import { LEGENDS } from '../data/characters';
 import { player, hasTech, rand, uid, genCharacter, courtCap, courtCount, provsOf, log, inflation } from './core';
-import { CARDS, buyCost, randomCard, removeCard, handOf, handLimit } from './cards';
+import { CARDS, buyCost, randomCard, removeCard, handOf, handLimit, addCard, poolOf, type CardType } from './cards';
 
 // ---------- buying cards ----------
-export function buyBlocked(s: GameState, cat: Cat): string | null {
+export function buyBlocked(s: GameState, cat: Cat, type?: CardType): string | null {
   const c = buyCost(s, cat);
   if (handOf(s, cat).length >= handLimit(s)) return `Your ${cat} hand is full (${handLimit(s)}; a bigger realm holds more)`;
+  if (type && !poolOf(s, cat, type).length) return 'Nothing of this kind to buy yet';
   return s.np < c ? `Needs ${c} nation points` : null;
 }
 
-/** Spend nation points: reveal three cards of a kind, keep one. */
-export function buyCard(s: GameState, cat: Cat): string | null {
-  const why = buyBlocked(s, cat);
+/** Spend nation points on a card of one type: three are revealed and you keep one; if the deck has only one such card, you get it straight away. */
+export function buyCard(s: GameState, cat: Cat, type?: CardType): string | null {
+  const why = buyBlocked(s, cat, type);
   if (why) return why;
   s.np -= buyCost(s, cat);
   s.bought[cat] = (s.bought[cat] ?? 0) + 1;
+  if (type && poolOf(s, cat, type).length === 1) { addCard(s, poolOf(s, cat, type)[0].id, true); return null; }
   const opts: DraftOption[] = [];
   const seen = new Set<string>();
   for (let i = 0; i < 12 && opts.length < 3; i++) {
-    const c = randomCard(s, cat);
+    const c = randomCard(s, cat, type);
     if (seen.has(c) && i < 9) continue;
     seen.add(c);
     opts.push({ t: 'card', card: c });

@@ -46,6 +46,11 @@ export function exposedProvince(s: GameState) {
   return ps.length && ps[0].score > -30 ? ps[0].p : null;
 }
 
+/** Card types a deck sells: people and actions everywhere, troops and improvements in Military. */
+export const typesFor = (cat: Cat): CardType[] => (cat === 'military' ? ['people', 'troops', 'improvement', 'action'] : ['people', 'action']);
+/** Cards of a type you could get from a deck now. */
+export const poolOf = (s: GameState, cat: Cat, type: CardType) => Object.values(CARDS).filter(c => c.cat === cat && cardType(c) === type && c.weight(s) > 0);
+
 /** What a card is for: people to hire, troops, improvements, or actions. */
 export type CardType = 'people' | 'troops' | 'improvement' | 'action' | 'burden';
 export function cardType(d: HandCardDef): CardType {
@@ -262,8 +267,8 @@ export function addCard(s: GameState, card: string, force = false): boolean {
   return true;
 }
 
-export function randomCard(s: GameState, cat: Cat): string {
-  const pool = Object.values(CARDS).filter(c => c.cat === cat).map(c => [c.id, c.weight(s)] as [string, number]).filter(([, w]) => w > 0);
+export function randomCard(s: GameState, cat: Cat, type?: CardType): string {
+  const pool = Object.values(CARDS).filter(c => c.cat === cat && (!type || cardType(c) === type)).map(c => [c.id, c.weight(s)] as [string, number]).filter(([, w]) => w > 0);
   return weighted(s, pool);
 }
 
