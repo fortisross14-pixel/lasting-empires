@@ -115,6 +115,14 @@ export function goalView(s: GameState, g: Goal, deadline: number): GoalView {
       const k = s.characters.filter(c => !c.ruler).length;
       return { title: `${g.n} people at court`, status: `${k} of ${g.n}`, have: k, need: g.n, met: k >= g.n };
     }
+    case 'companies': {
+      const k = s.troops.length;
+      return { title: `An army of ${g.n} companies`, status: `${k} of ${g.n}`, have: k, need: g.n, met: k >= g.n };
+    }
+    case 'devGain': {
+      const k = provsOf(s, s.player).reduce((a, p) => a + p.dev, 0) - (s.flags.goal_dev0 ?? 0);
+      return { title: `Gain ${g.n} development`, status: `${Math.max(0, k)} of ${g.n} gained`, have: k, need: g.n, met: k >= g.n };
+    }
     case 'independent': {
       const lord = player(s).overlord;
       return { title: 'Be free of any overlord', status: lord ? `Subject of ${nationName(s, lord)}` : 'Independent', have: lord ? 0 : 1, need: 1, met: !lord };

@@ -8,6 +8,7 @@ export interface MissionDef {
   wild?: boolean;         // not history: just for fun
   beginner?: string;      // a first mission: what it teaches
   cards?: string[];       // cards handed over at the start, so the lesson can begin at once
+  gold?: number;          // ducats handed over at the start
 }
 
 const NEW_WORLD = ['caribbean', 'mexico', 'north_america', 'brazil', 'andes', 'plata'];
@@ -28,6 +29,12 @@ export const MISSIONS: MissionDef[] = [
   { id: 'b_trade', name: 'Merchants of the Lagoon', icon: 'coin', start: 1451, deadline: 1461, nations: ['venice'], cards: ['export_contract', 'export_contract', 'import_contract'], beginner: 'Economy: goods, trade routes and trade posts',
     text: 'Sell what you have too much of. Open trade routes from Economy → Goods with Import and Export Contract cards and a merchant.',
     goals: [{ k: 'routes', n: 2 }] },
+  { id: 'b_army', name: 'The Sword Hunt', icon: 'helm', start: 1600, deadline: 1612, nations: ['japan'], cards: ['hire_infantry', 'hire_ranged', 'hire_cavalry'], beginner: 'Troops: hiring companies, the Forge and recipes',
+    text: 'Japan is one at last: turn its samurai into one army. Hire companies with troop cards (Military), and merge two of a kind in the Forge to make a stronger one.',
+    goals: [{ k: 'companies', n: 15 }] },
+  { id: 'b_develop', name: 'The Road of the Inca', icon: 'tower', start: 1451, deadline: 1475, nations: ['inca'], gold: 200, cards: ['settlers', 'settlers', 'irrigation', 'grow_settlement'], beginner: 'Your land: development, settlements and growth',
+    text: 'Bind the mountains with roads and terraces. Develop provinces and grow your towns with Settlers, Irrigation and Grow your Settlement cards.',
+    goals: [{ k: 'devGain', n: 4 }] },
   { id: 'b_build', name: 'The Builder King', icon: 'hammer', start: 1600, deadline: 1620, nations: ['benin', 'kongo', 'ethiopia'], cards: ['royal_works', 'guild_charter', 'guild_charter'], beginner: 'Buildings: cost, benefit and upkeep',
     text: 'Raise three buildings. Tap a province, compare cost and benefit, and build with a Royal Works or Guild Charter card.',
     goals: [{ k: 'built', n: 3 }] },

@@ -324,7 +324,9 @@ export type Goal =
   | { k: 'built'; n: number }                                  // finish n buildings during the mission
   | { k: 'routes'; n: number }                                 // have n trade routes running
   | { k: 'works'; n: number }                                  // n works of art made during the mission
-  | { k: 'court'; n: number };                                 // n people at court                                      // no overlord
+  | { k: 'court'; n: number }
+  | { k: 'companies'; n: number }                              // n companies in your army
+  | { k: 'devGain'; n: number };                               // n development gained during the mission                                 // n people at court                                      // no overlord
 export interface Scenario {
   id: string; name: string; text: string; deadline: number; goals: Goal[];
   status: 'active' | 'won' | 'lost'; done?: number;            // year it was won or lost

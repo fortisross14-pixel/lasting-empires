@@ -130,9 +130,11 @@ export function newMissionGame(nationId: string, mission: string | import('../ty
   // beginner missions hand over the cards their lesson needs
   if (typeof mission === 'string') for (const c of MISSION[mission]?.cards ?? []) addCard(s, c, true);
   if (typeof mission === 'string' && mission === 'b_court') s.np += 8; // nation points to buy person cards
+  if (typeof mission === 'string') player(s).gold += MISSION[mission]?.gold ?? 0;
   s.flags.goal_techs0 = s.techs.length;
   s.flags.goal_built0 = provsOf(s, s.player).reduce((a, p) => a + p.buildings.length, 0);
   s.flags.goal_works0 = (s.works ?? []).length;
+  s.flags.goal_dev0 = provsOf(s, s.player).reduce((a, p) => a + p.dev, 0);
   return s;
 }
 
