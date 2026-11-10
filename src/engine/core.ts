@@ -37,7 +37,7 @@ export const ageId = (s: GameState) => s.age?.id ?? eraOfYear(s.year).id;
 /** 0 for the first age, up to 4 for the Enlightenment. */
 export const ageIndex = (s: GameState) => Math.max(0, ERAS.findIndex(e => e.id === ageId(s)));
 /** Running the state costs more in each new age: bigger courts, more officials. */
-export const AGE_STATE_COST = [1, 1.15, 1.35, 1.6, 1.85];
+export const AGE_STATE_COST = [1, 1.15, 1.35, 1.6, 1.85, 2.1];
 /** The age's own data. */
 export const ageDef = (s: GameState) => ERA[ageId(s)];
 /** The player opened the current age not long ago. */

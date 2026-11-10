@@ -1217,3 +1217,10 @@ ul.traits { margin: 0; padding-left: 18px; }
 .goal.met .goal-bar i { background: var(--good); }
 .tbtn.goals-b.st-won .badge { background: var(--good); }
 .tbtn.goals-b.st-lost .badge { background: var(--bad); }
+
+/* ---------- start year ---------- */
+.pick-year { flex: none; }
+.pick-year .seg-b { min-height: 36px; padding: 6px 12px; font-variant-numeric: lining-nums; }
+.pick-era { margin: 0; padding: 6px 14px; font-size: 13.5px; color: var(--muted); background: var(--bar); border-bottom: 1px solid var(--line); }
+.pick-era b { color: var(--text); }
+@media (max-width: 640px) { .pick-top { flex-wrap: wrap; } .pick-hint { display: none; } }

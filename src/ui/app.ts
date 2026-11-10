@@ -4,6 +4,7 @@ import { NATIONS, RULER_ARCHS } from '../data/nations';
 import { TROOPS, EQUIPMENT, COUNTER_TEXT } from '../data/troops';
 import { TECHS, TECH, BUILDINGS, AGE_NAMES, type TechTrack } from '../data/techs';
 import { GOVS, GOV_ORDER } from '../data/governments';
+import { STARTS, START_YEARS } from '../data/starts';
 import { MISSIONS, GOAL_REGIONS, type MissionDef } from '../data/missions';
 import { goalView, type GoalView } from '../engine/goals';
 import type { Goal, Scenario } from '../types';
@@ -141,7 +142,7 @@ function slotsSection() {
         h('small', { class: 'muted' }, s ? `${me!.ruler.name} · ${provsOf(s, s.player).length} provinces${s.over ? ' · finished' : ''}` : 'Empty')));
     const acts = h('div', { class: 'slot-acts' });
     if (pendingNation) acts.append(h('button', { class: 'btn primary small', onclick: () => {
-      const go = () => startIn(n, newGame(pendingNation!));
+      const go = () => startIn(n, newGame(pendingNation!, undefined, pendingYear));
       if (window.confirm(`Replace ${me?.name ?? 'this'} campaign in slot ${n}? It cannot be recovered.`)) go();
     } }, 'Replace'));
     else if (s && !s.over) acts.append(h('button', { class: 'btn primary small', onclick: () => startIn(n, s) }, 'Continue'));
@@ -159,11 +160,13 @@ function saveCustom(list: (Scenario & { nation: string })[]) { try { localStorag
 
 function startMission(nation: string, mission: string | Scenario) {
   const free = SLOTS.find(n => !loadSlot(n)) ?? (window.confirm('All three campaign slots are full. Replace slot 3?') ? 3 : 0);
-  if (free) startIn(free, newMissionGame(nation, mission));
+  const start = typeof mission === 'string' ? MISSIONS.find(m => m.id === mission)?.start ?? 1451 : (mission as Scenario & { start?: number }).start ?? 1451;
+  if (free) startIn(free, newMissionGame(nation, mission, start));
 }
 
-let missionPreview: GameState | null = null;
-const previewState = () => { if (!missionPreview) { missionPreview = newGame('castile', 777); missionPreview.queue = []; } return missionPreview; };
+const missionPreviews: Record<number, GameState> = {};
+const previewFor = (year: number) => { if (!missionPreviews[year]) { missionPreviews[year] = newGame(STARTS[year]?.featured[0] ?? 'castile', 777, year); missionPreviews[year].queue = []; } return missionPreviews[year]; };
+const previewState = () => previewFor(missionYear);
 const goalTitle = (g: Goal, deadline: number) => goalView(previewState(), g, deadline).title;
 
 function missionCard(m: MissionDef) {
@@ -171,24 +174,25 @@ function missionCard(m: MissionDef) {
     h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon(m.icon, 24) }), h('div', {}, h('b', {}, m.name), h('small', {}, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`))),
     h('p', { class: 'mc-t' }, m.text),
     h('ul', { class: 'mc-g' }, m.goals.map(g => h('li', {}, goalTitle(g, m.deadline)))),
-    h('div', { class: 'mc-play' }, m.nations.map(n => { const d = NATIONS.find(x => x.id === n); return h('button', { class: 'btn primary small', style: `--nc:${d?.color}`, onclick: () => startMission(n, m.id) }, `Play ${d?.name ?? n}`); })));
+    h('div', { class: 'mc-play' }, m.nations.map(n => { const nm = previewFor(m.start).nations[n]?.name ?? n; return h('button', { class: 'btn primary small', onclick: () => startMission(n, m.id) }, `Play ${nm}`); })));
 }
 
+let missionYear = 1451;
 function showMissions() {
   const root = clear($('#app'));
   const mine = customMissions();
   root.append(h('div', { class: 'missions-screen' },
     h('header', { class: 'pick-top' }, h('button', { class: 'btn ghost small', onclick: () => showTitle() }, '← Back'), h('h1', {}, 'Missions')),
     h('p', { class: 'muted' }, 'A realm, a deadline and a few goals. Track them in the Goals window during the game. Win or lose, the world goes on.'),
-    h('div', { class: 'seg mfilter' }, h('button', { class: 'seg-b on' }, 'Start 1451'), h('button', { class: 'seg-b locked', onclick: () => toast('The 1600 start is coming: a new map of the world in 1600.') }, '1600 · soon'), h('button', { class: 'seg-b locked', onclick: () => toast('The 1700 start is coming, with the Age of Revolutions.') }, '1700 · soon')),
+    h('div', { class: 'seg mfilter' }, START_YEARS.map(y => h('button', { class: 'seg-b' + (y === missionYear ? ' on' : ''), onclick: () => { missionYear = y; showMissions(); } }, `Start ${y}`))),
     h('div', { class: 'mgrid' },
       h('button', { class: 'mcard mc-new', onclick: () => showBuilder() }, h('span', { class: 'mc-i', html: icon('plus', 28) }), h('b', {}, 'Create your own mission'), h('small', {}, 'Choose a realm, a deadline and up to 6 goals')),
-      ...mine.map(c => h('div', { class: 'mcard mc-custom' },
-        h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon('quill', 24) }), h('div', {}, h('b', {}, c.name), h('small', {}, `Your mission · 1451 – ${c.deadline}`))),
+      ...mine.filter(c => ((c as { start?: number }).start ?? 1451) === missionYear).map(c => h('div', { class: 'mcard mc-custom' },
+        h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon('quill', 24) }), h('div', {}, h('b', {}, c.name), h('small', {}, `Your mission · ${(c as { start?: number }).start ?? 1451} – ${c.deadline}`))),
         h('ul', { class: 'mc-g' }, c.goals.map(g => h('li', {}, goalTitle(g, c.deadline)))),
         h('div', { class: 'mc-play' }, h('button', { class: 'btn primary small', onclick: () => startMission(c.nation, { ...c, status: 'active' }) }, `Play ${NATIONS.find(x => x.id === c.nation)?.name}`),
           h('button', { class: 'btn ghost small', onclick: () => { saveCustom(customMissions().filter(x => x.id !== c.id)); showMissions(); } }, 'Delete')))),
-      ...MISSIONS.filter(m => m.start === 1451).map(missionCard))));
+      ...MISSIONS.filter(m => m.start === missionYear).map(missionCard))));
 }
 
 /** Goal templates for the builder: a label and how to make the goal from one value. */
@@ -210,16 +214,20 @@ const GOAL_KINDS: { id: string; label: string; input: 'n' | 'region' | 'province
 
 function showBuilder() {
   const root = clear($('#app'));
-  const realms = NATIONS.filter(n => !n.native).sort((a, b) => a.name.localeCompare(b.name));
+  let startY = missionYear;
+  const realmsOf = (y: number) => Object.values(previewFor(y).nations).filter(n => n.alive && !['natives', 'tribes', 'bedouins'].includes(n.id)).sort((a, b) => a.name.localeCompare(b.name));
+  let realms = realmsOf(startY);
   const provs = getGeo().seeds.map(x => ({ id: x.id, name: x.name })).sort((a, b) => a.name.localeCompare(b.name));
-  let nation = 'venice', deadline = 1550, name = '';
+  let nation = realms.some(r => r.id === 'venice') ? 'venice' : realms[0].id, deadline = Math.min(STARTS[startY]?.end ?? 1750, startY + 100), name = '';
   let goals: Goal[] = [];
   const form = h('div', { class: 'builder' });
   const draw = () => {
     clear(form);
     const sel = (opts: [string, string][], val: string, on: (v: string) => void) => { const e = h('select', { onchange: (ev: Event) => on((ev.target as HTMLSelectElement).value) }, opts.map(([v, l]) => h('option', { value: v, ...(v === val ? { selected: 'selected' } : {}) }, l))) as HTMLSelectElement; return e; };
+    form.append(h('label', {}, h('span', {}, 'Start'), sel(START_YEARS.map(y => [String(y), String(y)]), String(startY), v => { startY = +v; realms = realmsOf(startY); if (!realms.some(r => r.id === nation)) nation = realms[0].id; deadline = Math.min(STARTS[startY]?.end ?? 1750, startY + 100); draw(); })));
     form.append(h('label', {}, h('span', {}, 'Realm'), sel(realms.map(r => [r.id, r.name]), nation, v => { nation = v; })));
-    const dl = h('input', { type: 'number', min: '1460', max: '1750', value: String(deadline), onchange: (e: Event) => { deadline = Math.max(1460, Math.min(1750, +(e.target as HTMLInputElement).value || 1550)); } });
+    const endY = STARTS[startY]?.end ?? 1750;
+    const dl = h('input', { type: 'number', min: String(startY + 5), max: String(endY), value: String(deadline), onchange: (e: Event) => { deadline = Math.max(startY + 5, Math.min(endY, +(e.target as HTMLInputElement).value || startY + 100)); } });
     form.append(h('label', {}, h('span', {}, 'Deadline (year)'), dl));
     const nm = h('input', { type: 'text', placeholder: 'e.g. Venice discovers America', value: name, oninput: (e: Event) => { name = (e.target as HTMLInputElement).value; } });
     form.append(h('label', {}, h('span', {}, 'Name'), nm));
@@ -246,7 +254,7 @@ function showBuilder() {
       h('button', { class: 'btn primary' + (goals.length ? '' : ' blocked'), onclick: () => {
         if (!goals.length) return toast('Add at least one goal', 'bad');
         const realm = realms.find(r => r.id === nation)!;
-        const sc: Scenario & { nation: string } = { id: 'custom_' + Date.now(), name: name.trim() || `${realm.name}'s mission`, text: `Your own mission for ${realm.name}.`, deadline, goals, status: 'active', custom: true, nation };
+        const sc = { id: 'custom_' + Date.now(), name: name.trim() || `${realm.name}'s mission`, text: `Your own mission for ${realm.name}, from ${startY}.`, deadline, goals, status: 'active', custom: true, nation, start: startY } as Scenario & { nation: string };
         saveCustom([...customMissions(), sc]);
         startMission(nation, sc);
       } }, 'Save and play')));
@@ -254,13 +262,14 @@ function showBuilder() {
   draw();
   root.append(h('div', { class: 'missions-screen' },
     h('header', { class: 'pick-top' }, h('button', { class: 'btn ghost small', onclick: () => showMissions() }, '← Back'), h('h1', {}, 'Your own mission')),
-    h('p', { class: 'muted' }, 'Pick a realm and a deadline, then add goals. The game starts in 1451.'), form));
+    h('p', { class: 'muted' }, 'Pick a start year, a realm and a deadline, then add goals.'), form));
 }
 
-function chooseNation(id: string) {
+let pendingYear = 1451;
+function chooseNation(id: string, year = 1451) {
   const free = SLOTS.find(n => !loadSlot(n));
-  if (free) { startIn(free, newGame(id)); return; }
-  pendingNation = id; showTitle();
+  if (free) { startIn(free, newGame(id, undefined, year)); return; }
+  pendingNation = id; pendingYear = year; showTitle();
   document.querySelector('.slots')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
@@ -271,9 +280,13 @@ function difficulty(provs: number, army: number): { label: string; cls: string }
   return size >= 14 ? { label: 'Strong start', cls: 'd-easy' } : size >= 6 ? { label: 'Balanced', cls: 'd-mid' } : size >= 3 ? { label: 'Hard start', cls: 'd-hard' } : { label: 'Very hard', cls: 'd-vhard' };
 }
 
-function showPicker(initial = 'castile') {
+let pickYear = 1451;
+function showPicker(initial?: string) {
   const root = clear($('#app'));
-  const preview = newGame('castile', 12345);
+  const later = STARTS[pickYear];
+  const featured = later?.featured ?? FEATURED;
+  initial = initial ?? featured[0];
+  const preview = newGame(initial, 12345, pickYear);
   preview.queue = [];
   const panel = h('div', { class: 'pick-panel' });
   const board = h('div', { class: 'pick-map' });
@@ -281,19 +294,21 @@ function showPicker(initial = 'castile') {
     h('header', { class: 'pick-top' },
       h('button', { class: 'btn ghost small', onclick: () => showTitle() }, '← Back'),
       h('h1', {}, 'Choose your realm'),
+      h('div', { class: 'seg pick-year' }, START_YEARS.map(y => h('button', { class: 'seg-b' + (y === pickYear ? ' on' : ''), onclick: () => { if (y !== pickYear) { pickYear = y; showPicker(); } } }, String(y)))),
       h('span', { class: 'muted pick-hint' }, 'Tap any realm on the map')),
-    h('div', { class: 'pick-feat' }, FEATURED.map(id => h('button', { class: 'tchip', onclick: () => select(id, true) }, h('i', { class: 'swatch', style: `background:${preview.nations[id].color}` }), preview.nations[id].name))),
+    later ? h('p', { class: 'pick-era' }, h('b', {}, `${pickYear}: ${later.name}. `), later.text, ` The game runs to ${later.end}.`) : null,
+    h('div', { class: 'pick-feat' }, featured.filter(id => preview.nations[id]?.alive).map(id => h('button', { class: 'tchip', onclick: () => select(id, true) }, h('i', { class: 'swatch', style: `background:${preview.nations[id].color}` }), preview.nations[id].name))),
     board, panel, h('div', { id: 'toast', role: 'status', 'aria-live': 'polite' })));
   const mv = new MapView(board);
   mv.revealAll = true;
   const select = (id: string, focus = false) => {
     const n = preview.nations[id];
-    if (!n || id === NO_STATE) return;
+    if (!n || id === NO_STATE || !n.alive) return;
     mv.picked = id; mv.render(preview);
     const ps = provsOf(preview, id);
     if (focus) mv.focus(ps.map(p => p.id), 60);
-    const def = NATIONS.find(d => d.id === id)!;
-    const d = difficulty(ps.length, def.army.length);
+    const def = NATIONS.find(d => d.id === id) ?? { army: n.army.map(t => t.type), blurb: undefined };
+    const d = difficulty(ps.length, pickYear > 1451 ? Math.min(def.army.length, n.army.length) : def.army.length);
     const near = new Set<string>();
     for (const p of ps) for (const nb of getGeo().adj[p.id]) { const o = preview.provinces[nb].owner; if (o !== id && o !== NO_STATE) near.add(o); }
     const cap = preview.provinces[n.capital];
@@ -303,14 +318,14 @@ function showPicker(initial = 'castile') {
         h('div', { class: 'pick-t' },
           h('b', {}, n.name), h('span', { class: 'np-diff ' + d.cls }, d.label),
           h('small', {}, `${ps.length} province${ps.length > 1 ? 's' : ''} · capital ${cap?.name ?? '?'} · ${RELIGION_NAMES[cap?.religion ?? ''] ?? ''} · ${CULTURE_NAMES[n.culture]}`),
-          h('small', { class: 'muted' }, def.blurb ?? (near.size ? `Neighbours: ${[...near].slice(0, 5).map(o => preview.nations[o].name).join(', ')}.` : 'No neighbours by land.')))),
+          h('small', { class: 'muted' }, (pickYear === 1451 ? def.blurb : undefined) ?? (near.size ? `Neighbours: ${[...near].slice(0, 5).map(o => preview.nations[o].name).join(', ')}.` : 'No neighbours by land.')))),
       h('label', { class: 'tutopt' }, h('input', { type: 'checkbox', id: 'tutcheck', checked: wantTutorial ? true : undefined, onchange: (e: Event) => { wantTutorial = (e.target as HTMLInputElement).checked; } }), 'Show me how to play'),
-      h('button', { class: 'btn primary', onclick: () => chooseNation(id) }, `Play as ${n.name}`));
+      h('button', { class: 'btn primary', onclick: () => chooseNation(id, pickYear) }, `Play as ${n.name} in ${pickYear}`));
   };
   mv.onSelect = pid => { if (pid) { const o = preview.provinces[pid].owner; if (o === NO_STATE) { mv.select(null); toast('Unclaimed land: no state to play here', 'bad'); } else select(o); } };
   mv.render(preview);
   select(initial);
-  requestAnimationFrame(() => mv.focus(provsOf(preview, 'castile').concat(provsOf(preview, 'ottomans')).map(p => p.id), 40));
+  requestAnimationFrame(() => mv.focus(provsOf(preview, initial!).map(p => p.id), 60));
 }
 
 function showTitle() {
@@ -318,7 +333,7 @@ function showTitle() {
   const root = clear($('#app'));
   root.append(h('div', { class: 'title-screen' },
     h('div', { class: 'title-inner' },
-      h('p', { class: 'eyebrow' }, 'Anno Domini 1451 – 1750'),
+      h('p', { class: 'eyebrow' }, 'Anno Domini 1451 – 1810'),
       h('h1', { class: 'title' }, 'Lasting Empires'),
       h('p', { class: 'lede' }, 'Every action is a card. Gather Military, Diplomacy, Internal, Economy and Research cards each year, then send your people on missions. One turn is one year.'),
       SLOTS.some(n => loadSlot(n)) || pendingNation ? h('h2', { class: 'pick-h' }, 'Campaigns') : null,

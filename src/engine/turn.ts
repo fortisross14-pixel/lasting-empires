@@ -13,7 +13,7 @@ import { yearlyViceroys, quarterlyUnrest } from './realm';
 import { eraOfYear } from '../data/eras';
 import type { GameState, Nation, Ruler, RevealItem, Heir, Character } from '../types';
 import { CATS } from '../types';
-import { NATIONS, START_REL, RULERS, RULER_NAMES, RULER_ARCHS, archFromTraits, NO_STATE } from '../data/nations';
+import { NATIONS, START_REL, RULERS, RULER_NAMES, RULER_ARCHS, archFromTraits, NO_STATE, ARMIES } from '../data/nations';
 import { getGeo } from './map';
 import { BUILDINGS } from '../data/techs';
 import { TROOPS } from '../data/troops';
@@ -26,6 +26,8 @@ import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS, trimHand } from
 import { advanceMissions, MISSION_INFO, quarterlyReturns } from './missions';
 import { runAI, PRESTIGE_FADE } from './ai';
 import { quarterlyRevolution } from './government';
+import { applyStart, setupLaterPlayer, laterNation, LATER_DEFS } from './starts';
+import { STARTS } from '../data/starts';
 import { yearlyGoals, scenarioFrom } from './goals';
 import { rollEvents, EVENT } from './events';
 import { AMBITIONS, ambitionOptions } from './drafts';
@@ -52,9 +54,11 @@ function histRuler(nation: string, year: number) {
 
 /** Starting ruler for any nation (AI rulers are flavour only). */
 function initialRuler(s: GameState, nation: string): Ruler {
-  const h = histRuler(nation, START_YEAR);
+  const later = STARTS[s.year]?.rulers[nation];
+  if (later && s.year === s.startYear) return { name: later[0], traits: [], arch: 'balanced', skill: 3, from: s.year - 5, to: later[1] };
+  const h = histRuler(nation, s.year);
   if (h) return { name: h.name, traits: [...h.traits], arch: archFromTraits(h.traits), skill: h.traits.some(t => ['Weak', 'Idle', 'Unstable'].includes(t)) ? 1 : 3, from: h.from, to: h.to };
-  return { name: genRulerName(s, nation), traits: [], arch: pick(s, Object.keys(RULER_ARCHS)), skill: randInt(s, 2, 4), from: START_YEAR, to: START_YEAR + randInt(s, 8, 30) };
+  return { name: genRulerName(s, nation), traits: [], arch: pick(s, Object.keys(RULER_ARCHS)), skill: randInt(s, 2, 4), from: s.year, to: s.year + randInt(s, 8, 30) };
 }
 
 /** Three heirs with different talents. The historical one, if any, is first. */
@@ -117,16 +121,17 @@ const START_WARS: Record<string, string> = {
 };
 
 /** A mission-mode game: the realm, its goals and deadline; no personal ambition on top. */
-export function newMissionGame(nationId: string, mission: string | import('../types').Scenario): GameState {
-  const s = newGame(nationId);
+export function newMissionGame(nationId: string, mission: string | import('../types').Scenario, startYear = START_YEAR): GameState {
+  const s = newGame(nationId, undefined, startYear);
   s.scenario = typeof mission === 'string' ? scenarioFrom(mission) : mission;
   s.queue = s.queue.filter(q => !(q.kind === 'draft' && q.draft === 'ambition'));
   return s;
 }
 
-export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)): GameState {
+export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9), startYear = START_YEAR): GameState {
+  const later = STARTS[startYear];
   const s: GameState = {
-    version: SAVE_VERSION, seed, rng: seed, nextUid: 1, year: START_YEAR, quarter: 0, startYear: START_YEAR, endYear: 1750, player: nationId,
+    version: SAVE_VERSION, seed, rng: seed, nextUid: 1, year: later ? startYear : START_YEAR, quarter: 0, startYear: later ? startYear : START_YEAR, endYear: later?.end ?? 1750, player: nationId,
     nations: {}, provinces: {}, rel: {}, treaties: [], wars: [], truces: [], hand: [],
     cardAccum: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0, culture: 0 },
     bought: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0, culture: 0 },
@@ -145,11 +150,19 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
     s.nations[d.id] = n;
     if (d.native) { n.alive = false; n.army = []; n.fleet = []; } // stateless lands: never act
   }
+  // realms born after 1451 exist only in the later starts
+  if (later) for (const d of LATER_DEFS) if (!s.nations[d.id]) {
+    const n = { ...laterNation(d, ARMIES, startYear), ruler: { name: '', traits: [], arch: 'balanced', skill: 2, from: s.year, to: s.year } } as Nation;
+    n.army = d.id === nationId ? [] : n.army.map(t => ({ ...t, uid: s.nextUid++ }));
+    s.nations[d.id] = n;
+  }
   const geo = getGeo();
   for (const { id, name, owner, dev, fort, lon, lat, good } of geo.seeds) {
     s.provinces[id] = { id, name, owner, core: owner, dev, fort, buildings: [], land: geo.land[id], lon, lat, control: 80, good, settlement: initialSettlement(dev, NATIONS.some(n => n.capital === id)), grades: {}, culture: undefined as unknown as string, religion: undefined as unknown as string };
   }
+  if (later) { initSociety(s); applyStart(s, startYear); }
   for (const n of Object.values(s.nations)) if (n.id !== nationId) n.ruler = initialRuler(s, n.id);
+  if (!later) {
   for (const [a, b, v] of START_REL) addRel(s, a, b, v);
   addTreaty(s, 'aragon', 'naples', 'alliance');
   addTreaty(s, 'castile', 'france', 'alliance');
@@ -166,14 +179,15 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   addTreaty(s, 'ming', 'korea', 'alliance');
   declareWar(s, 'england', 'france');     // the last years of the Hundred Years' War
   if (nationId === 'castile') declareWar(s, 'castile', 'granada'); // the frontier war of the Reconquista simmers on
+  }
 
   const me = player(s);
-  const def = NATIONS.find(d => d.id === nationId)!;
+  const def = NATIONS.find(d => d.id === nationId) ?? { army: laterNation(LATER_DEFS.find(d => d.id === nationId)!, ARMIES, startYear).army.map(t => t.type) };
   me.manpower = 5;
   s.troops = def.army.map(type => ({ uid: uid(s), type, vet: 0, str: 100 }));
   s.fleet = (START_FLEETS[nationId] ?? []).map(type => ({ uid: uid(s), type, vet: 0, str: 100 }));
-  initSociety(s);
-  s.stateReligion = s.provinces[me.capital]?.religion ?? 'catholic'; // the crown shares the faith of its capital
+  if (!later) initSociety(s);
+  s.stateReligion = LATER_DEFS.find(d => d.id === nationId)?.religion ?? s.provinces[me.capital]?.religion ?? 'catholic'; // the crown shares the faith of its capital
   initKnownWorld(s);
   s.flags.start_provs = provsOf(s, nationId).length;
   for (const n of Object.values(s.nations)) s.flags['dev0_' + n.id] = provsOf(s, n.id).reduce((a, p) => a + p.dev, 0);
@@ -185,18 +199,19 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
     genCharacter(s, 'researcher', me.culture, 1),
     genCharacter(s, 'courtier', me.culture, 1),
   ];
-  if (nationId === 'portugal' && !s.usedLegends.includes('henry')) {
+  if (nationId === 'portugal' && !later && !s.usedLegends.includes('henry')) {
     s.usedLegends.push('henry');
     s.characters.push({ uid: uid(s), name: 'Henrique, the Navigator', role: 'researcher', skill: 6, traits: ['scholar', 'polymath'], born: 1394, dies: 1460, rarity: 'legendary', xp: 0, legendId: 'henry' });
   }
   const r = initialRuler(s, nationId);
-  me.ruler = { name: '', traits: [], arch: 'balanced', skill: 1, from: START_YEAR, to: START_YEAR };
-  setRuler(s, { name: r.name, arch: r.arch, skill: r.skill, reign: r.to - START_YEAR, historical: true, traits: r.traits });
+  me.ruler = { name: '', traits: [], arch: 'balanced', skill: 1, from: s.year, to: s.year };
+  setRuler(s, { name: r.name, arch: r.arch, skill: r.skill, reign: Math.max(3, r.to - s.year), historical: true, traits: r.traits });
   s.stats.kings = [];
   me.ruler.from = r.from;
   for (const c of CATS) { drawCat(s, c); drawCat(s, c); }
   addCard(s, 'eq_plate');
   addCard(s, 'peace_envoy', true);
+  if (later) setupLaterPlayer(s, startYear);
   settleArmies(s);
   s.stock = startStock(s);
   // wars you inherit on the first day: say so plainly
@@ -204,7 +219,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   if (foes.length) push(s, { kind: 'reveal', alarm: true, title: 'You are at war', subtitle: `Your crown inherits ${foes.length > 1 ? 'these wars' : 'this war'}`, items: foes.map(f => ({ title: `At war with ${s.nations[f].name}`, text: START_WARS[`${nationId}:${f}`] ?? `${s.nations[f].name} is your enemy. Its troops may attack your border provinces: keep garrisons ready. Use March Orders to strike, or a Peace Envoy to end it.`, tone: 'bad' as const, kind: 'sword' })) });
   push(s, { kind: 'draft', draft: 'ambition', options: ambitionOptions(s) });
   rollEvents(s);
-  log(s, `${me.ruler.name} rules ${me.name}. It is the spring of ${START_YEAR}.`);
+  log(s, `${me.ruler.name} rules ${me.name}. It is the spring of ${s.year}.`);
   return s;
 }
 

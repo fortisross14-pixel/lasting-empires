@@ -169,7 +169,9 @@ function botTurn(s: GameState) {
 // MODE=reasonable|passive|greedy  SEEDS=n
 const MODE = process.env.MODE ?? 'reasonable';
 const SEEDS = Number(process.env.SEEDS ?? 4);
-const CHECK = MODE === 'big' ? [1455, 1460, 1470, 1480, 1500, 1513] : [1500, 1550, 1600, 1650, 1700, 1750];
+const START_Y = Number(process.env.START ?? 1451);
+const CHECK = MODE === 'big' ? [1455, 1460, 1470, 1480, 1500, 1513] : START_Y === 1700 ? [1720, 1740, 1760, 1780, 1800, 1810] : START_Y === 1600 ? [1620, 1650, 1680, 1710, 1740, 1780] : [1500, 1550, 1600, 1650, 1700, 1750];
+const END_Y = START_Y === 1700 ? 1810 : START_Y === 1600 ? 1780 : 1750;
 type Row = Record<string, number>;
 const rows: Record<number, Row[]> = {};
 const finals: Row[] = [];
@@ -192,7 +194,8 @@ function greedyExtra(s: GameState) {
 }
 const PICK = process.env.NATIONS === 'all' ? NATIONS.filter(d => !d.native).map(d => d.id) : process.env.NATIONS ? process.env.NATIONS.split(',') : ['castile', 'portugal', 'aragon'];
 for (const n of (MODE === 'big' ? ['castile'] : PICK)) for (let seed = 1; seed <= SEEDS; seed++) {
-  const s = process.env.MISSION ? newMissionGame(n, process.env.MISSION) : newGame(n, seed * 7919 + (MODE === 'passive' ? 1 : MODE === 'greedy' ? 2 : 0));
+  const START = Number(process.env.START ?? 1451);
+  const s = process.env.MISSION ? newMissionGame(n, process.env.MISSION, START) : newGame(n, seed * 7919 + (MODE === 'passive' ? 1 : MODE === 'greedy' ? 2 : 0), START);
   if (MODE === 'big') { for (const id of ['granada', 'malaga', 'almeria', 'porto', 'lisbon', 'evora', 'faro', 'coimbra', 'pamplona', 'zaragoza', 'barcelona', 'valencia', 'tangier', 'fez', 'oran', 'tlemcen']) { const prov = s.provinces[id]; const from = prov.owner; prov.owner = n; if (!Object.values(s.provinces).some(x => x.owner === from)) s.nations[from].alive = false; } s.wars = s.wars.filter(w => s.nations[w.a].alive && s.nations[w.b].alive); for (let i = 0; i < 8; i++) s.troops.push({ uid: 50000 + i, type: 'pikemen', vet: 1, str: 100 }); }
   resolveQueue(s);
   let turns = 0;
@@ -225,7 +228,7 @@ const med = (a: Row[], k: string) => { const v = a.map(r => r[k]).sort((x, y) =>
 console.log(`MODE ${MODE}, ${finals.length} campaigns`);
 console.log('year  n  gold(med) income gross  costs provs stab happy hand troops rank');
 for (const y of CHECK) { const a = rows[y] ?? []; if (!a.length) continue; console.log(String(y).padEnd(5), String(a.length).padStart(2), String(Math.round(med(a, 'gold'))).padStart(8), avg(a, 'inc').toFixed(0).padStart(6), avg(a, 'gross').toFixed(0).padStart(5), avg(a, 'upk').toFixed(0).padStart(6), avg(a, 'provs').toFixed(1).padStart(5), avg(a, 'stab').toFixed(1).padStart(4), avg(a, 'happy').toFixed(0).padStart(5), avg(a, 'hand').toFixed(0).padStart(4), avg(a, 'troops').toFixed(0).padStart(6), avg(a, 'rank').toFixed(1).padStart(4)); }
-const survived = finals.filter(f => f.year > 1750 && f.provs > 0).length;
-console.log(`survived ${survived}/${finals.length} · top3 ${finals.filter(f => f.year > 1750 && f.rank >= 1 && f.rank <= 3).length} · wins(#1) ${finals.filter(f => f.year > 1750 && f.rank === 1).length}`);
+const survived = finals.filter(f => f.year > END_Y && f.provs > 0).length;
+console.log(`survived ${survived}/${finals.length} · top3 ${finals.filter(f => f.year > END_Y && f.rank >= 1 && f.rank <= 3).length} · wins(#1) ${finals.filter(f => f.year > END_Y && f.rank === 1).length}`);
 if (process.env.LIST) for (const f of finals) console.log('  final', f.nation ?? '', f.provs, f.rank);
 if (process.env.ROWS) console.log(JSON.stringify(rows[1750]));

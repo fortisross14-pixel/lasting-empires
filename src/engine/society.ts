@@ -125,7 +125,7 @@ export function happinessOf(s: GameState, p: Province): { value: number; parts: 
     if (ageId(s) === 'reformation') v -= 4;
     parts.push({ label: `${RELIGION_NAMES[p.religion] ?? p.religion} minority`, v });
   }
-  parts.push(isAccepted(s, p.culture) ? { label: `${CULTURE_NAMES[p.culture] ?? p.culture} culture`, v: 5 } : { label: `Foreign culture (${CULTURE_NAMES[p.culture] ?? p.culture})`, v: -12 });
+  parts.push(isAccepted(s, p.culture) ? { label: `${CULTURE_NAMES[p.culture] ?? p.culture} culture`, v: 5 } : { label: `Foreign culture (${CULTURE_NAMES[p.culture] ?? p.culture})`, v: ageId(s) === 'revolutions' ? -15 : -12 });
   const art = Math.round(s.art * 0.15);
   if (art) parts.push({ label: 'Learning', v: art });
   if (p.owner === s.player) {

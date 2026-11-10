@@ -3,7 +3,7 @@
 // Take their capital and the new government stands; lose your own capital first, or run out of time, and it fails.
 import type { GameState, TroopCard } from '../types';
 import { GOVS } from '../data/governments';
-import { player, provsOf, uid, push, log, clamp, rand, declareWar, makePeace, enemiesOf, govOf, hasTech } from './core';
+import { player, provsOf, uid, push, log, clamp, rand, declareWar, makePeace, enemiesOf, govOf, hasTech, ageId } from './core';
 import { createNation } from './realm';
 import { getGeo } from './map';
 import { CARDS } from './cards';
@@ -66,7 +66,7 @@ export function startRevolution(s: GameState, to: string): string | null {
   s.revolution = { to, from, rebel: n.id, rebelCapital: capital, myCapital: me.capital, since: s.year };
   declareWar(s, n.id, s.player);
   s.hand.push({ uid: uid(s), card: 'march_orders' }); // a third set of orders for the decisive march
-  me.stability = clamp(me.stability - 1, -3, 3);
+  if (ageId(s) !== 'revolutions') me.stability = clamp(me.stability - 1, -3, 3); // in the Age of Revolutions the people expect it
   push(s, { kind: 'reveal', alarm: true, title: 'Revolution!', subtitle: `Towards ${GOVS[to].name}`, items: [
     { title: `The ${n.name} rise`, text: `${lands.length} province${lands.length > 1 ? 's' : ''} rise${lands.length > 1 ? '' : 's'} for the old order with ${n.army.length} companies${turncoats.length ? `, ${turncoats.length} of them your own troops who changed sides` : ''}.`, tone: 'bad', kind: 'torch' },
     { title: 'To win', text: `Take their capital, ${cap.name}, or destroy every company they have. The rest of their land then returns to you and your new government stands.`, tone: 'good', kind: 'crown' },

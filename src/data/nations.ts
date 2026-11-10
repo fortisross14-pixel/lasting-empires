@@ -168,7 +168,7 @@ badakhshan;Badakhshan;Badakhshani;#8a6fb5;persian;muslim;badakhshan;cautious;20;
 sistan;Sistan;Sistani;#c99a5b;persian;muslim;sistan;cautious;20;S
 `;
 
-const ARMIES: Record<string, string[]> = {
+export const ARMIES: Record<string, string[]> = {
   S: ['levy', 'levy', 'crossbow'],
   M: ['levy', 'levy', 'crossbow', 'men_at_arms'],
   L: ['levy', 'levy', 'levy', 'crossbow', 'men_at_arms', 'knights'],

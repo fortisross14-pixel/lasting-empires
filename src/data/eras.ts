@@ -36,11 +36,16 @@ export const ERAS: EraDef[] = [
     ai: { from: 1695, chance: 0.08, pioneers: ['england', 'france', 'burgundy', 'brandenburg', 'austria', 'sweden'] },
     text: 'Reason, science and salons. Even kings must now explain themselves.',
     effects: ['+0.3 Research cards a year', 'The arts grow 50% faster'], rates: { research: 0.3 } },
+  { id: 'revolutions', name: 'Age of Revolutions', icon: 'torch', focus: 'internal',
+    opens: { tech: 'rights_of_man', how: 'The first realm to research the Rights of Man opens it.' },
+    ai: { from: 1775, chance: 0.08, pioneers: ['thirteen_colonies', 'france', 'england', 'netherlands'] },
+    text: 'Citizens, not subjects. Crowns fall, republics rise, and whole nations take up arms.',
+    effects: ['Revolutions cost 1 stability less to start', '+0.3 Internal cards a year', 'Provinces of another culture are 3 less happy'], rates: { internal: 0.3 } },
 ];
 
 export const ERA: Record<string, EraDef> = Object.fromEntries(ERAS.map(e => [e.id, e]));
 /** Which age a year would be in historically: used only to migrate old saves. */
-export const eraOfYear = (year: number): EraDef => ERAS[year >= 1700 ? 4 : year >= 1600 ? 3 : year >= 1517 ? 2 : year >= 1492 ? 1 : 0];
+export const eraOfYear = (year: number): EraDef => ERAS[year >= 1776 ? 5 : year >= 1700 ? 4 : year >= 1600 ? 3 : year >= 1517 ? 2 : year >= 1492 ? 1 : 0];
 /** Research that opens an age, by tech id. */
 export const AGE_TECH: Record<string, string> = Object.fromEntries(ERAS.filter(e => e.opens?.tech).map(e => [e.opens!.tech!, e.id]));
 /** Bonus for the realm that opens an age. */

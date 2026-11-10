@@ -39,6 +39,43 @@ export const MISSIONS: MissionDef[] = [
   { id: 'fifth_sun', name: 'The Fifth Sun', icon: 'star', start: 1451, deadline: 1600, nations: ['aztec', 'inca'],
     text: 'Strangers will come from the sea. Learn fast, and still rule from your own capital in 1600.',
     goals: [{ k: 'capital' }, { k: 'techs', n: 12 }] },
+
+  // ---------- 1600 ----------
+  { id: 'dutch_golden_age', name: 'The Dutch Golden Age', icon: 'coin', start: 1600, deadline: 1650, nations: ['netherlands'],
+    text: 'Win your freedom from Spain, then make Amsterdam the warehouse of the world.',
+    goals: [{ k: 'independent' }, { k: 'income', top: 3 }, { k: 'posts', n: 4 }, { k: 'colonies', n: 2 }] },
+  { id: 'lion_north', name: 'Lion of the North', icon: 'crown', start: 1600, deadline: 1660, nations: ['sweden'],
+    text: 'Turn the Baltic into a Swedish lake and stand among the great powers.',
+    goals: [{ k: 'own', provinces: ['riga', 'reval', 'ingria', 'stettin', 'scania'], label: 'The Baltic shores: Riga, Reval, Ingria, Stettin and Scania' }, { k: 'army', top: 5 }] },
+  { id: 'akbar', name: "Akbar's Empire", icon: 'star', start: 1600, deadline: 1660, nations: ['mughals'],
+    text: 'Bring the whole of Hindustan, from the Indus to the Deccan, under the Peacock Throne.',
+    goals: [{ k: 'provinces', n: 75 }, { k: 'rank', top: 3 }] },
+  { id: 'rule_waves', name: 'Rule the Waves', icon: 'anchor', start: 1600, deadline: 1700, nations: ['england'],
+    text: 'Beat the Armada\'s heirs at sea and plant colonies on every ocean.',
+    goals: [{ k: 'navy', top: 1 }, { k: 'colonies', n: 8 }] },
+  { id: 'long_war', name: 'The Long Turkish War', icon: 'sword', start: 1600, deadline: 1700, nations: ['austria'],
+    text: 'Drive the Turk out of Hungary and down the Danube.',
+    goals: [{ k: 'own', provinces: ['buda', 'belgrade'] }, { k: 'techs', n: 45 }] },
+
+  // ---------- 1700 ----------
+  { id: 'liberte', name: 'Liberté', icon: 'torch', start: 1700, deadline: 1795, nations: ['france'],
+    text: 'Make France the most learned nation on earth, then let the people overthrow the old order.',
+    goals: [{ k: 'techs', n: 66 }, { k: 'gov', gov: 'republic' }] },
+  { id: 'thirteen', name: 'Join or Die', icon: 'banner', start: 1700, deadline: 1810, nations: ['thirteen_colonies'],
+    text: 'Break free of the English crown and become one of the great military powers.',
+    goals: [{ k: 'independent' }, { k: 'army', top: 10 }, { k: 'provinces', n: 12 }] },
+  { id: 'prussia_rise', name: 'An Army with a State', icon: 'helm', start: 1700, deadline: 1760, nations: ['brandenburg'],
+    text: 'From a scattered electorate to a great power: drill, discipline and Silesia.',
+    goals: [{ k: 'army', top: 5 }, { k: 'provinces', n: 15 }] },
+  { id: 'peter', name: 'A Window on the West', icon: 'ship', start: 1700, deadline: 1730, nations: ['muscovy'],
+    text: 'Take a port on the Baltic, build a fleet and catch up with the West.',
+    goals: [{ k: 'own', provinces: ['ingria', 'reval', 'riga'], label: 'The Baltic ports: Ingria, Reval and Riga' }, { k: 'navy', top: 5 }, { k: 'techs', n: 55 }] },
+  { id: 'maratha_rise', name: 'Hindavi Swarajya', icon: 'sword', start: 1700, deadline: 1770, nations: ['marathas'],
+    text: 'Drive the Mughals from the Deccan and raise the saffron flag over Delhi.',
+    goals: [{ k: 'own', provinces: ['delhi', 'agra'] }, { k: 'provinces', n: 25 }] },
+  { id: 'kangxi', name: 'The High Qing', icon: 'crown', start: 1700, deadline: 1780, nations: ['qing'],
+    text: 'Rule the largest and richest realm under Heaven for a century of peace.',
+    goals: [{ k: 'rank', top: 1 }, { k: 'provinces', n: 90 }, { k: 'income', top: 1 }] },
 ];
 export const MISSION: Record<string, MissionDef> = Object.fromEntries(MISSIONS.map(m => [m.id, m]));
 

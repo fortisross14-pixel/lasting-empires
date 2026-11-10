@@ -111,7 +111,24 @@ export const TECHS: TechDef[] = [
   { id: 'encyclopaedia', name: 'Encyclopaedia', track: 'state', age: 4, year: 1735, cost: 68, req: ['scientific_method'], desc: 'All knowledge in one work: +2 research a year for every scholar, +0.2 People cards.', fx: { research: 2, rates: { culture: 0.2 } } },
   { id: 'cameralism', name: 'Cameralism', track: 'state', age: 4, year: 1720, cost: 64, req: ['intendants'], desc: 'The science of government: +5% income, +1 nation point a year.', fx: { income: 0.05, np: 1 } },
   { id: 'tolerance_edict', name: 'Edict of Tolerance', track: 'state', age: 4, year: 1740, cost: 68, desc: 'Every faith may worship: +4 happiness everywhere.', fx: { happy: 4 } },
+  { id: 'rights_of_man', name: 'Rights of Man', track: 'state', age: 4, year: 1760, cost: 72, req: ['encyclopaedia'], desc: 'Every citizen has rights the crown must respect: +3 happiness everywhere. The first realm to learn it opens the Age of Revolutions.', fx: { happy: 3 } },
   { id: 'public_schools', name: 'Public Schools', track: 'state', age: 4, year: 1745, cost: 72, req: ['enlightened'], desc: 'Schools in every parish: +1 stability, +0.2 Internal and Research cards.', fx: { stability: 1, rates: { internal: 0.2, research: 0.2 } } },
+
+  // ---------- Age of Revolutions ----------
+  { id: 'levee_en_masse', name: 'Levée en Masse', track: 'military', age: 5, year: 1793, cost: 80, req: ['general_staff'], desc: 'The whole nation in arms: +4 army size, +2 manpower a year.', fx: { army: 4, manpower: 2 } },
+  { id: 'divisions', name: 'Army Divisions', track: 'military', age: 5, year: 1795, cost: 82, req: ['general_staff'], desc: 'Self-contained divisions march apart and fight together: +10% battle strength.', fx: { battle: 0.1 } },
+  { id: 'horse_artillery', name: 'Horse Artillery', track: 'military', age: 5, year: 1790, cost: 78, req: ['standard_artillery'], desc: 'Guns that gallop with the cavalry: +5% battle strength, troop upkeep −5%.', fx: { battle: 0.05, upkeep: 0.05 } },
+  { id: 'copper_hulls', name: 'Copper-Sheathed Hulls', track: 'military', age: 5, year: 1780, cost: 76, req: ['naval_reform'], desc: 'Faster ships that stay at sea for years: +2 navy size.', fx: { navy: 2 } },
+
+  { id: 'spinning_jenny', name: 'Spinning Jenny', track: 'economy', age: 5, year: 1770, cost: 78, req: ['steam_pump'], desc: 'Cloth by machine: +10% income.', fx: { income: 0.1 } },
+  { id: 'steam_engine', name: 'Watt Steam Engine', track: 'economy', age: 5, year: 1776, cost: 84, req: ['steam_pump'], desc: 'Power for mills and mines: +10% income, buildings 10% cheaper.', fx: { income: 0.1, build: 0.1 } },
+  { id: 'national_bank', name: 'National Debt', track: 'economy', age: 5, year: 1780, cost: 76, req: ['central_bank'], desc: 'Borrow from your own citizens: +5% income, +1 trade route.', fx: { income: 0.05, routes: 1 } },
+  { id: 'turnpikes', name: 'Turnpikes', track: 'economy', age: 5, year: 1785, cost: 74, req: ['canals'], desc: 'Paved toll roads: +2 control a year everywhere, +0.2 Economy cards.', fx: { control: 2, rates: { economy: 0.2 } } },
+
+  { id: 'constitution', name: 'Written Constitution', track: 'state', age: 5, year: 1787, cost: 80, req: ['rights_of_man'], desc: 'The law above the ruler: +1 stability, +4 happiness everywhere.', fx: { stability: 1, happy: 4 } },
+  { id: 'nationalism', name: 'Nationalism', track: 'state', age: 5, year: 1795, cost: 82, req: ['rights_of_man'], desc: 'One people, one nation: +2 manpower a year, +2 happiness, +0.2 Military cards.', fx: { manpower: 2, happy: 2, rates: { military: 0.2 } } },
+  { id: 'meritocracy', name: 'Civil Service Exams', track: 'state', age: 5, year: 1790, cost: 78, req: ['cameralism'], desc: 'Offices go to the able, not the well-born: +1 nation point a year, +1 research per scholar.', fx: { np: 1, research: 1 } },
+  { id: 'metric_system', name: 'Metric System', track: 'state', age: 5, year: 1799, cost: 76, desc: 'One measure for all: +5% income, +0.2 Research cards.', fx: { income: 0.05, rates: { research: 0.2 } } },
 ];
 
 export const TECH: Record<string, TechDef> = Object.fromEntries(TECHS.map(t => [t.id, t]));
@@ -154,4 +171,4 @@ export const BUILDINGS: Record<string, BuildingDef> = {
 /** Card-rate bonuses from research. */
 export const TECH_RATES: Record<string, Rates> = Object.fromEntries(TECHS.filter(t => t.fx?.rates).map(t => [t.id, t.fx!.rates!]));
 
-export const AGE_NAMES = ['Crusade', 'Discovery', 'Reformation', 'Absolutism', 'Enlightenment'];
+export const AGE_NAMES = ['Crusade', 'Discovery', 'Reformation', 'Absolutism', 'Enlightenment', 'Revolutions'];
