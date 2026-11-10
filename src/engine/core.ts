@@ -112,6 +112,11 @@ export function makePeace(s: GameState, a: string, b: string) {
   s.truces.push({ a, b, until: s.year + 10 });
   // the peace confirms what was taken
   for (const p of Object.values(s.provinces)) if (p.occupiedFrom && [a, b].includes(p.occupiedFrom) && [a, b].includes(p.owner)) delete p.occupiedFrom;
+  // the last war over: the army stands down and keeps two sets of orders
+  if ((a === s.player || b === s.player) && !s.wars.some(w => w.a === s.player || w.b === s.player)) {
+    const orders = s.hand.filter(h => h.card === 'march_orders');
+    if (orders.length > 2) { const drop = new Set(orders.slice(2).map(h => h.uid)); s.hand = s.hand.filter(h => !drop.has(h.uid)); log(s, `Peace: the army stands down (${drop.size} March Orders returned).`, 'neutral'); }
+  }
 }
 
 export function borders(s: GameState, a: string, b: string): boolean {

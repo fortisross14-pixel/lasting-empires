@@ -73,7 +73,7 @@ for (const e of Object.values(EQUIPMENT)) {
     weight: s => (techOk(s, e.tech) ? (e.id === 'banner' ? 0.6 : e.tech ? 1.8 : 1.2) : 0) });
 }
 add({ id: 'hire_general', name: 'Recruit a General', cat: 'military', kind: 'hire', role: 'general', icon: 'helm', text: 'Meet three captains, keep one. Costs 1 manpower.', weight: () => 1.1 });
-add({ id: 'march_orders', name: 'March Orders', cat: 'military', kind: 'mission', missions: ['conquer', 'raid', 'base'], icon: 'sword', text: 'Send a general and troops to conquer or raid an enemy province within a quarter\'s march, or to set up an invasion base near a far one.', weight: () => 2.6 });
+add({ id: 'march_orders', name: 'March Orders', cat: 'military', kind: 'mission', missions: ['conquer', 'raid', 'base'], icon: 'sword', text: 'Send a general and troops to conquer or raid an enemy province within a quarter\'s march, or to set up an invasion base near a far one.', weight: s => (s.wars.some(w => w.a === s.player || w.b === s.player) ? 0.6 : 0.2) });
 add({ id: 'forced_march', name: 'Forced March', cat: 'military', kind: 'instant', target: 'mission', icon: 'boot', text: 'A mission takes 1 year less (minimum 1).', weight: () => 0.9,
   targetOk: (s, t) => { const m = s.missions.find(x => String(x.id) === t); return !!m && m.turnsLeft > 1 && m.kind !== 'research'; },
   play: (s, t) => { s.missions.find(x => String(x.id) === t)!.turnsLeft--; return 'The mission speeds up'; } });
