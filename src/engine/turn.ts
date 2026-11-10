@@ -13,7 +13,7 @@ import { yearlyViceroys, quarterlyUnrest } from './realm';
 import { eraOfYear } from '../data/eras';
 import type { GameState, Nation, Ruler, RevealItem, Heir, Character } from '../types';
 import { CATS } from '../types';
-import { NATIONS, START_REL, RULERS, RULER_NAMES, RULER_ARCHS, archFromTraits } from '../data/nations';
+import { NATIONS, START_REL, RULERS, RULER_NAMES, RULER_ARCHS, archFromTraits, NO_STATE } from '../data/nations';
 import { getGeo } from './map';
 import { BUILDINGS } from '../data/techs';
 import { TROOPS } from '../data/troops';
@@ -455,11 +455,30 @@ export function dropCore(s: GameState, id: string): string | null {
   return null;
 }
 
+/** The map grew: provinces added since a save was made join the game. Each goes to its 1451 owner if that crown
+ *  still stands, otherwise to whoever holds most of its neighbours, otherwise to no state. */
+function addNewProvinces(s: GameState) {
+  const geo = getGeo();
+  const missing = geo.seeds.filter(x => !s.provinces[x.id]);
+  if (!missing.length) return;
+  for (const { id, name, owner, dev, fort, lon, lat, good } of missing) {
+    let o = s.nations[owner]?.alive ? owner : '';
+    if (!o) {
+      const count: Record<string, number> = {};
+      for (const nb of geo.adj[id] ?? []) { const p = s.provinces[nb]; if (p) count[p.owner] = (count[p.owner] ?? 0) + 1; }
+      o = Object.entries(count).sort((a, b) => b[1] - a[1])[0]?.[0] ?? NO_STATE;
+    }
+    s.provinces[id] = { id, name, owner: o, core: o, dev, fort, buildings: [], land: geo.land[id], lon, lat, control: 70, good, settlement: initialSettlement(dev, false), grades: {}, culture: undefined as unknown as string, religion: undefined as unknown as string };
+  }
+  log(s, `The map grows: ${missing.length} new provinces.`, 'neutral');
+}
+
 /** Fill in fields added after a save was made. */
 export function migrate(s: GameState): GameState {
   s.core ??= []; s.coreChanged ??= -99; s.overseas ??= {}; s.imports ??= [];
   s.fleet ??= []; s.accepted ??= [];
   s.age ??= { id: eraOfYear(s.year).id, since: s.year };
+  addNewProvinces(s);
   settleArmies(s);
   for (const n of Object.values(s.nations)) n.fleet ??= [];
   initSociety(s);
