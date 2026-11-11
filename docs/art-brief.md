@@ -129,8 +129,6 @@ For each numbered item, make one image and save it with exactly the filename giv
 When a batch is finished: put its PNGs in a zip named `art-batch-N.zip` (N = batch number) with the filenames above, and give me the download link.
 
 ## Status
-Items 1–80 are in `art/` (sliced from two contact sheets, 256×256 webp, about 10 KB each). Items 81–102 are still to draw.
-
-### Prompt for the last batch
-> Same style as before: woodcut-style illustrations, bold black ink outlines, flat colours (crimson, blue, ochre, green) on aged parchment. One single image: a grid of 6 columns × 4 rows of square tiles with a thin white gap between them, no text, no borders. The tiles, left to right, top to bottom:
-> 1 a golden wheat harvest with sheaves and a cart · 2 a royal clerk counting villagers with a ledger · 3 a king's herald reading a pardon to kneeling peasants · 4 a king handing a gold chain to a courtier · 5 angry peasants arguing with a tax collector · 6 a patron commissioning a painter, coins on a table · 7 friars preaching to villagers under a cross · 8 a noble lady greeting townsfolk with gifts · 9 two peoples in different dress sharing bread at a table · 10 a bishop in mitre receiving an envoy before a cathedral · 11 a leader embracing a foreign elder before a crowd · 12 a noble placing a bag of gold on a church altar · 13 a town festival with banners, music and dancers · 14 a sealed charter of privileges held up before townsmen · 15 a preacher in a pulpit with an inspired congregation · 16 a golden reliquary glowing on an altar · 17 a scholar studying a cannon diagram and fortress plan · 18 a scholar with an abacus, coins and a ledger · 19 a scholar writing a treatise beside a crown and sceptre · 20 two scholars working together over one large book · 21 a wandering scholar with a staff and a satchel of books · 22 a scholar leaping up from his desk as light bursts from a book · 23 and 24 leave empty.
+All cards have art. 96 tiles in `art/` (256×256 webp, ~10 KB each), sliced from three ChatGPT sheets.
+The third sheet came back with its own subjects, so some cards share a painting: see `ALIAS` in `src/ui/art.ts`.
+To replace a shared painting later, add a tile named after the card (`card_<id>.webp`) to `art/` and its name to `ART`.
