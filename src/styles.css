@@ -1407,3 +1407,27 @@ ul.traits { margin: 0; padding-left: 18px; }
 .card.small .c-art.has-pic { margin: 3px 4px; }
 .card.dim .c-pic { filter: grayscale(.7); }
 .btn.armed { background: var(--wax) !important; color: #fffdf8 !important; border-color: var(--wax) !important; }
+
+/* Mission cards: compact, tap for the briefing */
+button.mcard { font: inherit; color: inherit; cursor: pointer; width: 100%; }
+.mcard .mc-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; }
+.mc-realms { display: flex; flex-wrap: wrap; gap: 4px 10px; flex: 1; min-width: 0; }
+.mc-realm { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; font-size: 14px; }
+.mc-realm .np-shield.sm, .md-play .np-shield.sm { width: 20px; height: 24px; flex: none; }
+.mc-state { font: 700 11px/1 var(--f-body); text-transform: uppercase; letter-spacing: .1em; color: var(--wax); flex: none; }
+.mcard.done .mc-state { color: var(--good); }
+.mcard.locked { opacity: .62; }
+.mcard.locked .mc-state { color: var(--muted); }
+.msec { margin-top: 6px; }
+.msec > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.msec > summary::-webkit-details-marker { display: none; }
+.msec > summary::before { content: '▸'; font-size: .8em; transition: rotate .15s; }
+.msec[open] > summary::before { rotate: 90deg; }
+.mdetail .md-body { display: flex; flex-direction: column; gap: 10px; max-width: 640px; padding: 0 16px 32px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+.md-meta { margin: 0; color: var(--muted); }
+.md-steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
+.md-steps small { display: block; color: var(--muted); }
+.md-lock { color: var(--wax); font-weight: 700; margin: 0; }
+.md-play { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.md-play .btn { min-height: 48px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+@media (prefers-reduced-motion: reduce) { .msec > summary::before { transition: none; } }

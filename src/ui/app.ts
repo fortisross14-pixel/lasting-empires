@@ -221,13 +221,47 @@ const goalTitle = (g: Goal, deadline: number) => goalView(previewState(), g, dea
 function missionCard(m: MissionDef) {
   const done = missionsDone()[m.id];
   const locked = !m.beginner && !realUnlocked();
-  return h('div', { class: 'mcard' + (m.wild ? ' wild' : '') + (done ? ' done' : '') + (m.beginner ? ' beginner' : '') + (locked ? ' locked' : '') },
-    h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon(done ? 'laurel' : m.icon, 24) }), h('div', {}, h('b', {}, m.name), h('small', {}, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`)), m.wild ? h('span', { class: 'mc-wild' }, 'Wild') : null),
-    done ? h('div', { class: 'mc-done' }, done.realm ? `✓ Completed with ${done.realm} in ${done.year}` : "✓ Completed") : null,
-    m.beginner ? h('div', { class: 'mc-learn' }, `Learn: ${m.beginner}`) : null,
-    h('p', { class: 'mc-t' }, m.text),
-    h('ul', { class: 'mc-g' }, m.goals.map(g => h('li', {}, goalTitle(g, m.deadline)))),
-    h('div', { class: 'mc-play' }, m.nations.map(n => { const nm = previewFor(m.start).nations[n]?.name ?? n; return h('button', { class: 'btn primary small' + (locked ? ' blocked' : ''), onclick: () => (locked ? toast(`Complete the ${BEGINNER().length} beginner missions first (${beginnersDone()}/${BEGINNER().length})`, 'bad') : startMission(n, m.id)) }, locked ? `Locked · ${nm}` : `Play ${nm}`); })));
+  const pv = previewFor(m.start);
+  return h('button', { type: 'button', class: 'mcard' + (m.wild ? ' wild' : '') + (done ? ' done' : '') + (m.beginner ? ' beginner' : '') + (locked ? ' locked' : ''), onclick: () => showMissionDetail(m) },
+    h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon(done ? 'laurel' : locked ? 'lock' : m.icon, 24) }), h('div', {}, h('b', {}, m.name), h('small', {}, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`)), m.wild ? h('span', { class: 'mc-wild' }, 'Wild') : null),
+    h('div', { class: 'mc-foot' },
+      h('span', { class: 'mc-realms' }, ...m.nations.map(n => { const nn = pv.nations[n]; return h('span', { class: 'mc-realm' }, nn ? shield(n, nn.color, true) : null, nn?.name ?? n); })),
+      h('span', { class: 'mc-state' }, done ? '✓ Done' : locked ? 'Locked' : 'Details ›')));
+}
+
+/** A mission's full briefing, with the button that starts it. */
+function showMissionDetail(m: MissionDef) {
+  const done = missionsDone()[m.id];
+  const locked = !m.beginner && !realUnlocked();
+  const pv = previewFor(m.start);
+  const root = clear($('#app'));
+  root.append(h('div', { class: 'missions-screen mdetail' },
+    h('header', { class: 'pick-top' }, h('button', { class: 'btn ghost small', onclick: () => showMissions() }, '← Missions'), h('h1', {}, m.name)),
+    h('div', { class: 'md-body' },
+      h('p', { class: 'md-meta' }, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`, m.wild ? ' · Wild' : m.beginner ? ' · Beginner' : ' · Historic'),
+      done ? h('div', { class: 'mc-done' }, done.realm ? `✓ Completed with ${done.realm} in ${done.year}` : '✓ Completed') : null,
+      m.beginner ? h('div', { class: 'mc-learn' }, `You learn: ${m.beginner}`) : null,
+      h('p', { class: 'mc-t' }, m.text),
+      h('h2', { class: 'mhead' }, m.steps?.length ? 'Steps, in order' : 'Goals'),
+      m.steps?.length
+        ? h('ol', { class: 'md-steps' }, m.steps.map(st => h('li', {}, h('b', {}, goalTitle(st.g, m.deadline)), h('small', {}, st.hint))))
+        : h('ul', { class: 'mc-g' }, m.goals.map(g => h('li', {}, goalTitle(g, m.deadline)))),
+      m.cards?.length || m.gold ? h('p', { class: 'muted' }, 'You start with: ', [m.cards?.length ? `${m.cards.length} extra card${m.cards.length > 1 ? 's' : ''}` : '', m.gold ? `${m.gold} ducats` : ''].filter(Boolean).join(' and ')) : null,
+      locked ? h('p', { class: 'md-lock' }, `Locked: complete the ${BEGINNER().length} beginner missions first (${beginnersDone()}/${BEGINNER().length}).`) : null,
+      h('div', { class: 'md-play' }, m.nations.map(n => { const nn = pv.nations[n];
+        return h('button', { class: 'btn primary' + (locked ? ' blocked' : ''), onclick: () => (locked ? toast(`Complete the ${BEGINNER().length} beginner missions first (${beginnersDone()}/${BEGINNER().length})`, 'bad') : startMission(n, m.id)) },
+          nn ? shield(n, nn.color, true) : null, ` ${done ? 'Play again as' : 'Start mission as'} ${nn?.name ?? n}`); })))));
+  window.scrollTo(0, 0);
+}
+
+/** Collapsible mission sections; the open/closed choice is remembered. */
+const FOLD_KEY = 'lasting-empires.mission-folds';
+function folds(): Record<string, boolean> { try { return JSON.parse(localStorage.getItem(FOLD_KEY) ?? '{}'); } catch { return {}; } }
+function section(key: string, title: string, openByDefault: boolean, ...kids: (HTMLElement | null)[]) {
+  const f = folds();
+  const d = h('details', { class: 'msec', ...((f[key] ?? openByDefault) ? { open: true } : {}) }, h('summary', { class: 'mhead' }, title), ...kids) as HTMLDetailsElement;
+  d.addEventListener('toggle', () => { const x = folds(); x[key] = d.open; try { localStorage.setItem(FOLD_KEY, JSON.stringify(x)); } catch { /* */ } });
+  return d;
 }
 
 let missionYear = 1451;
@@ -249,17 +283,18 @@ function showMissions() {
       const beg = of(m => !!m.beginner), real = of(m => !m.beginner && !m.wild), wild = of(m => !!m.wild);
       const lockNote = realUnlocked() ? null : h('p', { class: 'muted' }, `Locked until all ${BEGINNER().length} beginner missions are done (${beginnersDone()}/${BEGINNER().length}). Beginner missions are spread across the three starts.`);
       const out: HTMLElement[] = [];
-      if (beg.length) out.push(h('h2', { class: 'mhead' }, `Beginner · ${beg.filter(m => missionsDone()[m.id]).length}/${beg.length}`),
-        h('p', { class: 'muted' }, 'Short guided missions, each teaching one part of the game.'), h('div', { class: 'mgrid' }, ...beg.map(missionCard)));
-      out.push(h('h2', { class: 'mhead' }, `Historic${realUnlocked() ? '' : ' · locked'}`), ...(lockNote ? [lockNote] : []), h('div', { class: 'mgrid' }, ...real.map(missionCard)));
-      if (wild.length) out.push(h('h2', { class: 'mhead' }, `Wild${realUnlocked() ? '' : ' · locked'}`), h('p', { class: 'muted' }, 'Alternate history: the lunatic ones.'), h('div', { class: 'mgrid' }, ...wild.map(missionCard)));
-      out.push(h('h2', { class: 'mhead' }, 'Your own missions'), h('div', { class: 'mgrid' },
+      const begDone = beg.filter(m => missionsDone()[m.id]).length;
+      if (beg.length) out.push(section('beg', `Beginner · ${begDone}/${beg.length}`, begDone < beg.length,
+        h('p', { class: 'muted' }, 'Short guided missions, each teaching one part of the game.'), h('div', { class: 'mgrid' }, ...beg.map(missionCard))));
+      out.push(section('real', `Historic · ${real.filter(m => missionsDone()[m.id]).length}/${real.length}${realUnlocked() ? '' : ' · locked'}`, realUnlocked(), lockNote, h('div', { class: 'mgrid' }, ...real.map(missionCard))));
+      if (wild.length) out.push(section('wild', `Wild · ${wild.filter(m => missionsDone()[m.id]).length}/${wild.length}${realUnlocked() ? '' : ' · locked'}`, realUnlocked(), h('p', { class: 'muted' }, 'Alternate history: the lunatic ones.'), h('div', { class: 'mgrid' }, ...wild.map(missionCard))));
+      out.push(section('own', 'Your own missions', true, h('div', { class: 'mgrid' },
         h('button', { class: 'mcard mc-new', onclick: () => showBuilder() }, h('span', { class: 'mc-i', html: icon('plus', 28) }), h('b', {}, 'Create your own mission'), h('small', {}, 'Choose a realm, a deadline and up to 6 goals')),
         ...mine.filter(c => ((c as { start?: number }).start ?? 1451) === missionYear).map(c => h('div', { class: 'mcard mc-custom' },
           h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon('quill', 24) }), h('div', {}, h('b', {}, c.name), h('small', {}, `Your mission · ${(c as { start?: number }).start ?? 1451} – ${c.deadline}`))),
           h('ul', { class: 'mc-g' }, c.goals.map(g => h('li', {}, goalTitle(g, c.deadline)))),
           h('div', { class: 'mc-play' }, h('button', { class: 'btn primary small', onclick: () => startMission(c.nation, { ...c, status: 'active' }) }, `Play ${NATIONS.find(x => x.id === c.nation)?.name}`),
-            confirmBtn('Delete', 'Tap again to delete', () => { saveCustom(customMissions().filter(x => x.id !== c.id)); showMissions(); }))))));
+            confirmBtn('Delete', 'Tap again to delete', () => { saveCustom(customMissions().filter(x => x.id !== c.id)); showMissions(); })))))));
       return out;
     })(),
     unlockAll() ? null : h('p', { class: 'unlock-all' }, 'Already know the game? ', confirmBtn('Unlock everything', 'Tap again to unlock all', () => { try { localStorage.setItem(UNLOCK_KEY, '1'); } catch { /* */ } showMissions(); }))));

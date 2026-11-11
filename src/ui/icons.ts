@@ -56,6 +56,7 @@ const P: Record<string, string> = {
   mood: 'M3 12 a9 9 0 1 0 18 0 a9 9 0 1 0 -18 0 M8 14 C9.5 16.5 14.5 16.5 16 14 M9 9.5 h.01 M15 9.5 h.01',
   ship: 'M3 16 H21 L18 20 H6 Z M12 4 V16 M12 5 L18 13 H12 M12 7 L7 13 H12',
   close: 'M5 5 L19 19 M19 5 L5 19',
+  lock: 'M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5zM12 15v2',
   plus: 'M12 5 V19 M5 12 H19',
   merge: 'M6 3 V9 C6 13 12 13 12 17 V21 M18 3 V9 C18 13 12 13 12 17',
   map: 'M3 6 L9 3 L15 6 L21 3 V18 L15 21 L9 18 L3 21 Z M9 3 V18 M15 6 V21',

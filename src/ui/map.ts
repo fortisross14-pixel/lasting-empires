@@ -41,6 +41,21 @@ function wash(hex: string, k: number): string {
   return (WASH[key] = '#' + c.map(v => v.toString(16).padStart(2, '0')).join(''));
 }
 
+/** The coastline to ink. Skips edges that are not real coast: flat edges where the map data is cut off at the top,
+ *  and long closing jumps of outlines that were cut there. Filling still uses the full outline. */
+function coastLine(d: string): string {
+  let px = 0, py = 0, sx = 0, sy = 0;
+  const flatTop = (x: number, y: number) => y < 210 && Math.abs(x - px) > 20 && Math.abs(y - py) < (y < 20 ? 3 : 0.6);
+  return d.replace(/([MLZ])(?:(-?[\d.]+),(-?[\d.]+))?/g, (m, c: string, xs?: string, ys?: string) => {
+    if (c === 'Z') { const far = Math.hypot(sx - px, sy - py) > 100; px = sx; py = sy; return far ? '' : `L${sx},${sy}`; } // explicit: a Z would close to our inserted M
+    const x = +xs!, y = +ys!;
+    if (c === 'M') { sx = px = x; sy = py = y; return m; }
+    const cut = flatTop(x, y) || Math.hypot(x - px, y - py) > 400;
+    px = x; py = y;
+    return cut ? `M${xs},${ys}` : m;
+  });
+}
+
 export class MapView {
   svg: SVGSVGElement;
   W: number; H: number;
@@ -110,7 +125,7 @@ export class MapView {
       }
       this.svg.append(grp);
     }
-    for (const d of Object.values(g.landPaths)) this.svg.append(svgEl('path', { d, class: 'coast', 'fill-rule': 'evenodd' }));
+    for (const d of Object.values(g.landPaths)) this.svg.append(svgEl('path', { d: coastLine(d), class: 'coast', 'fill-rule': 'evenodd' }));
     const lab = svgEl('g', { class: 'labels' });
     for (const [id, [x, y]] of Object.entries(g.center)) {
       const t = svgEl('text', { x, y: y + 3, class: 'plabel' }) as SVGTextElement;
