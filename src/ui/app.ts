@@ -69,7 +69,27 @@ const RARITY_ORDER_I = (c: Character) => ['common', 'uncommon', 'rare', 'epic', 
 const SLOTS = [1, 2, 3];
 const slotKey = (n: number) => `lasting-empires.slot.${n}`;
 let slot = 1;
-let pendingNation: string | null = null;
+/** A new campaign waiting for a slot when all three are full. */
+let pending: { label: string; make: () => GameState } | null = null;
+
+/** A button that asks for a second tap before a destructive action (browser confirm pop-ups are blocked inside the artifact frame). */
+function confirmBtn(label: string, ask: string, act: () => void, cls = 'btn ghost small') {
+  let armed = 0;
+  const b = h('button', { class: cls, onclick: () => {
+    if (armed) { clearTimeout(armed); act(); return; }
+    b.textContent = ask; b.classList.add('armed');
+    armed = window.setTimeout(() => { armed = 0; b.textContent = label; b.classList.remove('armed'); }, 3500);
+  } }, label);
+  return b;
+}
+
+/** Start a new campaign in a free slot, or ask which slot to replace. */
+function startFresh(label: string, make: () => GameState) {
+  const free = SLOTS.find(n => !loadSlot(n));
+  if (free) { startIn(free, make()); return; }
+  pending = { label, make }; showTitle();
+  document.querySelector('.slots')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
 let wantTutorial = true; // chosen on the title screen while every slot is full
 /** The realm's coat of arms. */
 function shield(id: string, color: string, small = false) {
@@ -100,7 +120,7 @@ function migrateOldSave() {
     if (old) localStorage.removeItem(KEY);
   } catch { /* */ }
 }
-function startIn(n: number, s: GameState) { slot = n; pendingNation = null; if (s.tutorial == null) s.tutorial = wantTutorial ? 0 : -1; start(s); saveNow(); }
+function startIn(n: number, s: GameState) { slot = n; pending = null; if (s.tutorial == null) s.tutorial = wantTutorial ? 0 : -1; start(s); saveNow(); }
 export function snapshot() { return S ? { save: JSON.stringify(S), slot } : {}; }
 
 // ---------- menu styles ----------
@@ -140,8 +160,8 @@ export function boot(data: { save?: string; slot?: number }) {
 function slotsSection() {
   const saves = SLOTS.map(n => ({ n, s: loadSlot(n) }));
   const box = h('div', { class: 'slots' });
-  if (pendingNation) box.append(h('p', { class: 'slot-note' }, `All three slots are full. Choose one to replace with a new ${NATIONS.find(x => x.id === pendingNation)?.name} campaign, or delete one.`,
-    h('button', { class: 'btn ghost small', onclick: () => { pendingNation = null; showTitle(); } }, 'Cancel')));
+  if (pending) box.append(h('p', { class: 'slot-note' }, `All three slots are full. Choose one to replace with ${pending.label}, or delete one.`,
+    h('button', { class: 'btn ghost small', onclick: () => { pending = null; showTitle(); } }, 'Cancel')));
   for (const { n, s } of saves) {
     const me = s?.nations[s.player];
     const card = h('div', { class: 'slot-card' + (s ? '' : ' empty'), style: me ? `--nc:${me.color}` : '' },
@@ -149,12 +169,9 @@ function slotsSection() {
       h('div', { class: 'slot-t' }, h('b', {}, me ? `${me.name}, ${s!.year}` : `Slot ${n}`),
         h('small', { class: 'muted' }, s ? `${me!.ruler.name} · ${provsOf(s, s.player).length} provinces${s.over ? ' · finished' : ''}` : 'Empty')));
     const acts = h('div', { class: 'slot-acts' });
-    if (pendingNation) acts.append(h('button', { class: 'btn primary small', onclick: () => {
-      const go = () => startIn(n, newGame(pendingNation!, undefined, pendingYear));
-      if (window.confirm(`Replace ${me?.name ?? 'this'} campaign in slot ${n}? It cannot be recovered.`)) go();
-    } }, 'Replace'));
+    if (pending) { const p = pending; acts.append(confirmBtn('Replace', 'Tap again to replace', () => startIn(n, p.make()), 'btn primary small')); }
     else if (s && !s.over) acts.append(h('button', { class: 'btn primary small', onclick: () => startIn(n, s) }, 'Continue'));
-    if (s) acts.append(h('button', { class: 'btn ghost small', 'aria-label': `Delete slot ${n}`, onclick: () => { if (window.confirm(`Delete the ${me?.name} campaign in slot ${n}?`)) { clearSlot(n); showTitle(); } } }, 'Delete'));
+    if (s) acts.append(confirmBtn('Delete', 'Tap again to delete', () => { clearSlot(n); showTitle(); }));
     card.append(acts);
     box.append(card);
   }
@@ -190,11 +207,10 @@ function customMissions(): (Scenario & { nation: string })[] { try { return JSON
 function saveCustom(list: (Scenario & { nation: string })[]) { try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(list.slice(-12))); } catch { /* */ } }
 
 function startMission(nation: string, mission: string | Scenario) {
-  const free = SLOTS.find(n => !loadSlot(n)) ?? (window.confirm('All three campaign slots are full. Replace slot 3?') ? 3 : 0);
   const start = typeof mission === 'string' ? MISSIONS.find(m => m.id === mission)?.start ?? 1451 : (mission as Scenario & { start?: number }).start ?? 1451;
   const g = newMissionGame(nation, mission, start);
   if (g.scenario?.steps?.length) g.tutorial = -1; // the steps teach instead
-  if (free) startIn(free, g);
+  startFresh(`the mission “${g.scenario?.name ?? 'Mission'}”`, () => g);
 }
 
 const missionPreviews: Record<number, GameState> = {};
@@ -207,7 +223,7 @@ function missionCard(m: MissionDef) {
   const locked = !m.beginner && !realUnlocked();
   return h('div', { class: 'mcard' + (m.wild ? ' wild' : '') + (done ? ' done' : '') + (m.beginner ? ' beginner' : '') + (locked ? ' locked' : '') },
     h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon(done ? 'laurel' : m.icon, 24) }), h('div', {}, h('b', {}, m.name), h('small', {}, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`)), m.wild ? h('span', { class: 'mc-wild' }, 'Wild') : null),
-    done ? h('div', { class: 'mc-done' }, `✓ Completed with ${done.realm} in ${done.year}`) : null,
+    done ? h('div', { class: 'mc-done' }, done.realm ? `✓ Completed with ${done.realm} in ${done.year}` : "✓ Completed") : null,
     m.beginner ? h('div', { class: 'mc-learn' }, `Learn: ${m.beginner}`) : null,
     h('p', { class: 'mc-t' }, m.text),
     h('ul', { class: 'mc-g' }, m.goals.map(g => h('li', {}, goalTitle(g, m.deadline)))),
@@ -227,21 +243,26 @@ function showMissions() {
         h('i', { class: 'mprog-bar' }, h('i', { style: `width:${Math.round((n / all) * 100)}%` })),
         h('small', { class: 'muted' }, n === all ? 'Every mission done. A true Lasting Empire!' : 'The great goal: complete every mission, in any order. A realm, a deadline and a few goals each; track them in the Goals window. Win or lose, the world goes on.'));
     })(),
-    h('h2', { class: 'mhead' }, `Beginner missions · ${beginnersDone()}/${BEGINNER().length}`),
-    h('p', { class: 'muted' }, realUnlocked() ? 'Done: every other mission is open to you.' : 'Short missions that each teach one part of the game. Complete them all to unlock the historic and wild missions.'),
-    h('div', { class: 'mgrid' }, ...BEGINNER().map(missionCard)),
-    h('h2', { class: 'mhead' }, realUnlocked() ? 'Missions' : `Missions · locked until the beginner missions are done`),
     h('div', { class: 'seg mfilter' }, START_YEARS.map(y => h('button', { class: 'seg-b' + (y === missionYear ? ' on' : ''), onclick: () => { missionYear = y; showMissions(); } }, `Start ${y}`, h('small', {}, ` ${MISSIONS.filter(m => m.start === y && missionsDone()[m.id]).length}/${MISSIONS.filter(m => m.start === y).length}`)))),
-    h('div', { class: 'mgrid' },
-      h('button', { class: 'mcard mc-new', onclick: () => showBuilder() }, h('span', { class: 'mc-i', html: icon('plus', 28) }), h('b', {}, 'Create your own mission'), h('small', {}, 'Choose a realm, a deadline and up to 6 goals')),
-      ...mine.filter(c => ((c as { start?: number }).start ?? 1451) === missionYear).map(c => h('div', { class: 'mcard mc-custom' },
-        h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon('quill', 24) }), h('div', {}, h('b', {}, c.name), h('small', {}, `Your mission · ${(c as { start?: number }).start ?? 1451} – ${c.deadline}`))),
-        h('ul', { class: 'mc-g' }, c.goals.map(g => h('li', {}, goalTitle(g, c.deadline)))),
-        h('div', { class: 'mc-play' }, h('button', { class: 'btn primary small', onclick: () => startMission(c.nation, { ...c, status: 'active' }) }, `Play ${NATIONS.find(x => x.id === c.nation)?.name}`),
-          h('button', { class: 'btn ghost small', onclick: () => { saveCustom(customMissions().filter(x => x.id !== c.id)); showMissions(); } }, 'Delete')))),
-      ...MISSIONS.filter(m => m.start === missionYear && !m.wild && !m.beginner).map(missionCard),
-      ...MISSIONS.filter(m => m.start === missionYear && m.wild).map(missionCard)),
-    unlockAll() ? null : h('p', { class: 'unlock-all' }, 'Already know the game? ', h('button', { class: 'btn ghost small', onclick: () => { if (window.confirm('Unlock every mission and the open game now?')) { try { localStorage.setItem(UNLOCK_KEY, '1'); } catch { /* */ } showMissions(); } } }, 'Unlock everything'))));
+    ...(() => {
+      const of = (f: (m: typeof MISSIONS[number]) => boolean) => MISSIONS.filter(m => m.start === missionYear && f(m));
+      const beg = of(m => !!m.beginner), real = of(m => !m.beginner && !m.wild), wild = of(m => !!m.wild);
+      const lockNote = realUnlocked() ? null : h('p', { class: 'muted' }, `Locked until all ${BEGINNER().length} beginner missions are done (${beginnersDone()}/${BEGINNER().length}). Beginner missions are spread across the three starts.`);
+      const out: HTMLElement[] = [];
+      if (beg.length) out.push(h('h2', { class: 'mhead' }, `Beginner · ${beg.filter(m => missionsDone()[m.id]).length}/${beg.length}`),
+        h('p', { class: 'muted' }, 'Short guided missions, each teaching one part of the game.'), h('div', { class: 'mgrid' }, ...beg.map(missionCard)));
+      out.push(h('h2', { class: 'mhead' }, `Historic${realUnlocked() ? '' : ' · locked'}`), ...(lockNote ? [lockNote] : []), h('div', { class: 'mgrid' }, ...real.map(missionCard)));
+      if (wild.length) out.push(h('h2', { class: 'mhead' }, `Wild${realUnlocked() ? '' : ' · locked'}`), h('p', { class: 'muted' }, 'Alternate history: the lunatic ones.'), h('div', { class: 'mgrid' }, ...wild.map(missionCard)));
+      out.push(h('h2', { class: 'mhead' }, 'Your own missions'), h('div', { class: 'mgrid' },
+        h('button', { class: 'mcard mc-new', onclick: () => showBuilder() }, h('span', { class: 'mc-i', html: icon('plus', 28) }), h('b', {}, 'Create your own mission'), h('small', {}, 'Choose a realm, a deadline and up to 6 goals')),
+        ...mine.filter(c => ((c as { start?: number }).start ?? 1451) === missionYear).map(c => h('div', { class: 'mcard mc-custom' },
+          h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon('quill', 24) }), h('div', {}, h('b', {}, c.name), h('small', {}, `Your mission · ${(c as { start?: number }).start ?? 1451} – ${c.deadline}`))),
+          h('ul', { class: 'mc-g' }, c.goals.map(g => h('li', {}, goalTitle(g, c.deadline)))),
+          h('div', { class: 'mc-play' }, h('button', { class: 'btn primary small', onclick: () => startMission(c.nation, { ...c, status: 'active' }) }, `Play ${NATIONS.find(x => x.id === c.nation)?.name}`),
+            confirmBtn('Delete', 'Tap again to delete', () => { saveCustom(customMissions().filter(x => x.id !== c.id)); showMissions(); }))))));
+      return out;
+    })(),
+    unlockAll() ? null : h('p', { class: 'unlock-all' }, 'Already know the game? ', confirmBtn('Unlock everything', 'Tap again to unlock all', () => { try { localStorage.setItem(UNLOCK_KEY, '1'); } catch { /* */ } showMissions(); }))));
 }
 
 /** Goal templates for the builder: a label and how to make the goal from one value. */
@@ -315,12 +336,8 @@ function showBuilder() {
     h('p', { class: 'muted' }, 'Pick a start year, a realm and a deadline, then add goals.'), form));
 }
 
-let pendingYear = 1451;
 function chooseNation(id: string, year = 1451) {
-  const free = SLOTS.find(n => !loadSlot(n));
-  if (free) { startIn(free, newGame(id, undefined, year)); return; }
-  pendingNation = id; pendingYear = year; showTitle();
-  document.querySelector('.slots')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  startFresh(`a new ${NATIONS.find(x => x.id === id)?.name ?? id} campaign`, () => newGame(id, undefined, year));
 }
 
 // ---------- realm picker: tap any realm on the world map ----------
@@ -386,14 +403,14 @@ function showTitle() {
       h('p', { class: 'eyebrow' }, 'Anno Domini 1451 – 1810'),
       h('h1', { class: 'title' }, 'Lasting Empires'),
       h('p', { class: 'lede' }, 'Every action is a card. Gather Military, Diplomacy, Internal, Economy and Research cards each year, then send your people on missions. One turn is one year.'),
-      SLOTS.some(n => loadSlot(n)) || pendingNation ? h('h2', { class: 'pick-h' }, 'Campaigns') : null,
-      SLOTS.some(n => loadSlot(n)) || pendingNation ? slotsSection() : null,
+      SLOTS.some(n => loadSlot(n)) || pending ? h('h2', { class: 'pick-h' }, 'Campaigns') : null,
+      SLOTS.some(n => loadSlot(n)) || pending ? slotsSection() : null,
       h('button', { class: 'btn primary wide newgame missions-b', onclick: () => showMissions() }, h('span', { html: icon('star', 18) }), ` Missions · ${doneCount()} of ${MISSIONS.length} completed`),
       !realUnlocked() ? h('p', { class: 'title-hint' }, `New here? Start with the beginner missions (${beginnersDone()}/${BEGINNER().length}).`) : null,
       h('button', { class: 'btn wide newgame' + (sandboxUnlocked() ? '' : ' blocked'), onclick: () => (sandboxUnlocked() ? showPicker() : toast('The open game unlocks when you complete your first historic mission', 'bad')) }, sandboxUnlocked() ? 'Open game: any realm, any year' : 'Open game · unlocks after your first historic mission'),
       h('details', { class: 'howto' }, h('summary', {}, 'Test scenarios'),
         h('p', { class: 'muted' }, 'Ready-made games to try a system quickly. They use a free campaign slot.'),
-        h('button', { class: 'btn wide', onclick: () => { const free = SLOTS.find(n => !loadSlot(n)) ?? (window.confirm('All slots are full. Replace slot 3?') ? 3 : 0); if (free) startIn(free, scenarioCastilePortugal()); } }, 'Battles: Castile at war with Portugal, summer 1467')),
+        h('button', { class: 'btn wide', onclick: () => startFresh('the battle test', scenarioCastilePortugal) }, 'Battles: Castile at war with Portugal, summer 1467')),
       h('details', { class: 'howto' },
         h('summary', {}, 'How to play'),
         h('ul', {},

@@ -1406,3 +1406,4 @@ ul.traits { margin: 0; padding-left: 18px; }
 .card.wide.k-char .c-art.has-pic .c-pic, .card.wide.k-troop .c-art.has-pic .c-pic { height: 100%; }
 .card.small .c-art.has-pic { margin: 3px 4px; }
 .card.dim .c-pic { filter: grayscale(.7); }
+.btn.armed { background: var(--wax) !important; color: #fffdf8 !important; border-color: var(--wax) !important; }
