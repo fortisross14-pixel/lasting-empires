@@ -29,6 +29,18 @@ const svgEl = (tag: string, attrs: Record<string, string | number> = {}) => {
   return e;
 };
 
+/** A pale watercolour wash of a realm's colour: mixed toward the paper, so the map reads like an engraved chart. */
+const WASH: Record<string, string> = {};
+function wash(hex: string, k: number): string {
+  const key = hex + k;
+  if (WASH[key]) return WASH[key];
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16), paper = [0xf6, 0xf1, 0xe6];
+  const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v, i) => Math.round(v + (paper[i] - v) * k));
+  return (WASH[key] = '#' + c.map(v => v.toString(16).padStart(2, '0')).join(''));
+}
+
 export class MapView {
   svg: SVGSVGElement;
   W: number; H: number;
@@ -344,7 +356,7 @@ export class MapView {
       }
       if (!known) { c.style.fill = ''; for (const k of ['mine', 'subject', 'enemy', 'unrest', 'native']) c.classList.remove(k); continue; }
       const occupied = this.mode === 'political' && p.occupiedFrom && s.nations[p.occupiedFrom]?.alive && atWar(s, p.owner, p.occupiedFrom);
-      c.style.fill = occupied ? `url(#${this.stripes(nat?.color ?? '#777', s.nations[p.occupiedFrom!].color, p.owner + '_' + p.occupiedFrom)})` : this.fill(s, p, maxPop) ?? nat?.color ?? '#777';
+      c.style.fill = occupied ? `url(#${this.stripes(nat?.color ?? '#777', s.nations[p.occupiedFrom!].color, p.owner + '_' + p.occupiedFrom)})` : this.fill(s, p, maxPop) ?? wash(nat?.color ?? '#777', p.owner === s.player || p.owner === this.picked ? 0.12 : 0.42);
       const pol = this.mode === 'political';
       c.classList.toggle('native', p.owner === NO_STATE && pol);
       c.classList.toggle('mine', !this.revealAll && p.owner === s.player);

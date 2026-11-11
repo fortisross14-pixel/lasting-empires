@@ -46,6 +46,7 @@ import { happinessOf, moodName, CULTURE_NAMES, RELIGION_NAMES, isAccepted, natio
 import { MapView, MAP_MODES, legendFor } from './map';
 import { scenarioCastilePortugal } from '../engine/scenarios';
 import { troopsNear, setDefence, garrisons, moveTroops, travel, locOf, nearestGarrison, baseFor, READY_STR, HEAL } from '../engine/army';
+import { armsSvg } from './banners';
 import { rankOf, nextRank, missionCap, missionsLeft, VICEROY_COST, viceroyBlocked, territoryOf, appointViceroy, recallViceroy, viceroyFocus, FOCUS_TEXT } from '../engine/realm';
 
 const KEY = 'lasting-empires.save.v2';
@@ -70,6 +71,13 @@ const slotKey = (n: number) => `lasting-empires.slot.${n}`;
 let slot = 1;
 let pendingNation: string | null = null;
 let wantTutorial = true; // chosen on the title screen while every slot is full
+/** The realm's coat of arms. */
+function shield(id: string, color: string, small = false) {
+  const el = h('span', { class: 'np-shield arms' + (small ? ' sm' : '') });
+  el.innerHTML = armsSvg(id, color);
+  return el;
+}
+
 function saveNow() { clearTimeout(saveT); saveT = 0; try { localStorage.setItem(slotKey(slot), JSON.stringify(S)); } catch { /* storage may be blocked */ } }
 /** Saving writes the whole game, so it waits a moment after a change; leaving the page saves at once. */
 let saveT = 0;
@@ -137,7 +145,7 @@ function slotsSection() {
   for (const { n, s } of saves) {
     const me = s?.nations[s.player];
     const card = h('div', { class: 'slot-card' + (s ? '' : ' empty'), style: me ? `--nc:${me.color}` : '' },
-      h('span', { class: 'np-shield sm' }, me ? me.name[0] : String(n)),
+      me ? shield(s!.player, me.color, true) : h('span', { class: 'np-shield sm' }, String(n)),
       h('div', { class: 'slot-t' }, h('b', {}, me ? `${me.name}, ${s!.year}` : `Slot ${n}`),
         h('small', { class: 'muted' }, s ? `${me!.ruler.name} · ${provsOf(s, s.player).length} provinces${s.over ? ' · finished' : ''}` : 'Empty')));
     const acts = h('div', { class: 'slot-acts' });
@@ -356,7 +364,7 @@ function showPicker(initial?: string) {
     const cap = preview.provinces[n.capital];
     clear(panel).append(
       h('div', { class: 'pick-card', style: `--nc:${n.color}` },
-        h('span', { class: 'np-shield' }, n.name[0]),
+        shield(id, n.color),
         h('div', { class: 'pick-t' },
           h('b', {}, n.name), h('span', { class: 'np-diff ' + d.cls }, d.label),
           h('small', {}, `${ps.length} province${ps.length > 1 ? 's' : ''} · capital ${cap?.name ?? '?'} · ${RELIGION_NAMES[cap?.religion ?? ''] ?? ''} · ${CULTURE_NAMES[n.culture]}`),
@@ -519,7 +527,7 @@ function renderTop() {
   const top = clear($('#top'));
   top.append(
     h('button', { class: 'crest', onclick: () => toggleSheet('realm'), style: `--nc:${me.color}` },
-      h('span', { class: 'np-shield sm' }, me.name[0]),
+      shield(S.player, me.color, true),
       h('span', { class: 'crest-t' }, h('b', {}, me.name), h('small', {}, me.ruler.name))),
     h('button', { class: 'year', title: ageOf(S).name, onclick: () => showEra() }, h('span', { class: 'year-n' }, String(S.year)), h('small', {}, `${SEASONS[S.quarter ?? 0]} · ${ageOf(S).name.replace('Age of ', '')}`)),
     h('div', { class: 'res' },
@@ -634,7 +642,9 @@ function openWin(cat: Cat, tab = win?.cat === cat ? win.tab : 'cards') {
   if (sheet) { sheet = null; $('#sheet').hidden = true; }
   if (win?.cat !== cat) { pick = {}; cv = { filter: 'all', mode: 'browse', sel: [] }; }
   win = { cat, tab };
+  const wasHidden = $('#win').hidden;
   $('#win').hidden = false;
+  if (wasHidden) { $('#win').classList.add('fresh'); setTimeout(() => $('#win').classList.remove('fresh'), 500); }
   refresh();
 }
 function closeWin() { win = null; pick = {}; forge = []; $('#win').hidden = true; refresh(); }
@@ -1825,7 +1835,7 @@ function realmSheet(body: HTMLElement) {
   const me = player(S);
   const arch = RULER_ARCHS[me.ruler.arch];
   body.append(h('div', { class: 'ruler' },
-    h('span', { class: 'np-shield', style: `--nc:${me.color}` }, me.name[0]),
+    shield(S.player, me.color),
     h('div', {}, h('b', {}, me.ruler.name), h('p', { class: 'muted' }, `${arch?.name ?? ''} monarch · reigns since ${me.ruler.from}`), h('p', {}, arch?.desc ?? ''))));
   const rates = cardRates(S);
   body.append(h('h3', {}, 'Cards each year'));

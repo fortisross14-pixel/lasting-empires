@@ -41,6 +41,14 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 ## Hand limit
 - `HAND_LIMITS` by rank (per deck, in all); permanent cards and burdens do not count (`countsToLimit`). Draws never fail: over the limit the player sells extras (`sellCards`) before End Turn; `trimHand` is the engine's safety net and the sim's choice.
 
+## Missions
+- Data in `src/data/missions.ts` (`MISSIONS`): start year, nation, `goals`, optional `beginner`, `wild`, extra `cards`/`gold`, and guided `steps` (from the `STEPS` record).
+- Goals are checked every quarter by `checkGoals` in `src/engine/goals.ts`; `goalView` shows each goal's progress. A new goal kind needs a type in `src/types.ts`, a case in `goalView`, and a baseline flag in `newMissionGame` if it counts gains (`goal_*0`, `stat_*`).
+- In mission mode the mission alone decides victory: finishing it shows the celebration screen and the player may play on. Rank only matters in the sandbox.
+- Unlocks: beginner missions first; finishing them all opens the historic and wild missions; one real mission opens the sandbox (`realUnlocked`, `sandboxUnlocked`, saved in localStorage).
+- Beginner missions teach one system each and are guided: steps complete in order, the current step leads the timeline, and the generic tutorial is off (`tutorial = -1`). Every step must be reachable with the cards the mission hands out.
+- Verify a mission with the sim (`MISSION=<id> npm run sim`) or a scripted play when the bot cannot follow steps.
+
 ## Card rates
 - Six decks: Military, Diplomacy, Internal, Economy, Research, People (`culture`). Each draws `0.5 + bonuses` cards a year (capped at 1.4); fractions carry over (`cardAccum`). Add bonuses through `cardRates` parts (buildings, research, monarch, cities, core cards) so the breakdown stays visible to the player.
 - There is no hand limit (`handLimit` returns Infinity; the old limit only for balance tests). The yearly mission cap, army size and building slots are the limits.
