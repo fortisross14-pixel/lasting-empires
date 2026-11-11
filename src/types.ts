@@ -215,7 +215,7 @@ export type Prompt =
   | { kind: 'reveal'; title: string; subtitle?: string; items: RevealItem[]; alarm?: boolean }
   | { kind: 'draft'; draft: 'buy' | 'court' | 'ambition' | 'gift'; cat?: Cat; options: DraftOption[] }
   | { kind: 'succession'; heirs: Heir[]; old: string }
-  | { kind: 'peace'; enemy: string; offered: boolean }
+  | { kind: 'peace'; enemy: string; offered: boolean; surrender?: boolean }
   | { kind: 'incoming'; id: number }
   | { kind: 'gameover'; victory: boolean; reason: string }
   | { kind: 'mission_end'; won: boolean };

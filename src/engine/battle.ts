@@ -5,7 +5,7 @@ import { campLost } from './army';
 import { addInfamy } from './coalition';
 import type { GameState, Battle, BattleSide, BattleUnit, BattleGeneral, RoundLog, TroopCard, BattleRecord } from '../types';
 import { TROOPS, TACTICS } from '../data/troops';
-import { rand, pick, weighted, uid, clamp, hasTech, rulerMod, log, nationName, addRel, player, findWar, promoteRarity, hasCore, alliesOf, enemiesOf, troopPower, techFx } from './core';
+import { rand, pick, weighted, uid, clamp, hasTech, rulerMod, log, nationName, addRel, player, findWar, promoteRarity, hasCore, alliesOf, enemiesOf, troopPower, techFx, push } from './core';
 import { landPhase } from './missions';
 import { landDefence } from './ai';
 
@@ -250,11 +250,14 @@ export function transferProvince(s: GameState, provId: string, to: string) {
     const rest = Object.values(s.provinces).filter(x => x.owner === from).sort((a, b) => b.dev - a.dev);
     if (rest.length) fromNat.capital = rest[0].id;
   }
-  if (fromNat && !Object.values(s.provinces).some(x => x.owner === from)) {
+  if (fromNat && !Object.values(s.provinces).some(x => x.owner === from) && !(to === s.player && w)) {
     fromNat.alive = false;
     s.wars = s.wars.filter(w2 => w2.a !== from && w2.b !== from);
     s.treaties = s.treaties.filter(t => t.a !== from && t.b !== from);
     log(s, `${fromNat.name} has fallen and is no more.`, from === s.player ? 'bad' : 'neutral');
+  } else if (fromNat && to === s.player && w && !Object.values(s.provinces).some(x => x.owner === from)) {
+    fromNat.army = []; // every province occupied: they must accept your terms
+    if (!s.queue.some(q => q.kind === 'peace' && q.enemy === from)) push(s, { kind: 'peace', enemy: from, offered: true, surrender: true });
   }
 }
 

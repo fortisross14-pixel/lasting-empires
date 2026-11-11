@@ -152,7 +152,7 @@ const STEPS: Record<string, { cards?: string[]; deadline?: number; steps: { g: G
     { g: { k: 'hired', n: 1 }, hint: 'Military → Cards: tap Hire Infantry and pick a general to train them. Each company costs 1 manpower and some ducats.' },
     { g: { k: 'atWar', with: 'byzantium' }, hint: 'Tap Constantinople on the map and choose Declare war. Going to war gives you March Orders cards.' },
     { g: { k: 'own', provinces: ['constantinople'], label: 'Take Constantinople' }, hint: 'Play March Orders (Military → Cards): choose a general and the troops standing near the city, and attack. Cannon help against the great walls.' },
-    { g: { k: 'gone', nation: 'byzantium' }, hint: 'Once you hold Constantinople and their army is beaten, Byzantium surrenders at the end of the season and joins your realm. If they still have troops, send your Peace Envoy (Diplomacy → Cards) and pick "Annex Byzantium".' },
+    { g: { k: 'gone', nation: 'byzantium' }, hint: 'Taken provinces are only occupied until peace. Once Constantinople is yours and their army is beaten, Byzantium surrenders and you set the terms: pick "Annex Byzantium". If they still have troops, send your Peace Envoy (Diplomacy → Cards).' },
     { g: { k: 'capitalAt', province: 'constantinople' }, hint: 'Tap Constantinople and choose Move the capital here (it uses your Move the Capital card).' },
   ] },
   b_navarre: { cards: ['embassy', 'marriage', 'marriage', 'fealty', 'fealty'], steps: [

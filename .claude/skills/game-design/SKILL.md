@@ -38,7 +38,8 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 - A commander leads at most `commandOf(skill)` companies (`src/data/characters.ts`): ordinary 3, good 4, rare 5, epic 6, legendary 8. Unnamed enemy commanders lead `GENERIC_COMMAND` (4), one more at their capital. Extra troops stay for the next battle, so big armies take several assaults.
 - Walls: each fort level adds a garrison unit that takes the first blows and +25% defence. The highest level comes from `maxFort(s)` (`FORT_BY_AGE`: 2 in the Age of Crusade up to 5; Star Forts +1). Never raise `fort` without clamping to `maxFort`.
 - Historic rulers get their talent from traits (`histSkill` in `turn.ts`): Able +2, Warrior +1, Ambitious +1.
-- A beaten realm (no army, heartland held) surrenders by itself each quarter (`autoSurrender`).
+- Conquest only occupies (`occupiedFrom`). The peace treaty decides: `keep:<province>` terms keep occupations, the rest goes back (`concludePeace`). A realm left with no land waits at the table (AI skips it) and dies only if the treaty leaves it nothing.
+- A beaten realm (no army, heartland or capital held) asks for peace each quarter (`autoSurrender` pushes a `peace` prompt with `surrender`): the player sets any terms.
 
 ## Missions and government
 - Mission mode: `MISSIONS` in `src/data/missions.ts`; goal kinds in `Goal` (`src/types.ts`), measured by `goalView` in `src/engine/goals.ts` (title, status in words, progress). A new goal kind needs a `goalView` case and, for custom missions, a `GOAL_KINDS` entry in the builder.

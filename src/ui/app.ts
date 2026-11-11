@@ -2426,7 +2426,7 @@ function processQueue() {
   else if (p.kind === 'draft') showDraft(p.draft, p.options);
   else if (p.kind === 'battle') showBattle(p.battle);
   else if (p.kind === 'succession') showSuccession(p.heirs, p.old);
-  else if (p.kind === 'peace') showPeace(p.enemy, p.offered);
+  else if (p.kind === 'peace') showPeace(p.enemy, p.offered, p.surrender);
   else if (p.kind === 'incoming') showIncoming(p.id);
   else if (p.kind === 'gameover') showGameOver(p.victory, p.reason);
   else if (p.kind === 'mission_end') showMissionEnd(p.won);
@@ -2639,19 +2639,22 @@ function showIncoming(id: number) {
   openModal(box);
 }
 
-function showPeace(enemy: string, offered: boolean) {
+function showPeace(enemy: string, offered: boolean, surrender = false) {
   const n = S.nations[enemy];
   if (!n?.alive || !atWar(S, S.player, enemy)) { S.queue.shift(); afterPrompt(); return; }
-  const score = warScore(S, enemy);
+  const landless = !provsOf(S, enemy).length;
+  // a beaten realm takes whatever terms you set
+  const score = surrender ? Math.max(100, warScore(S, enemy)) : warScore(S, enemy);
   const box = h('div', { class: 'mbox narrow peace' });
   let chosen: string[] = [];
   const draw = () => {
     clear(box);
     if (offered) box.append(h('div', { class: 'alarm-band peace-band', html: icon('dove', 28) }));
-    box.append(h('h2', {}, offered ? `${n.name} offers peace` : `Peace with ${n.name}`), h('p', { class: 'muted' }, `${offered ? 'Accept their terms, or fight on. ' : ''}War score ${score > 0 ? '+' : ''}${score}: ${score > 10 ? 'you are winning and set the terms.' : score < -10 ? 'they are winning and set the terms.' : 'neither side has the upper hand.'}`));
+    if (surrender) box.append(h('h2', {}, `${n.name} surrenders`), h('p', { class: 'muted' }, `${landless ? 'You hold every province they had.' : 'Their army is gone and you hold their heartland.'} Dictate the terms: keep the provinces you want (the rest go back), make them your vassal, take reparations, or annex them whole.${landless ? '' : ' Or fight on.'}`));
+    else box.append(h('h2', {}, offered ? `${n.name} offers peace` : `Peace with ${n.name}`), h('p', { class: 'muted' }, `${offered ? 'Accept their terms, or fight on. ' : ''}War score ${score > 0 ? '+' : ''}${score}: ${score > 10 ? 'you are winning and set the terms.' : score < -10 ? 'they are winning and set the terms.' : 'neither side has the upper hand.'}`));
     if (score > 10) {
       const spent = peaceTerms(S, enemy).filter(t => chosen.includes(t.id)).reduce((a, t) => a + t.cost, 0);
-      box.append(h('h3', {}, `Your demands (${spent}/${score} points)`));
+      box.append(h('h3', {}, surrender ? 'Your terms' : `Your demands (${spent}/${score} points)`));
       const list = h('div', { class: 'tlist' });
       for (const t of peaceTerms(S, enemy)) {
         const on = chosen.includes(t.id);
@@ -2664,7 +2667,7 @@ function showPeace(enemy: string, offered: boolean) {
       }
       box.append(list);
       box.append(h('div', { class: 'mrow' },
-        offered ? h('button', { class: 'btn ghost', onclick: () => { S.queue.shift(); toast('The war goes on'); afterPrompt(); } }, 'Fight on') : null,
+        offered && !landless ? h('button', { class: 'btn ghost', onclick: () => { S.queue.shift(); toast('The war goes on'); afterPrompt(); } }, 'Fight on') : null,
         h('button', { class: 'btn primary', onclick: () => { S.queue.shift(); const items = concludePeace(S, enemy, chosen); closeModal(); refresh(); showReveal(`Peace with ${n.name}`, 'The treaty is sealed', items, afterPrompt); } }, chosen.length ? 'Sign the treaty' : 'Sign a white peace')));
     } else if (score < -10) {
       const dem = enemyDemands(S, enemy);

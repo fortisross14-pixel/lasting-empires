@@ -42,8 +42,10 @@ function resolveQueue(s: GameState) {
     else if (p.kind === 'peace') {
       s.queue.shift();
       if (!s.nations[p.enemy]?.alive || !atWar(s, s.player, p.enemy)) continue;
-      const sc = warScore(s, p.enemy);
-      if (sc > 0) { let b = sc; const ids: string[] = []; for (const t of peaceTerms(s, p.enemy).reverse()) if (t.cost <= b && !(t.id.startsWith('gold') && ids.some(i => i.startsWith('gold')))) { ids.push(t.id); b -= t.cost; } concludePeace(s, p.enemy, ids); }
+      const sc = (p as { surrender?: boolean }).surrender ? Math.max(100, warScore(s, p.enemy)) : warScore(s, p.enemy);
+      // the bot keeps what it occupies first (annex when free), then spends the rest
+      const rank = (id: string) => (id === 'annex' ? 0 : id.startsWith('keep:') ? 1 : 2);
+      if (sc > 0) { let b = sc; const ids: string[] = []; for (const t of peaceTerms(s, p.enemy).reverse().sort((x, y) => rank(x.id) - rank(y.id))) if (t.cost <= b && !(t.id.startsWith('gold') && ids.some(i => i.startsWith('gold'))) && !(ids.includes('annex') && (t.id === 'vassal' || t.id.startsWith('keep:')))) { ids.push(t.id); b -= t.cost; } concludePeace(s, p.enemy, ids); }
       else if (R() < 0.7) concludePeace(s, p.enemy, enemyDemands(s, p.enemy).map(t => t.id), true);
     }
     else s.queue.shift();

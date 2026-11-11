@@ -289,7 +289,7 @@ export function runAI(s: GameState, q = 3) {
   ids.sort(() => rand(s) - 0.5);
   for (const id of ids) {
     const n = s.nations[id];
-    if (!n.alive) continue;
+    if (!n.alive || !provsOf(s, id).length) continue; // no land left: waits for the peace table
     aiEconomy(s, n);
     aiDiplomacy(s, n);
     aiAlliances(s, n);

@@ -27,18 +27,23 @@ export function heldShare(s: GameState, enemy: string): number {
   return core.length ? core.filter(p => p.owner === s.player).length / core.length : 0;
 }
 
+/** Provinces `holder` took from `from` in a war that is still going on. */
+export const occupiedBy = (s: GameState, holder: string, from: string) => Object.values(s.provinces).filter(p => p.owner === holder && p.occupiedFrom === from);
+
 export function peaceTerms(s: GameState, enemy: string): PeaceTerm[] {
   const n = s.nations[enemy];
   const terms: PeaceTerm[] = [];
   const g = Math.round(25 * inflation(s));
   for (let i = 1; i <= 3; i++) terms.push({ id: 'gold' + i, label: `Reparations: ${g * i} ducats`, cost: 10 * i, detail: 'Paid from their treasury' });
+  // provinces you occupy: cheap to keep, they go back if you don't
+  for (const p of occupiedBy(s, s.player, enemy)) terms.push({ id: 'keep:' + p.id, label: `Keep ${p.name}`, cost: 3 + p.dev, detail: `Occupied by you · development ${p.dev}${p.core === s.player ? ' · once ours' : ''}. Returned if you don't keep it.` });
   const mine = new Set(provsOf(s, s.player).map(p => p.id));
   const border = provsOf(s, enemy).filter(p => neighbours(p.id).some(x => mine.has(x)) && p.id !== n.capital);
-  for (const p of border) terms.push({ id: 'prov:' + p.id, label: `Cede ${p.name}`, cost: 20 + p.dev * 4, detail: `Development ${p.dev}${p.core === s.player ? ' · once ours' : ''}` });
-  const size = provsOf(s, enemy).length;
-  if (size <= 6 && !n.overlord) terms.push({ id: 'vassal', label: `${n.name} becomes your vassal`, cost: 45 + size * 8, detail: 'Pays tribute and follows you to war' });
+  for (const p of border) terms.push({ id: 'prov:' + p.id, label: `Cede ${p.name}`, cost: 20 + p.dev * 4, detail: `Not occupied · development ${p.dev}${p.core === s.player ? ' · once ours' : ''}` });
+  const size = provsOf(s, enemy).length + occupiedBy(s, s.player, enemy).length;
+  if (size <= 6 && !n.overlord && size > 0) terms.push({ id: 'vassal', label: `${n.name} becomes your vassal`, cost: 45 + size * 8, detail: 'Pays tribute and follows you to war' });
   // a small realm whose heartland you already hold can be absorbed whole: for free
-  if (size <= 8) { const held = heldShare(s, enemy); const dev = provsOf(s, enemy).reduce((a, p) => a + p.dev, 0); terms.push({ id: 'annex', label: `Annex ${n.name}: all its lands join your realm`, cost: held >= 0.5 ? 0 : 40 + dev * 6, detail: held >= 0.5 ? 'You already hold most of its land: they cannot refuse' : `${size} province${size > 1 ? 's' : ''}, development ${dev}` }); }
+  if (size <= 8) { const held = heldShare(s, enemy); const dev = [...provsOf(s, enemy), ...occupiedBy(s, s.player, enemy)].reduce((a, p) => a + p.dev, 0); terms.push({ id: 'annex', label: `Annex ${n.name}: all its lands join your realm`, cost: held >= 0.5 ? 0 : 40 + dev * 6, detail: held >= 0.5 ? 'You already hold most of its land: free. Keeps everything you occupy' : `${size} province${size > 1 ? 's' : ''}, development ${dev}` }); }
   return terms.sort((a, b) => a.cost - b.cost);
 }
 
@@ -46,6 +51,7 @@ export function peaceTerms(s: GameState, enemy: string): PeaceTerm[] {
 export function enemyDemands(s: GameState, enemy: string): PeaceTerm[] {
   let budget = -warScore(s, enemy);
   const out: PeaceTerm[] = [];
+  for (const p of occupiedBy(s, enemy, s.player).sort((a, b) => a.dev - b.dev)) { const c = 5 + p.dev * 2; if (budget >= c) { out.push({ id: 'keep:' + p.id, label: `They keep ${p.name}`, cost: c, detail: '' }); budget -= c; } }
   const theirs = new Set(provsOf(s, enemy).map(p => p.id));
   const border = provsOf(s, s.player).filter(p => neighbours(p.id).some(x => theirs.has(x)) && p.id !== player(s).capital).sort((a, b) => (b.core === enemy ? 1 : 0) - (a.core === enemy ? 1 : 0) || a.dev - b.dev);
   for (const p of border) { const c = 20 + p.dev * 4; if (budget >= c) { out.push({ id: 'prov:' + p.id, label: `Cede ${p.name}`, cost: c, detail: '' }); budget -= c; } }
@@ -71,7 +77,11 @@ export function concludePeace(s: GameState, enemy: string, termIds: string[], th
         transferProvince(s, pid, winner);
         items.push({ title: `${s.provinces[pid].name} is ceded`, text: `It now belongs to ${nationName(s, winner)}.`, tone: theyDemand ? 'bad' : 'good', kind: 'scroll' });
       }
+    } else if (id.startsWith('keep:')) {
+      const p = s.provinces[id.slice(5)];
+      if (p) { delete p.occupiedFrom; items.push({ title: theyDemand ? `${p.name} is lost` : `${p.name} is yours`, text: theyDemand ? `${nationName(s, enemy)} keeps it.` : 'The treaty confirms it.', tone: theyDemand ? 'bad' : 'good', kind: 'scroll' }); }
     } else if (id === 'annex' && !theyDemand) {
+      for (const p of occupiedBy(s, s.player, enemy)) delete p.occupiedFrom;
       for (const p of provsOf(s, enemy)) transferProvince(s, p.id, s.player);
       n.alive = false; n.army = []; n.fleet = [];
       items.push({ title: `${n.name} is no more`, text: 'All its lands are now yours. Its people may take time to accept your rule.', tone: 'good', kind: 'crown' });
@@ -80,6 +90,13 @@ export function concludePeace(s: GameState, enemy: string, termIds: string[], th
       items.push({ title: `${n.name} bends the knee`, text: 'A new vassal: it pays a quarter of its income and joins your wars.', tone: 'good', kind: 'crown' });
     }
   }
+  // what was occupied and not kept goes back to its owner
+  const back = [...occupiedBy(s, s.player, enemy).map(p => [p, enemy] as const), ...occupiedBy(s, enemy, s.player).map(p => [p, s.player] as const)];
+  for (const [p, to] of back) { transferProvince(s, p.id, to); delete p.occupiedFrom; }
+  if (back.length) items.push({ title: `${back.length} province${back.length > 1 ? 's' : ''} returned`, text: back.map(([p]) => p.name).join(', ') + ' go back to their owners.', tone: 'neutral', kind: 'scroll' });
+  if (n.alive && s.provinces[n.capital]?.owner !== enemy) { const best = provsOf(s, enemy).sort((a, b) => b.dev - a.dev)[0]; if (best) n.capital = best.id; }
+  // a realm left with nothing is gone
+  if (n.alive && !provsOf(s, enemy).length) { n.alive = false; n.army = []; n.fleet = []; items.push({ title: `${n.name} is no more`, text: 'All its lands are now yours. Its people may take time to accept your rule.', tone: 'good', kind: 'crown' }); }
   // record the result
   if (score > 10) { s.stats.wars.won++; player(s).prestige += 5 + Math.round(score / 10); drawCat(s, 'military'); items.push({ title: 'Victory', text: `War score ${score}. Prestige +${5 + Math.round(score / 10)} and a Military card.`, tone: 'good', kind: 'laurel' }); }
   else if (score < -10) { s.stats.wars.lost++; player(s).prestige -= 5; items.push({ title: 'Defeat', text: `War score ${score}. Prestige −5.`, tone: 'bad', kind: 'twist' }); }
@@ -90,21 +107,21 @@ export function concludePeace(s: GameState, enemy: string, termIds: string[], th
   return items;
 }
 
-/** A beaten realm gives up on its own: no army left, and the player holds all its heartland
- *  (or its capital, with at most two provinces left). The outcome is certain, so no treaty is needed. */
+/** A beaten realm asks for peace: no army left, and the player holds all its heartland (or its capital).
+ *  The player then sets the terms at the table: keep some provinces, a vassal, reparations, or all of it. */
 export function autoSurrender(s: GameState) {
   for (const w of [...s.wars]) {
     if (w.a !== s.player && w.b !== s.player) continue;
     const enemy = w.a === s.player ? w.b : w.a, n = s.nations[enemy];
-    if (!n?.alive || n.army.length) continue;
+    if (!n?.alive || n.army.length || s.revolution?.rebel === enemy) continue;
+    if (s.queue.some(q => q.kind === 'peace' && q.enemy === enemy)) continue;
     const left = provsOf(s, enemy).length;
     const cores = Object.values(s.provinces).filter(p => p.core === enemy);
     const allCores = cores.length > 0 && cores.every(p => p.owner === s.player);
     const cap0 = NATIONS.find(d => d.id === enemy)?.capital;
-    const capital = !!cap0 && s.provinces[cap0]?.owner === s.player && left <= 2;
-    if (!(allCores || capital) || left > 8) continue;
-    const items = concludePeace(s, enemy, ['annex']);
-    push(s, { kind: 'reveal', title: `${n.name} surrenders`, subtitle: 'Their armies are gone and their lands are yours: no treaty needed', items });
+    const capital = !!cap0 && s.provinces[cap0]?.owner === s.player;
+    if (left && !allCores && !capital) continue;
+    push(s, { kind: 'peace', enemy, offered: true, surrender: true });
   }
 }
 
