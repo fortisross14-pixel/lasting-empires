@@ -132,3 +132,13 @@ When a batch is finished: put its PNGs in a zip named `art-batch-N.zip` (N = bat
 All cards have art. 96 tiles in `art/` (256×256 webp, ~10 KB each), sliced from three ChatGPT sheets.
 The third sheet came back with its own subjects, so some cards share a painting: see `ALIAS` in `src/ui/art.ts`.
 To replace a shared painting later, add a tile named after the card (`card_<id>.webp`) to `art/` and its name to `ART`.
+
+## Batch 4 (shared paintings to replace, plus the six ages)
+
+### Sheet A: 5 columns × 4 rows
+> Same style as before: woodcut-style illustrations, bold black ink outlines, flat colours (crimson, blue, ochre, green) on aged parchment. One image: a grid of exactly 5 columns × 4 rows of square tiles, thin white gaps, no text, no numbers, no borders. Draw exactly these subjects in this order, left to right, top to bottom, and do not substitute other subjects:
+> 1 a royal clerk counting a line of villagers with a ledger (census) · 2 a herald reading a pardon to kneeling prisoners (royal pardon) · 3 a Christian, a Muslim and a Jew in a market, at peace (tolerance) · 4 a preacher in a pulpit, villagers listening (sermon) · 5 a bishop in mitre receiving an envoy before a cathedral (holy see) · 6 a golden reliquary glowing on an altar (relic) · 7 peasants shaking fists at a tax collector (unrest) · 8 a patron paying a sculptor beside a statue (patronage) · 9 a queen giving bread to townsfolk (royal grace) · 10 a ruler embracing a foreign elder in different dress (embrace culture) · 11 a town festival with banners, music and dancers (festival) · 12 galleons loaded with silver chests at sea (treasure fleet) · 13 Greek scholars arriving by boat with scrolls (Greek scholars) · 14 a bundle of very long pikes (equipment) · 15 an arquebus with a matchcord (equipment) · 16 a bronze cannon barrel being cast in a foundry (equipment) · 17 a pair of wheellock pistols (equipment) · 18 a heavy musket with its forked rest (equipment) · 19 a bayonet fixed on a musket (equipment) · 20 a decorative compass rose with a wax seal (card back).
+
+### Sheet B: 3 columns × 2 rows, wide tiles (3:2)
+> Same style. One image: a grid of exactly 3 columns × 2 rows of wide tiles (3:2), thin white gaps, no text. In order:
+> 1 Age of Crusade: knights before a besieged walled city · 2 Age of Discovery: caravels leaving a harbour toward an unknown coast · 3 Age of Reformation: a printing press and a door with a nailed notice · 4 Age of Absolutism: a king in a vast palace hall with courtiers · 5 Age of Enlightenment: scholars around a telescope and an orrery · 6 Age of Revolutions: crowds with flags storming a fortress.

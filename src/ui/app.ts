@@ -45,7 +45,7 @@ import { warScore, peaceTerms, enemyDemands, concludePeace, subjectsOf, integrat
 import { happinessOf, moodName, CULTURE_NAMES, RELIGION_NAMES, isAccepted, nationalHappiness } from '../engine/society';
 import { MapView, MAP_MODES, legendFor } from './map';
 import { scenarioCastilePortugal } from '../engine/scenarios';
-import { troopsNear, setDefence, garrisons, moveTroops, travel, locOf, nearestGarrison, baseFor, READY_STR, HEAL } from '../engine/army';
+import { troopsNear, setDefence, garrisons, moveTroops, travel, locOf, nearestGarrison, baseFor, READY_STR, HEAL, healOf } from '../engine/army';
 import { armsSvg } from './banners';
 import { rankOf, nextRank, missionCap, missionsLeft, VICEROY_COST, viceroyBlocked, territoryOf, appointViceroy, recallViceroy, viceroyFocus, FOCUS_TEXT } from '../engine/realm';
 
@@ -1085,6 +1085,9 @@ function provinceSheet(id: string, body: HTMLElement) {
   const mine = p.owner === S.player;
   const g = getGeo();
   const tier = tierOf(p);
+  // the realm it belongs to, one tap away
+  if (owner && p.owner !== NO_STATE) body.append(h('button', { class: 'owner-chip', onclick: () => (mine ? openSheet('realm') : openSheet('nation', p.owner)) },
+    shield(p.owner, owner.color, true), h('span', {}, h('b', {}, owner.name), h('small', {}, mine ? 'Your realm' : `${atWar(S, S.player, p.owner) ? 'At war with you · ' : ''}relations ${getRel(S, S.player, p.owner)} · all its provinces`)), h('span', { class: 'a-go', html: icon('next', 14) })));
   body.append(h('div', { class: 'stats' },
     stat(TIERS[tier].name, `${(population(S, p) / 1000).toFixed(0)}k people`), stat('Development', p.dev),
     stat('Control', `${Math.round(p.control)}%`), stat('Raw material', GOODS[p.good]?.name ?? p.good),
@@ -1169,7 +1172,6 @@ function provinceSheet(id: string, body: HTMLElement) {
       }
       if ((S.nations[p.owner].spiedUntil ?? 0) > S.year) body.append(h('p', { class: 'muted' }, `Spies report ${troopsNear(S, p.owner, id).length} enemy companies within a quarter of ${p.name}.`));
     }
-    body.append(actionRow('hands', owner.name, `Relations ${getRel(S, S.player, p.owner)} · open diplomacy`, null, () => openSheet('nation', p.owner)));
     if (!war) body.append(declareWarRow(p.owner));
     body.append(armyIntel(p.owner));
   }
@@ -1250,19 +1252,20 @@ function unitsPanel() {
 }
 
 function armyTab(body: HTMLElement) {
-  const gs = garrisons(S);
+  // where troops stand now, plus the capital, barracks and bases
+  const gs = [...new Set([...garrisons(S), ...S.troops.filter(t => !t.moving && t.loc).map(t => t.loc!)])];
   body.append(h('h3', {}, 'Your units'), h('p', { class: 'muted small' }, 'Troop cards hire the best unit of their kind you have researched. Better kinds (Tercios, Knights, Cuirassiers, Galleons…) come from the recipes in the Forge: two companies, or a company and an improvement card.'), unitsPanel());
-  body.append(h('p', { class: 'muted' }, 'Troops stand in the capital, in provinces with Barracks, or at an invasion base. Only troops within a quarter\'s march can attack or defend a province. Tap troops to select them, then move them.'));
+  body.append(h('p', { class: 'muted' }, 'Troops stand in the capital, in provinces with Barracks, or at an invasion base. They heal every season: fastest with Barracks, then the capital, at half speed on the march or in camp. Only troops within a quarter\'s march can attack or defend a province. Tap troops to select them, then move them.'));
   body.append(h('h3', {}, `Armies (${S.troops.length}/${armyCap(S)}) · upkeep ${incomeOf(S, S.player).upkeep.toFixed(1)} a year`));
   const sel = forge.filter(u => S.troops.some(t => t.uid === u));
   const toggle = (uid: number) => { forge = forge.includes(uid) ? forge.filter(x => x !== uid) : [...forge, uid]; renderWin(); };
   const groups: [string, typeof S.troops][] = gs.map(g => [g, S.troops.filter(t => t.loc === g && !t.moving)]);
   const moving = S.troops.filter(t => t.moving), away = S.troops.filter(t => t.mission != null && !t.moving);
   for (const [g, ts] of groups) {
-    body.append(h('div', { class: 'garrison' }, h('b', {}, placeName(g)), h('small', {}, `${g === player(S).capital ? 'capital · ' : g.startsWith('base:') ? '' : 'barracks · '}${ts.filter(t => t.mission == null).length} companies · power ${Math.round(armyPower(ts.filter(t => t.mission == null)))}`)));
+    body.append(h('div', { class: 'garrison' }, h('b', {}, placeName(g)), h('small', {}, `${g === player(S).capital ? 'capital · ' : g.startsWith('base:') ? 'camp · ' : S.provinces[g]?.buildings.includes('barracks') ? 'barracks · ' : ''}${ts.filter(t => t.mission == null).length} companies · power ${Math.round(armyPower(ts.filter(t => t.mission == null)))}`)));
     const row = h('div', { class: 'cards-row wrap' });
     if (!ts.length) row.append(h('p', { class: 'muted' }, 'Empty.'));
-    for (const t of ts) row.append(troopCard(t, { small: true, selected: sel.includes(t.uid), dim: t.mission != null || t.str < 100, badge: t.mission === -5 ? 'defending' : t.str < 100 ? `resting ${Math.ceil((100 - t.str) / 20)}q` : undefined, onclick: () => t.mission === -5 ? toast('Standing ready to defend') : t.mission != null ? toast('Away on a mission') : toggle(t.uid) }));
+    for (const t of ts) row.append(troopCard(t, { small: true, selected: sel.includes(t.uid), dim: t.mission != null || t.str < 100, badge: t.mission === -5 ? 'defending' : t.str < 100 ? `+${healOf(S, t).q}% a season` : undefined, onclick: () => t.mission === -5 ? toast('Standing ready to defend') : t.mission != null ? toast('Away on a mission') : (t.str < 100 && toast(`Heals ${healOf(S, t).q}% a season${healOf(S, t).why.length ? ': ' + healOf(S, t).why.join(', ') : ''}. ${t.str < READY_STR ? 'Too weak to attack until half strength, but it can march.' : 'Ready to fight.'}`), toggle(t.uid)) }));
     body.append(row);
   }
   if (moving.length) {
@@ -1273,10 +1276,11 @@ function armyTab(body: HTMLElement) {
   if (sel.length) {
     const from = S.troops.find(t => t.uid === sel[0])!;
     body.append(h('div', { class: 'mcap' }, h('b', {}, `${sel.length} selected · move to:`),
-      h('div', { class: 'targets' }, gs.filter(g => g !== from.loc).map(g => { const q = travel(locOf(S, from), g); return h('button', { class: 'tchip', onclick: () => { const ids = [...sel]; forge = []; act(() => moveTroops(S, ids, g), q ? `On the march: ${qText(q)}` : 'Moved'); } }, `${placeName(g)} · ${q ? qText(q) : 'now'}`); }),
+      h('div', { class: 'targets' }, garrisons(S).filter(g => g !== from.loc).map(g => { const q = travel(locOf(S, from), g); return h('button', { class: 'tchip', onclick: () => { const ids = [...sel]; forge = []; act(() => moveTroops(S, ids, g), q ? `On the march: ${qText(q)}` : 'Moved'); } }, `${placeName(g)} · ${q ? qText(q) : 'now'}`); }),
+        garrisons(S).some(g => g !== from.loc) ? null : h('small', { class: 'muted' }, 'Nowhere else to go: troops stand in the capital, in provinces with Barracks (Internal) or at an invasion base.'),
         sel.length === 1 ? h('button', { class: 'btn ghost danger small', onclick: () => confirmBox(`Disband ${TROOPS[from.type].name}?`, 'The troop is removed for good.', 'Disband', () => { forge = []; act(() => disbandTroop(S, from.uid)); }) }, 'Disband') : null)));
   }
-  if (gs.length < 2) body.append(h('p', { class: 'muted' }, 'Build Barracks in a province (Internal) to station troops there, for example near a frontier or overseas.'));
+  if (!provsOf(S, S.player).some(p => p.buildings.includes('barracks'))) body.append(h('p', { class: 'muted' }, 'Tip: Barracks (Internal) make troops heal 50% faster there.'));
 }
 
 function navyTab(body: HTMLElement) {
@@ -1962,7 +1966,7 @@ function noTargetReason(): string {
   if (!free.length) return `You are at war with ${names}, but all your troops are away on missions.`;
   const hurt = free.filter(t => t.str < READY_STR);
   const moving = free.filter(t => t.moving);
-  if (hurt.length === free.length - moving.length) return `You are at war with ${names}, but your troops are still recovering from battle (below ${READY_STR}% strength). They heal about ${HEAL}% a quarter in garrison.`;
+  if (hurt.length === free.length - moving.length) return `You are at war with ${names}, but your troops are still recovering from battle (below ${READY_STR}% strength). They heal every season, fastest in a province with Barracks.`;
   if (moving.length) return `You are at war with ${names}, but your free troops are still marching. Try again next quarter.`;
   return `You are at war with ${names}, but none of their land is within reach of your troops. Move troops to a garrison near the front.`;
 }

@@ -8,7 +8,7 @@ import { poolFor } from '../data/names';
 import { yearlyAges } from './ages';
 import { scriptedHistory } from './history';
 import { yearlyCoalitions } from './coalition';
-import { HEAL } from './army';
+import { HEAL, healOf } from './army';
 import { settleArmies, resolveIncoming, quarterlyMarch, quarterlyBases } from './army';
 import { yearlyViceroys, quarterlyUnrest } from './realm';
 import { eraOfYear } from '../data/eras';
@@ -283,8 +283,7 @@ function playerEconomy(s: GameState) {
   const mp = playerManpower(s);
   me.manpower = Math.min(mp.max, me.manpower + mp.gain / 4);
   // the wounded heal only if there are weapons (and powder, and naval stores) to refit them
-  const refit = (t: { type: string }) => 1 - Math.max(s.short?.weapons ?? 0, GUN_TROOPS.has(t.type) ? s.short?.gunpowder ?? 0 : 0);
-  for (const t of s.troops) if (t.mission == null && !t.moving && t.str < 100) t.str = Math.min(100, t.str + HEAL * refit(t));
+  for (const t of s.troops) if (t.mission == null && t.str < 100) t.str = Math.min(100, t.str + healOf(s, t).q);
   for (const t of s.fleet) if (t.mission == null && !t.moving && t.str < 100) t.str = Math.min(100, t.str + HEAL * (1 - (s.short?.stores ?? 0)));
   // control
   for (const p of provsOf(s, s.player)) {

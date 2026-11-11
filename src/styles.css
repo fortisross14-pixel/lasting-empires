@@ -1435,3 +1435,9 @@ button.mcard { font: inherit; color: inherit; cursor: pointer; width: 100%; }
 .np-provs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-bottom: 10px; }
 .np-prov { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 44px; padding: 6px 10px; text-align: left; font: inherit; color: inherit; background: var(--card, #fffdf8); border: 1.2px solid var(--line); cursor: pointer; }
 .np-prov small { color: var(--muted); font-size: 12px; }
+.tsel { appearance: auto; max-width: 100%; font: inherit; }
+.owner-chip { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 6px 10px; margin-bottom: 10px; font: inherit; color: inherit; text-align: left; background: var(--card, #fffdf8); border: 1.2px solid #1b1a17; box-shadow: var(--shadow); cursor: pointer; }
+.owner-chip > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.owner-chip b { font-family: var(--f-display); font-size: 18px; }
+.owner-chip small { color: var(--muted); }
+.owner-chip .np-shield.sm { width: 26px; height: 31px; flex: none; }

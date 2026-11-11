@@ -1,3 +1,4 @@
+import { GUN_TROOPS } from './trade';
 import { commandOf, GENERIC_COMMAND } from '../data/characters';
 // Where armies stand, how long they take to march, who can fight where,
 // enemy attacks announced a quarter ahead, and invasion bases for far wars.
@@ -58,7 +59,7 @@ export function settleArmies(s: GameState) {
     const at = baseOf(t.loc);
     // a garrison we no longer hold: fall back to the capital
     if (!t.moving && t.mission == null && !t.loc.startsWith('base:') && (!g.has(t.loc) || s.provinces[at]?.owner !== s.player)) {
-      t.moving = { to: cap, eta: Math.max(1, travel(t.loc, cap)) }; t.str = Math.max(20, t.str - 15);
+      t.moving = { to: cap, eta: Math.max(1, travel(t.loc, cap)) };
     }
   }
   for (const n of Object.values(s.nations)) {
@@ -95,6 +96,25 @@ export const READY_STR = 50;
 export const recovering = (t: TroopCard) => t.str < READY_STR;
 /** Quarterly healing in garrison: about a fifth of a company. */
 export const HEAL = 20;
+
+/** How much a company heals this quarter, and why: faster at home with barracks, slower on the march or at a camp,
+ *  halved when the realm lacks weapons (or powder for gun troops). It never stops completely. */
+export function healOf(s: GameState, t: TroopCard): { q: number; why: string[] } {
+  const why: string[] = [];
+  let k = 1;
+  const at = t.moving ? null : baseOf(locOf(s, t));
+  const p = at ? s.provinces[at] : null;
+  if (t.moving) { k = 0.5; why.push('on the march: half'); }
+  else if (locOf(s, t).startsWith('base:')) { k = 0.5; why.push('in a field camp: half'); }
+  else if (p?.owner === s.player) {
+    if (p.buildings.includes('barracks')) { k = 1.5; why.push('barracks: +50%'); }
+    else if (p.id === player(s).capital) { k = 1.25; why.push('capital: +25%'); }
+  } else { k = 0.5; why.push('away from home: half'); }
+  const shortW = s.short?.weapons ?? 0, shortP = GUN_TROOPS.has(t.type) ? s.short?.gunpowder ?? 0 : 0;
+  const short = Math.max(shortW, shortP);
+  if (short > 0) { k *= 1 - 0.5 * short; why.push(`short of ${shortP > shortW ? 'gunpowder' : 'weapons'}: slower (Economy → Goods)`); }
+  return { q: Math.max(5, Math.round(HEAL * k)), why };
+}
 
 /** Each quarter: marching troops get closer, and arrive. */
 export function quarterlyMarch(s: GameState) {
