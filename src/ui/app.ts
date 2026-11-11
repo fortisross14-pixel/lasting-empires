@@ -9,7 +9,7 @@ import { MISSIONS, GOAL_REGIONS, type MissionDef } from '../data/missions';
 import { goalView, type GoalView } from '../engine/goals';
 import type { Goal, Scenario } from '../types';
 import { revolutionBlocked, revolutionLands, startRevolution, REVOLUTION_YEARS, moveCapital, moveCapitalBlocked, capitalMoveCost } from '../engine/government';
-import { TRAITS, RARITY, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
+import { TRAITS, RARITY, OUTCOME_ODDS, OUTCOMES, commandOf, GENERIC_COMMAND } from '../data/characters';
 import { GOODS, FOOD, RAW, MADE } from '../data/goods';
 import { GENRES, QUALITY } from '../data/culture';
 import { churchHead, churchRel, churchMood, giftCost, giftBlocked, artHappy, artGold, displayed, displaySlots, museumsOpen, artCost, acceptBlocked, acceptCap, cultureRows, religionRows, cultureName } from '../engine/culture';
@@ -52,6 +52,8 @@ import { rankOf, nextRank, missionCap, missionsLeft, VICEROY_COST, viceroyBlocke
 const KEY = 'lasting-empires.save.v2';
 let S: GameState;
 let map: MapView;
+/** A realm kept outlined on the map after its sheet closes (Show all on map); cleared on the next tap. */
+let shownRealm: string | null = null;
 let sheet: { kind: string; arg?: string } | null = null;
 let win: { cat: Cat; tab: string } | null = null; // the centred window of a core menu
 let pick: { char?: number; card?: number } = {};   // the Missions tab: a person and/or a card chosen
@@ -480,7 +482,7 @@ function start(s: GameState) {
   );
   map = new MapView($('#board'));
   map.onPick = onMapPick;
-  map.onSelect = id => { if (pickHand != null) { if (id) toast('Hold your finger on the province to choose it'); return; } if (id) openSheet('province', id); else if (sheet?.kind === 'province') closeSheet(); };
+  map.onSelect = id => { shownRealm = null; if (pickHand != null) { if (id) toast('Hold your finger on the province to choose it'); return; } if (id) openSheet('province', id); else if (sheet?.kind === 'province') closeSheet(); };
   document.documentElement.style.setProperty('--me', player(S).color);
   refresh();
   requestAnimationFrame(() => map.focus(provsOf(S, S.player).map(p => p.id), 120));
@@ -538,6 +540,7 @@ function renderTutorial() {
 function refresh() {
   setCardGame(S);
   recordMission();
+  map.realm = sheet?.kind === 'nation' ? sheet.arg ?? null : shownRealm;
   renderTop(); renderTabs(); map.render(S); renderTimeline(); renderTracker(); renderLegend();
   if (sheet) renderSheet();
   if (win) renderWin();
@@ -971,6 +974,7 @@ function openSheet(kind: string, arg?: string) {
   sheet = { kind, arg };
   $('#sheet').hidden = false;
   refresh();
+  if (kind === 'nation' && arg) { const ids = provsOf(S, arg).map(p => p.id); if (ids.length) map.focus(ids, 60); } // show the whole realm
 }
 function closeSheet() {
   sheet = null; forge = [];
@@ -1204,13 +1208,20 @@ function nationSheet(id: string, body: HTMLElement) {
   if (theirWars.length || theirAllies.length) body.append(h('p', { class: 'muted' }, [theirAllies.length ? `Allies: ${theirAllies.join(', ')}.` : '', theirWars.length ? ` At war with ${theirWars.join(', ')}.` : ''].join('')));
   if (war) body.append(h('div', { class: 'stats' }, stat('War score', `${warScore(S, id) > 0 ? '+' : ''}${warScore(S, id)}`), stat('Meaning', warScore(S, id) > 10 ? 'You are winning' : warScore(S, id) < -10 ? 'You are losing' : 'Even')));
   if (n.overlord) body.append(h('p', { class: 'muted' }, n.overlord === S.player ? `Your ${n.subject === 'union' ? 'personal union' : 'vassal'} since ${n.subjectSince}.` : `Subject of ${nationName(S, n.overlord)}: attacking it means war with its overlord.`));
+  // every province of the realm, outlined on the map; tap one to go there
+  const ps = provsOf(S, id).sort((a, b) => (b.id === n.capital ? 1 : 0) - (a.id === n.capital ? 1 : 0) || b.dev - a.dev);
+  if (ps.length) {
+    body.append(h('div', { class: 'np-provh' }, h('h3', {}, `Provinces · ${ps.length}`), h('button', { class: 'btn ghost small', onclick: () => { shownRealm = id; closeSheet(); map.focus(ps.map(p => p.id), 60); } }, 'Show all on map')));
+    body.append(h('div', { class: 'np-provs' }, ps.map(p => h('button', { class: 'np-prov', onclick: () => { map.select(p.id); map.focus([p.id]); openSheet('province', p.id); } },
+      h('b', {}, p.name), h('small', {}, [p.id === n.capital ? 'Capital' : '', `dev ${p.dev}`, p.fort ? `fort ${p.fort}` : ''].filter(Boolean).join(' · '))))));
+  }
   body.append(h('h3', {}, 'Send a diplomat'));
   for (const k of DIPLO) {
     if (war !== (k === 'peace')) continue;
     if (k === 'integrate' && n.overlord !== S.player) continue;
     if (k === 'vassalize' && n.overlord === S.player) continue;
     const card = cardFor(S, k);
-    const why = !card ? `Needs a ${({ relations: 'Embassy', trade: 'Trade Route', alliance: 'Alliance Pact', marriage: 'Royal Marriage', peace: 'Peace Envoy', vassalize: 'Demand Fealty', integrate: 'Integration Treaty' } as Record<string, string>)[k]} card` : missionBlocked(S, k, id);
+    const why = !card ? `Needs ${/^[AEIOU]/.test(({ relations: 'Embassy', trade: 'Trade Route', alliance: 'Alliance Pact', marriage: 'Royal Marriage', peace: 'Peace Envoy', vassalize: 'Demand Fealty', integrate: 'Integration Treaty' } as Record<string, string>)[k]) ? 'an' : 'a'} ${({ relations: 'Embassy', trade: 'Trade Route', alliance: 'Alliance Pact', marriage: 'Royal Marriage', peace: 'Peace Envoy', vassalize: 'Demand Fealty', integrate: 'Integration Treaty' } as Record<string, string>)[k]} card` : missionBlocked(S, k, id);
     body.append(actionRow(MISSION_INFO[k].icon, MISSION_INFO[k].name, diploHint(k), why, () => openPlanner(k, id, undefined, card!.uid)));
   }
   if (!war) body.append(declareWarRow(id));
@@ -2204,7 +2215,7 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
   let ch = free.find(c => c.uid === preferChar) ?? [...free].sort((a, b) => b.skill - a.skill)[0];
   preferChar = null;
   const home = (kind === 'conquer' || kind === 'raid' ? troopsNear(S, S.player, target) : S.troops.filter(t => t.mission == null && !t.moving && t.str >= 100)).filter(t => t.str >= 30).sort((a, b) => armyPower([b]) - armyPower([a]));
-  const maxTroops = () => ch.skill + 3;
+  const maxTroops = () => commandOf(ch.skill);
   let picked: number[] = military ? home.slice(0, maxTroops()).map(t => t.uid) : [];
   const naval = ((kind === 'conquer' || kind === 'raid') && !!attackRoute(S, target)?.naval) || (kind === 'base' && home.some(t => travel(locOf(S, t), target) >= 1 && S.provinces[target] && getGeo().land[S.provinces[target].id] !== getGeo().land[locOf(S, t).replace('base:', '')]));
   const harbourShips = S.fleet.filter(t => t.mission == null && t.str >= 30);
@@ -2262,6 +2273,7 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
     if (kind === 'colonize') facts.push(`${Math.round(colonizeChance(S, target, ch) * 100)}% chance · ${colonyCost(S)} ducats and 1 manpower`);
     if (military) {
       box.append(h('h3', {}, `Troops (${picked.length}/${maxTroops()})`));
+      box.append(h('p', { class: 'muted small' }, `${ch.name} can lead ${maxTroops()} companies (${RARITY[ch.rarity].name.toLowerCase()} commander). Enemy defenders fight under a captain who leads ${GENERIC_COMMAND}, plus the walls.`));
       const tr = h('div', { class: 'cards-row wrap' });
       if (!home.length) tr.append(h('p', { class: 'muted' }, kind === 'conquer' || kind === 'raid' ? 'No free troops within a quarter\'s march of here.' : 'No free troops.'));
       for (const t of home) tr.append(troopCard(t, { small: true, badge: placeName(locOf(S, t)), selected: picked.includes(t.uid), onclick: () => {

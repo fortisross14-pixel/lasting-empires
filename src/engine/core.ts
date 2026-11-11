@@ -12,6 +12,13 @@ import { TRAITS, FIRST_NAMES, SURNAMES, RARITY, RARITY_ORDER, OUTCOME_ODDS, OUTC
 import { getGeo, neighbours } from './map';
 
 // ---------- RNG (mulberry32, state kept in the save) ----------
+/** Highest fortress level by age (0 = no walls, 5 = the great star fortresses). Star Forts adds one. */
+export const FORT_BY_AGE = [2, 2, 3, 4, 4, 5];
+export function maxFort(s: GameState): number {
+  const i = Math.max(0, ERAS.findIndex(e => e.id === (s.age?.id ?? eraOfYear(s.year).id)));
+  return Math.min(5, (FORT_BY_AGE[i] ?? 5) + (hasTech(s, 'star_forts') ? 1 : 0));
+}
+
 export function rand(s: GameState): number {
   let t = (s.rng = (s.rng + 0x6d2b79f5) | 0);
   t = Math.imul(t ^ (t >>> 15), t | 1);
@@ -433,8 +440,8 @@ export function buildingAllowed(s: GameState, provId: string, b: string): string
   if (def.site === 'town' && !p.settlement) return 'No town here yet: found a settlement first';
   const slots = buildingSlots(s, provId, def.site);
   if (b === 'fortress') {
-    const max = hasTech(s, 'star_forts') ? 3 : 2;
-    if (p.fort >= max) return `Fort already at level ${max}`;
+    const max = maxFort(s);
+    if (p.fort >= max) return `Walls already at level ${max}, the most this age allows`;
   } else {
     if (p.buildings.includes(b)) return 'Already built';
     if (builtAt(p, def.site) >= slots) return `No free ${def.site === 'town' ? 'town' : 'rural'} slots (${slots})`;

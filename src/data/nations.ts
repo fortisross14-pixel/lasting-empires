@@ -55,7 +55,7 @@ bosnia;Bosnia;Bosnian;#6a7fa0;serbian;catholic;bosnia;cautious;15;S
 serbia;Serbia;Serbian;#a35a5a;serbian;orthodox;belgrade;cautious;20;S
 albania;Albania;Albanian;#7a2f2f;albanian;catholic;kruja;cautious;15;S
 byzantium;Byzantium;Byzantine;#8e44ad;greek;orthodox;constantinople;cautious;90;levy,levy,crossbow,men_at_arms,men_at_arms
-ottomans;Ottoman Empire;Ottoman;#3c8f5a;turkish;muslim;edirne;expansionist;90;levy,levy,levy,crossbow,crossbow,men_at_arms,jinetes,jinetes,bombard
+ottomans;Ottoman Empire;Ottoman;#3c8f5a;turkish;muslim;edirne;expansionist;90;levy,levy,levy,levy,crossbow,crossbow,crossbow,men_at_arms,men_at_arms,men_at_arms,jinetes,jinetes,jinetes,bombard,bombard
 karaman;Karaman;Karamanid;#b5895a;turkish;muslim;konya;balanced;30;H
 trebizond;Trebizond;Trapezuntine;#c070a0;greek;orthodox;trebizond;cautious;15;S
 georgia;Georgia;Georgian;#c05050;georgian;orthodox;tbilisi;cautious;20;S

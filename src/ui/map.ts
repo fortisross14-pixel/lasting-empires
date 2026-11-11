@@ -63,6 +63,7 @@ export class MapView {
   mode: MapMode = 'political';
   revealAll = false;
   picked: string | null = null; // the realm picker shows the whole world
+  realm: string | null = null; // a realm whose lands are outlined (its sheet is open)
   private size: Record<string, number> = {};
   private lastPx = 0;
   cells: Record<string, SVGPathElement> = {};
@@ -359,7 +360,7 @@ export class MapView {
       const lbl = this.labels[id];
       const occ = this.mode === 'political' && p.occupiedFrom && s.nations[p.occupiedFrom]?.alive && atWar(s, p.owner, p.occupiedFrom);
       // skip provinces whose look has not changed since the last draw
-      const key = `${known ? 1 : 0}|${p.owner}|${p.name}|${occ ? p.occupiedFrom : ''}|${this.mode}|${this.picked}|${this.revealAll ? 1 : 0}|${p.control < 30 ? 1 : 0}|${this.mode === 'political' ? '' : this.fill(s, p, maxPop)}|${nat?.overlord === s.player ? 1 : 0}|${nat?.capital === id ? 1 : 0}|${p.owner !== s.player && atWar(s, s.player, p.owner) ? 1 : 0}|${p.good}|${nat?.color}`;
+      const key = `${known ? 1 : 0}|${p.owner}|${p.name}|${occ ? p.occupiedFrom : ''}|${this.mode}|${this.picked}|${this.realm}|${this.revealAll ? 1 : 0}|${p.control < 30 ? 1 : 0}|${this.mode === 'political' ? '' : this.fill(s, p, maxPop)}|${nat?.overlord === s.player ? 1 : 0}|${nat?.capital === id ? 1 : 0}|${p.owner !== s.player && atWar(s, s.player, p.owner) ? 1 : 0}|${p.good}|${nat?.color}`;
       if (this.paint.get(id) === key) continue;
       this.paint.set(id, key);
       c.classList.toggle('fog', !known);
@@ -375,7 +376,7 @@ export class MapView {
       const pol = this.mode === 'political';
       c.classList.toggle('native', p.owner === NO_STATE && pol);
       c.classList.toggle('mine', !this.revealAll && p.owner === s.player);
-      c.classList.toggle('picked', this.revealAll && p.owner === this.picked);
+      c.classList.toggle('picked', (this.revealAll && p.owner === this.picked) || (!!this.realm && p.owner === this.realm));
       c.classList.toggle('subject', pol && nat?.overlord === s.player);
       c.classList.toggle('enemy', pol && p.owner !== s.player && atWar(s, s.player, p.owner));
       c.classList.toggle('unrest', pol && p.owner === s.player && p.control < 30);

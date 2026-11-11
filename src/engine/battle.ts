@@ -131,12 +131,13 @@ function applyDamage(s: GameState, target: BattleSide, attacker: BattleSide, out
   if (!alive.length) return 0;
   let incoming = out.fire * tm.incoming + out.melee * tm.incoming * tm.incomingMelee;
   if (target.general?.traits.includes('cautious')) incoming *= 1 - 0.15 * (target.general.mult ?? 1);
+  // the men on the walls take the first blows (garrison weight below)
   // a skilled commander also places his men well
   incoming *= 1 - 0.035 * (target.general?.skill ?? 1);
   const pool = incoming * 14 * (0.85 + rand(s) * 0.3);
   const weights = alive.map(u => {
     const k = TROOPS[u.type].kind;
-    return u.str * (u.garrison ? 1.2 : k === 'inf' ? 1.2 : k === 'cav' ? 1 : k === 'shot' ? 0.85 : 0.6) * (0.7 + rand(s) * 0.6);
+    return u.str * (u.garrison ? 4 : k === 'inf' ? 1.2 : k === 'cav' ? 1 : k === 'shot' ? 0.85 : 0.6) * (0.7 + rand(s) * 0.6);
   });
   const wsum = weights.reduce((a, b) => a + b, 0);
   let dealt = 0;
@@ -155,7 +156,7 @@ function applyDamage(s: GameState, target: BattleSide, attacker: BattleSide, out
 function effectiveFort(b: Battle): number {
   const siege = b.att.units.filter(u => u.str > 0).reduce((a, u) => a + (TROOPS[u.type].siege ?? 0), 0);
   const sm = b.att.general?.traits.includes('siegemaster') ? 1 : 0;
-  return clamp(b.def.fort - Math.floor(siege / 2) - sm, 0, 3);
+  return clamp(b.def.fort - Math.floor(siege / 2) - sm, 0, 5);
 }
 
 /** Play one round. playerTactic may be null for AI-vs-AI or auto mode. */

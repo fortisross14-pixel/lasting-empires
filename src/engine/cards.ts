@@ -1,3 +1,4 @@
+import { maxFort } from './core';
 // Cards are the actions of the game. Five kinds, each drawn at its own yearly rate.
 import { happinessOf } from './society';
 import { getGeo, neighbours } from './map';
@@ -37,7 +38,7 @@ export interface HandCardDef {
 export const HAND_LIMIT = 7;
 /** The border province that most needs walls: next to an enemy (or a foreign realm), weakest fort, richest. */
 export function exposedProvince(s: GameState) {
-  const max = hasTech(s, 'star_forts') ? 3 : 2;
+  const max = maxFort(s);
   const foes = new Set(enemiesOf(s, s.player));
   const ps = provsOf(s, s.player).filter(p => p.fort < max).map(p => {
     const nb = neighbours(p.id).map(n => s.provinces[n]?.owner).filter(o => o && o !== s.player);
@@ -192,7 +193,7 @@ add({ id: 'marriage', name: 'Royal Marriage', cat: 'diplomacy', kind: 'mission',
 add({ id: 'peace_envoy', name: 'Peace Envoy', cat: 'diplomacy', kind: 'mission', permanent: true, missions: ['peace'], icon: 'dove', text: 'Negotiate an end to a war.', weight: s => (s.wars.some(w => w.a === s.player || w.b === s.player) ? 2 : 0.6) });
 add({ id: 'expedition', name: 'Voyage of Discovery', cat: 'diplomacy', kind: 'mission', missions: ['explore'], agent: 'explorer', icon: 'anchor', text: 'An explorer sails into the unknown. What they find is up to fate.', weight: s => (ageId(s) === 'reconquest' ? 0 : 0.9) });
 add({ id: 'fealty', name: 'Demand Fealty', cat: 'diplomacy', kind: 'mission', missions: ['vassalize'], icon: 'crown', text: 'Make a much weaker crown your vassal.', weight: () => 0.7 });
-add({ id: 'fortify', name: 'Fortify', cat: 'military', kind: 'instant', icon: 'tower', text: 'Pay 25 ducats: the most exposed province on your borders gains a fort level (up to 2, or 3 with Star Forts).', weight: s => (s.wars.some(w => w.a === s.player || w.b === s.player) ? 1.2 : 0.6),
+add({ id: 'fortify', name: 'Fortify', cat: 'military', kind: 'instant', icon: 'tower', text: 'Pay 25 ducats: the most exposed province on your borders gains a level of walls (up to 2 now, 5 in later ages).', weight: s => (s.wars.some(w => w.a === s.player || w.b === s.player) ? 1.2 : 0.6),
   can: s => player(s).gold < Math.round(25 * inflation(s)) ? `Needs ${Math.round(25 * inflation(s))} ducats` : !exposedProvince(s) ? 'Every border province is fortified already' : null,
   play: s => { const p = exposedProvince(s)!; player(s).gold -= Math.round(25 * inflation(s)); p.fort++; return `${p.name} is fortified: fort ${p.fort}`; } });
 add({ id: 'scouts', name: 'Spy Troop Positions', cat: 'military', kind: 'instant', target: 'nation', icon: 'eye', text: 'Scouts find where a realm\'s armies stand, and how strong they are, for 2 years. Strike where they are weak.', weight: s => (enemiesOf(s, s.player).length ? 1.5 : 0.4),

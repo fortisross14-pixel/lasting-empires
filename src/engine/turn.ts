@@ -1,3 +1,4 @@
+import { maxFort } from './core';
 // New game setup, the yearly turn, and player actions that touch several systems.
 import { GOODS, OLD_GOODS } from '../data/goods';
 import { yearlyChurch } from './culture';
@@ -54,11 +55,14 @@ function histRuler(nation: string, year: number) {
 }
 
 /** Starting ruler for any nation (AI rulers are flavour only). */
+/** A historic ruler's talent from their traits: Mehmed II (Able, Ambitious) is a legend. */
+const histSkill = (t: string[]) => (t.some(x => ['Weak', 'Idle', 'Unstable'].includes(x)) ? 1 : Math.min(6, 3 + (t.includes('Able') ? 2 : 0) + (t.includes('Warrior') ? 1 : 0) + (t.includes('Ambitious') ? 1 : 0)));
+
 function initialRuler(s: GameState, nation: string): Ruler {
   const later = STARTS[s.year]?.rulers[nation];
   if (later && s.year === s.startYear) return { name: later[0], traits: [], arch: 'balanced', skill: 3, from: s.year - 5, to: later[1] };
   const h = histRuler(nation, s.year);
-  if (h) return { name: h.name, traits: [...h.traits], arch: archFromTraits(h.traits), skill: h.traits.some(t => ['Weak', 'Idle', 'Unstable'].includes(t)) ? 1 : 3, from: h.from, to: h.to };
+  if (h) return { name: h.name, traits: [...h.traits], arch: archFromTraits(h.traits), skill: histSkill(h.traits), from: h.from, to: h.to };
   return { name: genRulerName(s, nation), traits: [], arch: pick(s, Object.keys(RULER_ARCHS)), skill: randInt(s, 2, 4), from: s.year, to: s.year + randInt(s, 8, 30) };
 }
 
@@ -69,7 +73,7 @@ export function makeHeirs(s: GameState): Heir[] {
   const juanaBlock = s.player === 'castile' && s.flags.juana && h && h.from >= 1474 && h.from < 1516;
   if (h && !juanaBlock) {
     const arch = archFromTraits(h.traits);
-    out.push({ name: h.name, arch, skill: arch === 'weak' ? 1 : randInt(s, 3, 5), reign: Math.max(3, h.to - h.from), historical: true, traits: [...h.traits] });
+    out.push({ name: h.name, arch, skill: arch === 'weak' ? 1 : Math.max(randInt(s, 3, 5), histSkill(h.traits)), reign: Math.max(3, h.to - h.from), historical: true, traits: [...h.traits] });
   }
   const archs = Object.keys(RULER_ARCHS).filter(a => a !== 'weak' && !out.some(o => o.arch === a)).sort(() => rand(s) - 0.5);
   while (out.length < 3) {
@@ -171,6 +175,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
     s.provinces[id] = { id, name, owner, core: owner, dev, fort, buildings: [], land: geo.land[id], lon, lat, control: 80, good, settlement: initialSettlement(dev, NATIONS.some(n => n.capital === id)), grades: {}, culture: undefined as unknown as string, religion: undefined as unknown as string };
   }
   if (later) { initSociety(s); applyStart(s, startYear); }
+  { const cap = maxFort(s); for (const p of Object.values(s.provinces)) p.fort = Math.min(p.fort, cap); } // walls no higher than the age allows
   for (const n of Object.values(s.nations)) if (n.id !== nationId) n.ruler = initialRuler(s, n.id);
   if (!later) {
   for (const [a, b, v] of START_REL) addRel(s, a, b, v);

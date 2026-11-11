@@ -1,3 +1,4 @@
+import { commandOf, GENERIC_COMMAND } from '../data/characters';
 // AI nations: economy, recruiting, upgrades, war and peace.
 import type { GameState, Nation, TroopCard, RevealItem } from '../types';
 import { TROOPS } from '../data/troops';
@@ -169,8 +170,8 @@ export function landDefence(s: GameState, nationId: string, forceUids: number[],
   const prov = s.provinces[target];
   const home = s.troops.filter(t => t.mission == null && t.str > 0);
   const lastStand = provsOf(s, s.player).length <= 3 || target === player(s).capital;
-  const defenders = strongest(home, 8);
   const gen = s.characters.filter(c => c.role === 'general' && c.mission == null).sort((a, b) => b.skill - a.skill)[0];
+  const defenders = strongest(home, gen ? commandOf(gen.skill) : GENERIC_COMMAND);
   const att = makeSide(n.id, toBattleUnits(force), genericGeneral(s), 0, false);
   const militia = lastStand ? [0, 1].map(i => ({ uid: -300 - i, type: 'levy', vet: 1, str: 100, start: 100, garrison: true })) : [];
   const def = makeSide(s.player, [...toBattleUnits(defenders), ...militia], gen ? { name: gen.name, skill: gen.skill, traits: gen.traits, uid: gen.uid, mult: traitMult(gen) } : null, prov.fort + (lastStand ? 1 : 0), true);

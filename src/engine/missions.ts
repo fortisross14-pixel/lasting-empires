@@ -1,3 +1,4 @@
+import { maxFort } from './core';
 // Missions: characters (and troops) sent to do things over several years.
 import { onTech } from './ages';
 import { troopsNear, travel, locOf, bySea, nearestGarrison, baseFor, buildBase } from './army';
@@ -13,7 +14,7 @@ import { GOODS } from '../data/goods';
 import { GENRES, QUALITY } from '../data/culture';
 import { artCost, createWork, addChurchRel, churchRel, churchHead, acceptBlocked, cultureName } from './culture';
 import { routeBlocked, postBlocked, postTurns, postCost, POST_UPKEEP, dealFor, merchantFactor, price, supplies, routeCap, shortfallCost, takeGoods, materialsFor, defaultMake } from './trade';
-import { OUTCOMES, RARITY } from '../data/characters';
+import { OUTCOMES, RARITY, commandOf, GENERIC_COMMAND } from '../data/characters';
 import { TECH, AGE_NAMES } from '../data/techs';
 import { BUILDINGS } from '../data/techs';
 import {
@@ -527,7 +528,7 @@ function completeResearch(s: GameState, m: Mission, ch: Character) {
   onTech(s, t.id);
   player(s).prestige += 1;
   if (t.fx?.stability) player(s).stability = clamp(player(s).stability + t.fx.stability, -3, 3);
-  if (t.id === 'star_forts') { const cap = s.provinces[player(s).capital]; if (cap && cap.owner === s.player) cap.fort = Math.min(3, cap.fort + 1); }
+  if (t.id === 'star_forts') { const cap = s.provinces[player(s).capital]; if (cap && cap.owner === s.player) cap.fort = Math.min(maxFort(s), cap.fort + 1); }
   const items: RevealItem[] = [{ title: t.name, text: t.desc, tone: 'good', kind: 'book' }];
   const o = hasCore(s, 'open') ? rollBest(s, ch) : rollOutcome(s, ch);
   if (o >= 3) {
@@ -586,10 +587,10 @@ export function landPhase(s: GameState, missionId: number) {
       finish(s, m); return;
     }
     const enemy = s.nations[prov.owner];
-    const troops = s.troops.filter(t => m.troops.includes(t.uid));
+    const troops = s.troops.filter(t => m.troops.includes(t.uid)).slice(0, commandOf(ch.skill));
     if (!troops.length) { finish(s, m); return; }
     const att = makeSide(s.player, toBattleUnits(troops), { name: ch.name, skill: ch.skill, traits: ch.traits, uid: ch.uid, mult: traitMult(ch) }, 0, true);
-    const defUnits = [...troopsNear(s, enemy.id, prov.id)].sort((a, b) => armyPower([b]) - armyPower([a])).slice(0, m.kind === 'raid' ? 4 : 8);
+    const defUnits = [...troopsNear(s, enemy.id, prov.id)].sort((a, b) => armyPower([b]) - armyPower([a])).slice(0, m.kind === 'raid' ? 3 : GENERIC_COMMAND + (prov.id === enemy.capital ? 1 : 0));
     const fort = m.kind === 'raid' ? Math.max(0, prov.fort - 1) : prov.fort;
     if (!defUnits.length && fort === 0) {
       // undefended: walks in
@@ -702,7 +703,7 @@ function resolveOther(s: GameState, m: Mission, ch: Character) {
     if (prov.owner !== s.player) { finish(s, m); return; }
     const o = hasCore(s, 'consolidation') ? rollBest(s, ch) : rollOutcome(s, ch);
     const g = GRADES[o];
-    if (b.id === 'fortress') { prov.fort++; if (o >= 3 && prov.fort < 3) prov.fort++; } else { prov.buildings.push(b.id); prov.grades = { ...(prov.grades ?? {}), [b.id]: g.mult }; }
+    if (b.id === 'fortress') { prov.fort = Math.min(maxFort(s), prov.fort + 1); if (o >= 3) prov.fort = Math.min(maxFort(s), prov.fort + 1); } else { prov.buildings.push(b.id); prov.grades = { ...(prov.grades ?? {}), [b.id]: g.mult }; }
     if (b.id === 'temple') me.stability = clamp(me.stability + 1, -3, 3);
     if ((b.id === 'workshop' || b.id === 'manufactory') && !prov.make) prov.make = defaultMake(s);
     me.prestige += o >= 3 ? o : 1;

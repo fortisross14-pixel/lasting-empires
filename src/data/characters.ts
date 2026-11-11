@@ -39,6 +39,11 @@ export const OUTCOME_ODDS: Record<Rarity, number[]> = {
   legendary: [2, 18, 35, 25, 20],
 };
 
+/** How many companies a commander can lead into one battle, by skill: ordinary 3, legendary 8. */
+export const commandOf = (skill: number) => (skill >= 6 ? 8 : Math.max(3, skill + 1));
+/** An enemy commander without a name leads this many; the sovereign at the capital one more. */
+export const GENERIC_COMMAND = 4;
+
 export const RARITY_ORDER: Rarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 
 export interface TraitDef { id: string; name: string; role: Role | 'any'; desc: string; }

@@ -1,3 +1,4 @@
+import { maxFort } from './core';
 // The shape of the realm: its rank, how many missions it can run a year, viceroys, and civil wars.
 import type { GameState, Nation, Province, Character } from '../types';
 import { player, provsOf, rand, clamp, uid, push, log, declareWar, nationName, atWar, armyPower } from './core';
@@ -92,7 +93,7 @@ export function yearlyViceroys(s: GameState, q: number) {
       if (focus === 'order' && p.dev < 8 && rand(s) < 0.025 * k) p.dev++;
       if (focus === 'order') p.favor = Math.min(30, (p.favor ?? 0) + k / 2);
       if (focus === 'people') p.favor = Math.min(30, (p.favor ?? 0) + k);
-      if (focus === 'arms' && p.fort < 2 && rand(s) < 0.02 * k) p.fort++;
+      if (focus === 'arms' && p.fort < Math.min(2, maxFort(s)) && rand(s) < 0.02 * k) p.fort++;
       if (focus === 'trade' && rand(s) < 0.03 * k) {
         const opt = ['market', 'farm', 'mine', 'fishery', 'pasture'].find(b => buildingAllowed(s, id, b) === null);
         if (opt) { p.buildings.push(opt); log(s, `${ch.name} builds a ${BUILDINGS[opt].name.toLowerCase()} in ${p.name}.`, 'good'); }

@@ -1,3 +1,4 @@
+import { commandOf, GENERIC_COMMAND } from '../data/characters';
 // Where armies stand, how long they take to march, who can fight where,
 // enemy attacks announced a quarter ahead, and invasion bases for far wars.
 import type { GameState, TroopCard, Incoming } from '../types';
@@ -146,6 +147,7 @@ export function resolveIncoming(s: GameState) {
     const near = troopsNear(s, s.player, prov.id);
     const chosen = inc.chosen ? s.troops.filter(t => inc.defenders!.includes(t.uid) && t.str > 0) : near;
     const gen = s.characters.find(c => c.uid === inc.general && c.mission == null) ?? (inc.chosen ? undefined : s.characters.filter(c => c.role === 'general' && c.mission == null).sort((a, b) => b.skill - a.skill)[0]);
+    chosen.splice(gen ? commandOf(gen.skill) : GENERIC_COMMAND);
     const last = provsOf(s, s.player).length <= 3 || prov.id === player(s).capital;
     const militia = [0, 1].slice(0, last ? 2 : 1).map(i => ({ uid: -300 - i, type: 'levy', vet: 1, str: 100, start: 100, garrison: true }));
     const att = makeSide(n.id, toBattleUnits(force), genericGeneral(s), 0, false);
