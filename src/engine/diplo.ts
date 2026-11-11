@@ -90,6 +90,24 @@ export function concludePeace(s: GameState, enemy: string, termIds: string[], th
   return items;
 }
 
+/** A beaten realm gives up on its own: no army left, and the player holds all its heartland
+ *  (or its capital, with at most two provinces left). The outcome is certain, so no treaty is needed. */
+export function autoSurrender(s: GameState) {
+  for (const w of [...s.wars]) {
+    if (w.a !== s.player && w.b !== s.player) continue;
+    const enemy = w.a === s.player ? w.b : w.a, n = s.nations[enemy];
+    if (!n?.alive || n.army.length) continue;
+    const left = provsOf(s, enemy).length;
+    const cores = Object.values(s.provinces).filter(p => p.core === enemy);
+    const allCores = cores.length > 0 && cores.every(p => p.owner === s.player);
+    const cap0 = NATIONS.find(d => d.id === enemy)?.capital;
+    const capital = !!cap0 && s.provinces[cap0]?.owner === s.player && left <= 2;
+    if (!(allCores || capital) || left > 8) continue;
+    const items = concludePeace(s, enemy, ['annex']);
+    push(s, { kind: 'reveal', title: `${n.name} surrenders`, subtitle: 'Their armies are gone and their lands are yours: no treaty needed', items });
+  }
+}
+
 // ---------- subjects ----------
 export const subjectsOf = (s: GameState, n = s.player): Nation[] => Object.values(s.nations).filter(x => x.alive && x.overlord === n);
 export const tributeShare = (x: Nation) => (x.subject === 'union' ? 0.4 : 0.25);

@@ -34,7 +34,7 @@ import { rollEvents, EVENT } from './events';
 import { AMBITIONS, ambitionOptions } from './drafts';
 import { START_FLEETS, yearlyFleet } from './navy';
 import { initSociety, yearlySociety } from './society';
-import { yearlySubjects, unionClaim } from './diplo';
+import { yearlySubjects, unionClaim, autoSurrender } from './diplo';
 
 export const SAVE_VERSION = 2;
 
@@ -427,8 +427,9 @@ export function endTurn(s: GameState): YearReport | null {
     characterAging(s);
     successionCheck(s);
     checkAmbition(s);
+    autoSurrender(s);
     yearlyGoals(s);
-  } else checkGoals(s, false);
+  } else { autoSurrender(s); checkGoals(s, false); }
   scriptedHistory(s);
   if (!provsOf(s, s.player).length) {
     s.over = true;
