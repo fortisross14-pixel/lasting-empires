@@ -1,6 +1,6 @@
 // Bundles the game into a single self-contained HTML file.
 import { build } from 'esbuild';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, cpSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
 const res = await build({ entryPoints: ['src/main.ts'], bundle: true, minify: !process.env.NOMIN, write: false, format: 'iife', target: 'es2020', legalComments: 'none' });
@@ -37,6 +37,7 @@ self.addEventListener('fetch', e => {
 mkdirSync('dist', { recursive: true });
 writeFileSync('dist/lasting-empires.html', artifact);
 writeFileSync('dist/index.html', standalone);
+cpSync('art', 'dist/art', { recursive: true }); // card paintings, fetched on demand
 writeFileSync('index.html', standalone); // served by GitHub Pages from the repo root
 writeFileSync('sw.js', sw);
 console.log('built', (artifact.length / 1024).toFixed(0) + ' KB');

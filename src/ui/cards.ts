@@ -7,6 +7,10 @@ import { CARDS, cardType, CARD_TYPE_NAME, unitFor } from '../engine/cards';
 import { roleName, troopPower } from '../engine/core';
 import { h } from './dom';
 import { icon } from './icons';
+import { artImg } from './art';
+
+/** The art panel: the painting when there is one, else the line icon. */
+const artDiv = (name: string, fallback: string, ...kids: (HTMLElement | null)[]) => { const pic = artImg(name); return h('div', { class: 'c-art' + (pic ? ' has-pic' : ''), html: pic ?? fallback }, ...kids); };
 
 interface Opts { small?: boolean; selected?: boolean; dim?: boolean; onclick?: (e: Event) => void; badge?: string; cls?: string; wide?: boolean; count?: number; }
 
@@ -28,7 +32,7 @@ export function troopCard(t: Pick<TroopCard, 'type' | 'vet' | 'str'> & { mission
   const d = TROOPS[t.type];
   return shell('troop', { ...o, cls: `tier${d.tier} ${o.cls ?? ''}` },
     h('div', { class: 'c-top' }, h('span', { class: 'c-name' }, d.name), h('span', { class: 'c-vet' }, stars(t.vet))),
-    h('div', { class: 'c-art', html: icon(d.icon, o.small ? 26 : 34) }),
+    artDiv('unit_' + t.type, icon(d.icon, o.small ? 26 : 34)),
     h('div', { class: 'c-power', title: 'Total strength' }, h('b', {}, String(Math.round(troopPower(t)))), h('small', {}, VET_NAME[Math.min(3, t.vet)])),
     (t.might ?? 1) > 1 ? h('div', { class: 'c-might', title: 'Forged: worth this many ordinary companies' }, `×${(t.might ?? 1).toFixed(1)}`) : null,
     h('div', { class: 'c-stats' },
@@ -42,7 +46,7 @@ export function equipCard(e: Pick<EquipCard, 'type'>, o: Opts = {}) {
   const d = EQUIPMENT[e.type];
   return shell('equip', o,
     h('div', { class: 'c-top' }, h('span', { class: 'c-name' }, d.name)),
-    h('div', { class: 'c-art', html: icon(d.icon, o.small ? 26 : 34) }),
+    artDiv('card_eq_' + e.type, icon(d.icon, o.small ? 26 : 34)),
     h('div', { class: 'c-text' }, o.small ? 'Equipment' : d.desc),
   );
 }
@@ -51,7 +55,7 @@ export const ROLE_ICON: Record<string, string> = { general: 'helm', diplomat: 's
 
 export function charCard(c: Character, s: GameState, o: Opts = {}) {
   if (o.wide) return shell('char', { ...o, cls: `r-${c.rarity} role-${c.role} ty-person ${o.cls ?? ''}` },
-    h('div', { class: 'c-art', html: icon(ROLE_ICON[c.role] ?? 'crown', 34) }),
+    artDiv('role_' + c.role, icon(ROLE_ICON[c.role] ?? 'crown', 34)),
     h('div', { class: 'c-body' },
       h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, `Person · ${c.ruler ? 'Monarch' : roleName[c.role]}`), h('span', { class: 'c-rarity' }, RARITY[c.rarity].name)),
       h('div', { class: 'c-name c-title' }, c.name),
@@ -59,7 +63,7 @@ export function charCard(c: Character, s: GameState, o: Opts = {}) {
       c.mission != null ? h('div', { class: 'c-away' }, c.mission === -1 ? 'Viceroy' : 'On mission') : null));
   return shell('char', { ...o, cls: `r-${c.rarity} role-${c.role} ${o.cls ?? ''}` },
     h('div', { class: 'c-top' }, h('span', { class: 'c-role' }, c.ruler ? 'Monarch' : roleName[c.role]), h('span', { class: 'c-gem', title: RARITY[c.rarity].name })),
-    h('div', { class: 'c-art', html: icon(ROLE_ICON[c.role] ?? 'crown', o.small ? 24 : 32) }),
+    artDiv('role_' + c.role, icon(ROLE_ICON[c.role] ?? 'crown', o.small ? 24 : 32)),
     h('div', { class: 'c-name c-person' }, c.name),
     h('div', { class: 'c-rarity' }, RARITY[c.rarity].name),
     h('div', { class: 'c-traits' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || '—'),
@@ -78,11 +82,12 @@ export function handCard(id: string, o: Opts = {}) {
   const d = CARDS[id];
   const unit = d.cls && current ? unitFor(current, d.cls) : d.troop;
   const t = unit ? TROOPS[unit] : null;
+  const pic = unit ? 'unit_' + unit : d.kind === 'hire' && d.role ? 'role_' + d.role : 'card_' + id;
   const label = d.permanent ? 'Action · permanent' : CARD_TYPE_NAME[cardType(d)];
   if (o.wide) {
     const ty = d.permanent ? 'permanent' : cardType(d);
     return shell('hand', { ...o, cls: `cat-${d.cat} kind-${d.kind} ty-${ty}${d.burden ? ' burden' : ''} ${o.cls ?? ''}` },
-      h('div', { class: 'c-art', html: icon(t?.icon ?? d.icon, 34) }, h('span', { class: 'c-ty' }, d.permanent ? 'Keep' : CARD_TYPE_NAME[cardType(d)])),
+      artDiv(pic, icon(t?.icon ?? d.icon, 34), h('span', { class: 'c-ty' }, d.permanent ? 'Keep' : CARD_TYPE_NAME[cardType(d)])),
       h('div', { class: 'c-body' },
         h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, label)),
         h('div', { class: 'c-name c-title' }, d.name),
@@ -92,7 +97,7 @@ export function handCard(id: string, o: Opts = {}) {
   }
   return shell('hand', { ...o, cls: `cat-${d.cat} kind-${d.kind}${d.burden ? ' burden' : ''} ${o.cls ?? ''}` },
     h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, label)),
-    h('div', { class: 'c-art', html: icon(t?.icon ?? d.icon, o.small ? 24 : 32) }),
+    artDiv(pic, icon(t?.icon ?? d.icon, o.small ? 24 : 32)),
     h('div', { class: 'c-name c-title' }, d.name),
     t ? h('div', { class: 'c-stats' }, h('span', {}, h('b', {}, 'M'), t.melee), h('span', {}, h('b', {}, 'F'), t.fire), h('span', {}, h('b', {}, 'D'), t.def)) : null,
     o.small || t ? null : h('div', { class: 'c-text' }, d.text),
