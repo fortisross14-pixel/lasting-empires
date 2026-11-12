@@ -14,7 +14,7 @@ import { shipBlocked } from './navy';
 import { shortfallCost, takeGoods, hireNeeds, postCap } from './trade';
 import { setCardPool, acceptCap, giftCost, sendGift, churchHead } from './culture';
 import {
-  ageId, ageDef, pioneerNow, enemiesOf, player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore, techFx, ageIndex, govOf } from './core';
+  ageId, ageDef, pioneerNow, enemiesOf, player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore, techFx, ageIndex, govOf, courtCount, courtCap } from './core';
 
 export type CardTarget = 'none' | 'nation' | 'mission' | 'troop';
 export type CardKind = 'troop' | 'ship' | 'equip' | 'hire' | 'mission' | 'instant';
@@ -185,7 +185,7 @@ add({ id: 'hire_diplomat', name: 'Engage a Diplomat', cat: 'diplomacy', kind: 'h
 add({ id: 'embassy', name: 'Embassy', cat: 'diplomacy', kind: 'mission', permanent: true, missions: ['relations'], icon: 'scroll', text: 'Send a diplomat to improve relations (+25).', weight: () => 2 });
 add({ id: 'import_contract', name: 'Import Contract', cat: 'economy', kind: 'mission', missions: ['route'], trade: 'buy', icon: 'coin', text: 'A merchant opens a route that buys 1–4 loads a year of one good abroad, every quarter. Quick to set up; dear unless you have a trade post there.', weight: s => (Object.values(s.short ?? {}).some(v => v > 0.1) ? 1.6 : 1.1) });
 add({ id: 'export_contract', name: 'Export Contract', cat: 'economy', kind: 'mission', missions: ['route'], trade: 'sell', icon: 'coin', text: 'A merchant opens a route that sells 1–4 loads a year of one good abroad, every quarter. Better prices through a trade post.', weight: () => 1 });
-add({ id: 'trading_post', name: 'Trade Post Charter', cat: 'economy', kind: 'mission', missions: ['post'], icon: 'anchor', text: 'A merchant founds a post abroad: 2 quarters next door, up to 6 overseas. Routes with that realm then buy below the market price and sell above it.', weight: s => (s.posts.length < postCap(s) ? 0.6 : 0.1) });
+add({ id: 'trading_post', name: 'Trade Post Charter', cat: 'economy', kind: 'mission', missions: ['post'], icon: 'anchor', text: 'A merchant founds a post abroad: 2 quarters next door, up to 6 overseas. Routes with that realm then buy below the market price and sell above it.', weight: s => (s.posts.length < postCap(s) ? 0.6 : 0) });
 add({ id: 'merchant_route', name: 'Trade Route', cat: 'economy', kind: 'mission', missions: ['route'], icon: 'coin', text: 'An old route charter: buy or sell a good abroad.', weight: never });
 add({ id: 'trade_route', name: 'Trade Treaty', cat: 'diplomacy', kind: 'mission', missions: ['trade'], icon: 'coin', text: 'Sign a trade treaty: ducats every year, and better prices on your trade routes with them.', weight: () => 2 });
 add({ id: 'alliance_pact', name: 'Alliance Pact', cat: 'diplomacy', kind: 'mission', missions: ['alliance'], icon: 'hands', text: 'Seek an alliance. They will join your wars.', weight: () => 1.2 });
@@ -198,7 +198,7 @@ add({ id: 'fortify', name: 'Fortify', cat: 'military', kind: 'instant', icon: 't
   play: s => { const p = exposedProvince(s)!; player(s).gold -= Math.round(25 * inflation(s)); p.fort++; return `${p.name} is fortified: fort ${p.fort}`; } });
 add({ id: 'scouts', name: 'Spy Troop Positions', cat: 'military', kind: 'instant', target: 'nation', icon: 'eye', text: 'Scouts find where a realm\'s armies stand, and how strong they are, for 2 years. Strike where they are weak.', weight: s => (enemiesOf(s, s.player).length ? 1.5 : 0.4),
   targetOk: (s, t) => t !== s.player && !!s.nations[t]?.alive, play: (s, t) => { s.nations[t].spiedUntil = Math.max(s.nations[t].spiedUntil ?? 0, s.year + 2); return `Scouts report where the ${s.nations[t].adj} armies stand`; } });
-add({ id: 'integration', name: 'Integration Treaty', cat: 'diplomacy', kind: 'mission', missions: ['integrate'], icon: 'hands', text: 'Fold a loyal vassal or union crown into the realm.', weight: s => (Object.values(s.nations).some(n => n.overlord === s.player) ? 1.2 : 0.1) });
+add({ id: 'integration', name: 'Integration Treaty', cat: 'diplomacy', kind: 'mission', missions: ['integrate'], icon: 'hands', text: 'Fold a loyal vassal or union crown into the realm.', weight: s => (Object.values(s.nations).some(n => n.overlord === s.player) ? 1.2 : 0) });
 add({ id: 'spy_network', name: 'Spy Network', cat: 'diplomacy', kind: 'instant', target: 'nation', icon: 'eye', text: 'Reveal a nation\'s army and where it stands for 10 years. Missions against it get +10%.', weight: () => 1,
   targetOk: (s, t) => t !== s.player, play: (s, t) => { s.nations[t].spiedUntil = s.year + 10; return `Your agents report from ${nationName(s, t)}`; } });
 add({ id: 'royal_feast', name: 'Royal Feast', cat: 'diplomacy', kind: 'instant', target: 'nation', icon: 'cup', text: 'Pay 10 ducats: relations +25 with a nation.', weight: () => 1,
@@ -206,30 +206,30 @@ add({ id: 'royal_feast', name: 'Royal Feast', cat: 'diplomacy', kind: 'instant',
   play: (s, t) => { player(s).gold -= 10; addRel(s, s.player, t, 25); return `Relations with ${nationName(s, t)} +25`; } });
 add({ id: 'lavish_gifts', name: 'Lavish Gifts', cat: 'diplomacy', kind: 'instant', target: 'mission', icon: 'cup', text: 'Pay 15 ducats: a diplomatic mission gets +20% success.', weight: () => 0.8,
   can: s => player(s).gold < 15 ? 'Needs 15 ducats' : null,
-  targetOk: (s, t) => s.missions.some(m => String(m.id) === t && ['relations', 'trade', 'alliance', 'marriage', 'peace'].includes(m.kind)),
+  targetOk: (s, t) => s.missions.some(m => String(m.id) === t && ['relations', 'trade', 'alliance', 'marriage', 'peace', 'vassalize', 'integrate'].includes(m.kind)),
   play: (s, t) => { player(s).gold -= 15; s.missions.find(x => String(x.id) === t)!.bonus += 0.2; return 'The envoys carry gold and silk'; } });
 add({ id: 'claim', name: 'Fabricated Claim', cat: 'diplomacy', kind: 'instant', target: 'nation', icon: 'scroll', text: 'You may declare war on a nation without losing stability.', weight: () => 0.8,
   targetOk: (s, t) => t !== s.player, play: (s, t) => { s.flags['claim_' + t] = 1; return `You hold a claim against ${nationName(s, t)}`; } });
 
-add({ id: 'conquista', name: 'Conquista', cat: 'military', kind: 'mission', missions: ['conquista'], agent: 'conqueror', icon: 'sword', text: 'A conqueror leads troops against a native people overseas.', weight: s => (Object.values(s.overseas).some(o => o.found) ? 1 : 0.15) });
+add({ id: 'conquista', name: 'Conquista', cat: 'military', kind: 'mission', missions: ['conquista'], agent: 'conqueror', icon: 'sword', text: 'A conqueror leads troops against a native people overseas.', weight: s => (Object.values(s.overseas).some(o => o.found) ? 1 : 0) });
 
 // ---------- internal ----------
 add({ id: 'hire_admin', name: 'Appoint an Administrator', cat: 'internal', kind: 'hire', role: 'admin', icon: 'quill', text: 'Meet three officials, keep one. Costs 1 manpower.', weight: () => 1.1 });
 add({ id: 'royal_works', name: 'Royal Works', cat: 'internal', kind: 'mission', missions: ['build'], group: 'internal', icon: 'hammer', text: 'Build a temple, library, barracks, fortress, courthouse or university.', weight: () => 2.5 });
 add({ id: 'settlers', name: 'Settlers', cat: 'internal', kind: 'mission', missions: ['develop'], icon: 'wheat', text: 'Develop a province: +1 development.', weight: () => 1.5 });
-add({ id: 'found_settlement', name: 'Found a Settlement', cat: 'internal', kind: 'mission', missions: ['found'], icon: 'tower', text: 'Found a village, town or city where there is none. The better the administrator, the bigger it starts.', weight: s => (provsOf(s, s.player).some(p => !p.settlement) ? 1.4 : 0.2) });
+add({ id: 'found_settlement', name: 'Found a Settlement', cat: 'internal', kind: 'mission', missions: ['found'], icon: 'tower', text: 'Found a village, town or city where there is none. The better the administrator, the bigger it starts.', weight: s => (provsOf(s, s.player).some(p => !p.settlement) ? 1.4 : 0) });
 add({ id: 'grow_settlement', name: 'Grow your Settlement', cat: 'internal', kind: 'mission', missions: ['grow'], icon: 'tower', text: 'Grow a village to a town, a town to a city, a city to a metropolis.', weight: () => 1.3 });
 add({ id: 'royal_progress', name: 'Royal Progress', cat: 'internal', kind: 'mission', missions: ['progress'], icon: 'crown', text: 'Tour the realm: stability +1, prestige +2, control +10 everywhere.', weight: () => 1.2 });
-add({ id: 'colonial_charter', name: 'Colonial Charter', cat: 'internal', kind: 'mission', missions: ['colonize'], agent: 'colonist', icon: 'tower', text: 'A colonist settles a discovered land (1 manpower).', weight: s => (Object.values(s.overseas).some(o => o.found) ? 1.2 : 0.15) });
+add({ id: 'colonial_charter', name: 'Colonial Charter', cat: 'internal', kind: 'mission', missions: ['colonize'], agent: 'colonist', icon: 'tower', text: 'A colonist settles a discovered land (1 manpower).', weight: s => (Object.values(s.overseas).some(o => o.found) ? 1.2 : 0) });
 add({ id: 'patronage', name: 'Commission a Work of Art', cat: 'culture', agent: 'artist', kind: 'mission', missions: ['artwork'], icon: 'quill', text: 'An artist makes a painting, poem, treatise or monument. The better the work, the longer it cheers the people; the best pay ducats, bring prestige and a free card.', weight: () => 1.3 });
-add({ id: 'religious_mission', name: 'Religious Mission', cat: 'culture', agent: 'priest', kind: 'mission', missions: ['convert'], icon: 'church', text: 'Preachers convert a province to your faith.', weight: s => (provsOf(s, s.player).some(p => p.religion !== s.stateReligion) ? 1.3 : 0.1) });
+add({ id: 'religious_mission', name: 'Religious Mission', cat: 'culture', agent: 'priest', kind: 'mission', missions: ['convert'], icon: 'church', text: 'Preachers convert a province to your faith.', weight: s => (provsOf(s, s.player).some(p => p.religion !== s.stateReligion) ? 1.3 : 0) });
 add({ id: 'royal_grace', name: 'Royal Grace', cat: 'culture', agent: 'leader', kind: 'mission', missions: ['grace'], icon: 'mood', text: 'A cultural leader wins the hearts of one province. A better one is faster and kinder.', weight: s => (provsOf(s, s.player).some(p => happinessOf(s, p).value < 50) ? 1.3 : 0.5) });
-add({ id: 'assimilation', name: 'Cultural Integration', cat: 'culture', agent: 'leader', kind: 'mission', missions: ['assimilate'], icon: 'scroll', text: 'Bring a province of foreign culture into your ways.', weight: s => (provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? 1.1 : 0.1) });
+add({ id: 'assimilation', name: 'Cultural Integration', cat: 'culture', agent: 'leader', kind: 'mission', missions: ['assimilate'], icon: 'scroll', text: 'Bring a province of foreign culture into your ways.', weight: s => (provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? 1.1 : 0) });
 add({ id: 'hire_courtier', name: 'Invite a Courtier', cat: 'culture', kind: 'hire', role: 'courtier', icon: 'people', text: 'Meet three courtiers, keep one. Their first mission makes them a churchman, an artist or a cultural leader for good. Costs 1 manpower.', weight: () => 1.1 });
 add({ id: 'hire_artist', name: 'Invite an Artist', cat: 'culture', kind: 'hire', role: 'artist', icon: 'quill', text: 'Meet three painters, poets and builders, keep one. Costs 1 manpower.', weight: () => 0.6 });
 add({ id: 'hire_priest', name: 'Call a Churchman', cat: 'culture', kind: 'hire', role: 'priest', icon: 'church', text: 'Meet three clerics, keep one. Costs 1 manpower.', weight: () => 0.6 });
 add({ id: 'holy_see', name: 'Mission to the Church', cat: 'culture', agent: 'priest', kind: 'mission', missions: ['pilgrimage'], icon: 'church', text: 'A churchman wins the favour of your faith\'s leaders. Blessed realms are happier and more prestigious; censured ones lose stability.', weight: () => 1 });
-add({ id: 'embrace_culture', name: 'Embrace a Culture', cat: 'culture', agent: 'leader', kind: 'mission', missions: ['accept'], icon: 'people', text: 'A cultural leader makes a people of your realm one of your own: no more foreign-culture unhappiness.', weight: s => (provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? 0.9 : 0.1) });
+add({ id: 'embrace_culture', name: 'Embrace a Culture', cat: 'culture', agent: 'leader', kind: 'mission', missions: ['accept'], icon: 'people', text: 'A cultural leader makes a people of your realm one of your own: no more foreign-culture unhappiness.', weight: s => (provsOf(s, s.player).some(p => !s.accepted.includes(p.culture)) ? 0.9 : 0) });
 add({ id: 'church_gift', name: 'Gift to the Church', cat: 'culture', kind: 'instant', icon: 'church', text: 'Pay 25 ducats: your faith\'s leaders favour you more (+10).', weight: () => 0.9,
   can: s => player(s).gold < giftCost(s) ? `Needs ${giftCost(s)} ducats` : null,
   play: s => { sendGift(s); return `Favour with ${churchHead(s).name.replace(/^The /, 'the ')} +10`; } });
@@ -312,7 +312,11 @@ export function addCard(s: GameState, card: string, force = false): boolean {
 }
 
 export function randomCard(s: GameState, cat: Cat, type?: CardType): string {
-  const pool = Object.values(CARDS).filter(c => c.cat === cat && (!type || cardType(c) === type)).map(c => [c.id, c.weight(s)] as [string, number]).filter(([, w]) => w > 0);
+  // never offer what can't be used: a permanent card you already hold, or a hire with a full court
+  const courtFull = courtCount(s) >= courtCap(s);
+  const pool = Object.values(CARDS).filter(c => c.cat === cat && (!type || cardType(c) === type) && !(c.permanent && s.hand.some(h => h.card === c.id)) && !(c.kind === 'hire' && courtFull))
+    .map(c => [c.id, c.weight(s)] as [string, number]).filter(([, w]) => w > 0);
+  if (!pool.length) return Object.values(CARDS).filter(c => c.cat === cat && !c.permanent && c.weight(s) > 0)[0]?.id ?? 'scholar';
   return weighted(s, pool);
 }
 

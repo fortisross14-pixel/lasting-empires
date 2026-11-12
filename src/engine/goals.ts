@@ -1,3 +1,4 @@
+import { tradeIncome } from './trade';
 // Mission mode: how far each goal has come, and the yearly check for victory or failure.
 import type { GameState, Goal, Scenario } from '../types';
 import { MISSION } from '../data/missions';
@@ -130,6 +131,22 @@ export function goalView(s: GameState, g: Goal, deadline: number): GoalView {
     case 'forged': {
       const k = s.flags.stat_forged ?? 0;
       return { title: `Forge troops ${g.n} time${g.n > 1 ? 's' : ''}`, status: `${k} of ${g.n}`, have: k, need: g.n, met: k >= g.n };
+    }
+    case 'people': {
+      const k = s.flags.stat_people ?? 0;
+      return { title: `Hire ${g.n} ${g.n > 1 ? 'people' : 'person'} to your court`, status: `${k} of ${g.n} hired`, have: k, need: g.n, met: k >= g.n };
+    }
+    case 'dismissed': {
+      const k = s.flags.stat_dismissed ?? 0;
+      return { title: `Dismiss ${g.n} ${g.n > 1 ? 'people' : 'person'} to make room`, status: `${k} of ${g.n}`, have: k, need: g.n, met: k >= g.n };
+    }
+    case 'missionsDone': {
+      const k = s.flags.stat_missions_done ?? 0;
+      return { title: `Complete ${g.n} mission${g.n > 1 ? 's' : ''} with your people`, status: `${k} of ${g.n} completed`, have: k, need: g.n, met: k >= g.n };
+    }
+    case 'tradeProfit': {
+      const t = tradeIncome(s), k = Math.round((t.sold - t.bought - t.posts) * 10) / 10;
+      return { title: `Trade profit of ${g.n} ducats a year`, status: `${k} a year (sales ${t.sold.toFixed(1)} − imports ${t.bought.toFixed(1)} − posts ${t.posts.toFixed(1)})`, have: k, need: g.n, met: k >= g.n };
     }
     case 'launched': {
       const k = s.flags['stat_m_' + g.kind] ?? 0, n = g.n ?? 1;

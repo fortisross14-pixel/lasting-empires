@@ -74,6 +74,7 @@ export function takeDraftOption(s: GameState, opt: DraftOption) {
   else if (opt.t === 'card') s.hand.push({ uid: uid(s), card: opt.card });
   else if (opt.t === 'char') {
     s.characters.push(opt.ch);
+    s.flags.stat_people = (s.flags.stat_people ?? 0) + 1;
     if (opt.ch.legendId) { s.usedLegends.push(opt.ch.legendId); log(s, `${opt.ch.name} joins your court!`, 'good'); }
   } else if (opt.t === 'ambition') s.ambition = opt.id;
 }

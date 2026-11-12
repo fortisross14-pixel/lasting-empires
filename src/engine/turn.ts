@@ -133,7 +133,7 @@ export function newMissionGame(nationId: string, mission: string | import('../ty
   // starting points for goals that count what you do during the mission
   // beginner missions hand over the cards their lesson needs
   if (typeof mission === 'string') for (const c of MISSION[mission]?.cards ?? []) addCard(s, c, true);
-  if (typeof mission === 'string' && mission === 'b_court') s.np += 8; // nation points to buy person cards
+  if (typeof mission === 'string' && mission === 'b_court') s.flags.court_bonus = 1; // a court of 8 for the lesson: room for one hire, then someone must go
   if (typeof mission === 'string') player(s).gold += MISSION[mission]?.gold ?? 0;
   s.flags.goal_techs0 = s.techs.length;
   s.flags.goal_built0 = provsOf(s, s.player).reduce((a, p) => a + p.buildings.length, 0);
@@ -582,6 +582,7 @@ export function dismissCharacter(s: GameState, uidC: number) {
   const c = s.characters.find(x => x.uid === uidC);
   if (!c || c.mission != null || c.ruler) return;
   s.characters = s.characters.filter(x => x.uid !== uidC);
+  s.flags.stat_dismissed = (s.flags.stat_dismissed ?? 0) + 1;
 }
 
 export function disbandTroop(s: GameState, uidT: number) {

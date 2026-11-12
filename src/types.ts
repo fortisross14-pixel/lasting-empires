@@ -330,6 +330,10 @@ export type Goal =
   | { k: 'devGain'; n: number }                                // n development gained during the mission
   | { k: 'hired'; n: number }                                  // hire n troop companies
   | { k: 'forged'; n: number }                                 // forge n times
+  | { k: 'people'; n: number }                                 // hire n people to the court
+  | { k: 'dismissed'; n: number }                              // dismiss n people
+  | { k: 'missionsDone'; n: number }                           // finish n missions of any kind
+  | { k: 'tradeProfit'; n: number }                            // trade routes earn n ducats a year, after imports and posts
   | { k: 'launched'; kind: string; n?: number; label?: string } // start n missions of a kind
   | { k: 'atWar'; with: string }                               // be at war with a realm
   | { k: 'gone'; nation: string }                              // that realm is no more (or your subject)

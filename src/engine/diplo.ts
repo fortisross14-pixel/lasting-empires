@@ -1,7 +1,7 @@
 import { NATIONS } from '../data/nations';
 // War score, peace terms, and subject crowns (vassals and personal unions).
 import type { GameState, RevealItem, Nation } from '../types';
-import { player, provsOf, findWar, makePeace, addRel, getRel, inflation, log, nationName, clamp, rand, armyPower, push } from './core';
+import { player, provsOf, findWar, makePeace, addRel, getRel, inflation, log, nationName, clamp, rand, armyPower, push, hasTreaty } from './core';
 import { neighbours } from './map';
 import { transferProvince } from './battle';
 import { drawCat } from './cards';
@@ -35,6 +35,8 @@ export function peaceTerms(s: GameState, enemy: string): PeaceTerm[] {
   const terms: PeaceTerm[] = [];
   const g = Math.round(25 * inflation(s));
   for (let i = 1; i <= 3; i++) terms.push({ id: 'gold' + i, label: `Reparations: ${g * i} ducats`, cost: 10 * i, detail: 'Paid from their treasury' });
+  // a subject that beats its overlord can win its freedom
+  if (player(s).overlord === enemy) terms.push({ id: 'independence', label: `Independence from ${n.name}`, cost: 30, detail: 'You are no longer their subject: no tribute, your own wars' });
   // provinces you occupy: cheap to keep, they go back if you don't
   for (const p of occupiedBy(s, s.player, enemy)) terms.push({ id: 'keep:' + p.id, label: `Keep ${p.name}`, cost: 3 + p.dev, detail: `Occupied by you · development ${p.dev}${p.core === s.player ? ' · once ours' : ''}. Returned if you don't keep it.` });
   const mine = new Set(provsOf(s, s.player).map(p => p.id));
@@ -77,6 +79,9 @@ export function concludePeace(s: GameState, enemy: string, termIds: string[], th
         transferProvince(s, pid, winner);
         items.push({ title: `${s.provinces[pid].name} is ceded`, text: `It now belongs to ${nationName(s, winner)}.`, tone: theyDemand ? 'bad' : 'good', kind: 'scroll' });
       }
+    } else if (id === 'independence' && !theyDemand) {
+      const me = player(s); delete me.overlord; delete me.subject; delete me.subjectSince;
+      items.push({ title: 'Independence!', text: `${n.name} recognises your realm as free and sovereign.`, tone: 'good', kind: 'crown' });
     } else if (id.startsWith('keep:')) {
       const p = s.provinces[id.slice(5)];
       if (p) { delete p.occupiedFrom; items.push({ title: theyDemand ? `${p.name} is lost` : `${p.name} is yours`, text: theyDemand ? `${nationName(s, enemy)} keeps it.` : 'The treaty confirms it.', tone: theyDemand ? 'bad' : 'good', kind: 'scroll' }); }
@@ -199,9 +204,13 @@ export function yearlySubjects(s: GameState): number {
 }
 
 /** A neighbouring crown passes to your house through a royal marriage. */
-export function unionClaim(s: GameState, n: string): boolean {
+/** A crown passes to you by marriage. Small realms always can; married houses on good terms up to 16 provinces;
+ *  a scripted dynastic union (Isabel and Fernando) at any size. */
+export function unionClaim(s: GameState, n: string, scripted = false): boolean {
   const x = s.nations[n];
-  if (!x?.alive || x.overlord || n === s.player || n === 'papacy' || provsOf(s, n).length > 6) return false;
+  const size = provsOf(s, n).length;
+  const married = hasTreaty(s, s.player, n, 'marriage') && getRel(s, s.player, n) >= 50 && !!s.scenario?.goals.some(g => g.k === 'subjects' && g.of.includes(n));
+  if (!x?.alive || x.overlord || n === s.player || n === 'papacy' || (!scripted && size > (married ? 16 : 6))) return false;
   makeSubject(s, n, 'union');
   return true;
 }

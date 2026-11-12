@@ -136,7 +136,9 @@ export function resolveExplore(s: GameState, ch: Character, items: RevealItem[],
     const rulers = [...new Set(ps.map(p => p.owner).filter(x => x !== NO_STATE))].map(x => nationName(s, x));
     return `${r.text} ${ps.length} provinces. Goods: ${goods}.${rulers.length ? ' Rulers: ' + rulers.slice(0, 3).join(', ') + '.' : ' No state rules here.'}`;
   };
-  const r = weighted(s, pool.map(x => [x, 4 - x.dist] as [RegionDef, number]));
+  // explorers look where the crown wants them to: a region your mission must discover is three times as likely
+  const wanted = new Set((s.scenario?.goals ?? []).flatMap(g => (g.k === 'discover' || g.k === 'colonies' || g.k === 'holdIn') ? ((g as { regions?: string[] }).regions ?? []) : []));
+  const r = weighted(s, pool.map(x => [x, (4 - x.dist) * (wanted.has(x.id) ? 3 : 1)] as [RegionDef, number]));
   player(s).prestige += 4 + r.dist * 2;
   items.push({ title: `${r.name} discovered!`, text: found(r), tone: 'good', kind: 'anchor' });
   log(s, `${ch.name} discovers ${r.name}.`, 'good');

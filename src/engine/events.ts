@@ -1,3 +1,4 @@
+import { courtCount, courtCap } from './core';
 // History deck and random events. Each fires as a face-down card that flips to show choices.
 import type { GameState, RevealItem } from '../types';
 import { TROOPS } from '../data/troops';
@@ -154,7 +155,7 @@ export const EVENTS: EventDef[] = [
         const p = clamp(0.55 + getRel(s, 'castile', 'aragon') / 200, 0.3, 0.85);
         if (rand(s) < p) {
           const name = s.nations[other].name;
-          unionClaim(s, other);
+          unionClaim(s, other, true);
           player(s).prestige += 25;
           log(s, `The crowns of Castile and Aragon are united!`, 'good');
           return [good('The Crowns are United!', `${name} enters a personal union with your crown: one monarch, two kingdoms. It pays 40% of its income and fights at your side. After 15 years you may integrate it fully. Prestige +25.`, 'crown')];
@@ -367,7 +368,7 @@ export const EVENTS: EventDef[] = [
   {
     id: 'court_visitor', title: 'A Talent at Court', art: 'crown', chance: 0.07, repeat: 4,
     text: () => 'Three promising people seek a place at your court. You may take one, at no cost.',
-    options: [{ label: 'Meet them', can: s => s.characters.length >= 8 ? 'Your court is crowded' : null, run: s => { push(s, { kind: 'draft', draft: 'court', options: courtOptions(s, undefined, 1) }); return [neutral('Audience', 'Choose one of them.', 'crown')]; } },
+    options: [{ label: 'Meet them', can: s => courtCount(s) >= courtCap(s) ? 'Your court is full' : null, run: s => { push(s, { kind: 'draft', draft: 'court', options: courtOptions(s, undefined, 1) }); return [neutral('Audience', 'Choose one of them.', 'crown')]; } },
       { label: 'Send them away', run: () => [neutral('Not today', 'They leave.')] }],
   },
   {

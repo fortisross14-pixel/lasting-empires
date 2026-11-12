@@ -3,7 +3,7 @@
 import type { GameState, Province, TradeRoute } from '../types';
 import { GOODS, RAW, MADE, FOOD } from '../data/goods';
 import { BUILDINGS } from '../data/techs';
-import { player, provsOf, inflation, controlMult, grade, hasTech, hasCore, atWar, hasTreaty, log, nationName, techFx, govOf } from './core';
+import { player, provsOf, inflation, controlMult, grade, hasTech, hasCore, atWar, hasTreaty, log, nationName, techFx, govOf, ownGoods } from './core';
 import { NO_STATE } from '../data/nations';
 import { travel } from './army';
 import { rankOf, RANKS } from './realm';
@@ -128,6 +128,7 @@ export function routeBlocked(s: GameState, g: string, dir: 'buy' | 'sell', partn
   if (atWar(s, s.player, partner)) return `You are at war with ${n.name}`;
   if (dir === 'buy' && !supplies(s, partner, g)) return `${n.name} has no ${GOODS[g].name} to sell`;
   if (dir === 'sell' && supplies(s, partner, g)) return `${n.name} makes its own ${GOODS[g].name}`;
+  if (dir === 'sell' && !ownGoods(s).has(g) && (s.stock?.[g] ?? 0) < amount) return `You do not make ${GOODS[g].name}: you can only sell what you have`;
   return null;
 }
 

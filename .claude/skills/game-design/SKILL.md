@@ -41,6 +41,10 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 - Conquest only occupies (`occupiedFrom`). The peace treaty decides: `keep:<province>` terms keep occupations, the rest goes back (`concludePeace`). A realm left with no land waits at the table (AI skips it) and dies only if the treaty leaves it nothing.
 - A beaten realm (no army, heartland or capital held) asks for peace each quarter (`autoSurrender` pushes a `peace` prompt with `surrender`): the player sets any terms.
 
+## Diplomacy odds
+- `diploChance` (`src/engine/missions.ts`): base by kind + diplomat skill + relations/250 + `powerEdge` (−15%…+25% from army + 3 per province, log scale). Capped at 95%, or 99% at relations 80+ (`diploCap`). A near-certain deal (≥90%) or an embassy to a non-hostile realm never gets a bad twist.
+- Courts hold 7 (`courtCap`); realms start with 6. Hire cards are not drawn while the court is full, and permanent cards you already hold are never drawn (`randomCard`).
+
 ## Missions and government
 - Mission mode: `MISSIONS` in `src/data/missions.ts`; goal kinds in `Goal` (`src/types.ts`), measured by `goalView` in `src/engine/goals.ts` (title, status in words, progress). A new goal kind needs a `goalView` case and, for custom missions, a `GOAL_KINDS` entry in the builder.
 - Governments: `GOVS` with `fx` like research; changing needs the Revolution card and `startRevolution`.
@@ -54,7 +58,7 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 - In mission mode the mission alone decides victory: finishing it shows the celebration screen and the player may play on. Rank only matters in the sandbox.
 - Unlocks: beginner missions first; finishing them all opens the historic and wild missions; one real mission opens the sandbox (`realUnlocked`, `sandboxUnlocked`, saved in localStorage).
 - Beginner missions teach one system each and are guided: steps complete in order, the current step leads the timeline, and the generic tutorial is off (`tutorial = -1`). Every step must be reachable with the cards the mission hands out.
-- Verify a mission with the sim (`MISSION=<id> npm run sim`) or a scripted play when the bot cannot follow steps.
+- Verify a mission with the sim (`START=<year> MISSION=<id> NATIONS=<nation> npm run sim`; set START for 1600/1700 missions) or a scripted play when the bot cannot follow steps. Check every step's cards are handed out (step cards add copies), and that no goal is already met at the start.
 
 ## Card rates
 - Six decks: Military, Diplomacy, Internal, Economy, Research, People (`culture`). Each draws `0.5 + bonuses` cards a year (capped at 1.4); fractions carry over (`cardAccum`). Add bonuses through `cardRates` parts (buildings, research, monarch, cities, core cards) so the breakdown stays visible to the player.

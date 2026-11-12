@@ -9,7 +9,7 @@ export const REGIONS: Record<string, RegionDef> = {
   west_africa:     { id: 'west_africa', name: 'Guinea Coast', where: 'Africa', dist: 1, text: 'Rivers that carry gold dust to the sea, and kingdoms that trade it.' },
   central_africa:  { id: 'central_africa', name: 'Kongo and Angola', where: 'Africa', dist: 2, needs: ['west_africa'], text: 'The great river of Kongo and the coasts south of it.' },
   southern_africa: { id: 'southern_africa', name: 'Cape of Good Hope', where: 'Africa', dist: 2, needs: ['central_africa'], text: 'The southern tip of Africa. Beyond lies the Indian Ocean.' },
-  east_africa:     { id: 'east_africa', name: 'Swahili Coast', where: 'Africa', dist: 3, needs: ['southern_africa'], text: 'Rich trading towns of coral stone, and Madagascar across the strait.' },
+  east_africa:     { id: 'east_africa', name: 'Swahili Coast', where: 'Africa', dist: 3, needs: ['southern_africa', 'india'], text: 'Rich trading towns of coral stone, and Madagascar across the strait.' },
   india:           { id: 'india', name: 'The Indies', where: 'Asia', dist: 3, needs: ['east_africa', 'southern_africa'], text: 'Pepper, cotton, diamonds and the courts of great princes.' },
   east_indies:     { id: 'east_indies', name: 'Spice Islands', where: 'Asia', dist: 3, needs: ['india'], text: 'Cloves and nutmeg worth their weight in gold.' },
   china:           { id: 'china', name: 'Cathay and Cipangu', where: 'Asia', dist: 3, needs: ['east_indies', 'india'], text: 'The Ming empire, Korea and the islands of Japan.' },

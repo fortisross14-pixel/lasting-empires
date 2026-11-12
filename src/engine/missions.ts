@@ -211,7 +211,7 @@ export function missionTurns(s: GameState, kind: MissionKind, ch: Character, tar
 export function diploChance(s: GameState, kind: MissionKind, ch: Character, target: string, bonus = 0): number {
   const rel = getRel(s, s.player, target);
   const nat = s.nations[target];
-  let p = ({ relations: 0.75, trade: 0.55, marriage: 0.45, alliance: 0.4, peace: 0.35, vassalize: 0.35, integrate: 0.55 } as Record<string, number>)[kind] ?? 0.5;
+  let p = ({ relations: 0.9, trade: 0.55, marriage: 0.45, alliance: 0.4, peace: 0.35, vassalize: 0.35, integrate: 0.55 } as Record<string, number>)[kind] ?? 0.5;
   p += ch.skill * 0.06 + rel / 250 + bonus + rulerMod(s, 'diplo');
   if (ch.traits.includes('silver')) p += 0.1 * traitMult(ch);
   if (kind === 'marriage' && ch.traits.includes('matchmaker')) p += 0.2 * traitMult(ch);
@@ -236,8 +236,19 @@ export function diploChance(s: GameState, kind: MissionKind, ch: Character, targ
       p -= rel / 250; // relations do not help much here
     }
   }
+  // a much stronger crown is hard to refuse (and a much weaker one easy to)
+  if (['relations', 'trade', 'marriage', 'alliance', 'vassalize', 'integrate'].includes(kind)) p += powerEdge(s, target);
   p -= 0.06 * Math.max(0, player(s).stability < 0 ? -player(s).stability : 0);
-  return clamp(p, 0.05, 0.95);
+  return clamp(p, 0.05, diploCap(rel));
+}
+
+/** Best odds a mission can have: 95%, rising to 99% with relations of 80 or more. */
+export const diploCap = (rel: number) => (rel >= 80 ? 0.99 : 0.95);
+/** −15%…+25% from the balance of power: army plus 3 per province, on a log scale. */
+export function powerEdge(s: GameState, target: string): number {
+  const mine = armyPower(s.troops) + 3 * provsOf(s, s.player).length;
+  const theirs = armyPower(s.nations[target]?.army ?? []) + 3 * provsOf(s, target).length;
+  return clamp(0.06 * Math.log2(Math.max(0.01, mine) / Math.max(1, theirs)), -0.15, 0.25);
 }
 
 /** Returns a reason the mission cannot be launched, or null. */
@@ -496,6 +507,7 @@ export function advanceMissions(s: GameState) {
 }
 
 function finish(s: GameState, m: Mission) {
+  s.flags.stat_missions_done = (s.flags.stat_missions_done ?? 0) + 1;
   freeMission(s, m.id); s.missions = s.missions.filter(x => x.id !== m.id);
   // envoys abroad still have to ride home before they can go out again
   if (DIPLO.includes(m.kind)) { const ch = s.characters.find(c => c.uid === m.char); if (ch && ch.mission == null) { ch.back = Math.max(1, envoyTravel(s, m.target)); ch.mission = -4; } }
@@ -656,9 +668,12 @@ function resolveOther(s: GameState, m: Mission, ch: Character) {
       finish(s, m); return;
     }
     let p = diploChance(s, m.kind, ch, target, m.bonus);
-    if (rand(s) < 0.35) {
-      const tw = pick(s, TWISTS);
-      p = clamp(p + tw.d, 0.05, 0.95);
+    // surprises; a near-certain deal (or a friendly embassy) is not spoiled by a bad one
+    const sure = p >= 0.9 || (m.kind === 'relations' && getRel(s, s.player, target) >= 0);
+    const tws = TWISTS.filter(t => !sure || t.d > 0);
+    if (rand(s) < 0.35 && tws.length) {
+      const tw = pick(s, tws);
+      p = clamp(p + tw.d, 0.05, diploCap(getRel(s, s.player, target)));
       if (tw.rel) addRel(s, s.player, target, tw.rel);
       items.push({ title: tw.title, text: tw.text + ` (${tw.d > 0 ? '+' : ''}${Math.round(tw.d * 100)}%)`, tone: tw.d > 0 ? 'good' : 'bad', kind: 'twist' });
     }

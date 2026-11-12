@@ -209,7 +209,7 @@ export function armyCap(s: GameState): number {
   return 5 + Math.floor(ps.length / 2) + barracks + techFx(s, 'army') + (hasCore(s, 'land') ? 2 : 0);
 }
 export function courtCap(s: GameState): number {
-  return 6 + techFx(s, 'seats');
+  return 7 + techFx(s, 'seats') + (s.flags.court_bonus ?? 0); // realms start with 6 people: one free seat, then choose whom to let go
 }
 export const courtCount = (s: GameState) => s.characters.filter(c => !c.ruler).length;
 
