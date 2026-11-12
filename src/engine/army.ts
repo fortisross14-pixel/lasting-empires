@@ -74,7 +74,8 @@ export function settleArmies(s: GameState) {
 export function troopsNear(s: GameState, n: string, target: string, reach = 1): TroopCard[] {
   const list = n === s.player ? s.troops : s.nations[n]?.army ?? [];
   const unready = new Set((s.bases ?? []).filter(b => !b.ready).map(b => 'base:' + b.target));
-  return list.filter(t => t.mission == null && !t.moving && t.str > 0 && !(n === s.player && (unready.has(t.loc ?? '') || recovering(t))) && travel(locOf(s, t, n), target) <= reach);
+  const now = turnNo(s);
+  return list.filter(t => t.mission == null && !t.moving && t.str > 0 && t.fought !== now && !(n === s.player && (unready.has(t.loc ?? '') || recovering(t))) && travel(locOf(s, t, n), target) <= reach);
 }
 
 /** Order troops to another garrison. Nearby is instant; far takes quarters. */

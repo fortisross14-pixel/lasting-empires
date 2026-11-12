@@ -92,7 +92,7 @@ export function handCard(id: string, o: Opts = {}) {
         h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, label)),
         h('div', { class: 'c-name c-title' }, d.name),
         d.cls && t ? h('div', { class: 'c-unit' }, `Hires: ${t.name}`) : null,
-        t ? h('div', { class: 'c-stats' }, h('span', {}, h('b', {}, 'M'), t.melee), h('span', {}, h('b', {}, 'F'), t.fire), h('span', {}, h('b', {}, 'D'), t.def), h('span', {}, h('b', {}, 'upkeep'), t.upkeep)) : null,
+        t ? h('div', { class: 'c-stats' }, h('span', {}, h('b', {}, 'Melee'), t.melee), h('span', {}, h('b', {}, 'Fire'), t.fire), h('span', {}, h('b', {}, 'Defence'), t.def), h('span', {}, h('b', {}, 'upkeep'), t.upkeep)) : null,
         h('div', { class: 'c-text' }, d.text)));
   }
   return shell('hand', { ...o, cls: `cat-${d.cat} kind-${d.kind}${d.burden ? ' burden' : ''} ${o.cls ?? ''}` },
@@ -141,4 +141,23 @@ export function coreCard(id: string, o: Opts & { slotted?: boolean } = {}) {
     o.small ? null : h('div', { class: 'c-text c-pros' }, d.pros.join(' · ')),
     o.small ? null : h('div', { class: 'c-text c-cons' }, d.cons.join(' · ')),
   );
+}
+
+const KIND_NAME: Record<string, string> = { inf: 'Infantry', cav: 'Cavalry', shot: 'Ranged', art: 'Artillery', ship: 'Ship' };
+/** What a troop type does, in words: shown when a troop card is opened. */
+export function troopDetails(type: string, t?: Pick<TroopCard, 'vet' | 'str'>) {
+  const d = TROOPS[type];
+  const row = (k: string, v: string | number, why: string) => h('tr', {}, h('th', {}, k), h('td', {}, h('b', {}, String(v))), h('td', { class: 'muted' }, why));
+  return h('div', { class: 'tdetail' },
+    h('p', {}, h('b', {}, `${d.name} · ${KIND_NAME[d.kind] ?? d.kind}. `), d.desc),
+    h('table', { class: 'tstats' },
+      row('Melee', d.melee, 'damage in close combat: charges and pike fights'),
+      row('Fire', d.fire, 'damage at range: volleys and barrages'),
+      row('Defence', d.def, 'how well it takes blows; walls add +25% a level'),
+      row('Upkeep', d.upkeep, 'ducats a year'),
+      d.siege ? row('Siege', d.siege, 'every 2 points knock down a level of walls') : null,
+      d.transport ? row('Carries', d.transport, 'companies by sea') : null,
+      t ? row('Strength', `${Math.round(t.str)}%`, t.str < 50 ? 'too weak to attack until half strength' : t.str < 100 ? 'heals every season' : 'at full strength') : null,
+      t ? row('Veterancy', VET_NAME[Math.min(3, t.vet)], '+15% defence per star') : null),
+    d.pike ? h('p', { class: 'muted small' }, 'Pikes: allows the Pike Wall tactic.') : null);
 }

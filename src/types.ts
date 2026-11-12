@@ -11,6 +11,7 @@ export interface TroopCard {
   type: string;   // TroopType id
   vet: number;    // 0..3 veterancy stars
   str: number;    // 0..100 strength
+  fought?: number; // turn of its last battle: one battle a season
   mission?: number;
   might?: number; // a forged company is worth this many ordinary ones (1 by default)
   loc?: string;   // where it stands: a province id, or 'base:<province>' for an invasion base

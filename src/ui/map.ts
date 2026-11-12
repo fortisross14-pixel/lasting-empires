@@ -391,6 +391,16 @@ export class MapView {
       pin.append(svgEl('path', { d: `M0 -21 l2.4 4.8 5.2 .7 -3.8 3.6 .9 5.2 -4.7 -2.5 -4.7 2.5 .9 -5.2 -3.8 -3.6 5.2 -.7 Z`, class: 'capmark' + (n.id === s.player && !this.revealAll ? ' mine' : '') }));
       this.marks.append(pin);
     }
+    // your settlements: a small house, bigger for towns and cities, so you can spread them out
+    for (const p of Object.values(s.provinces)) {
+      if (p.owner !== s.player || !p.settlement || s.nations[s.player].capital === p.id || !g.center[p.id]) continue;
+      const [x, y] = g.center[p.id];
+      const k = [0, 0.7, 0.9, 1.1, 1.3][p.settlement] ?? 1;
+      const pin = svgEl('g', { 'data-x': x, 'data-y': y, class: 'settle s' + p.settlement });
+      pin.append(svgEl('path', { d: `M${-6 * k} ${2 * k} V${-4 * k} L0 ${-10 * k} L${6 * k} ${-4 * k} V${2 * k} Z`, class: 'settle-ic' }));
+      if (p.settlement >= 3) pin.append(svgEl('path', { d: `M${-2 * k} ${2 * k} V${-3 * k} H${2 * k} V${2 * k}`, class: 'settle-door' }));
+      this.marks.append(pin);
+    }
     // armies: yours always; others where your spies are watching
     const stacks: Record<string, { n: number; mine: boolean; color: string }> = {};
     const add = (loc: string | undefined, mine: boolean, color: string) => { if (!loc) return; const k = (mine ? 'm:' : 'e:') + loc; (stacks[k] ??= { n: 0, mine, color }).n++; };

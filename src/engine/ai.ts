@@ -126,7 +126,7 @@ function aiWar(s: GameState, n: Nation) {
     const prov = s.provinces[target];
     if (e === s.player) {
       // only the armies standing within a quarter's march can strike, and the player sees them coming
-      const near = strongest(troopsNear(s, n.id, target).filter(t => t.str > 40), 8);
+      const near = strongest(troopsNear(s, n.id, target).filter(t => t.str > 40), GENERIC_COMMAND + (s.nations[n.id].ruler.skill >= 5 ? 2 : 0));
       if (!near.length || attacksOnPlayer >= (revolt ? 2 : 1) || s.incoming?.some(x => x.nation === n.id)) continue;
       attacksOnPlayer++;
       announceAttack(s, n.id, target, near);

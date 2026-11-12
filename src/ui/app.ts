@@ -38,7 +38,7 @@ import { playRound, autoResolve, finishBattle, ratio, breakLevel, hp } from '../
 import { getGeo } from '../engine/map';
 import { h, $, clear, sleep, reduced, fmt, signed } from './dom';
 import { icon } from './icons';
-import { setCardGame, troopCard, charCard, handCard, tacticCard, backCard, flipCard, coreCard } from './cards';
+import { setCardGame, troopCard, charCard, handCard, tacticCard, backCard, flipCard, coreCard, troopDetails } from './cards';
 import { AXES, CORE } from '../data/core';
 import { navyCap, transportOf, hireShip, shipHireCost } from '../engine/navy';
 import { warScore, peaceTerms, enemyDemands, concludePeace, subjectsOf, integrateBlocked, vassalizeBlocked, tributeShare } from '../engine/diplo';
@@ -603,6 +603,8 @@ function renderTop() {
         h('span', { html: icon('hourglass', 18) }), h('span', { class: 'tb-l' }, 'Missions'), S.missions.length ? h('span', { class: 'badge' }, String(S.missions.length)) : null),
       h('button', { class: 'tbtn' + (sheet?.kind === 'chronicle' ? ' on' : ''), onclick: () => toggleSheet('chronicle'), title: 'Chronicle' },
         h('span', { html: icon('laurel', 18) }), h('span', { class: 'tb-l' }, 'Chronicle')),
+      h('button', { class: 'tbtn menu-b', onclick: () => showGameMenu(), title: 'Menu', 'aria-label': 'Menu' },
+        h('span', { html: icon('list', 18) }), h('span', { class: 'tb-l' }, 'Menu')),
       h('button', { id: 'endturn', class: 'btn primary', onclick: onEndTurn }, h('span', { class: 'et-l' }, 'End Turn'), h('small', {}, `${SEASONS[S.quarter ?? 0]} ${S.year}`))),
   );
 }
@@ -1256,6 +1258,7 @@ function armyTab(body: HTMLElement) {
   const gs = [...new Set([...garrisons(S), ...S.troops.filter(t => !t.moving && t.loc).map(t => t.loc!)])];
   body.append(h('h3', {}, 'Your units'), h('p', { class: 'muted small' }, 'Troop cards hire the best unit of their kind you have researched. Better kinds (Tercios, Knights, Cuirassiers, Galleons…) come from the recipes in the Forge: two companies, or a company and an improvement card.'), unitsPanel());
   body.append(h('p', { class: 'muted' }, 'Troops stand in the capital, in provinces with Barracks, or at an invasion base. They heal every season: fastest with Barracks, then the capital, at half speed on the march or in camp. Only troops within a quarter\'s march can attack or defend a province. Tap troops to select them, then move them.'));
+  body.append(h('p', { class: 'muted small' }, 'On troop cards: M = Melee (close combat), F = Fire (range), D = Defence. Tap a company to see its details and move it.'));
   body.append(h('h3', {}, `Armies (${S.troops.length}/${armyCap(S)}) · upkeep ${incomeOf(S, S.player).upkeep.toFixed(1)} a year`));
   const sel = forge.filter(u => S.troops.some(t => t.uid === u));
   const toggle = (uid: number) => { forge = forge.includes(uid) ? forge.filter(x => x !== uid) : [...forge, uid]; renderWin(); };
@@ -1273,6 +1276,7 @@ function armyTab(body: HTMLElement) {
     body.append(h('div', { class: 'cards-row wrap' }, moving.map(t => troopCard(t, { small: true, badge: `${placeName(t.moving!.to)} · ${t.moving!.eta} q` }))));
   }
   if (away.length) body.append(h('p', { class: 'muted' }, `${away.length} companies are away on missions.`));
+  if (sel.length === 1) { const t1 = S.troops.find(t => t.uid === sel[0])!; body.append(troopDetails(t1.type, t1)); }
   if (sel.length) {
     const from = S.troops.find(t => t.uid === sel[0])!;
     body.append(h('div', { class: 'mcap' }, h('b', {}, `${sel.length} selected · move to:`),
@@ -1932,6 +1936,17 @@ function closeModal() {
   m.hidden = true; clear(m);
   modalOpen = false;
 }
+/** The in-game menu: back to the title screen (the game is saved), or keep playing. */
+function showGameMenu() {
+  if (modalOpen) return;
+  openModal(h('div', { class: 'mbox narrow gmenu' }, h('h2', {}, 'Menu'), h('p', { class: 'muted' }, `Your campaign is saved in slot ${slot} every season.`),
+    h('div', { class: 'gm-list' },
+      h('button', { class: 'btn primary', onclick: closeModal }, 'Continue playing'),
+      S.scenario ? h('button', { class: 'btn', onclick: () => { closeModal(); toggleSheet('goals'); } }, 'Mission goals') : null,
+      h('button', { class: 'btn', onclick: () => { closeModal(); toggleSheet('realm'); } }, 'Realm and ruler'),
+      h('button', { class: 'btn', onclick: () => { saveNow(); closeModal(); showTitle(); } }, 'Save and go to the title screen'))));
+}
+
 function confirmBox(title: string, text: string, okLabel: string, ok: () => void) {
   if (modalOpen) return ok();
   openModal(h('div', { class: 'mbox narrow' }, h('h2', {}, title), h('p', {}, text),
@@ -2056,7 +2071,7 @@ function openCardModal(handUid: number) {
 
   if (def.kind === 'troop') {
     const unit = cardTroop(S, def);
-    body.append(h('p', {}, `${def.cls ? `Hires your best ${CLASS_NAME[def.cls].toLowerCase()}: ${TROOPS[unit].name}. ` : ''}1 manpower and ${troopHireCost(S, unit)} ducats. Upkeep ${TROOPS[unit].upkeep} a year. A better general trains better troops: veteran stars depend on the outcome.`), goodsNote(hireNeeds(unit, TROOPS[unit].kind)));
+    body.append(h('p', {}, `${def.cls ? `Hires your best ${CLASS_NAME[def.cls].toLowerCase()}: ${TROOPS[unit].name}. ` : ''}1 manpower and ${troopHireCost(S, unit)} ducats. Upkeep ${TROOPS[unit].upkeep} a year. A better general trains better troops: veteran stars depend on the outcome.`), goodsNote(hireNeeds(unit, TROOPS[unit].kind)), troopDetails(unit));
     const gens = S.characters.filter(c => (c.role === 'general' || c.role === 'conqueror') && c.mission == null);
     let gsel: Character | null = [...gens].sort((a, b) => RARITY_ORDER_I(b) - RARITY_ORDER_I(a))[0] ?? null;
     const gl = h('div', { class: 'cards-row wrap' });
@@ -2117,8 +2132,8 @@ function openCardModal(handUid: number) {
         h('div', { class: 'r-acts' }, r.acts.map(a => h('button', { class: 'btn small' + (a.why ? ' blocked' : ''), title: a.why ?? '', onclick: () => { if (a.why) return toast(a.why, 'bad'); closeModal(); openPlanner(a.kind, a.target, a.building, handUid); } }, a.label)))));
     }
     body.append(list);
-    if (def.missions![0] === 'conquer' && rows.length) {
-      body.insertBefore(h('button', { class: 'btn pickmap', onclick: () => { closeModal(); startMapPick(handUid); } }, '🗺 Select province on the map'), list);
+    if (rows.some(r => r.acts.some(a => S.provinces[a.target]))) {
+      body.insertBefore(h('button', { class: 'btn pickmap', onclick: () => { closeModal(); startMapPick(handUid); } }, '🗺 See the choices on the map'), list);
     }
   } else {
     let target = '';
@@ -2160,18 +2175,21 @@ let pickHand: number | null = null;
 /** Hold (touch) or click (mouse) an enemy province to pick it as the target of an attack card. */
 function startMapPick(handUid: number) {
   const rows = missionTargets(handUid, true);
-  const ids = rows.flatMap(r => r.acts.map(a => a.target));
+  const attack = ['conquer', 'raid', 'conquista'].includes(CARDS[S.hand.find(x => x.uid === handUid)?.card ?? '']?.missions?.[0] ?? '');
+  const ids = rows.flatMap(r => r.acts.filter(a => attack || !a.why).map(a => a.target));
+  if (!attack && !ids.length) { toast('Nowhere to play this card right now', 'bad'); return; }
   pickHand = handUid;
   if (win) closeWin();
   closeSheet();
   map.setPick(true, ids);
   // frame the targets that can be reached now (the far ones are a base away) together with home
-  const near = rows.filter(r => r.acts.some(a => a.kind !== 'base')).flatMap(r => r.acts.map(a => a.target));
-  map.focus([...new Set(near.length ? near : ids)].concat(provsOf(S, S.player).map(p => p.id)), 60);
+  const near = rows.filter(r => r.acts.some(a => a.kind !== 'base')).flatMap(r => r.acts.map(a => a.target)).filter(id => S.provinces[id]);
+  const valid = ids.filter(id => S.provinces[id]);
+  map.focus([...new Set(near.length ? near : valid)].concat(provsOf(S, S.player).map(p => p.id)), 60);
   document.getElementById('pickbar')?.remove();
   const touch = matchMedia('(pointer: coarse)').matches;
   document.body.append(h('div', { id: 'pickbar' },
-    h('span', {}, h('b', {}, 'Pick a target: '), touch ? 'hold a highlighted province.' : 'click a highlighted province.'),
+    h('span', {}, h('b', {}, `${CARDS[S.hand.find(x => x.uid === handUid)!.card].name}: `), touch ? 'hold a highlighted province to choose it.' : 'click a highlighted province.'),
     h('button', { class: 'btn small ghost', onclick: stopMapPick }, 'Cancel')));
 }
 
@@ -2188,7 +2206,8 @@ function onMapPick(id: string) {
   const p = S.provinces[id];
   const row = missionTargets(handUid, true).find(r => r.acts.some(a => a.target === id));
   if (!row) {
-    const why = !p ? 'Not a province' : p.owner === S.player ? `${p.name} is already yours` : !provKnown(S, id) ? 'You have not mapped that land' : !atWar(S, S.player, p.owner) ? `You are not at war with ${nationName(S, p.owner)}` : `${p.name} is out of reach`;
+    const attack = ['conquer', 'raid', 'conquista'].includes(CARDS[S.hand.find(x => x.uid === handUid)!.card].missions?.[0] ?? '');
+    const why = !p ? 'Not a province' : !attack ? `${p.name} is not a choice for this card` : p.owner === S.player ? `${p.name} is already yours` : !provKnown(S, id) ? 'You have not mapped that land' : !atWar(S, S.player, p.owner) ? `You are not at war with ${nationName(S, p.owner)}` : `${p.name} is out of reach`;
     toast(why, 'bad');
     return;
   }
@@ -2613,9 +2632,10 @@ function showIncoming(id: number) {
   const force = n.army.filter(t => inc.force.includes(t.uid));
   const spied = (n.spiedUntil ?? 0) > S.year;
   const near = troopsNear(S, S.player, prov.id);
-  let picked = near.map(t => t.uid);
   const gens = S.characters.filter(c => (c.role === 'general' || c.role === 'conqueror' || (c.ruler && RULER_ARCHS[player(S).ruler.arch]?.role === 'general')) && c.mission == null);
   let gen: number | undefined = [...gens].sort((a, b) => b.skill - a.skill)[0]?.uid;
+  const cap = () => { const g = S.characters.find(c => c.uid === gen); return g ? commandOf(g.skill) : GENERIC_COMMAND; };
+  let picked = [...near].sort((a, b) => armyPower([b]) - armyPower([a])).slice(0, cap()).map(t => t.uid);
   const box = h('div', { class: 'mbox planner' });
   const draw = () => {
     clear(box);
@@ -2625,12 +2645,12 @@ function showIncoming(id: number) {
     box.append(h('h3', {}, 'General'));
     const gr = h('div', { class: 'cards-row wrap' });
     if (!gens.length) gr.append(h('p', { class: 'muted' }, 'No free general: your captains lead.'));
-    for (const c of gens) gr.append(charCard(c, S, { small: true, selected: gen === c.uid, onclick: () => { gen = gen === c.uid ? undefined : c.uid; draw(); } }));
+    for (const c of gens) gr.append(charCard(c, S, { small: true, selected: gen === c.uid, onclick: () => { gen = gen === c.uid ? undefined : c.uid; picked = picked.slice(0, cap()); draw(); } }));
     box.append(gr);
-    box.append(h('h3', {}, `Troops within reach (${picked.length}/${near.length})`));
+    box.append(h('h3', {}, `Troops (${picked.length}/${cap()}) · ${near.length} within reach`), h('p', { class: 'muted small' }, `${S.characters.find(c => c.uid === gen)?.name ?? 'A captain'} can lead ${cap()} companies. The walls (level ${prov.fort}) fight on top. Companies that already fought this season cannot.`));
     const tr = h('div', { class: 'cards-row wrap' });
     if (!near.length) tr.append(h('p', { class: 'bad' }, 'None of your troops can get there in time. The walls and local militia must hold. Move troops to a garrison nearby for next time.'));
-    for (const t of near) tr.append(troopCard(t, { small: true, selected: picked.includes(t.uid), onclick: () => { picked = picked.includes(t.uid) ? picked.filter(x => x !== t.uid) : [...picked, t.uid]; draw(); } }));
+    for (const t of near) tr.append(troopCard(t, { small: true, selected: picked.includes(t.uid), onclick: () => { if (!picked.includes(t.uid) && picked.length >= cap()) return toast(`Your general can lead only ${cap()} companies`, 'bad'); picked = picked.includes(t.uid) ? picked.filter(x => x !== t.uid) : [...picked, t.uid]; draw(); } }));
     box.append(tr);
     box.append(h('div', { class: 'facts' }, h('span', { class: 'fact' }, `Your strength ${Math.round(mine)} + fort ${prov.fort}`), h('span', { class: 'fact' }, `Theirs ${spied ? Math.round(theirs) : `~${Math.round(theirs * 0.8)}–${Math.round(theirs * 1.25)}`}`)));
     box.append(h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: () => { setDefence(S, id, picked, gen); closeModal(); done(); } }, 'Hold the line')));

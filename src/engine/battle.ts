@@ -1,7 +1,7 @@
 // Battles: three rounds, each side commits a face-down tactic, then both flip.
 import { rebelsTake } from './realm';
 import { siegeAftermath } from './history';
-import { campLost } from './army';
+import { campLost, turnNo } from './army';
 import { addInfamy } from './coalition';
 import type { GameState, Battle, BattleSide, BattleUnit, BattleGeneral, RoundLog, TroopCard, BattleRecord } from '../types';
 import { TROOPS, TACTICS } from '../data/troops';
@@ -208,7 +208,7 @@ function syncPlayerTroops(s: GameState, side: BattleSide, won: boolean): { lost:
     let str = u.str;
     if (!won) str *= 0.85;
     if (str < 8) { lost.push(TROOPS[card.type].name); s.troops = s.troops.filter(t => t.uid !== card.uid); s.fleet = s.fleet.filter(t => t.uid !== card.uid); continue; }
-    card.str = Math.round(str);
+    card.str = Math.round(str); card.fought = turnNo(s);
     if (won && card.vet < 3 && rand(s) < 0.25) { card.vet++; promoted.push(TROOPS[card.type].name); }
   }
   return { lost, promoted };
@@ -224,7 +224,7 @@ function syncAITroops(s: GameState, side: BattleSide, won: boolean) {
     let str = u.str;
     if (!won) str *= 0.85;
     if (str < 8) { nat.army = nat.army.filter(t => t.uid !== card.uid); nat.fleet = (nat.fleet ?? []).filter(t => t.uid !== card.uid); }
-    else { card.str = Math.round(str); if (won && card.vet < 3 && rand(s) < 0.15) card.vet++; }
+    else { card.str = Math.round(str); card.fought = turnNo(s); if (won && card.vet < 3 && rand(s) < 0.15) card.vet++; }
   }
 }
 
