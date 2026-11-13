@@ -2359,7 +2359,7 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
         closeModal();
         toast(`${ch.name} sets out`, 'good');
         refresh();
-      } }, 'Launch mission')));
+      } }, 'Send them')));
   };
   draw();
   openModal(box);

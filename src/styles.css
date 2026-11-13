@@ -1601,3 +1601,20 @@ button.mcard { font: inherit; color: inherit; cursor: pointer; width: 100%; }
 [data-style="chancery"] #tabs .tab.on .tab-n { color: #f6f1e6b0; }
 .hero { margin-bottom: 14px; }
 @media (max-width: 640px) { .yr-a { display: none; } }
+
+/* ---- research: paper cards with an ink shadow, one scrolling row of ages ---- */
+[data-style="chancery"] .tfilter { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 0; gap: 0; border-bottom: 1px solid #1b1a1726; }
+[data-style="chancery"] .tfilter::-webkit-scrollbar { display: none; }
+[data-style="chancery"] .tfilter .seg-b { flex: 0 0 auto; padding: 8px 12px; }
+[data-style="chancery"] .tfilter .seg-b.locked { border: 0; opacity: .4; }
+[data-style="chancery"] .tcard { background: var(--card, #fffdf8); border: 1.2px solid #1b1a17; border-radius: 0; box-shadow: 3px 3px 0 #1b1a17; color: var(--text); min-height: 104px; }
+[data-style="chancery"] .tcard::before, [data-style="chancery"] .tcard::after { display: none; }
+[data-style="chancery"] .tc-side { border-right: 1px solid #1b1a1730; }
+[data-style="chancery"] .tc-pts { font-family: var(--f-body); color: var(--text); }
+[data-style="chancery"] .tc-name { font-family: var(--f-display); font-weight: 700; font-size: 18px; letter-spacing: .02em; }
+[data-style="chancery"] .tc-status, [data-style="chancery"] .tc-side small, [data-style="chancery"] .tc-req, [data-style="chancery"] .tc-unl small { color: var(--muted); }
+[data-style="chancery"] .tc-desc { font-size: 14px; }
+[data-style="chancery"] .tcard.active { box-shadow: 3px 3px 0 var(--wax); border-color: var(--wax); }
+[data-style="chancery"] .tcard.known { opacity: 1; background: color-mix(in srgb, var(--good) 8%, #fffdf8); box-shadow: none; }
+[data-style="chancery"] .tcard.locked { filter: none; opacity: .55; box-shadow: none; }
+[data-style="chancery"] .tfilter { flex: none; min-height: 42px; }
