@@ -235,6 +235,19 @@ export class MapView {
     this.clampVb(); this.apply();
   }
 
+  /** Slide the map so a province is not hidden under a panel that covers the bottom `cover` pixels. */
+  reveal(id: string, cover: number) {
+    const c = getGeo().center[id];
+    const r = this.svg.getBoundingClientRect();
+    const m = this.svg.getScreenCTM();
+    if (!c || !m || !r.height) return;
+    const y = m.b * c[0] + m.d * c[1] + m.f - r.top; // where it sits on screen now
+    const visible = r.height - cover;
+    if (visible < 60 || y < visible - 24) return;
+    this.vb.y += (y - visible / 2) / m.d; // screen pixels back to map units
+    this.clampVb(); this.apply();
+  }
+
   private bind() {
     const svg = this.svg;
     svg.addEventListener('pointerdown', e => {

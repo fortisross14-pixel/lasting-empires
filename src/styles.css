@@ -1618,3 +1618,52 @@ button.mcard { font: inherit; color: inherit; cursor: pointer; width: 100%; }
 [data-style="chancery"] .tcard.known { opacity: 1; background: color-mix(in srgb, var(--good) 8%, #fffdf8); box-shadow: none; }
 [data-style="chancery"] .tcard.locked { filter: none; opacity: .55; box-shadow: none; }
 [data-style="chancery"] .tfilter { flex: none; min-height: 42px; }
+
+/* ---- audit fixes ---- */
+/* five numbers on the phone: ducats, men, points, stability, mood */
+@media (max-width: 640px) { [data-style="chancery"] .chip:nth-child(5) { display: flex; } [data-style="chancery"] .chip:nth-child(5) small { display: none; } [data-style="chancery"] .chip:nth-child(2) small, [data-style="chancery"] .chip:nth-child(3) small { display: none; } [data-style="chancery"] .res { padding-right: 2px; } }
+/* buying: a tidy grid on phones instead of a row that scrolls out of sight */
+@media (max-width: 640px) { .shop-row .shop { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; padding-right: 3px; } [data-style="chancery"] .shop-row .shop-b { min-height: 44px; } }
+/* filters never wrap; they scroll */
+[data-style="chancery"] .cfilter { flex: none; overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap; border-bottom: 1px solid #1b1a1726; padding: 0; gap: 0; min-height: 42px; }
+[data-style="chancery"] .cfilter::-webkit-scrollbar { display: none; }
+[data-style="chancery"] .cfilter .seg-b { flex: 0 0 auto; white-space: nowrap; padding: 8px 12px; min-height: 42px; }
+/* tab badge sits in the corner of the tab, not on the icon */
+[data-style="chancery"] .tab-i { position: static; }
+[data-style="chancery"] .tab-c { top: 4px; right: 6px; }
+/* toasts under the top bar: never on top of the buttons you are about to press */
+#toast { bottom: auto; top: calc(var(--top) + 8px); }
+#pickbar { top: auto !important; bottom: calc(var(--tabs) + 10px); }
+/* square corners everywhere; pills stay round */
+[data-style="chancery"] .card.wide, [data-style="chancery"] .iconbtn, [data-style="chancery"] .mcard, [data-style="chancery"] .garrison, [data-style="chancery"] .unit-box, [data-style="chancery"] .cb, [data-style="chancery"] .cb > *, [data-style="chancery"] .mission, [data-style="chancery"] .action, [data-style="chancery"] .nrow, [data-style="chancery"] .trow, [data-style="chancery"] .stat, [data-style="chancery"] .mprog, [data-style="chancery"] .tl-card { border-radius: 0; }
+/* wide cards: full width, the painting fills its panel (the type is already named in the heading line) */
+.cards-grid .card.wide { width: 100%; }
+.card.wide .c-art.has-pic .c-ty { display: none; }
+.card.wide .c-art.has-pic .c-pic { height: 100%; aspect-ratio: auto; }
+/* small cards stay legible */
+.card.small .c-rarity, .card.small .c-traits, .card.small .c-name, .card.small .c-role, .card.small .c-top { font-size: max(10.5px, 1em); }
+.card.small .c-traits { font-size: 10.5px; line-height: 1.15; }
+.card.small .c-rarity { font-size: 10px; }
+/* chronicle: bad news readable on paper */
+[data-style="chancery"] .log .t-bad { color: var(--wax); }
+[data-style="chancery"] .log .t-good { color: var(--good); }
+/* hit areas */
+[data-style="chancery"] .seg-b { min-height: 40px; }
+[data-style="chancery"] .btn.small { min-height: 40px; }
+/* folded sections and one-line build rows */
+.fold { border-top: 1px solid #1b1a1726; }
+.fold:last-of-type { border-bottom: 1px solid #1b1a1726; }
+.fold > summary, .build-row > summary { display: flex; align-items: center; gap: 10px; min-height: 52px; cursor: pointer; list-style: none; padding: 4px 2px; }
+.fold > summary::-webkit-details-marker, .build-row > summary::-webkit-details-marker { display: none; }
+.fold > summary b { font-family: var(--f-display); font-size: 16px; letter-spacing: .08em; text-transform: uppercase; color: var(--wax); }
+.fold > summary small { color: var(--muted); margin-left: auto; }
+.br-chev { color: var(--muted); transition: rotate .15s; flex: none; }
+details[open] > summary .br-chev { rotate: 180deg; }
+.build-row { border-top: 1px solid #1b1a1714; padding: 0 2px; }
+.build-row > summary .a-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.build-row > summary .a-t small { color: var(--muted); font-size: 13px; }
+.build-row > summary .a-t small.bad { color: var(--wax); }
+.build-row.blocked > summary b { color: var(--muted); }
+.build-row[open] { padding-bottom: 12px; background: #1b1a1707; }
+.build-row .btn { margin-top: 8px; width: 100%; }
+@media (prefers-reduced-motion: reduce) { .br-chev { transition: none; } }

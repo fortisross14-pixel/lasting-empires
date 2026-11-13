@@ -162,7 +162,7 @@ const STEPS: Record<string, { cards?: string[]; deadline?: number; steps: { g: G
   ] },
   b_court: { cards: ['hire_merchant', 'hire_researcher', 'embassy'], steps: [
     { g: { k: 'people', n: 1 }, hint: 'Economy → Cards: play Engage a Merchant. Meet three candidates and keep one: rarer people are better at their missions. Your court now holds 8, the most it can.' },
-    { g: { k: 'dismissed', n: 1 }, hint: 'The court is full, so make room: open the People tab, tap your weakest person and press Dismiss.' },
+    { g: { k: 'dismissed', n: 1 }, hint: 'The court is full, so make room: open the menu your weakest person belongs to (a general in Military, a merchant in Economy...), tap them under Your court and press Dismiss.' },
     { g: { k: 'people', n: 2 }, hint: 'Research → Cards: play Invite a Scholar and keep the best of three.' },
     { g: { k: 'missionsDone', n: 1 }, hint: 'People act through missions: play the Embassy card (Diplomacy) and send a diplomat to a neighbour, or send your new scholar to study. Wait until the mission ends.' },
   ] },
@@ -178,7 +178,7 @@ const STEPS: Record<string, { cards?: string[]; deadline?: number; steps: { g: G
     { g: { k: 'built', n: 3 }, hint: 'One more. Watch the upkeep: every building pays a salary each year.' },
   ] },
   b_art: { steps: [
-    { g: { k: 'launched', kind: 'artwork', label: 'Commission a work of art' }, hint: 'People → Cards: play Commission a Work of Art and send a courtier or an artist. A courtier who paints becomes an artist for good.' },
+    { g: { k: 'launched', kind: 'artwork', label: 'Commission a work of art' }, hint: 'Society → Cards: play Commission a Work of Art and send a courtier or an artist. A courtier who paints becomes an artist for good.' },
     { g: { k: 'works', n: 1 }, hint: 'Wait while it is made: a better artist makes a finer work, which pleases the people and adds prestige.' },
   ] },
   b_research: { cards: ['hire_researcher'], steps: [

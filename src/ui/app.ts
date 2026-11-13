@@ -323,6 +323,7 @@ const GOAL_KINDS: { id: string; label: string; input: 'n' | 'region' | 'province
 ];
 
 function showBuilder() {
+  screenBack = showMissions; armBack();
   const root = clear($('#app'));
   let startY = missionYear;
   const realmsOf = (y: number) => Object.values(previewFor(y).nations).filter(n => n.alive && !['natives', 'tribes', 'bedouins'].includes(n.id)).sort((a, b) => a.name.localeCompare(b.name));
@@ -388,6 +389,7 @@ function difficulty(provs: number, army: number): { label: string; cls: string }
 
 let pickYear = 1451;
 function showPicker(initial?: string) {
+  screenBack = showTitle; armBack();
   const root = clear($('#app'));
   const later = STARTS[pickYear];
   const featured = later?.featured ?? FEATURED;
@@ -603,7 +605,7 @@ function renderTop() {
       chip('coin', fmt(me.gold), signed(inc.total), 'Ducats', inc.total < 0 ? 'bad' : ''),
       chip('people', String(Math.floor(me.manpower)), '+' + mp.gain.toFixed(1), 'Manpower'),
       chip('star', S.np.toFixed(1), '+' + npRate(S).rate.toFixed(1), 'Nation points'),
-      h('button', { class: 'chip stab', title: 'Stability', onclick: () => toggleSheet('realm') },
+      h('button', { class: 'chip stab', title: 'Stability', 'aria-label': `Stability ${me.stability}`, onclick: () => openSheet('realm') },
         h('span', { html: icon('scales', 16) }),
         h('span', { class: 'pips' }, ...[-3, -2, -1, 0, 1, 2, 3].map(v => h('i', { class: (v === 0 ? 'zero ' : '') + (me.stability >= v && v > 0 ? 'on' : me.stability <= v && v < 0 ? 'neg' : '') }))),
         h('span', { class: 'sr' }, `Stability ${me.stability}`)),
@@ -619,7 +621,9 @@ function renderTop() {
   );
 }
 function chip(ic: string, v: string, sub: string, label: string, tone = '') {
-  return h('button', { class: 'chip ' + tone, title: label, 'aria-label': `${label} ${v}${sub ? ', ' + sub : ''}`, onclick: () => toggleSheet('realm') }, h('span', { html: icon(ic, 16) }), h('b', {}, v), sub ? h('small', {}, sub) : null);
+  // each number opens the screen that explains it
+  const go = label === 'Ducats' ? () => openWin('economy', 'ledger') : label === 'Manpower' ? () => openWin('military', 'army') : label === 'Happiness' ? () => openWin('culture', 'cultures') : () => openSheet('realm');
+  return h('button', { class: 'chip ' + tone, title: label, 'aria-label': `${label} ${v}${sub ? ', ' + sub : ''}`, onclick: go }, h('span', { html: icon(ic, 16) }), h('b', {}, v), sub ? h('small', {}, sub) : null);
 }
 
 function renderTabs() {
@@ -698,7 +702,7 @@ const qText = (n: number) => (n >= 8 ? `${Math.round(n / 4)} years` : `${n} quar
 const WIN_TABS: Record<Cat, [string, string][]> = {
   military: [['cards', 'Cards'], ['army', 'Army'], ['navy', 'Navy'], ['wars', 'Wars & battles']],
   diplomacy: [['cards', 'Cards'], ['realms', 'Realms'], ['subjects', 'Subjects']],
-  internal: [['cards', 'Cards'], ['gov', 'Government'], ['core', 'Core'], ['realm', 'Realm'], ['provinces', 'Provinces']],
+  internal: [['cards', 'Cards'], ['gov', 'Government'], ['core', 'Core'], ['realm', 'Rank & viceroys'], ['provinces', 'Provinces']],
   economy: [['cards', 'Cards'], ['goods', 'Goods'], ['trade', 'Trade'], ['ledger', 'Ledger']],
   culture: [['cards', 'Cards'], ['cultures', 'Cultures'], ['religion', 'Religion'], ['arts', 'Arts']],
   research: [['cards', 'Cards'], ['tech', 'Technologies']],
@@ -855,7 +859,7 @@ function cardsTab(cat: Cat, body: HTMLElement) {
   if (cv.mode === 'recipes') { body.append(recipeBook(true)); return; }
   if (ex.total > 0) body.append(h('p', { class: 'hlim-warn' }, ex.byCat[cat] ? `${ex.byCat[cat]} too many ${CAT_INFO[cat].name} cards` : `${ex.total} card${ex.total > 1 ? 's' : ''} over the limit across your decks`, `: sell before you end the turn (½ nation point each). A bigger realm may hold more.`));
   // filters
-  const filters: [string, string, number][] = [['all', 'All', 0], ['hand', 'Cards', hand.length], ['people', 'People', S.characters.filter(c => CAT_ROLES[cat].includes(c.role)).length]];
+  const filters: [string, string, number][] = [['all', 'All', 0], ['hand', 'Hand', hand.length], ['people', 'Court', S.characters.filter(c => CAT_ROLES[cat].includes(c.role)).length]];
   if (mil) filters.push(['troops', 'Troops', S.troops.length], ['ships', 'Ships', S.fleet.length], ['equip', 'Improvements', hand.filter(x => cardType(CARDS[x.card]) === 'improvement').length]);
   if (!filters.some(f => f[0] === cv.filter)) cv.filter = 'all';
   body.append(h('div', { class: 'seg cfilter' }, filters.map(([id, label, n]) => h('button', { class: 'seg-b' + (cv.filter === id ? ' on' : ''), onclick: () => { cv = { ...cv, filter: id }; renderWin(); } }, label, n ? h('small', {}, ` ${n}`) : null))));
@@ -995,6 +999,10 @@ function openSheet(kind: string, arg?: string) {
   $('#sheet').hidden = false;
   armBack();
   refresh();
+  if (kind === 'province' && arg && innerWidth <= 760) { // the panel covers the lower part of the map on phones
+    const sh = $('#sheet').getBoundingClientRect(), bd = $('#board').getBoundingClientRect();
+    map.reveal(arg, Math.max(0, bd.bottom - sh.top));
+  }
   if (kind === 'nation' && arg) { const ids = provsOf(S, arg).map(p => p.id); if (ids.length) map.focus(ids, 60); } // show the whole realm
 }
 function closeSheet() {
@@ -1060,9 +1068,11 @@ function costBenefit(bid: string, provId?: string, ch?: Character): HTMLElement 
 
 function buildRow(bid: string, provId: string, blocked: string | null, onclick: () => void) {
   const b = BUILDINGS[bid];
-  return h('button', { class: `action build-row${blocked ? ' blocked' : ''}`, onclick: () => (blocked ? toast(blocked, 'bad') : onclick()) },
-    h('span', { class: 'br-head' }, h('span', { class: 'a-ico', html: icon(b.icon, 20) }), h('b', {}, b.name), blocked ? h('small', { class: 'bad' }, blocked) : null),
-    costBenefit(bid, provId));
+  // one line; tap to see cost and benefit, then build
+  return h('details', { class: `build-row${blocked ? ' blocked' : ''}` },
+    h('summary', {}, h('span', { class: 'a-ico', html: icon(b.icon, 20) }), h('span', { class: 'a-t' }, h('b', {}, b.name), h('small', { class: blocked ? 'bad' : '' }, blocked ?? `${buildingCost(S, bid)} ducats · ready to build`)), h('span', { class: 'br-chev', 'aria-hidden': 'true' }, '▾')),
+    costBenefit(bid, provId),
+    h('button', { class: 'btn primary small' + (blocked ? ' blocked' : ''), onclick: () => (blocked ? toast(blocked, 'bad') : onclick()) }, blocked ? 'Cannot build yet' : `Build ${b.name}`));
 }
 
 function actionRow(ic: string, title: string, sub: string, blocked: string | null, onclick: () => void, tone = '') {
@@ -1156,7 +1166,7 @@ function provinceSheet(id: string, body: HTMLElement) {
       body.append(actionRow('tower', `Grow the ${TIERS[tierOf(p)].name.toLowerCase()}`, `Up to a ${TIERS[(['none', 'village', 'town', 'city', 'metropolis'] as const)[p.settlement + 1]].name.toLowerCase()} · ${growCost(S, id)} ducats`, !gc ? 'Needs a Grow your Settlement card (Internal)' : missionBlocked(S, 'grow', id), () => openPlanner('grow', id, undefined, gc!.uid)));
     }
     for (const [siteName, label] of [['town', 'Build in town'], ['rural', 'Build in the countryside']] as const) {
-      body.append(h('h3', {}, label));
+      const rows: HTMLElement[] = []; let ready = 0;
       for (const b of Object.values(BUILDINGS).filter(b => b.site === siteName)) {
         const why = buildingAllowed(S, id, b.id);
         if (b.tech && !S.techs.includes(b.tech)) continue; // not researched yet: not shown
@@ -1164,8 +1174,11 @@ function provinceSheet(id: string, body: HTMLElement) {
         const card = cardFor(S, 'build', { group: b.group });
         const need = b.group === 'internal' ? 'Royal Works (Internal)' : 'Guild Charter (Economy)';
         const block = why ?? (!card ? `Needs a ${need} card` : player(S).gold < buildingCost(S, b.id) ? `Needs ${buildingCost(S, b.id)} ducats` : null);
-        body.append(buildRow(b.id, id, block, () => openPlanner('build', id, b.id, card!.uid)));
+        if (!block) ready++;
+        rows.push(buildRow(b.id, id, block, () => openPlanner('build', id, b.id, card!.uid)));
       }
+      // folded by default: the panel stays short until you want to build
+      if (rows.length) body.append(h('details', { class: 'fold' }, h('summary', {}, h('b', {}, label), h('small', {}, ready ? `${ready} ready · ${rows.length} kinds` : `${rows.length} kinds · none ready`), h('span', { class: 'br-chev', 'aria-hidden': 'true' }, '▾')), ...rows));
     }
   } else if (p.owner === NO_STATE) {
     const cc = cardFor(S, 'colonize');
@@ -1578,7 +1591,7 @@ function tradeTab(body: HTMLElement) {
   body.append(h('div', { class: 'stats' },
     stat('Sold a year', '+' + inc.goods.toFixed(1)), stat('Bought a year', '−' + inc.imports.toFixed(1)),
     stat('Trade routes', `${S.routes.length}/${routeCap(S)}`), stat('Trade posts', `${S.posts.length}/${postCap(S)}`)));
-  body.append(h('p', { class: 'muted small' }, 'Each route takes a card (Import or Export Contract) and a merchant for one quarter; it does not use up a mission. Buying directly is dear; found a Trade Post (Trade Post Charter card) and every route with that realm buys at 90% and sells at 120% of the price. Start a route from Buy or Sell in the Goods tab.'));
+  body.append(h('p', { class: 'muted small' }, 'Each route takes a card (Import or Export Contract) and a merchant for one quarter; it does not use up a task. Buying directly is dear; found a Trade Post (Trade Post Charter card) and every route with that realm buys at 90% and sells at 120% of the price. Start a route from Buy or Sell in the Goods tab.'));
   const routeRow = (r: GameState['routes'][number]) => {
     const each = price(S, r.good) * dealFor(S, r.partner, r.dir, r.deal);
     return h('div', { class: 'grow-row' },
@@ -1716,7 +1729,7 @@ function artsTab(body: HTMLElement) {
   const works = [...(S.works ?? [])].sort((a, b) => b.year - a.year);
   const g = artGold(S);
   body.append(h('div', { class: 'stats' }, stat('Works', String(works.length)), stat('Happiness now', '+' + artHappy(S).toFixed(1)), stat('Ducats a year', (g.fees + g.visitors).toFixed(1)), stat('On show', `${displayed(S).length}/${displaySlots(S)}`)));
-  body.append(h('p', { class: 'muted small' }, `An artist makes one work per mission. Quality is the outcome: the better it is, the longer it cheers the people; admired works pay fees for a few years, celebrated ones bring a free card of their kind and masterpieces may carry a famous name. Libraries show 1 work, universities 2, museums 4; ${museumsOpen(S) ? 'in this Age of Enlightenment visitors pay for them.' : 'from the Age of Enlightenment visitors will pay to see them.'}`));
+  body.append(h('p', { class: 'muted small' }, `An artist makes one work per task. Quality is the outcome: the better it is, the longer it cheers the people; admired works pay fees for a few years, celebrated ones bring a free card of their kind and masterpieces may carry a famous name. Libraries show 1 work, universities 2, museums 4; ${museumsOpen(S) ? 'in this Age of Enlightenment visitors pay for them.' : 'from the Age of Enlightenment visitors will pay to see them.'}`));
   body.append(h('h3', {}, 'Commission a work'), h('p', { class: countCards('patronage') ? 'muted small' : 'bad small' }, `Each work takes a Commission a Work of Art card (you hold ${countCards('patronage')}) and a free artist or courtier. Draw them in the People deck or buy a pack.`));
   const list = h('div', { class: 'tlist' });
   for (const gd of Object.values(GENRES)) list.append(h('div', { class: 'trow' }, h('span', { class: 'gico', html: icon(gd.icon, 20) }), h('div', { class: 'a-t' }, h('b', {}, gd.name), h('small', {}, `${artCost(S, gd.id)} ducats · ${gd.desc}`)), h('div', { class: 'r-acts' }, peopleAction('artwork', gd.id, 'Commission'))));
@@ -1880,7 +1893,7 @@ function overseasSheet(body: HTMLElement) {
 }
 
 function chronicleSheet(body: HTMLElement) {
-  const tabs = h('div', { class: 'seg' }, ...[['powers', 'Powers'], ['generals', 'Generals'], ['kings', 'Monarchs'], ['log', 'Chronicle']].map(([k, l]) =>
+  const tabs = h('div', { class: 'seg' }, ...[['powers', 'Powers'], ['generals', 'Generals'], ['kings', 'Monarchs'], ['log', 'Annals']].map(([k, l]) =>
     h('button', { class: 'seg-b' + (chronTab === k ? ' on' : ''), onclick: () => { chronTab = k; renderSheet(); } }, l)));
   body.append(tabs);
   if (chronTab === 'powers') {
@@ -1938,7 +1951,6 @@ function realmSheet(body: HTMLElement) {
     stat('Manpower', `${Math.floor(me.manpower)}/${mp.max} (+${mp.gain.toFixed(1)})`), stat('Stability', me.stability),
     stat('Court', `${courtCount(S)}/${courtCap(S)}`), stat('Provinces', provsOf(S, S.player).length)));
   body.append(h('p', { class: 'muted' }, 'Stability from −3 to +3 changes income by 6% a step and nation points by 0.5. At −2 or lower, revolts break out and you draw fewer cards.'));
-  body.append(h('button', { class: 'btn ghost', onclick: () => confirmBox('Leave this campaign?', `It stays saved in slot ${slot}. You can continue it from the title screen.`, 'Back to title', () => { closeModal(); showTitle(); }) }, 'Back to title screen'));
   return [sheetHead(me.name, `${me.ruler.name} · ${S.year}`, me.color), body];
 }
 
@@ -2328,7 +2340,7 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
     const facts: (string | HTMLElement)[] = [qText(turns)];
     if (DIPLO.includes(kind)) facts.push(`${Math.round(diploChance(S, kind, ch, target) * 100)}% chance`, `Journey ${envoyCost(S, target)} ducats · back at court ${qText(Math.max(1, envoyTravel(S, target)))} after`, CARDS[card.card].permanent ? 'The card stays in your hand' : 'The card is used up');
     if (kind === 'research') facts.push(`${researchRate(S, ch, TECH[target]?.track)} research a year · ${techCost(S, target)} needed`);
-    facts.push(kind === 'route' ? 'A quick errand: does not use up one of the year\'s missions' : `Missions left this year: ${missionsLeft(S)}`);
+    facts.push(kind === 'route' ? 'A quick errand: does not use up one of the year\'s tasks' : `Tasks left this year: ${missionsLeft(S)}`);
     const pgKey = kind === 'artwork' ? target : building;
     const pg = kind === 'build' ? {} : projectGoods(kind, pgKey);
     if (kind === 'build') box.append(costBenefit(building!, target, ch));

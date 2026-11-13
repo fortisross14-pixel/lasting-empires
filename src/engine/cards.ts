@@ -113,7 +113,7 @@ export const CAT_INFO: Record<Cat, { name: string; icon: string; role: Role; col
   internal: { name: 'Internal', icon: 'crown', role: 'admin', color: '#4d3a62' },
   economy: { name: 'Economy', icon: 'coin', role: 'merchant', color: '#6d5a2a' },
   research: { name: 'Research', icon: 'book', role: 'researcher', color: '#3c6a45' },
-  culture: { name: 'People', icon: 'people', role: 'courtier', color: '#7a3a5a' },
+  culture: { name: 'Society', icon: 'people', role: 'courtier', color: '#7a3a5a' },
 };
 
 const stab = (s: GameState, d: number) => { const p = player(s); p.stability = clamp(p.stability + d, -3, 3); };
