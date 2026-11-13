@@ -1,3 +1,4 @@
+import { inflation, ageIndex } from './core';
 import { commandOf, GENERIC_COMMAND } from '../data/characters';
 // AI nations: economy, recruiting, upgrades, war and peace.
 import type { GameState, Nation, TroopCard, RevealItem } from '../types';
@@ -45,18 +46,18 @@ export const playerPower = (s: GameState) =>
 const powerOf = (s: GameState, n: string) => (n === s.player ? playerPower(s) : nationPower(s, n));
 
 /** Balance levers: AI development a year (chance of +1) and how fast every crown's prestige fades. */
-export const AI_DEV_BASE = 0.14, AI_DEV_SIZE = 0.025, PRESTIGE_FADE = 0.02;
+export const AI_DEV_BASE = 0.14, AI_DEV_SIZE = 0.025, PRESTIGE_FADE = 0.03;
 
 function aiEconomy(s: GameState, n: Nation) {
   const inc = incomeOf(s, n.id);
-  n.gold += inc.total;
+  n.gold = Math.min(n.gold + inc.total, 400 * inflation(s)); // crowns spend what they cannot store
   n.manpower = Math.min(manpowerMax(s, n.id), n.manpower + manpowerGain(s, n.id));
   for (const t of n.army) t.str = Math.min(100, t.str + 20);
   // AI realms develop their land, the way a player would: bigger realms a little faster,
   // but far less than in proportion, so great empires do not win on size alone
   const pv = provsOf(s, n.id).length;
   if (rand(s) < AI_DEV_BASE + AI_DEV_SIZE * Math.sqrt(pv) + (n.personality === 'merchant' ? 0.04 : 0)) {
-    const low = provsOf(s, n.id).filter(p => p.dev < 8).sort((x, y) => x.dev - y.dev);
+    const low = provsOf(s, n.id).filter(p => p.dev < 5 + ageIndex(s)).sort((x, y) => x.dev - y.dev); // the ceiling rises with the ages
     if (low.length) low[Math.floor(rand(s) * Math.min(4, low.length))].dev++;
   }
   if (n.gold < -20 && n.army.length) { n.army.splice(Math.floor(rand(s) * n.army.length), 1); n.gold += 10; }
@@ -206,7 +207,7 @@ function aiDiplomacy(s: GameState, n: Nation) {
   if (atWarCount > 0 || n.overlord) return;
   const base = { expansionist: 0.07, zealot: 0.05, balanced: 0.035, merchant: 0.02, cautious: 0.012 }[n.personality];
   const size = provsOf(s, n.id).length;
-  if (rand(s) > base / (1 + size / 8)) return;
+  if (rand(s) > base / (1 + size / 20)) return; // great powers still go to war, just less eagerly
   const neigh = new Set<string>();
   for (const p of provsOf(s, n.id)) for (const nb of neighbours(p.id)) { const o = s.provinces[nb].owner; if (o !== n.id) neigh.add(o); }
   const myPow = nationPower(s, n.id);
@@ -217,7 +218,7 @@ function aiDiplomacy(s: GameState, n: Nation) {
     const rel = getRel(s, n.id, t);
     if (rel > (n.personality === 'expansionist' ? 15 : -10)) return false;
     const theirPow = powerOf(s, t) + alliesOf(s, t).reduce((a, x) => a + powerOf(s, x) * 0.5, 0);
-    return myPow > theirPow * (t === s.player ? 1.5 : 1.25);
+    return myPow > theirPow * (t === s.player ? 1.3 : 1.25);
   });
   if (!options.length) return;
   const t = pick(s, options);
@@ -263,7 +264,7 @@ function aiRebellions(s: GameState) {
     if (!owner || owner.overlord) continue;
     const size = provsOf(s, p.owner).length;
     if (size <= 2 || p.id === owner.capital) continue;
-    if (rand(s) > 0.008 + Math.max(0, size - 8) * 0.0025) continue;
+    if (rand(s) > 0.004 + Math.max(0, size - 8) * 0.001) continue; // conquests mostly hold, so the map changes over the centuries
     const old = s.nations[p.core];
     if (!old || old.id === s.player || old.id === NO_STATE) continue;
     if (!old.alive) {
@@ -284,6 +285,10 @@ export const aiQuarter = (id: string) => { let h = 0; for (const c of id) h = (h
 export function runAI(s: GameState, q = 3) {
   if (q === 0) attacksOnPlayer = 0;
   if (q === 3) { aiRebellions(s); aiOverseas(s); }
+  if (q === 0) { // a dead realm cannot be at war, and old occupations of finished wars are forgotten
+    s.wars = s.wars.filter(w => s.nations[w.a]?.alive && s.nations[w.b]?.alive);
+    for (const p of Object.values(s.provinces)) if (p.occupiedFrom && !(s.nations[p.occupiedFrom]?.alive && s.wars.some(w => (w.a === p.owner && w.b === p.occupiedFrom) || (w.b === p.owner && w.a === p.occupiedFrom)))) delete p.occupiedFrom;
+  }
   revealBorders(s);
   const ids = Object.keys(s.nations).filter(id => id !== s.player && s.nations[id].alive && aiQuarter(id) === q);
   ids.sort(() => rand(s) - 0.5);

@@ -17,9 +17,11 @@ export function coalitionAgainst(s: GameState, target: string): string[] {
   const t = s.nations[target];
   if (!t?.alive) return [];
   const cap = t.capital;
-  return Object.values(s.nations).filter(n => n.alive && n.id !== target && n.id !== 'natives' && !n.overlord && n.overlord !== target
-    && s.provinces[n.capital] && travel(n.capital, cap) <= 2 && getRel(s, n.id, target) < 20 && !hasTreaty(s, n.id, target, 'alliance') && !hasTreaty(s, n.id, target, 'marriage')
+  const all = Object.values(s.nations).filter(n => n.alive && n.id !== target && n.id !== 'natives' && !n.overlord && n.overlord !== target
+    && s.provinces[n.capital] && travel(n.capital, cap) <= 1 && getRel(s, n.id, target) < 20 && !hasTreaty(s, n.id, target, 'alliance') && !hasTreaty(s, n.id, target, 'marriage')
     && !(s.nations[n.id].overlord === target)).map(n => n.id);
+  // the eight strongest stand together; the rest watch
+  return all.sort((a, b) => power(s, b) - power(s, a)).slice(0, 8);
 }
 
 /** Once a year. */
@@ -35,7 +37,6 @@ export function yearlyCoalitions(s: GameState) {
     if (members.length < 2) continue;
     if (!s.flags[coalKey]) {
       s.flags[coalKey] = s.year;
-      for (const a of members) for (const b of members) if (a < b) addTreaty(s, a, b, 'alliance');
       if (n.id === s.player) push(s, { kind: 'reveal', title: 'A coalition forms against you', items: [{ title: 'Your conquests frighten them', text: `${members.slice(0, 6).map(m => nationName(s, m)).join(', ')} have allied against you. Conquer less for a while (infamy ${Math.round(ae)}) and it will break up; if they grow strong enough, they will attack together.`, tone: 'bad', kind: 'hands' }] });
       else if (alliesOf(s, s.player).includes(n.id) || members.includes(s.player)) log(s, `A coalition forms against ${n.name}.`, 'neutral');
     }

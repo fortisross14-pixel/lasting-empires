@@ -134,7 +134,7 @@ export const DIPLO: MissionKind[] = ['relations', 'trade', 'alliance', 'marriage
 
 export function techCost(s: GameState, techId: string): number {
   const t = TECH[techId];
-  return Math.round(t.cost * (1 + Math.max(0, t.year - s.year) / 40));
+  return Math.round(t.cost * (1 + Math.max(0, t.year - s.year) / 20)); // ideas ahead of their time are dear
 }
 
 export function researchRate(s: GameState, ch: Character, track?: string): number {

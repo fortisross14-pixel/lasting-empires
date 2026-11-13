@@ -1,3 +1,6 @@
+import { ageIndex } from './core';
+import { troopsNear } from './army';
+import { commandOf, GENERIC_COMMAND } from '../data/characters';
 import { maxFort } from './core';
 // The shape of the realm: its rank, how many missions it can run a year, viceroys, and civil wars.
 import type { GameState, Nation, Province, Character } from '../types';
@@ -191,9 +194,9 @@ export function quarterlyUnrest(s: GameState) {
 
 function rising(s: GameState, p: Province, cause: { key: string; name: string; adj: string }, h: number) {
   const size = Math.max(2, Math.round(1 + p.dev / 2 + (30 - h) / 8));
-  const att = makeSide('rebels', risingForce(size), genericGeneral(s), 0, false);
-  const home = s.troops.filter(t => t.mission == null && t.str > 0).sort((a, b) => b.str - a.str).slice(0, 6);
+  const att = makeSide('rebels', risingForce(size).map(u => ({ ...u, might: 1 + 0.4 * ageIndex(s) })), genericGeneral(s), 0, false);
   const gen = s.characters.filter(c => c.role === 'general' && c.mission == null).sort((a, b) => b.skill - a.skill)[0];
+  const home = troopsNear(s, s.player, p.id, 2).sort((a, b) => b.str - a.str).slice(0, gen ? commandOf(gen.skill) : GENERIC_COMMAND);
   const militia = [0, 1].map(i => ({ uid: -600 - i, type: 'levy', vet: 0, str: 100, start: 100, garrison: true }));
   const def = makeSide(s.player, [...toBattleUnits(home), ...militia], gen ? { name: gen.name, skill: gen.skill, traits: gen.traits, uid: gen.uid } : null, p.fort, true);
   const b = createBattle(s, att, def, p.id, 'rebels');

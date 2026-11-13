@@ -1,3 +1,7 @@
+import { provKnown } from './overseas';
+import { ageIndex } from './core';
+import { troopsNear } from './army';
+import { commandOf, GENERIC_COMMAND } from '../data/characters';
 import { courtCount, courtCap } from './core';
 // History deck and random events. Each fires as a face-down card that flips to show choices.
 import type { GameState, RevealItem } from '../types';
@@ -48,6 +52,14 @@ const bad = (title: string, text: string, kind = 'twist'): RevealItem => ({ titl
 const neutral = (title: string, text: string, kind = 'scroll'): RevealItem => ({ title, text, tone: 'neutral', kind });
 const P = (s: GameState) => s.player;
 const alive = (s: GameState, n: string) => !!s.nations[n]?.alive;
+let REGION: Record<string, string> | null = null;
+const regionOf = (id: string) => (REGION ??= Object.fromEntries(getGeo().seeds.map(x => [x.id, x.region])))[id] ?? '';
+const AMERICAS = ['north_america', 'caribbean', 'mexico', 'andes', 'brazil', 'plata'];
+/** Does the player hold land in the Americas that is not its homeland? */
+const holdsNewWorld = (s: GameState) => provsOf(s, P(s)).some(p => AMERICAS.includes(regionOf(p.id)) && p.core !== P(s));
+/** Lands far from home: another region than the capital's, and not the realm's own heartland. */
+const overseasOf = (s: GameState) => { const home = regionOf(player(s).capital); return provsOf(s, P(s)).filter(p => regionOf(p.id) !== home && p.core !== P(s)); };
+const CHRISTIAN = ['catholic', 'orthodox', 'protestant', 'coptic'];
 /** The history deck is written for Europe and its neighbours. */
 const westernRealm = (s: GameState) => ['europe', 'north_africa', 'middle_east', 'atlantic', 'russia'].includes(getGeo().seeds.find(x => x.id === s.nations[s.player].capital)?.region ?? 'europe');
 /** Crowns whose provinces touch yours. */
@@ -155,7 +167,7 @@ export const EVENTS: EventDef[] = [
         const p = clamp(0.55 + getRel(s, 'castile', 'aragon') / 200, 0.3, 0.85);
         if (rand(s) < p) {
           const name = s.nations[other].name;
-          unionClaim(s, other, true);
+          if (!unionClaim(s, other, true)) { addTreaty(s, 'castile', 'aragon', 'marriage'); addRel(s, 'castile', 'aragon', 30); return [neutral('A marriage, not a union', `${name} already answers to another crown. The houses are joined by marriage instead.`, 'ring')]; }
           player(s).prestige += 25;
           log(s, `The crowns of Castile and Aragon are united!`, 'good');
           return [good('The Crowns are United!', `${name} enters a personal union with your crown: one monarch, two kingdoms. It pays 40% of its income and fights at your side. After 15 years you may integrate it fully. Prestige +25.`, 'crown')];
@@ -237,7 +249,7 @@ export const EVENTS: EventDef[] = [
   },
   {
     id: 'italian_wars', history: true, title: 'The French Cross the Alps', art: 'sword', window: [1494, 1502], chance: 0.35,
-    cond: s => alive(s, 'france') && alive(s, 'naples') && P(s) !== 'france',
+    cond: s => alive(s, 'france') && alive(s, 'naples') && P(s) !== 'france' && s.stateReligion === 'catholic' && regionOf(player(s).capital) === 'europe',
     text: () => 'King Charles VIII of France claims the throne of Naples and marches south with a huge army and modern artillery. Italy is in uproar.',
     options: [
       { label: 'Join the Holy League', hint: 'War with France', run: s => {
@@ -255,7 +267,7 @@ export const EVENTS: EventDef[] = [
     ],
   },
   {
-    id: 'reformation', title: 'The Reformation', art: 'book', chance: 0.5,
+    id: 'reformation', title: 'The Reformation', art: 'book', chance: 0.5, window: [1500, 1570],
     cond: s => ageReached(s, 'reformation') && s.stateReligion === 'catholic',
     text: () => 'A German monk has nailed his theses to a church door. Printed pamphlets spread his ideas faster than any preacher. Unrest stirs everywhere.',
     options: [
@@ -271,20 +283,20 @@ export const EVENTS: EventDef[] = [
   },
   {
     id: 'potosi', history: true, title: 'The Silver Mountain', art: 'coin', window: [1545, 1565], chance: 0.3,
-    cond: s => !!s.flags.new_world,
+    cond: s => !!s.flags.new_world && holdsNewWorld(s),
     text: () => 'In the high Andes your colonists have found a mountain made of silver.',
     options: [{ label: 'Open the mines', run: s => { s.flags.new_world_income = (s.flags.new_world_income ?? 0) + 6; addCards(s, 'treasure_fleet', 2); return [good('Potosí', 'New World income +6 ducats a year. Two Treasure Fleet cards are added.', 'coin')]; } }],
   },
   {
     id: 'price_revolution', history: true, title: 'The Price Revolution', art: 'coin', window: [1560, 1600], chance: 0.2,
-    cond: s => !!s.flags.new_world,
+    cond: s => !!s.flags.new_world && holdsNewWorld(s),
     text: () => 'So much silver floods in that prices soar. Your treasury is richer, yet everything costs more.',
     options: [{ label: 'Borrow from the Genoese', run: s => { player(s).gold += 50; addCards(s, 'debt', 2); return [neutral('Bankers\' gold', '+50 ducats now, but two Crown Debt cards are added.', 'chain')]; } },
       { label: 'Cut spending', run: s => { stab(s, -1); return [neutral('Austerity', 'Stability −1.')]; } }],
   },
   {
     id: 'lepanto', history: true, title: 'The Holy League at Sea', art: 'anchor', window: [1565, 1576], chance: 0.3,
-    cond: s => provsOf(s, P(s)).some(p => MED().includes(p.id)),
+    cond: s => provsOf(s, P(s)).some(p => MED().includes(p.id)) && CHRISTIAN.includes(s.stateReligion) && alive(s, 'ottomans') && P(s) !== 'ottomans',
     text: () => 'The Turkish fleet threatens the whole Mediterranean. The Pope calls Christian galleys to gather at Messina.',
     options: [
       { label: 'Send galleys (−50 ducats)', can: s => player(s).gold < 50 ? 'Needs 50 ducats' : null, run: s => {
@@ -322,7 +334,7 @@ export const EVENTS: EventDef[] = [
     id: 'corsairs', title: 'Barbary Corsairs', art: 'anchor', window: [1460, 1720], chance: 0.07, repeat: 6,
     setup: s => {
       const coast = provsOf(s, P(s)).filter(p => MED().includes(p.id));
-      if (!coast.length) return null;
+      if (!coast.length || s.stateReligion === 'muslim') return null; // the corsairs raid Christian shores
       if (s.flags.const_holds && rand(s) < 0.5) return null;
       const p = pick(s, coast);
       return { prov: p.id };
@@ -374,7 +386,7 @@ export const EVENTS: EventDef[] = [
   {
     id: 'merchant_envoy', title: 'A Merchant Envoy', art: 'coin', chance: 0.06, repeat: 4,
     setup: s => {
-      const c = Object.values(s.nations).filter(n => n.alive && n.id !== P(s) && !atWar(s, P(s), n.id) && !hasTreaty(s, P(s), n.id, 'trade') && getRel(s, P(s), n.id) > -10);
+      const c = Object.values(s.nations).filter(n => n.alive && n.id !== P(s) && !atWar(s, P(s), n.id) && !hasTreaty(s, P(s), n.id, 'trade') && getRel(s, P(s), n.id) > -10 && n.id !== 'natives' && provKnown(s, n.capital));
       return c.length ? { nation: pick(s, c).id } : null;
     },
     text: (s, v) => `Merchants from ${nationName(s, String(v.nation))} propose a trade agreement on generous terms.`,
@@ -408,10 +420,11 @@ export const EVENTS: EventDef[] = [
     options: [
       { label: 'Crush them', run: (s, v) => {
         const prov = s.provinces[v.prov];
-        const n = randInt(s, 3, 5);
-        const att = makeSide('rebels', Array.from({ length: n }, (_, i) => ({ uid: -200 - i, type: 'rebels', vet: 0, str: 100, start: 100 })), genericGeneral(s), 0, false);
-        const home = s.troops.filter(t => t.mission == null).sort((a, b) => b.str - a.str).slice(0, 6);
-        const gen = s.characters.find(c => c.role === 'general' && c.mission == null);
+        const n = randInt(s, 4, 7);
+        // rebels keep up with the times: later ages bring muskets and drilled men
+        const att = makeSide('rebels', Array.from({ length: n }, (_, i) => ({ uid: -200 - i, type: 'rebels', vet: 0, str: 100, start: 100, might: 1 + 0.4 * ageIndex(s) })), genericGeneral(s), 0, false);
+        const gen = s.characters.filter(c => c.role === 'general' && c.mission == null).sort((a, b) => b.skill - a.skill)[0];
+        const home = troopsNear(s, P(s), prov.id, 2).sort((a, b) => b.str - a.str).slice(0, gen ? commandOf(gen.skill) : GENERIC_COMMAND);
         const def = makeSide(P(s), home.map(t => ({ uid: t.uid, type: t.type, vet: t.vet, str: t.str, start: t.str })), gen ? { name: gen.name, skill: gen.skill, traits: gen.traits, uid: gen.uid } : null, prov.fort, true);
         if (!def.units.length) {
           player(s).gold = Math.max(0, player(s).gold - 30); prov.control = 10;
@@ -495,7 +508,7 @@ export const EVENTS: EventDef[] = [
   {
     id: 'ai_marriage', title: 'A Royal Match', art: 'ring', chance: 0.08, repeat: 6,
     setup: s => {
-      const c = Object.values(s.nations).filter(n => n.alive && n.id !== P(s) && n.id !== 'papacy' && !atWar(s, P(s), n.id) && !hasTreaty(s, P(s), n.id, 'marriage') && getRel(s, P(s), n.id) >= 10 && sameFaith(s, n.id));
+      const c = Object.values(s.nations).filter(n => n.alive && n.id !== P(s) && n.id !== 'papacy' && !atWar(s, P(s), n.id) && !hasTreaty(s, P(s), n.id, 'marriage') && getRel(s, P(s), n.id) >= 10 && sameFaith(s, n.id) && provKnown(s, n.capital));
       return c.length ? { nation: pick(s, c).id } : null;
     },
     text: (s, v) => `${nationName(s, String(v.nation))} offers a prince for a marriage into your royal house. Marriages bind crowns, and one day may unite them.`,
@@ -593,7 +606,7 @@ export const EVENTS: EventDef[] = [
   },
   {
     id: 'native_unrest', title: 'Unrest in the Colonies', art: 'torch', chance: 0.12, repeat: 6,
-    setup: s => { const ps = provsOf(s, P(s)).filter(p => p.religion !== s.stateReligion && !s.accepted.includes(p.culture) && p.control < 60 && p.dev <= 3); return ps.length ? { prov: pick(s, ps).id } : null; },
+    setup: s => { const ps = overseasOf(s).filter(p => p.religion !== s.stateReligion && !s.accepted.includes(p.culture) && p.control < 60 && p.dev <= 3); return ps.length ? { prov: pick(s, ps).id } : null; },
     text: (s, v) => `The native people of ${s.provinces[v.prov].name} rise against the settlers, who beg for soldiers.`,
     options: [
       { label: 'Send soldiers (25 ducats)', can: s => player(s).gold < 25 ? 'Needs 25 ducats' : null, run: (s, v) => { player(s).gold -= 25; s.provinces[v.prov].control = Math.min(100, s.provinces[v.prov].control + 15); return [good('Order', `Control +15 in ${s.provinces[v.prov].name}.`, 'sword')]; } },
@@ -603,7 +616,7 @@ export const EVENTS: EventDef[] = [
   {
     id: 'rival_colonies', title: 'Rival Flags Overseas', art: 'anchor', chance: 0.1, repeat: 10,
     setup: s => {
-      const mine = new Set(provsOf(s, P(s)).filter(p => !getGeo().seeds.some(x => x.id === p.id && ['europe', 'north_africa', 'atlantic'].includes(x.region))).map(p => p.id));
+      const mine = new Set(overseasOf(s).map(p => p.id));
       for (const id of mine) for (const nb of getGeo().adj[id]) { const o = s.provinces[nb].owner; if (o !== P(s) && s.nations[o]?.alive && !atWar(s, P(s), o) && !hasTreaty(s, P(s), o, 'alliance')) return { nation: o, prov: id }; }
       return null;
     },

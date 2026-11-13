@@ -161,7 +161,7 @@ function botTurn(s: GameState) {
   }
   if (!enemiesOf(s, s.player).length && R() < 0.05 && s.troops.length >= 8) {
     const nb = new Set<string>();
-    for (const p of provsOf(s, s.player)) for (const n of neighbours(p.id)) if (s.provinces[n].owner !== s.player) nb.add(s.provinces[n].owner);
+    for (const p of provsOf(s, s.player)) for (const n of neighbours(p.id)) if (s.provinces[n].owner !== s.player && s.provinces[n].owner !== 'natives' && s.nations[s.provinces[n].owner]?.alive) nb.add(s.provinces[n].owner);
     const t = [...nb].sort((a, b) => s.nations[a].army.length - s.nations[b].army.length)[0];
     if (t && s.nations[t].army.length < s.troops.length) playerDeclareWar(s, t);
   }

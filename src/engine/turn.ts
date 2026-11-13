@@ -457,6 +457,7 @@ export function endTurn(s: GameState): YearReport | null {
 // ---------- player actions ----------
 export function playerDeclareWar(s: GameState, target: string): string | null {
   if (atWar(s, s.player, target)) return 'Already at war';
+  if (!s.nations[target]?.alive || target === 'natives') return 'There is no realm there to fight';
   if (s.nations[target]?.overlord === s.player) return 'You cannot attack your own subject';
   if (s.truces.some(t => t.until > s.year && ((t.a === s.player && t.b === target) || (t.b === s.player && t.a === target)))) return 'A truce is in force';
   const claim = s.flags['claim_' + target];
