@@ -100,7 +100,7 @@ function shield(id: string, color: string, small = false) {
   return el;
 }
 
-function saveNow() { clearTimeout(saveT); saveT = 0; try { localStorage.setItem(slotKey(slot), JSON.stringify(S)); } catch { /* storage may be blocked */ } }
+function saveNow() { clearTimeout(saveT); saveT = 0; try { S.savedAt = Date.now(); localStorage.setItem(slotKey(slot), JSON.stringify(S)); } catch { /* storage may be blocked */ } }
 /** Saving writes the whole game, so it waits a moment after a change; leaving the page saves at once. */
 let saveT = 0;
 function save() { if (!saveT) saveT = window.setTimeout(saveNow, 1500); }
@@ -437,14 +437,23 @@ function showTitle() {
   const root = clear($('#app'));
   root.append(h('div', { class: 'title-screen' },
     h('div', { class: 'title-inner' },
+      // three cards fanned out: what the game is made of
+      h('div', { class: 'hero', 'aria-hidden': 'true' }, ...['unit_knights', 'card_marriage', 'unit_galleon'].map((a, i) => h('span', { class: 'hero-card hc' + i }, h('img', { src: `art/${a}.webp`, alt: '', width: '256', height: '256', decoding: 'async' })))),
       h('p', { class: 'eyebrow' }, 'Anno Domini 1451 – 1810'),
       h('h1', { class: 'title' }, 'Lasting Empires'),
-      h('p', { class: 'lede' }, 'Every action is a card. Gather Military, Diplomacy, Internal, Economy and Research cards each year, then send your people on missions. One turn is one year.'),
-      SLOTS.some(n => loadSlot(n)) || pending ? h('h2', { class: 'pick-h' }, 'Campaigns') : null,
-      SLOTS.some(n => loadSlot(n)) || pending ? slotsSection() : null,
-      h('button', { class: 'btn primary wide newgame missions-b', onclick: () => showMissions() }, h('span', { html: icon('star', 18) }), ` Missions · ${doneCount()} of ${MISSIONS.length} completed`),
+      h('p', { class: 'lede' }, 'Rule a realm from 1451 to 1810. Every action is a card; every card needs the right person. One turn is one season.'),
+      (() => { // the game you were playing: one tap to go back in
+        if (pending) return null;
+        const cur = SLOTS.map(n => ({ n, s: loadSlot(n) })).filter(x => x.s && !x.s.over).sort((a, b) => (b.s!.savedAt ?? 0) - (a.s!.savedAt ?? 0))[0];
+        if (!cur) return null;
+        const me = cur.s!.nations[cur.s!.player];
+        return h('button', { class: 'btn primary wide newgame continue-b', onclick: () => startIn(cur.n, cur.s!) }, shield(cur.s!.player, me.color, true), h('span', { class: 'cb-t' }, h('b', {}, `Continue ${me.name}`), h('small', {}, `${SEASONS[cur.s!.quarter ?? 0]} ${cur.s!.year}${cur.s!.scenario ? ` · ${cur.s!.scenario.name}` : ''}`)));
+      })(),
+      h('button', { class: 'btn wide newgame missions-b' + (SLOTS.some(n => { const x = loadSlot(n); return x && !x.over; }) && !pending ? '' : ' primary'), onclick: () => showMissions() }, h('span', { html: icon('star', 18) }), ` Missions · ${doneCount()} of ${MISSIONS.length} completed`),
       !realUnlocked() ? h('p', { class: 'title-hint' }, `New here? Start with the beginner missions (${beginnersDone()}/${BEGINNER().length}).`) : null,
       h('button', { class: 'btn wide newgame' + (sandboxUnlocked() ? '' : ' blocked'), onclick: () => (sandboxUnlocked() ? showPicker() : toast('The open game unlocks when you complete your first historic mission', 'bad')) }, sandboxUnlocked() ? 'Open game: any realm, any year' : 'Open game · unlocks after your first historic mission'),
+      SLOTS.some(n => loadSlot(n)) || pending ? h('h2', { class: 'pick-h' }, 'Your campaigns') : null,
+      SLOTS.some(n => loadSlot(n)) || pending ? slotsSection() : null,
       h('details', { class: 'howto' }, h('summary', {}, 'Test scenarios'),
         h('p', { class: 'muted' }, 'Ready-made games to try a system quickly. They use a free campaign slot.'),
         h('button', { class: 'btn wide', onclick: () => startFresh('the battle test', scenarioCastilePortugal) }, 'Battles: Castile at war with Portugal, summer 1467')),
@@ -452,7 +461,7 @@ function showTitle() {
         h('summary', {}, 'How to play'),
         h('ul', {},
           h('li', {}, 'You draw about one card of each kind a year. Buildings, research and your monarch raise those rates. Spend nation points to buy more (pick 1 of 3).'),
-          h('li', {}, 'Mission cards need a person: generals, diplomats, administrators, merchants and researchers. Each has a rarity from Common to Legendary.'),
+          h('li', {}, 'Most cards are tasks for a person: generals, diplomats, administrators, merchants and researchers. Each has a rarity from Common to Legendary.'),
           h('li', {}, 'Manpower is scarce: hiring a troop or a person costs 1. Ducats pay for troops, building salaries and imported goods.'),
           h('li', {}, 'Forge troops in the Military panel: Levy + Long Pikes = Pikemen; Pikemen + Arquebusiers = Tercio.'),
           h('li', {}, 'In battle both sides play a tactic face-down. Counter the enemy and they take extra damage.'),
@@ -515,14 +524,13 @@ interface TutStep { title: string; text: string; done?: () => boolean; next?: bo
 const TUTORIAL: TutStep[] = [
   { title: 'Welcome, Majesty', text: 'One turn is one quarter of a year. Everything you do starts with a card: you draw them each quarter in five kinds. Let me show you around.', next: true },
   { title: 'Your treasury', text: 'At the top: ducats, manpower (1 per troop or person you hire), nation points (to buy cards), stability and the people\'s happiness. Tap the year to see the current age.', next: true },
-  { title: 'Open a menu', text: 'The five menus are at the bottom. Open Internal.', done: () => win?.cat === 'internal' },
-  { title: 'Cards', text: 'The Cards tab starts with Get cards: spend nation points on a person card (to hire someone) or an action card (in Military also troops and improvements). Below are the cards you hold: tap one to use it.', next: true },
-  { title: 'Missions', text: 'Open the Missions tab. Tap a person, then a mission card, or the other way round. The better the person, the better the outcome.', done: () => win?.tab === 'missions' },
-  { title: 'Send someone out', text: 'Start a mission now if you have a card for it. It takes a few quarters. You can start only so many missions a year; a bigger realm can start more.', done: () => S.missions.length > 0, next: true },
+  { title: 'Open a menu', text: 'The six menus are at the bottom. Open Internal.', done: () => win?.cat === 'internal' },
+  { title: 'Cards', text: 'Every menu opens on your cards. Tap one to use it. The Buy row spends nation points (the star at the top) on a new person, troop or action card.', next: true },
+  { title: 'Send someone out', text: 'Most cards are tasks for a person: tap the card, choose where, then who goes. Better people get better results. A task takes a few seasons, and a bigger realm can start more each year.', done: () => S.missions.length > 0, next: true },
   { title: 'Armies', text: 'Open Military. Troops stand in your capital or in provinces with Barracks, and only those within a quarter\'s march can fight. Cards → Forge merges two companies into a stronger one.', done: () => win?.cat === 'military' },
   { title: 'The map', text: 'Close the menu and tap any province for its details and actions. "Map: Realms" at the bottom right switches to culture, religion, raw materials, happiness or population.', next: true },
-  { title: 'End the turn', text: 'Press End Turn at the top right. Every winter you get the year\'s report: money, cards, battles and missions.', done: () => (S.quarter ?? 0) !== 0 || S.year !== S.startYear },
-  { title: 'Rule well', text: 'Ages open by research, rivals form coalitions if you conquer too fast, and unhappy provinces may rise. The Chronicle (top right) shows the rankings. Good luck.', next: true },
+  { title: 'End the turn', text: 'Press End Turn at the top right. Every winter you get the year\'s report: money, cards, battles and tasks.', done: () => (S.quarter ?? 0) !== 0 || S.year !== S.startYear },
+  { title: 'Rule well', text: 'Ages open by research, rivals form coalitions if you conquer too fast, and unhappy provinces may rise. The Chronicle (in the Menu) shows the rankings. Good luck.', next: true },
 ];
 function renderTutorial() {
   let el = document.getElementById('tut');
@@ -580,11 +588,14 @@ function renderTop() {
   const inc = incomeOf(S, S.player);
   const mp = playerManpower(S);
   const top = clear($('#top'));
+  const sc = S.scenario;
+  const goalsBadge = sc ? (sc.status === 'active' ? (sc.steps?.length ? `${sc.step ?? 0}/${sc.steps.length}` : `${sc.goals.filter(g => goalView(S, g, sc.deadline).met).length}/${sc.goals.length}`) : sc.status === 'won' ? '✓' : '✗') : '';
   top.append(
-    h('button', { class: 'crest', onclick: () => toggleSheet('realm'), style: `--nc:${me.color}` },
+    h('button', { class: 'crest', onclick: () => toggleSheet('realm'), style: `--nc:${me.color}`, 'aria-label': `${me.name}: realm and ruler` },
       shield(S.player, me.color, true),
       h('span', { class: 'crest-t' }, h('b', {}, me.name), h('small', {}, me.ruler.name))),
-    h('button', { class: 'year', title: ageOf(S).name, onclick: () => showEra() }, h('span', { class: 'year-n' }, String(S.year)), h('small', {}, `${SEASONS[S.quarter ?? 0]} · ${ageOf(S).name.replace('Age of ', '')}`)),
+    h('button', { class: 'year', title: ageOf(S).name, onclick: () => showEra() }, h('span', { class: 'year-n' }, String(S.year)), h('small', {}, h('span', { class: 'yr-s' }, SEASONS[S.quarter ?? 0]), h('span', { class: 'yr-a' }, ` · ${ageOf(S).name.replace('Age of ', '')}`))),
+    // the realm at a glance: what you spend (ducats, men, nation points) and how the realm feels
     h('div', { class: 'res' },
       chip('coin', fmt(me.gold), signed(inc.total), 'Ducats', inc.total < 0 ? 'bad' : ''),
       chip('people', String(Math.floor(me.manpower)), '+' + mp.gain.toFixed(1), 'Manpower'),
@@ -597,19 +608,15 @@ function renderTop() {
       chip('laurel', fmt(me.prestige), '', 'Prestige'),
     ),
     h('div', { class: 'top-btns' },
-      S.scenario ? h('button', { class: 'tbtn goals-b' + (sheet?.kind === 'goals' ? ' on' : '') + ' st-' + S.scenario.status, onclick: () => toggleSheet('goals'), title: 'Goals' },
-        h('span', { html: icon('star', 18) }), h('span', { class: 'tb-l' }, 'Goals'), h('span', { class: 'badge' }, S.scenario.status === 'active' ? (S.scenario.steps?.length ? `${S.scenario.step ?? 0}/${S.scenario.steps.length}` : `${S.scenario.goals.filter(g => goalView(S, g, S.scenario!.deadline).met).length}/${S.scenario.goals.length}`) : S.scenario.status === 'won' ? '✓' : '✗')) : null,
-      h('button', { class: 'tbtn' + (sheet?.kind === 'missions' ? ' on' : ''), onclick: () => toggleSheet('missions'), title: 'Missions' },
-        h('span', { html: icon('hourglass', 18) }), h('span', { class: 'tb-l' }, 'Missions'), S.missions.length ? h('span', { class: 'badge' }, String(S.missions.length)) : null),
-      h('button', { class: 'tbtn' + (sheet?.kind === 'chronicle' ? ' on' : ''), onclick: () => toggleSheet('chronicle'), title: 'Chronicle' },
-        h('span', { html: icon('laurel', 18) }), h('span', { class: 'tb-l' }, 'Chronicle')),
+      sc ? h('button', { class: 'tbtn goals-b' + (sheet?.kind === 'goals' ? ' on' : '') + ' st-' + sc.status, onclick: () => toggleSheet('goals'), title: 'Mission goals', 'aria-label': 'Mission goals' },
+        h('span', { html: icon('star', 18) }), h('span', { class: 'tb-l' }, 'Goals'), h('span', { class: 'badge' }, goalsBadge)) : null,
       h('button', { class: 'tbtn menu-b', onclick: () => showGameMenu(), title: 'Menu', 'aria-label': 'Menu' },
-        h('span', { html: icon('list', 18) }), h('span', { class: 'tb-l' }, 'Menu')),
+        h('span', { html: icon('list', 18) }), h('span', { class: 'tb-l' }, 'Menu'), S.missions.length ? h('span', { class: 'badge' }, String(S.missions.length)) : null),
       h('button', { id: 'endturn', class: 'btn primary', onclick: onEndTurn }, h('span', { class: 'et-l' }, 'End Turn'), h('small', {}, `${SEASONS[S.quarter ?? 0]} ${S.year}`))),
   );
 }
 function chip(ic: string, v: string, sub: string, label: string, tone = '') {
-  return h('button', { class: 'chip ' + tone, title: label, onclick: () => toggleSheet('realm') }, h('span', { html: icon(ic, 16) }), h('b', {}, v), sub ? h('small', {}, sub) : null, h('span', { class: 'sr' }, label));
+  return h('button', { class: 'chip ' + tone, title: label, 'aria-label': `${label} ${v}${sub ? ', ' + sub : ''}`, onclick: () => toggleSheet('realm') }, h('span', { html: icon(ic, 16) }), h('b', {}, v), sub ? h('small', {}, sub) : null);
 }
 
 function renderTabs() {
@@ -649,7 +656,7 @@ function renderTimeline() {
   }
   const ms = S.missions.filter(m => m.kind !== 'route').slice(0, 6);
   if (ms.length) {
-    tl.append(h('span', { class: 'tl-h' }, 'Missions'));
+    tl.append(h('span', { class: 'tl-h' }, 'Tasks'));
     for (const m of ms) {
       const pct = m.kind === 'research' ? Math.min(100, (m.progress / techCost(S, m.target)) * 100) : ((m.total - m.turnsLeft) / Math.max(1, m.total)) * 100;
       tl.append(h('button', { class: 'tl-card tl-m', onclick: () => openSheet('missions') },
@@ -686,12 +693,12 @@ const qText = (n: number) => (n >= 8 ? `${Math.round(n / 4)} years` : `${n} quar
 
 // ---------- the core menus: a centred window with tabs ----------
 const WIN_TABS: Record<Cat, [string, string][]> = {
-  military: [['cards', 'Cards'], ['missions', 'Missions'], ['army', 'Army'], ['navy', 'Navy'], ['wars', 'Wars & battles']],
-  diplomacy: [['cards', 'Cards'], ['missions', 'Missions'], ['realms', 'Realms'], ['subjects', 'Subjects']],
-  internal: [['cards', 'Cards'], ['missions', 'Missions'], ['gov', 'Government'], ['core', 'Core'], ['realm', 'Realm'], ['provinces', 'Provinces']],
-  economy: [['cards', 'Cards'], ['missions', 'Missions'], ['goods', 'Goods'], ['trade', 'Trade'], ['ledger', 'Ledger']],
-  culture: [['cards', 'Cards'], ['missions', 'Missions'], ['cultures', 'Cultures'], ['religion', 'Religion'], ['arts', 'Arts']],
-  research: [['cards', 'Cards'], ['missions', 'Missions'], ['tech', 'Technologies']],
+  military: [['cards', 'Cards'], ['army', 'Army'], ['navy', 'Navy'], ['wars', 'Wars & battles']],
+  diplomacy: [['cards', 'Cards'], ['realms', 'Realms'], ['subjects', 'Subjects']],
+  internal: [['cards', 'Cards'], ['gov', 'Government'], ['core', 'Core'], ['realm', 'Realm'], ['provinces', 'Provinces']],
+  economy: [['cards', 'Cards'], ['goods', 'Goods'], ['trade', 'Trade'], ['ledger', 'Ledger']],
+  culture: [['cards', 'Cards'], ['cultures', 'Cultures'], ['religion', 'Religion'], ['arts', 'Arts']],
+  research: [['cards', 'Cards'], ['tech', 'Technologies']],
 };
 function toggleWin(cat: Cat) { if (win?.cat === cat) closeWin(); else openWin(cat); }
 function openWin(cat: Cat, tab = win?.cat === cat ? win.tab : 'cards') {
@@ -725,7 +732,7 @@ function renderWin() {
 function winSub(cat: Cat) {
   if (cat === 'military') return `Army power ${Math.round(armyPower(S.troops))} · ${S.troops.length}/${armyCap(S)} companies · ${S.fleet.length} ships`;
   if (cat === 'diplomacy') return `${alliesOf(S, S.player).length} allies · ${enemiesOf(S, S.player).length} wars · ${subjectsOf(S).length} subjects`;
-  if (cat === 'internal') return `${rankOf(S).name} · ${provsOf(S, S.player).length} provinces · missions this year ${S.launched ?? 0}/${missionCap(S)}`;
+  if (cat === 'internal') return `${rankOf(S).name} · ${provsOf(S, S.player).length} provinces · tasks this year ${S.launched ?? 0}/${missionCap(S)}`;
   if (cat === 'economy') return `${signed(incomeOf(S, S.player).total)} ducats a year`;
   if (cat === 'culture') return `Happiness ${nationalHappiness(S)}% · ${cultureRows(S).length} peoples · ${(S.works ?? []).length} works of art · church ${Math.round(churchRel(S))}`;
   return `${S.techs.length} of ${TECHS.length} technologies known`;
@@ -815,18 +822,20 @@ function cardsTab(cat: Cat, body: HTMLElement) {
   const setMode = (mode: typeof cv.mode) => { cv = { ...cv, mode: cv.mode === mode ? 'browse' : mode, sel: [], filter: mode === 'select' ? 'hand' : cv.filter }; forge = []; renderWin(); };
   // 1. get cards: one button per kind of card this deck sells
   const BUY: Record<CardType, { label: string; icon: string }> = {
-    people: { label: 'Buy a person card', icon: 'people' }, troops: { label: 'Buy a troop card', icon: 'helm' },
-    improvement: { label: 'Buy an improvement', icon: 'anvil' }, action: { label: 'Buy an action card', icon: 'star' }, burden: { label: '', icon: 'star' },
+    people: { label: 'Person', icon: 'people' }, troops: { label: 'Troop', icon: 'helm' },
+    improvement: { label: 'Improvement', icon: 'anvil' }, action: { label: 'Action', icon: 'star' }, burden: { label: '', icon: 'star' },
   };
   const shop = h('div', { class: 'shop' });
   for (const ty of typesFor(cat)) {
     const why = buyBlocked(S, cat, ty);
     const pool = poolOf(S, cat, ty);
-    const sub = why ?? (pool.length === 1 ? `${buyCost(S, cat)} NP · ${pool[0].name}` : `${buyCost(S, cat)} NP · 3 shown, keep 1`);
-    shop.append(h('button', { class: 'shop-b' + (why ? ' blocked' : ''), onclick: () => { if (why) return toast(why, 'bad'); const n = S.hand.length; act(() => buyCard(S, cat, ty)); if (S.hand.length > n) toast(`${CARDS[S.hand[S.hand.length - 1].card].name} added to your hand`, 'good'); } },
-      h('span', { class: 'shop-i', html: icon(BUY[ty].icon, 22) }), h('span', { class: 'shop-t' }, h('b', {}, BUY[ty].label), h('small', {}, sub))));
+    const sub = pool.length === 1 ? pool[0].name : 'pick 1 of 3';
+    shop.append(h('button', { class: 'shop-b' + (why ? ' blocked' : ''), title: why ?? `${BUY[ty].label} card: ${sub}`, onclick: () => { if (why) return toast(why, 'bad'); const n = S.hand.length; act(() => buyCard(S, cat, ty)); if (S.hand.length > n) toast(`${CARDS[S.hand[S.hand.length - 1].card].name} added to your hand`, 'good'); } },
+      h('span', { class: 'shop-i', html: icon(BUY[ty].icon, 18) }), h('span', { class: 'shop-t' }, h('b', {}, BUY[ty].label), h('small', {}, sub)), h('span', { class: 'shop-c' }, `${buyCost(S, cat)}★`)));
   }
-  body.append(h('div', { class: 'shop-head' }, h('h3', {}, 'Get cards'), h('small', { class: 'muted' }, `You have ${S.np.toFixed(1)} nation points · each purchase this year costs more · free draws: +${rate.rate.toFixed(2)} a year, next card ${pct}%`)), shop);
+  // tasks of this menu that are under way: always first, so you see who is busy
+  const now = missionsOfCat(cat);
+  if (now.length) { body.append(h('h3', { class: 'sec-h' }, `Under way · ${now.length}`)); for (const m of now) body.append(missionRow(m)); }
   const bar = h('div', { class: 'ctools' },
     h('button', { class: 'btn small' + (cv.mode === 'select' ? ' on' : ''), onclick: () => setMode('select') }, h('span', { html: icon('coin', 14) }), ' Sell cards'),
     mil ? h('button', { class: 'btn small' + (cv.mode === 'forge' ? ' on' : ''), onclick: () => setMode('forge') }, h('span', { html: icon('merge', 14) }), ' Forge') : null,
@@ -834,7 +843,10 @@ function cardsTab(cat: Cat, body: HTMLElement) {
   // 2. what you hold
   const held = heldOf(S, cat), lim = handLimit(S), tot = heldTotal(S), tlim = handTotalLimit(S);
   const ex = handExcess(S);
-  body.append(h('div', { class: 'cs-head' }, h('h3', {}, `Your cards `, h('span', { class: 'hlim' + (held > lim ? ' over' : held >= lim ? ' full' : '') }, `${held} of ${lim}`), h('small', { class: 'hlim-t' + (tot > tlim ? ' over' : '') }, ` · ${tot} of ${tlim} in all decks`)), h('small', { class: 'muted', title: rate.parts.map(p => `${p.label} ${signed(p.v)}`).join(', ') }, 'Tap a card to use it')), bar);
+  body.append(h('div', { class: 'cs-head' }, h('h3', { class: 'sec-h' }, `Your cards `, h('span', { class: 'hlim' + (held > lim ? ' over' : held >= lim ? ' full' : '') }, `${held}/${lim}`)), bar));
+  // buying: one compact row; the fine print sits under it
+  body.append(h('div', { class: 'shop-row' }, h('span', { class: 'shop-l' }, 'Buy'), shop),
+    h('p', { class: 'shop-note', title: rate.parts.map(p => `${p.label} ${signed(p.v)}`).join(', ') }, `${S.np.toFixed(1)}★ nation points · a free card every ${rate.rate > 0 ? (1 / rate.rate).toFixed(1) : '—'} years (next ${pct}%) · tasks this year ${S.launched ?? 0}/${missionCap(S)}${tot > tlim ? ` · ${tot}/${tlim} cards in all decks` : ''}`));
   if (cv.mode === 'forge') return forgeView(body);
   if (cv.mode === 'recipes') { body.append(recipeBook(true)); return; }
   if (ex.total > 0) body.append(h('p', { class: 'hlim-warn' }, ex.byCat[cat] ? `${ex.byCat[cat]} too many ${CAT_INFO[cat].name} cards` : `${ex.total} card${ex.total > 1 ? 's' : ''} over the limit across your decks`, `: sell before you end the turn (½ nation point each). A bigger realm may hold more.`));
@@ -930,7 +942,7 @@ function missionsTab(cat: Cat, body: HTMLElement) {
     const busy = c.mission != null;
     const ok = !pc || canDo(c, pc.card);
     prow.append(charCard(c, S, { small: true, selected: pp?.uid === c.uid, dim: busy || !ok, badge: busy ? (c.mission === -1 ? 'viceroy' : c.mission === -4 ? `back in ${c.back}q` : c.mission === -5 ? 'defending' : 'busy') : undefined, onclick: () => {
-      if (busy) return toast(c.mission === -1 ? 'Serving as a viceroy' : c.mission === -4 ? `Riding home: back in ${qText(c.back ?? 1)}` : c.mission === -5 ? 'Standing ready to defend' : 'Away on a mission');
+      if (busy) return toast(c.mission === -1 ? 'Serving as a viceroy' : c.mission === -4 ? `Riding home: back in ${qText(c.back ?? 1)}` : c.mission === -5 ? 'Standing ready to defend' : 'Away on a task');
       if (pc) { if (!ok) return toast('This person cannot do that mission', 'bad'); return go(pc.uid, c.uid); }
       pick = { char: pp?.uid === c.uid ? undefined : c.uid }; renderWin();
     } }));
@@ -965,7 +977,7 @@ function missionRow(m: GameState['missions'][number]) {
     h('div', { class: 'a-t' }, h('b', {}, missionTitle(m)),
       h('small', {}, `${c?.name ?? '?'}${m.troops.length ? ` with ${m.troops.length} troops` : ''} · ${qText(m.turnsLeft)} left`),
       h('div', { class: 'pbar' }, h('i', { style: `width:${pct}%` }))),
-    h('button', { class: 'iconbtn', 'aria-label': 'Recall', title: 'Recall', onclick: () => confirmBox('Recall this mission?', 'The card is lost. Construction refunds half its cost.', 'Recall', () => act(() => cancelMission(S, m.id))), html: icon('close', 16) }));
+    h('button', { class: 'iconbtn', 'aria-label': 'Recall', title: 'Recall', onclick: () => confirmBox('Recall this task?', 'The card is lost. Construction refunds half its cost.', 'Recall', () => act(() => cancelMission(S, m.id))), html: icon('close', 16) }));
 }
 
 function toggleSheet(kind: string, arg?: string) {
@@ -1268,14 +1280,14 @@ function armyTab(body: HTMLElement) {
     body.append(h('div', { class: 'garrison' }, h('b', {}, placeName(g)), h('small', {}, `${g === player(S).capital ? 'capital · ' : g.startsWith('base:') ? 'camp · ' : S.provinces[g]?.buildings.includes('barracks') ? 'barracks · ' : ''}${ts.filter(t => t.mission == null).length} companies · power ${Math.round(armyPower(ts.filter(t => t.mission == null)))}`)));
     const row = h('div', { class: 'cards-row wrap' });
     if (!ts.length) row.append(h('p', { class: 'muted' }, 'Empty.'));
-    for (const t of ts) row.append(troopCard(t, { small: true, selected: sel.includes(t.uid), dim: t.mission != null || t.str < 100, badge: t.mission === -5 ? 'defending' : t.str < 100 ? `+${healOf(S, t).q}% a season` : undefined, onclick: () => t.mission === -5 ? toast('Standing ready to defend') : t.mission != null ? toast('Away on a mission') : (t.str < 100 && toast(`Heals ${healOf(S, t).q}% a season${healOf(S, t).why.length ? ': ' + healOf(S, t).why.join(', ') : ''}. ${t.str < READY_STR ? 'Too weak to attack until half strength, but it can march.' : 'Ready to fight.'}`), toggle(t.uid)) }));
+    for (const t of ts) row.append(troopCard(t, { small: true, selected: sel.includes(t.uid), dim: t.mission != null || t.str < 100, badge: t.mission === -5 ? 'defending' : t.str < 100 ? `+${healOf(S, t).q}% a season` : undefined, onclick: () => t.mission === -5 ? toast('Standing ready to defend') : t.mission != null ? toast('Away on a task') : (t.str < 100 && toast(`Heals ${healOf(S, t).q}% a season${healOf(S, t).why.length ? ': ' + healOf(S, t).why.join(', ') : ''}. ${t.str < READY_STR ? 'Too weak to attack until half strength, but it can march.' : 'Ready to fight.'}`), toggle(t.uid)) }));
     body.append(row);
   }
   if (moving.length) {
     body.append(h('h3', {}, 'On the march'));
     body.append(h('div', { class: 'cards-row wrap' }, moving.map(t => troopCard(t, { small: true, badge: `${placeName(t.moving!.to)} · ${t.moving!.eta} q` }))));
   }
-  if (away.length) body.append(h('p', { class: 'muted' }, `${away.length} companies are away on missions.`));
+  if (away.length) body.append(h('p', { class: 'muted' }, `${away.length} companies are away on tasks.`));
   if (sel.length === 1) { const t1 = S.troops.find(t => t.uid === sel[0])!; body.append(troopDetails(t1.type, t1)); }
   if (sel.length) {
     const from = S.troops.find(t => t.uid === sel[0])!;
@@ -1334,8 +1346,8 @@ function realmTab(body: HTMLElement) {
   const r = rankOf(S), nx = nextRank(S), k = provsOf(S, S.player).length;
   body.append(h('div', { class: 'coresec' },
     h('div', { class: 'cs-head' }, h('b', {}, `${player(S).name}: ${r.name}`), h('small', {}, nx ? `${nx.name} at ${nx.min} provinces (you have ${k})` : 'The highest rank')),
-    h('div', { class: 'stats' }, stat('Missions a year', `${missionCap(S)}`), stat('Started this year', `${S.launched ?? 0}`), stat('Viceroys', `${S.viceroys?.length ?? 0}/${r.viceroys}`), stat('Provinces', k)),
-    h('p', { class: 'muted' }, 'Small Kingdom 6 missions a year · Kingdom (5+ provinces) 9 · Great Kingdom (13+) 12 and 1 viceroy · Empire (30+) 15 and 3 viceroys. Each viceroy takes 2 of your yearly missions.')));
+    h('div', { class: 'stats' }, stat('Tasks a year', `${missionCap(S)}`), stat('Started this year', `${S.launched ?? 0}`), stat('Viceroys', `${S.viceroys?.length ?? 0}/${r.viceroys}`), stat('Provinces', k)),
+    h('p', { class: 'muted' }, 'Small Kingdom 6 tasks a year · Kingdom (5+ provinces) 9 · Great Kingdom (13+) 12 and 1 viceroy · Empire (30+) 15 and 3 viceroys. Each viceroy takes 2 of your yearly tasks.')));
   // viceroys
   body.append(h('h3', {}, 'Viceroys'));
   if (!r.viceroys) body.append(h('p', { class: 'muted' }, 'A Great Kingdom or an Empire can hand distant provinces to a viceroy. They govern them for you: a better viceroy raises control, happiness and development faster, but the very able grow ambitious and may crown themselves.'));
@@ -1815,7 +1827,7 @@ function goalsSheet(body: HTMLElement) {
 }
 
 function missionsSheet(body: HTMLElement) {
-  if (!S.missions.length) body.append(h('p', { class: 'muted' }, 'No missions under way. Play a mission card from any panel, or tap a province or nation.'));
+  if (!S.missions.length) body.append(h('p', { class: 'muted' }, 'Nobody is at work. Play a card from any menu, or tap a province or realm on the map.'));
   for (const m of S.missions) {
     const c = S.characters.find(x => x.uid === m.char);
     const info = MISSION_INFO[m.kind];
@@ -1827,7 +1839,7 @@ function missionsSheet(body: HTMLElement) {
         h('div', { class: 'pbar' }, h('i', { style: `width:${pct}%` }))),
       h('button', { class: 'iconbtn', 'aria-label': 'Recall', title: 'Recall', onclick: () => confirmBox('Recall this mission?', 'The card is lost. Construction refunds half its cost.', 'Recall', () => act(() => cancelMission(S, m.id))), html: icon('close', 16) })));
   }
-  return [sheetHead('Missions', `${S.missions.length} under way`), body];
+  return [sheetHead('Tasks', `${S.missions.length} under way`), body];
 }
 
 function overseasSheet(body: HTMLElement) {
@@ -1936,15 +1948,23 @@ function closeModal() {
   m.hidden = true; clear(m);
   modalOpen = false;
 }
-/** The in-game menu: back to the title screen (the game is saved), or keep playing. */
+/** The in-game menu: everything that is not a daily action lives here. */
 function showGameMenu() {
   if (modalOpen) return;
-  openModal(h('div', { class: 'mbox narrow gmenu' }, h('h2', {}, 'Menu'), h('p', { class: 'muted' }, `Your campaign is saved in slot ${slot} every season.`),
+  const go = (f: () => void) => () => { closeModal(); f(); };
+  const row = (ic: string, label: string, sub: string, f: () => void, badge = '') => h('button', { class: 'gm-row', onclick: go(f) },
+    h('span', { class: 'gm-i', html: icon(ic, 20) }), h('span', { class: 'gm-t' }, h('b', {}, label), h('small', {}, sub)), badge ? h('span', { class: 'gm-badge' }, badge) : h('span', { class: 'a-go', html: icon('next', 14) }));
+  const sc = S.scenario;
+  openModal(h('div', { class: 'mbox narrow gmenu' },
+    h('div', { class: 'gm-head' }, h('h2', {}, 'Menu'), h('button', { class: 'iconbtn', 'aria-label': 'Close', onclick: closeModal, html: icon('close', 18) })),
     h('div', { class: 'gm-list' },
-      h('button', { class: 'btn primary', onclick: closeModal }, 'Continue playing'),
-      S.scenario ? h('button', { class: 'btn', onclick: () => { closeModal(); toggleSheet('goals'); } }, 'Mission goals') : null,
-      h('button', { class: 'btn', onclick: () => { closeModal(); toggleSheet('realm'); } }, 'Realm and ruler'),
-      h('button', { class: 'btn', onclick: () => { saveNow(); closeModal(); showTitle(); } }, 'Save and go to the title screen'))));
+      sc ? row('star', 'Mission goals', sc.name, () => openSheet('goals')) : null,
+      row('hourglass', 'Tasks under way', S.missions.length ? 'Your people at work, and when they finish' : 'Nobody is at work right now', () => openSheet('missions'), S.missions.length ? String(S.missions.length) : ''),
+      row('crown', 'Realm and ruler', `${player(S).ruler.name} · cards and nation points each year`, () => openSheet('realm')),
+      row('laurel', 'Chronicle', 'Rankings of the powers, records and history', () => openSheet('chronicle')),
+      row('book', ageOf(S).name, 'The age you live in and the next one', () => showEra())),
+    h('p', { class: 'muted small gm-save' }, `Saved in slot ${slot} every season.`),
+    h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: () => { saveNow(); closeModal(); showTitle(); } }, 'Save and exit to title'), h('button', { class: 'btn primary', onclick: closeModal }, 'Continue'))));
 }
 
 function confirmBox(title: string, text: string, okLabel: string, ok: () => void) {
@@ -2404,7 +2424,7 @@ function showTurnReport() {
     box.append(h('ul', { class: 'rlist' }, tl.done.map(d => h('li', {}, h('span', { html: icon(MISSION_INFO[d.kind as MissionKind]?.icon ?? 'star', 14) }), d.title))));
   }
   box.append(h('h3', {}, `Under way (${S.missions.length})`));
-  if (!S.missions.length) box.append(h('p', { class: 'muted' }, 'No missions under way. Open a menu and send someone out.'));
+  if (!S.missions.length) box.append(h('p', { class: 'muted' }, 'No tasks under way. Open a menu and send someone out.'));
   for (const m of S.missions.slice(0, 6)) box.append(missionRow(m));
   if (S.missions.length > 6) box.append(h('p', { class: 'muted' }, `+${S.missions.length - 6} more in the Missions tabs.`));
   box.append(h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: () => { closeModal(); refresh(); } }, 'Continue')));

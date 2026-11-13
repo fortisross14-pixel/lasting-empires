@@ -38,7 +38,7 @@ export function troopCard(t: Pick<TroopCard, 'type' | 'vet' | 'str'> & { mission
     h('div', { class: 'c-stats' },
       h('span', { title: 'Melee' }, h('b', {}, 'M'), d.melee), h('span', { title: 'Fire' }, h('b', {}, 'F'), d.fire), h('span', { title: 'Defence' }, h('b', {}, 'D'), d.def)),
     h('div', { class: 'c-bar' }, h('i', { style: `width:${Math.round(t.str)}%` })),
-    t.mission != null ? h('div', { class: 'c-away' }, 'On mission') : null,
+    t.mission != null ? h('div', { class: 'c-away' }, 'Away') : null,
   );
 }
 
@@ -60,7 +60,7 @@ export function charCard(c: Character, s: GameState, o: Opts = {}) {
       h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, `Person · ${c.ruler ? 'Monarch' : roleName[c.role]}`), h('span', { class: 'c-rarity' }, RARITY[c.rarity].name)),
       h('div', { class: 'c-name c-title' }, c.name),
       h('div', { class: 'c-text' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || 'No traits', ` · age ${s.year - c.born}`),
-      c.mission != null ? h('div', { class: 'c-away' }, c.mission === -1 ? 'Viceroy' : 'On mission') : null));
+      c.mission != null ? h('div', { class: 'c-away' }, c.mission === -1 ? 'Viceroy' : 'Away') : null));
   return shell('char', { ...o, cls: `r-${c.rarity} role-${c.role} ${o.cls ?? ''}` },
     h('div', { class: 'c-top' }, h('span', { class: 'c-role' }, c.ruler ? 'Monarch' : roleName[c.role]), h('span', { class: 'c-gem', title: RARITY[c.rarity].name })),
     artDiv('role_' + c.role, icon(ROLE_ICON[c.role] ?? 'crown', o.small ? 24 : 32)),
@@ -68,7 +68,7 @@ export function charCard(c: Character, s: GameState, o: Opts = {}) {
     h('div', { class: 'c-rarity' }, RARITY[c.rarity].name),
     h('div', { class: 'c-traits' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || '—'),
     o.small ? null : h('div', { class: 'c-age' }, `Age ${s.year - c.born}`),
-    c.mission != null ? h('div', { class: 'c-away' }, 'On mission') : null,
+    c.mission != null ? h('div', { class: 'c-away' }, 'Away') : null,
   );
 }
 

@@ -293,6 +293,7 @@ export interface GameState {
   ambition: string | null;
   ambitionDone: boolean;
   over: boolean;
+  savedAt?: number; // when the game was last written, to offer Continue on the title screen
 }
 
 export interface Stats {
