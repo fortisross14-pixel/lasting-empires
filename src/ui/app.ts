@@ -233,6 +233,7 @@ function missionCard(m: MissionDef) {
 
 /** A mission's full briefing, with the button that starts it. */
 function showMissionDetail(m: MissionDef) {
+  screenBack = showMissions; armBack();
   const done = missionsDone()[m.id];
   const locked = !m.beginner && !realUnlocked();
   const pv = previewFor(m.start);
@@ -268,6 +269,7 @@ function section(key: string, title: string, openByDefault: boolean, ...kids: (H
 
 let missionYear = 1451;
 function showMissions() {
+  screenBack = showTitle; armBack();
   const root = clear($('#app'));
   const mine = customMissions();
   root.append(h('div', { class: 'missions-screen' },
@@ -433,6 +435,7 @@ function showPicker(initial?: string) {
 }
 
 function showTitle() {
+  screenBack = null;
   migrateOldSave();
   const root = clear($('#app'));
   root.append(h('div', { class: 'title-screen' },
@@ -706,6 +709,7 @@ function openWin(cat: Cat, tab = win?.cat === cat ? win.tab : 'cards') {
   if (sheet) { sheet = null; $('#sheet').hidden = true; }
   if (win?.cat !== cat) { pick = {}; cv = { filter: 'all', mode: 'browse', sel: [] }; }
   win = { cat, tab };
+  armBack();
   const wasHidden = $('#win').hidden;
   $('#win').hidden = false;
   if (wasHidden) { $('#win').classList.add('fresh'); setTimeout(() => $('#win').classList.remove('fresh'), 500); }
@@ -984,9 +988,12 @@ function toggleSheet(kind: string, arg?: string) {
   if (sheet && sheet.kind === kind && sheet.arg === arg) closeSheet(); else openSheet(kind, arg);
 }
 function openSheet(kind: string, arg?: string) {
+  if (win) { win = null; pick = {}; $('#win').hidden = true; } // never behind the window
   if (kind !== 'military') forge = [];
+  sheetFrom = kind === 'nation' && sheet?.kind === 'province' ? sheet.arg ?? null : kind === 'nation' ? sheetFrom : null;
   sheet = { kind, arg };
   $('#sheet').hidden = false;
+  armBack();
   refresh();
   if (kind === 'nation' && arg) { const ids = provsOf(S, arg).map(p => p.id); if (ids.length) map.focus(ids, 60); } // show the whole realm
 }
@@ -1939,10 +1946,40 @@ function realmSheet(body: HTMLElement) {
 function openModal(content: HTMLElement) {
   const m = clear($('#modal'));
   content.prepend(h('div', { class: 'seal', 'aria-hidden': 'true' }, h('i'), h('i'), h('b')));
-  m.append(h('div', { class: 'scrim' }), content);
+  m.append(h('div', { class: 'scrim', onclick: () => { dismissModal(); } }), content);
   m.hidden = false;
   modalOpen = true;
+  armBack();
 }
+/** Close the dialog the way its own cancel button would. Decisions without one stay open. */
+function dismissModal(): boolean {
+  const m = $('#modal');
+  const btn = (m.querySelector('.iconbtn[aria-label="Close"]') as HTMLElement | null)
+    ?? Array.from(m.querySelectorAll<HTMLElement>('button')).find(b => /^(Keep it|Cancel|Close|Back|Back to map|Continue|Not now|Later)$/i.test((b.textContent ?? '').trim()) && !b.classList.contains('blocked')) ?? null;
+  if (!btn) return false;
+  btn.click();
+  return true;
+}
+
+// ---------- back: Android's back button, Escape and tapping outside all step back one layer ----------
+/** What "back" does on the screens outside a game (title, missions, picker). */
+let screenBack: (() => void) | null = null;
+function goBack(): boolean {
+  if (modalOpen) { if (!dismissModal()) toast('Choose an option first'); return true; }
+  if (!document.getElementById('top')) { if (screenBack) { const f = screenBack; screenBack = null; f(); return true; } return false; }
+  if (pickHand != null) { stopMapPick(); return true; }
+  if (sheet?.kind === 'nation' && sheetFrom) { const f = sheetFrom; sheetFrom = null; openSheet('province', f); return true; }
+  if (sheet) { closeSheet(); return true; }
+  if (win) { closeWin(); return true; }
+  showGameMenu(); // nothing open: back offers the menu rather than leaving the game
+  return true;
+}
+/** Keep one history entry in hand so the browser's back comes to us first. */
+function armBack() { try { if (history.state?.le !== 1) history.pushState({ le: 1 }, ''); } catch { /* sandboxed frames may refuse */ } }
+addEventListener('popstate', () => { if (goBack()) armBack(); });
+addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); goBack(); } });
+/** The province a realm sheet was opened from, so back returns to it. */
+let sheetFrom: string | null = null;
 function closeModal() {
   const m = $('#modal');
   m.hidden = true; clear(m);

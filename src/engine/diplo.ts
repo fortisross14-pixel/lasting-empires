@@ -76,7 +76,7 @@ export function concludePeace(s: GameState, enemy: string, termIds: string[], th
     } else if (id.startsWith('prov:')) {
       const pid = id.slice(5);
       if (s.provinces[pid]?.owner === loser) {
-        transferProvince(s, pid, winner);
+        transferProvince(s, pid, winner); delete s.provinces[pid].occupiedFrom; // ceded by treaty, not occupied
         items.push({ title: `${s.provinces[pid].name} is ceded`, text: `It now belongs to ${nationName(s, winner)}.`, tone: theyDemand ? 'bad' : 'good', kind: 'scroll' });
       }
     } else if (id === 'independence' && !theyDemand) {
@@ -87,7 +87,7 @@ export function concludePeace(s: GameState, enemy: string, termIds: string[], th
       if (p) { delete p.occupiedFrom; items.push({ title: theyDemand ? `${p.name} is lost` : `${p.name} is yours`, text: theyDemand ? `${nationName(s, enemy)} keeps it.` : 'The treaty confirms it.', tone: theyDemand ? 'bad' : 'good', kind: 'scroll' }); }
     } else if (id === 'annex' && !theyDemand) {
       for (const p of occupiedBy(s, s.player, enemy)) delete p.occupiedFrom;
-      for (const p of provsOf(s, enemy)) transferProvince(s, p.id, s.player);
+      for (const p of provsOf(s, enemy)) { transferProvince(s, p.id, s.player); delete p.occupiedFrom; }
       n.alive = false; n.army = []; n.fleet = [];
       items.push({ title: `${n.name} is no more`, text: 'All its lands are now yours. Its people may take time to accept your rule.', tone: 'good', kind: 'crown' });
     } else if (id === 'vassal' && !theyDemand) {
