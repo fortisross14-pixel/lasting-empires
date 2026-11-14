@@ -995,6 +995,7 @@ function openSheet(kind: string, arg?: string) {
   if (win) { win = null; pick = {}; $('#win').hidden = true; } // never behind the window
   if (kind !== 'military') forge = [];
   sheetFrom = kind === 'nation' && sheet?.kind === 'province' ? sheet.arg ?? null : kind === 'nation' ? sheetFrom : null;
+  sheetTall = kind !== 'province' && kind !== 'nation';
   sheet = { kind, arg };
   $('#sheet').hidden = false;
   armBack();
@@ -1032,8 +1033,29 @@ function renderSheet() {
   else if (k === 'chronicle') parts = chronicleSheet(body);
   else if (k === 'realm') parts = realmSheet(body);
   else if (k === 'overseas') parts = overseasSheet(body);
+  // phones: a handle to pull the panel up to full height, or back down to half
+  if (innerWidth <= 760) {
+    const grab = h('button', { class: 'sh-grab', 'aria-label': sheetTall ? 'Show less' : 'Show more', 'aria-expanded': String(sheetTall), onclick: () => setSheetTall(!sheetTall) }, h('i'));
+    let y0 = 0;
+    grab.addEventListener('pointerdown', e => { y0 = e.clientY; });
+    grab.addEventListener('pointerup', e => { const dy = e.clientY - y0; if (dy < -24) setSheetTall(true); else if (dy > 24) { if (sheetTall) setSheetTall(false); else closeSheet(); } });
+    el.append(grab);
+    // scrolling the half-height panel pulls it up
+    body.addEventListener('scroll', () => { if (!sheetTall && body.scrollTop > 40) setSheetTall(true); }, { passive: true });
+  }
   el.append(...parts);
+  el.dataset.h = sheetTall ? 'full' : 'peek';
   body.scrollTop = scroll;
+}
+/** Phones: is the panel at full height (or the half height that leaves the map in view)? */
+let sheetTall = false;
+function setSheetTall(v: boolean) {
+  sheetTall = v;
+  const el = document.getElementById('sheet');
+  if (!el) return;
+  el.dataset.h = v ? 'full' : 'peek';
+  const g = el.querySelector('.sh-grab');
+  g?.setAttribute('aria-expanded', String(v)); g?.setAttribute('aria-label', v ? 'Show less' : 'Show more');
 }
 
 const gradeLabel = (g: number) => { const d = GRADES.find(x => x.mult === g); return d && d.mult !== 1 ? ` (${d.name})` : ''; };
@@ -1967,7 +1989,7 @@ function openModal(content: HTMLElement) {
 function dismissModal(): boolean {
   const m = $('#modal');
   const btn = (m.querySelector('.iconbtn[aria-label="Close"]') as HTMLElement | null)
-    ?? Array.from(m.querySelectorAll<HTMLElement>('button')).find(b => /^(Keep it|Cancel|Close|Back|Back to map|Continue|Not now|Later)$/i.test((b.textContent ?? '').trim()) && !b.classList.contains('blocked')) ?? null;
+    ?? Array.from(m.querySelectorAll<HTMLElement>('button')).find(b => /^(‹ ?)?(Keep it|Cancel|Close|Back|Back to map|Continue|Not now|Later)$/i.test((b.textContent ?? '').trim()) && !b.classList.contains('blocked')) ?? null;
   if (!btn) return false;
   btn.click();
   return true;
@@ -2316,12 +2338,21 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
 
   const tname = kind === 'assist' ? TECH[S.missions.find(x => String(x.id) === target)?.target ?? '']?.name ?? 'a study' : kind === 'artwork' ? GENRES[target]?.name.toLowerCase() ?? 'a work' : kind === 'accept' ? `${cultureName(target)} people` : kind === 'pilgrimage' ? churchHead(S).name : S.provinces[target]?.name ?? S.nations[target]?.name ?? TECH[target]?.name ?? 'the realm';
   const box = h('div', { class: 'mbox planner' });
+  // armies are planned in steps: who leads, who marches, then a last look before they set out
+  const STEPS = military ? ['General', kind === 'conquista' ? 'Men' : 'Troops', 'Review'] : null;
+  let step = 0;
+  const show = (k: number) => !STEPS || step === k;
   const draw = () => {
     clear(box);
+    const body = h('div', { class: 'pl-body' });
     box.append(h('div', { class: 'pl-head' }, h('span', { class: 'a-ico', html: icon(info.icon, 22) }),
       h('div', {}, h('h2', {}, `${info.name}${kind === 'build' ? ': ' + BUILDINGS[building!].name : ''}`), h('p', { class: 'muted' }, `${info.verb} ${tname} · uses ${CARDS[card.card].name}`))));
-    box.append(h('h3', {}, `Choose ${/^[aeiou]/i.test(roleName[role]) ? 'an' : 'a'} ${roleName[role].toLowerCase()}`));
-    const row = h('div', { class: 'cards-row' });
+    if (STEPS) box.append(h('ol', { class: 'pl-steps', 'aria-label': 'Steps' }, STEPS.map((l, i) => h('li', { class: i === step ? 'on' : i < step ? 'done' : '', 'aria-current': i === step ? 'step' : undefined }, h('span', { class: 'ps-n' }, i < step ? '✓' : String(i + 1)), l))));
+    box.append(body);
+    const box0 = box; void box0;
+    const boxAppend = (...els: (HTMLElement | null)[]) => body.append(...els.filter((e): e is HTMLElement => !!e));
+    if (show(0)) boxAppend(h('h3', {}, `Choose ${/^[aeiou]/i.test(roleName[role]) ? 'an' : 'a'} ${roleName[role].toLowerCase()}`));
+    const row = h('div', { class: 'cards-row wrap' });
     for (const c of chars) {
       const busy = c.mission != null;
       let sub = qLabel(missionTurns(S, kind, c, target, building));
@@ -2332,10 +2363,10 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
       if (!busy && c.role !== role && role !== 'general') sub = `→ ${roleName[role]}`;
       row.append(charCard(c, S, { small: true, selected: c.uid === ch.uid, dim: busy, badge: busy ? 'busy' : sub, onclick: () => { if (busy) return toast('Busy on another mission'); ch = c; if (military) picked = picked.slice(0, maxTroops()); draw(); } }));
     }
-    box.append(row);
+    if (show(0)) boxAppend(row);
     const turnsInto = becomesOnMission(kind, ch, naval && ships.length > 0);
-    if (turnsInto) box.append(h('p', { class: 'bad' }, `${ch.name} will become ${/^[aeiou]/i.test(turnsInto) ? 'an' : 'a'} ${roleName[turnsInto].toLowerCase()} for good: new skills, no going back.`));
-    if (!['conquer', 'raid'].includes(kind)) box.append(h('div', { class: 'oddsbox' }, h('small', { class: 'muted' }, `Outcome odds with a ${RARITY[ch.rarity].name} ${roleName[ch.role].toLowerCase()}:`), oddsLine(ch)));
+    if (turnsInto && show(0)) boxAppend(h('p', { class: 'bad' }, `${ch.name} will become ${/^[aeiou]/i.test(turnsInto) ? 'an' : 'a'} ${roleName[turnsInto].toLowerCase()} for good: new skills, no going back.`));
+    if (!['conquer', 'raid'].includes(kind) && show(0)) boxAppend(h('div', { class: 'oddsbox' }, h('small', { class: 'muted' }, `Outcome odds with a ${RARITY[ch.rarity].name} ${roleName[ch.role].toLowerCase()}:`), oddsLine(ch)));
     const turns = missionTurns(S, kind, ch, target, building);
     const facts: (string | HTMLElement)[] = [qText(turns)];
     if (DIPLO.includes(kind)) facts.push(`${Math.round(diploChance(S, kind, ch, target) * 100)}% chance`, `Journey ${envoyCost(S, target)} ducats · back at court ${qText(Math.max(1, envoyTravel(S, target)))} after`, CARDS[card.card].permanent ? 'The card stays in your hand' : 'The card is used up');
@@ -2343,7 +2374,7 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
     facts.push(kind === 'route' ? 'A quick errand: does not use up one of the year\'s tasks' : `Tasks left this year: ${missionsLeft(S)}`);
     const pgKey = kind === 'artwork' ? target : building;
     const pg = kind === 'build' ? {} : projectGoods(kind, pgKey);
-    if (kind === 'build') box.append(costBenefit(building!, target, ch));
+    if (kind === 'build') boxAppend(costBenefit(building!, target, ch));
     for (const [g, n] of Object.entries(pg)) {
       const have = S.stock[g] ?? 0, extra = projectShortfall(S, kind, pgKey);
       facts.push(h('span', { class: have >= n ? '' : 'bad' }, `Uses ${n} ${GOODS[g].name.toLowerCase()} (you have ${have.toFixed(1)})${have >= n ? '' : ` · the rest bought at double price: +${extra} ducats`}`));
@@ -2364,8 +2395,8 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
     if (kind === 'explore') facts.push(`${Math.round(exploreChance(S, ch) * 100)}% chance of a discovery · ${voyageCost(S)} ducats`);
     if (kind === 'colonize') facts.push(`${Math.round(colonizeChance(S, target, ch) * 100)}% chance · ${colonyCost(S)} ducats and 1 manpower`);
     if (military) {
-      box.append(h('h3', {}, `Troops (${picked.length}/${maxTroops()})`));
-      box.append(h('p', { class: 'muted small' }, `${ch.name} can lead ${maxTroops()} companies (${RARITY[ch.rarity].name.toLowerCase()} commander). Enemy defenders fight under a captain who leads ${GENERIC_COMMAND}, plus the walls.`));
+      if (show(1)) boxAppend(h('h3', {}, `Troops (${picked.length}/${maxTroops()})`));
+      if (show(1)) boxAppend(h('p', { class: 'muted small' }, `${ch.name} can lead ${maxTroops()} companies (${RARITY[ch.rarity].name.toLowerCase()} commander). Enemy defenders fight under a captain who leads ${GENERIC_COMMAND}, plus the walls.`));
       const tr = h('div', { class: 'cards-row wrap' });
       if (!home.length) tr.append(h('p', { class: 'muted' }, kind === 'conquer' || kind === 'raid' ? 'No free troops within a quarter\'s march of here.' : 'No free troops.'));
       for (const t of home) tr.append(troopCard(t, { small: true, badge: placeName(locOf(S, t)), selected: picked.includes(t.uid), onclick: () => {
@@ -2373,14 +2404,14 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
         else if (picked.length < maxTroops()) picked = [...picked, t.uid]; else toast(`${ch.name} can lead ${maxTroops()} troops`);
         draw();
       } }));
-      box.append(tr);
+      if (show(1)) boxAppend(tr);
       if (naval) {
         const cap = transportOf(S, ships, ch);
-        box.append(h('h3', {}, `Ships (carry ${cap} of ${picked.length} companies)`));
+        if (show(1)) boxAppend(h('h3', {}, `Ships (carry ${cap} of ${picked.length} companies)`));
         const sr = h('div', { class: 'cards-row wrap' });
         if (!harbourShips.length) sr.append(h('p', { class: 'bad' }, 'This attack goes by sea and you have no ships in harbour.'));
         for (const t of harbourShips) sr.append(troopCard(t, { small: true, selected: ships.includes(t.uid), onclick: () => { ships = ships.includes(t.uid) ? ships.filter(x => x !== t.uid) : [...ships, t.uid]; draw(); } }));
-        box.append(sr);
+        if (show(1)) boxAppend(sr);
         const foeFleet = S.nations[S.provinces[target].owner].fleet ?? [];
         facts.push(foeFleet.length ? `Their fleet (${foeFleet.length} ships) may intercept: a sea battle comes first` : 'No enemy fleet seen');
       }
@@ -2397,10 +2428,23 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
       }
       if (!S.troops.some(t => t.mission == null && !picked.includes(t.uid))) facts.push(h('span', { class: 'bad' }, 'No troops left at home to defend'));
     }
-    box.append(h('div', { class: 'facts' }, facts.map(f => h('span', { class: 'fact' }, f))));
+    if (STEPS && step === 2) { // the last look: who leads, who goes
+      boxAppend(h('h3', {}, 'Your army'), h('div', { class: 'cards-row wrap' }, charCard(ch, S, { small: true }), ...S.troops.filter(t => picked.includes(t.uid)).map(t => troopCard(t, { small: true })), ...S.fleet.filter(t => ships.includes(t.uid)).map(t => troopCard(t, { small: true }))));
+    }
+    if (!STEPS || step === 2) boxAppend(h('div', { class: 'facts' }, facts.map(f => h('span', { class: 'fact' }, f))));
+    else if (step === 1) boxAppend(h('div', { class: 'facts' }, h('span', { class: 'fact' }, `${picked.length} of ${maxTroops()} companies chosen`)));
     const why = (kind === 'route' && trade ? routeBlocked(S, trade.good, trade.dir, target, trade.amount) : missionBlocked(S, kind, target, building)) ?? (military && !picked.length ? 'Choose at least one troop' : null) ?? (naval && transportOf(S, ships, ch) < picked.length ? 'Not enough ships to carry these troops' : null);
-    box.append(h('div', { class: 'mrow' },
-      h('button', { class: 'btn ghost', onclick: closeModal }, 'Cancel'),
+    // Back goes one step back, or to the card you came from
+    const back = () => { if (STEPS && step > 0) { step--; draw(); return; } closeModal(); if (S.hand.some(x => x.uid === cardUid)) openCardModal(cardUid); };
+    if (STEPS && step < 2) {
+      const stepWhy = step === 1 ? (!picked.length ? 'Choose at least one company' : naval && transportOf(S, ships, ch) < picked.length ? 'Not enough ships to carry them' : null) : null;
+      box.append(h('div', { class: 'mrow pl-foot' },
+        h('button', { class: 'btn ghost', onclick: back }, '‹ Back'),
+        h('button', { class: 'btn primary' + (stepWhy ? ' blocked' : ''), onclick: () => { if (stepWhy) return toast(stepWhy, 'bad'); step++; draw(); box.scrollTop = 0; } }, `Next: ${STEPS[step + 1]}`)));
+      return;
+    }
+    box.append(h('div', { class: 'mrow pl-foot' },
+      h('button', { class: 'btn ghost', onclick: back }, '‹ Back'),
       h('button', { class: 'btn primary' + (why ? ' blocked' : ''), onclick: () => {
         if (why) return toast(why, 'bad');
         const r = launchMission(S, kind, ch.uid, target, picked, building, cardUid, good, ships, trade ? { dir: trade.dir, amount: trade.amount } : undefined);

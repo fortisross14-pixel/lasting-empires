@@ -19,16 +19,32 @@ const stars = (n: number) => (n > 0 ? '★'.repeat(n) : '');
 function shell(kind: string, o: Opts, ...kids: (HTMLElement | null)[]) {
   const el = h('button', {
     class: `card k-${kind}${o.wide ? ' wide' : o.small ? ' small' : ''}${o.selected ? ' sel' : ''}${o.dim ? ' dim' : ''} ${o.cls ?? ''}`,
-    type: 'button', onclick: o.onclick,
+    type: 'button', onclick: o.onclick, 'aria-pressed': o.selected ? 'true' : undefined,
   }, ...kids);
-  if (o.badge) el.append(h('span', { class: 'c-badge' }, o.badge));
+  // on small cards the status (where, busy, odds) is a strip under the picture, never over the name
+  if (o.badge) el.append(h('span', { class: o.small ? 'c-strip' : 'c-badge' }, o.badge));
   if ((o.count ?? 1) > 1) el.append(h('span', { class: 'c-count' }, `×${o.count}`));
   return el;
 }
 
 const VET_NAME = ['Recruits', 'Seasoned', 'Veterans', 'Elite'];
 
+/** A small card: name on two lines at most, the painting, then the one number that matters. */
+function miniTroop(t: Pick<TroopCard, 'type' | 'vet' | 'str'> & { mission?: number; might?: number }, o: Opts) {
+  const d = TROOPS[t.type];
+  return shell('troop', { ...o, cls: `mini tier${d.tier} ${o.cls ?? ''}` },
+    h('div', { class: 'm-name' }, d.name),
+    artDiv('unit_' + t.type, icon(d.icon, 26), t.vet ? h('span', { class: 'm-vet', 'aria-label': `${t.vet} veteran stars` }, stars(t.vet)) : null),
+    h('div', { class: 'm-foot' },
+      h('b', { class: 'm-pow', title: 'Strength' }, String(Math.round(troopPower(t)))),
+      h('span', { class: 'm-stats', 'aria-label': `Melee ${d.melee}, fire ${d.fire}, defence ${d.def}` }, `${d.melee}·${d.fire}·${d.def}`)),
+    t.str < 100 ? h('div', { class: 'm-bar' }, h('i', { style: `width:${Math.round(t.str)}%` })) : null,
+    (t.might ?? 1) > 1 ? h('span', { class: 'm-might' }, `×${(t.might ?? 1).toFixed(1)}`) : null,
+  );
+}
+
 export function troopCard(t: Pick<TroopCard, 'type' | 'vet' | 'str'> & { mission?: number; might?: number }, o: Opts = {}) {
+  if (o.small) return miniTroop(t, o);
   const d = TROOPS[t.type];
   return shell('troop', { ...o, cls: `tier${d.tier} ${o.cls ?? ''}` },
     h('div', { class: 'c-top' }, h('span', { class: 'c-name' }, d.name), h('span', { class: 'c-vet' }, stars(t.vet))),
@@ -61,6 +77,11 @@ export function charCard(c: Character, s: GameState, o: Opts = {}) {
       h('div', { class: 'c-name c-title' }, c.name),
       h('div', { class: 'c-text' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || 'No traits', ` · age ${s.year - c.born}`),
       c.mission != null ? h('div', { class: 'c-away' }, c.mission === -1 ? 'Viceroy' : 'Away') : null));
+  if (o.small) return shell('char', { ...o, cls: `mini r-${c.rarity} role-${c.role} ${o.cls ?? ''}` },
+    h('div', { class: 'm-name' }, c.name),
+    artDiv('role_' + c.role, icon(ROLE_ICON[c.role] ?? 'crown', 26), h('span', { class: 'm-rar' }, RARITY[c.rarity].name)),
+    h('div', { class: 'm-foot' }, h('span', { class: 'm-role' }, c.ruler ? 'Monarch' : roleName[c.role]), h('b', { class: 'm-skill', title: 'Skill' }, String(c.skill))),
+    h('div', { class: 'm-traits' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || '—'));
   return shell('char', { ...o, cls: `r-${c.rarity} role-${c.role} ${o.cls ?? ''}` },
     h('div', { class: 'c-top' }, h('span', { class: 'c-role' }, c.ruler ? 'Monarch' : roleName[c.role]), h('span', { class: 'c-gem', title: RARITY[c.rarity].name })),
     artDiv('role_' + c.role, icon(ROLE_ICON[c.role] ?? 'crown', o.small ? 24 : 32)),
