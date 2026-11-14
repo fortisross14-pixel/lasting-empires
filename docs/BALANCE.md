@@ -67,3 +67,11 @@ History events now check who and when: Reformation 1500–1570 only; Potosí and
 the Americas; Lepanto needs a Christian Mediterranean realm; corsairs spare Muslim shores; colonial events need
 real overseas land; envoys only come from known realms.
 Known gaps: little scripted history after 1630 and none for the non-western realms; the AI world still changes slowly.
+
+## History and a livelier world (November)
+Historical rulers for 21 more realms (Europe, Asia, Africa, Americas), 35 new events, 14 scripted AI turning
+points (`worldMoments` in history.ts), 4 legendary generals (`src/data/legends.ts`). AI: historical risers
+(`RISERS` in ai.ts, windowed, stop at 70 provinces) war more and keep their gains; AI attacks on the player compare
+with the troops actually near that border, at most once every 30 years per realm; tiny realms may become vassals of a
+rising neighbour and be absorbed after 20 years. Result (1451, 24 games): top 3 ~5/9, first ~3–4/9, ~2.6 AI wars on
+the player per game, the 1451 top 10 changes by ~3 realms per century.

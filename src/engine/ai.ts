@@ -12,7 +12,7 @@ import { aiOverseas, revealBorders } from './overseas';
 import { troopsNear, announceAttack, aiRedeploy } from './army';
 import { NO_STATE } from '../data/nations';
 import { getGeo } from './map';
-import { warScore } from './diplo';
+import { warScore, makeSubject, subjectsOf } from './diplo';
 import { createBattle, makeSide, toBattleUnits, genericGeneral, autoResolve, finishBattle } from './battle';
 
 // When AI nations get each troop type (they lag behind the player's research a little).
@@ -34,10 +34,35 @@ function aiRecruitPool(year: number): [string, number][] {
   return pool;
 }
 
+/** Realms history remembers as conquerors, in the years they rose: more eager for war, a little stronger,
+ *  slower to make peace while winning. The bonus ends once a realm holds RISER_MAX provinces. */
+export const RISERS: Record<string, [number, number]> = {
+  ottomans: [1451, 1683], muscovy: [1462, 1725], castile: [1475, 1590], timurids: [1526, 1707], mughals: [1556, 1707],
+  jurchens: [1610, 1760], qing: [1644, 1760], songhai: [1464, 1590], aztec: [1451, 1519], inca: [1451, 1527],
+  safavids: [1501, 1630], sweden: [1611, 1718], brandenburg: [1640, 1790], vijayanagara: [1451, 1565], marathas: [1700, 1760],
+  bahmani: [1451, 1490], oyo: [1600, 1780], ashanti: [1700, 1800], ayutthaya: [1451, 1600],
+};
+export const RISER_MAX = 70;
+/** Is this realm in its historical age of expansion? */
+export const rising = (s: GameState, id: string) => { const w = RISERS[id]; return !!w && s.year >= w[0] && s.year <= w[1] && provsOf(s, id).length < RISER_MAX; };
+/** Years between AI declarations of war on the player (any realm), so attacks come now and then, not every year. */
+export const AI_WAR_ON_PLAYER_GAP = 30;
+
 export function aiArmyCap(s: GameState, n: Nation): number {
   const ps = provsOf(s, n.id).length;
-  const bonus = n.personality === 'expansionist' ? 2 : n.personality === 'cautious' ? 0 : 1;
+  const bonus = (n.personality === 'expansionist' ? 2 : n.personality === 'cautious' ? 0 : 1) + (rising(s, n.id) ? 2 : 0);
   return Math.round(2 + Math.sqrt(ps) * 2.6 + bonus + (s.year - 1453) / 100);
+}
+
+/** What the player can bring to bear on the border with `n`: the troops within reach of it and the walls there,
+ *  never less than a quarter of the whole army (the rest can march back), plus a quarter of the allies' strength. */
+export function playerGuard(s: GameState, n: string): number {
+  const front = new Set<string>();
+  for (const p of provsOf(s, s.player)) if (getGeo().adj[p.id].some(nb => s.provinces[nb].owner === n)) front.add(p.id);
+  const near = new Set<number>();
+  for (const id of front) for (const t of troopsNear(s, s.player, id)) near.add(t.uid);
+  const local = armyPower(s.troops.filter(t => near.has(t.uid))) + [...front].reduce((a, id) => a + s.provinces[id].fort * 3, 0);
+  return Math.max(local, playerPower(s) / 4) + alliesOf(s, s.player).reduce((a, x) => a + nationPower(s, x) * 0.25, 0);
 }
 
 export const nationPower = (s: GameState, n: string) => armyPower(s.nations[n].army) + provsOf(s, n).reduce((a, p) => a + p.fort * 3, 0);
@@ -119,7 +144,8 @@ function aiWar(s: GameState, n: Nation) {
   for (const e of enemiesOf(s, n.id)) {
     if (!s.nations[e]?.alive) continue;
     const revolt = n.id === s.revolution?.rebel; // the other side of a revolution fights hard
-    if (!n.army.length || rand(s) > (revolt ? 0.8 : 0.4)) continue;
+    const rise = rising(s, n.id);
+    if (!n.army.length || rand(s) > (revolt ? 0.8 : rise ? 0.6 : 0.4)) continue;
     // a casual game: a crown on its last legs is rarely hunted down
     if (e === s.player && !revolt && provsOf(s, s.player).length <= 3 && rand(s) < 0.7) continue;
     const target = pickTarget(s, n.id, e);
@@ -133,7 +159,7 @@ function aiWar(s: GameState, n: Nation) {
       announceAttack(s, n.id, target, near);
       continue;
     }
-    const force = strongest(n.army.filter(t => t.str > 40), 6);
+    const force = strongest(n.army.filter(t => t.str > 40), rise ? 8 : 6);
     if (!force.length) continue;
     {
       const defNat = s.nations[e];
@@ -200,30 +226,44 @@ function aiDiplomacy(s: GameState, n: Nation) {
       }
       continue;
     }
-    if (n.id < other && s.year - w.since >= 2 && rand(s) < 0.2) makePeace(s, n.id, other);
+    if (n.id < other && s.year - w.since >= 2) {
+      const lead = (w.a === n.id ? 1 : -1) * (w.gainsA - w.gainsB); // provinces taken by n, net
+      const winner = lead > 0 ? n.id : lead < 0 ? other : '';
+      const holdOut = winner && rising(s, winner) && s.year - w.since < 8;
+      if (rand(s) < (holdOut ? 0.08 : 0.2)) makePeace(s, n.id, other);
+    }
   }
   // declare war
   const atWarCount = enemiesOf(s, n.id).length;
   if (atWarCount > 0 || n.overlord) return;
   const base = { expansionist: 0.07, zealot: 0.05, balanced: 0.035, merchant: 0.02, cautious: 0.012 }[n.personality];
   const size = provsOf(s, n.id).length;
-  if (rand(s) > base / (1 + size / 20)) return; // great powers still go to war, just less eagerly
+  const rise = rising(s, n.id);
+  // great powers still go to war, just less eagerly; a realm in its age of conquest more so
+  if (rand(s) > (rise ? Math.max(base, 0.06) * 1.5 / (1 + size / 40) : base / (1 + size / 20))) return;
   const neigh = new Set<string>();
   for (const p of provsOf(s, n.id)) for (const nb of neighbours(p.id)) { const o = s.provinces[nb].owner; if (o !== n.id) neigh.add(o); }
   const myPow = nationPower(s, n.id);
   const options = [...neigh].filter(t => {
     if (!s.nations[t]?.alive || inTruce(s, n.id, t) || hasTreaty(s, n.id, t, 'alliance') || hasTreaty(s, n.id, t, 'marriage')) return false;
     if (s.nations[t].overlord === n.id || n.overlord === t) return false;
-    if (t === s.player && s.year < s.startYear + 10) return false;
     const rel = getRel(s, n.id, t);
-    if (rel > (n.personality === 'expansionist' ? 15 : -10)) return false;
+    if (t === s.player) {
+      // the player is attacked now and then: by a neighbour that hates it and is clearly stronger where they meet
+      if (s.year < s.startYear + 10 || (s.flags.ai_war_on_player ?? -99) + AI_WAR_ON_PLAYER_GAP > s.year) return false;
+      if (rel > (rise ? -10 : -40)) return false;
+      const friends = alliesOf(s, n.id).filter(a => getRel(s, a, s.player) < 0).reduce((a, x) => a + powerOf(s, x) * 0.5, 0);
+      return myPow + friends > playerGuard(s, n.id) * 1.25;
+    }
+    if (rel > (rise ? 30 : n.personality === 'expansionist' ? 15 : -10)) return false;
     const theirPow = powerOf(s, t) + alliesOf(s, t).reduce((a, x) => a + powerOf(s, x) * 0.5, 0);
-    return myPow > theirPow * (t === s.player ? 1.3 : 1.25);
+    return myPow > theirPow * (rise ? 1.0 : 1.25);
   });
   if (!options.length) return;
   const t = pick(s, options);
   declareWar(s, n.id, t);
   if (t === s.player) {
+    s.flags.ai_war_on_player = s.year;
     log(s, `${n.name} declares war on you!`, 'bad');
     // the player's allies may be asked to help: AI allies simply join
     const joined: string[] = [];
@@ -264,7 +304,8 @@ function aiRebellions(s: GameState) {
     if (!owner || owner.overlord) continue;
     const size = provsOf(s, p.owner).length;
     if (size <= 2 || p.id === owner.capital) continue;
-    if (rand(s) > 0.004 + Math.max(0, size - 8) * 0.001) continue; // conquests mostly hold, so the map changes over the centuries
+    // conquests mostly hold, so the map changes over the centuries; a realm in its age of conquest holds them better
+    if (rand(s) > (0.004 + Math.max(0, size - 8) * 0.001) * (rising(s, owner.id) ? 0.5 : 1)) continue;
     const old = s.nations[p.core];
     if (!old || old.id === s.player || old.id === NO_STATE) continue;
     if (!old.alive) {
@@ -278,13 +319,46 @@ function aiRebellions(s: GameState) {
   }
 }
 
+/** Small crowns next to a much stronger conqueror bow to it as vassals; after a generation a small vassal is
+ *  absorbed (its land keeps its old core, so it can rise again later); vassals of the start dates are left alone. No realm takes more than 3 vassals,
+ *  and the very largest take none, so no one swallows the world this way. */
+function aiVassals(s: GameState) {
+  for (const x of Object.values(s.nations)) {
+    if (!x.alive || x.id === s.player || x.id === NO_STATE || x.id === 'papacy' || s.revolution?.rebel === x.id) continue;
+    const mine = provsOf(s, x.id);
+    if (x.overlord) {
+      const lord = s.nations[x.overlord];
+      if (!s.flags['bowed_' + x.id] || !lord?.alive || lord.id === s.player || mine.length > 3 || s.year - (x.subjectSince ?? s.year) < 20 || rand(s) > 0.05) continue;
+      for (const p of mine) { p.owner = lord.id; p.control = Math.min(p.control, 50); delete p.occupiedFrom; }
+      lord.army.push(...x.army.slice(0, 2));
+      x.alive = false; x.army = []; x.fleet = []; delete x.overlord; delete x.subject; delete s.flags['bowed_' + x.id];
+      s.wars = s.wars.filter(w => w.a !== x.id && w.b !== x.id);
+      s.treaties = s.treaties.filter(t => t.a !== x.id && t.b !== x.id);
+      log(s, `${x.name} is absorbed by ${lord.name}.`, 'neutral');
+      continue;
+    }
+    if (mine.length > 2 || enemiesOf(s, x.id).length || alliesOf(s, x.id).includes(s.player) || subjectsOf(s, x.id).length || rand(s) > 0.04) continue;
+    const xp = nationPower(s, x.id);
+    const near = new Set<string>();
+    for (const p of mine) for (const nb of getGeo().adj[p.id]) near.add(s.provinces[nb].owner);
+    const lords = [...near].map(id => s.nations[id]).filter(b => b?.alive && b.id !== x.id && b.id !== s.player && b.id !== NO_STATE && !b.overlord
+      && (b.personality === 'expansionist' || rising(s, b.id)) && provsOf(s, b.id).length <= 60 && provsOf(s, b.id).length >= 6
+      && subjectsOf(s, b.id).length < 3 && !atWar(s, b.id, s.player) && getRel(s, x.id, b.id) > -60 && nationPower(s, b.id) > xp * 3.5);
+    if (!lords.length) continue;
+    const b = pick(s, lords);
+    makeSubject(s, x.id, 'vassal', b.id);
+    s.flags['bowed_' + x.id] = 1; // only crowns that bowed this way are absorbed later
+    log(s, `${x.name} bows to ${b.name} and becomes its vassal.`, 'neutral');
+  }
+}
+
 /** Which quarter of the year a realm acts in: spreads the world's moves over the year. */
 export const aiQuarter = (id: string) => { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 4; };
 
 /** One quarter of AI play. Every realm runs its yearly turn in its own quarter; world upkeep runs at year end. */
 export function runAI(s: GameState, q = 3) {
   if (q === 0) attacksOnPlayer = 0;
-  if (q === 3) { aiRebellions(s); aiOverseas(s); }
+  if (q === 3) { aiRebellions(s); aiOverseas(s); aiVassals(s); }
   if (q === 0) { // a dead realm cannot be at war, and old occupations of finished wars are forgotten
     s.wars = s.wars.filter(w => s.nations[w.a]?.alive && s.nations[w.b]?.alive);
     for (const p of Object.values(s.provinces)) if (p.occupiedFrom && !(s.nations[p.occupiedFrom]?.alive && s.wars.some(w => (w.a === p.owner && w.b === p.occupiedFrom) || (w.b === p.owner && w.a === p.occupiedFrom)))) delete p.occupiedFrom;
@@ -302,6 +376,9 @@ export function runAI(s: GameState, q = 3) {
     if (n.alive) aiWar(s, n);
   }
   if (q !== 3) return;
+  // the conquests of a rising realm alarm its neighbours less (its infamy fades faster), so it is not
+  // always broken by a coalition at the start of its climb
+  for (const id of Object.keys(RISERS)) if (id !== s.player && s.flags['ae_' + id] && rising(s, id)) s.flags['ae_' + id] *= 0.85;
   // fear of the strong: everyone grows wary of large realms
   for (const big of Object.values(s.nations)) {
     if (!big.alive || provsOf(s, big.id).length < 12) continue;

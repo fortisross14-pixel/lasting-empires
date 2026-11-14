@@ -60,7 +60,7 @@ const histSkill = (t: string[]) => (t.some(x => ['Weak', 'Idle', 'Unstable'].inc
 
 function initialRuler(s: GameState, nation: string): Ruler {
   const later = STARTS[s.year]?.rulers[nation];
-  if (later && s.year === s.startYear) return { name: later[0], traits: [], arch: 'balanced', skill: 3, from: s.year - 5, to: later[1] };
+  if (later && s.year === s.startYear) { const t = histRuler(nation, s.year)?.traits ?? []; return { name: later[0], traits: [...t], arch: t.length ? archFromTraits(t) : 'balanced', skill: t.length ? histSkill(t) : 3, from: s.year - 5, to: later[1] }; } // [history hook] traits from RULERS
   const h = histRuler(nation, s.year);
   if (h) return { name: h.name, traits: [...h.traits], arch: archFromTraits(h.traits), skill: histSkill(h.traits), from: h.from, to: h.to };
   return { name: genRulerName(s, nation), traits: [], arch: pick(s, Object.keys(RULER_ARCHS)), skill: randInt(s, 2, 4), from: s.year, to: s.year + randInt(s, 8, 30) };
@@ -249,7 +249,9 @@ function successionCheck(s: GameState) {
       push(s, { kind: 'reveal', title: `The crown of ${n.name} passes to your house`, subtitle: 'A royal marriage bears fruit', items: [{ title: 'Personal union', text: `${n.name} keeps its own laws but now shares your monarch. It pays 40% of its income and fights at your side. After 15 years you may integrate it.`, tone: 'good', kind: 'crown' }] });
       log(s, `${n.name} enters a personal union with your crown.`, 'good');
     }
-    n.ruler = { name: genRulerName(s, n.id), traits: [], arch: pick(s, Object.keys(RULER_ARCHS)), skill: randInt(s, 1, 5), from: s.year, to: s.year + randInt(s, 10, 30) };
+    const h = histRuler(n.id, s.year); // [history hook] AI realms crown their historical rulers too
+    n.ruler = h ? { name: h.name, traits: [...h.traits], arch: archFromTraits(h.traits), skill: histSkill(h.traits), from: s.year, to: h.to }
+      : { name: genRulerName(s, n.id), traits: [], arch: pick(s, Object.keys(RULER_ARCHS)), skill: randInt(s, 1, 5), from: s.year, to: s.year + randInt(s, 10, 30) };
   }
 }
 
