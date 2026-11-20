@@ -1,5 +1,9 @@
 # Lasting Empires — Design Proposal (v0.3)
 
+> **November 2026:** this is the original proposal, kept for its pillars and its promise of a short, heavy-decision game.
+> The game has since grown far beyond it (see README.md for the rules as they are). Where we take it next, action by
+> action, is in [ROADMAP.md](ROADMAP.md); the market audit behind that plan is in [AUDIT.md](AUDIT.md).
+
 > **v0.3 changes (prototype built):** one turn = one year (1453–1750). Missions are the core verb:
 > generals lead troop cards on military missions, diplomats sign treaties and trade routes, administrators
 > research, build and develop. Troops are drafted (pick 1 of 3) and forged together into stronger units
