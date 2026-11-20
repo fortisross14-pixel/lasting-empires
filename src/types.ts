@@ -91,6 +91,8 @@ export interface Nation {
   ruler: Ruler;
   spiedUntil?: number;
   general?: Commander;  // rivals of some size keep one named general (commanders.ts)
+  /** What the realm has saved towards its next work of each kind; at 1 the work is done (ai.ts). */
+  work?: { land: number; focus: number; ships: number; arms: number };
   goal?: { target: string; since: number }; // the realm this one means to have (rivals.ts)
   deeds?: { year: number; text: string }[]; // what it has lately done, newest first
 }

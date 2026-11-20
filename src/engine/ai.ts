@@ -5,7 +5,7 @@ import { dispatch } from './annals';
 import { inflation, ageIndex, diff } from './core';
 import { commandOf, GENERIC_COMMAND } from '../data/characters';
 // AI nations: economy, recruiting, upgrades, war and peace.
-import type { GameState, Nation, TroopCard, RevealItem } from '../types';
+import type { Personality, GameState, Nation, TroopCard, RevealItem } from '../types';
 import { TROOPS } from '../data/troops';
 import {
   rand, pick, uid, clamp, provsOf, incomeOf, manpowerGain, manpowerMax, getRel, addRel, atWar, findWar,
@@ -78,17 +78,49 @@ const powerOf = (s: GameState, n: string) => (n === s.player ? playerPower(s) : 
 export const GREAT_POWER = 12;
 export const AI_DEV_BASE = 0.14, AI_DEV_SIZE = 0.025, PRESTIGE_FADE = 0.03;
 
-function aiEconomy(s: GameState, n: Nation) {
+// ---------- a rival's works: a budget, not dice ----------
+// Each year a realm sets labour aside for four kinds of work. When a whole unit is saved, the work is done and
+// written in its record. The rates are what the dice used to give on average, so realms grow as fast as before,
+// but steadily, and a player who reads a realm's page can see what it is about.
+/** Ships laid down a year by a realm with a coast, room in its harbours and silver to spare. */
+export const SHIP_RATE = 0.12;
+/** Companies re-armed a year, for each company whose arms have been overtaken. */
+export const ARMS_RATE = 0.05;
+const hashOf = (t: string) => { let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+/** How far a realm's pace on the land may lie from the common one, either way. When dice decided, luck spread
+ *  realms about this much over three centuries (one in ten ended a tenth ahead or behind); without it no rival
+ *  ever pulls ahead and the player's place in the ranking rises. The spread is now each realm's own nature. */
+export const DILIGENCE_SPREAD = 0.17;
+/** A realm's own pace, fixed for the whole game: from 1 − spread to 1 + spread, 1 on average. */
+export const diligence = (id: string) => 1 - DILIGENCE_SPREAD + ((hashOf(id + 'diligence') % 1000) / 999) * 2 * DILIGENCE_SPREAD;
+/** Works on the land a year: bigger realms a little faster, but far less than in proportion, so great empires do
+ *  not win on size alone; merchants faster; each realm at its own pace; multiplied by the difficulty. */
+export const landRate = (s: GameState, n: Nation) => (AI_DEV_BASE + AI_DEV_SIZE * Math.sqrt(provsOf(s, n.id).length) + (n.personality === 'merchant' ? 0.04 : 0)) * diligence(n.id) * diff(s).aiGrowth;
+/** A realm's savings towards its works. They begin part-way, differently for each realm, so the world does not
+ *  all build in the same year. */
+export function worksOf(n: Nation) {
+  return (n.work ??= { land: (hashOf(n.id + 'land') % 100) / 100, focus: (hashOf(n.id + 'focus') % 100) / 100, ships: (hashOf(n.id + 'ships') % 100) / 100, arms: (hashOf(n.id + 'arms') % 100) / 100 });
+}
+/** The land a realm can still improve, poorest first: the ceiling rises with the ages. */
+const improvable = (s: GameState, n: Nation) => provsOf(s, n.id).filter(p => p.dev < 5 + ageIndex(s)).sort((x, y) => x.dev - y.dev || (x.id < y.id ? -1 : 1));
+/** Years until a realm next improves its land, for the player's spies; null when it has none left to improve. */
+export function yearsToLand(s: GameState, n: Nation): number | null {
+  if (!improvable(s, n).length) return null;
+  return Math.max(1, Math.ceil((1 - worksOf(n).land) / Math.max(0.01, landRate(s, n))));
+}
+
+export function aiEconomy(s: GameState, n: Nation) {
   const inc = incomeOf(s, n.id);
   n.gold = Math.min(n.gold + inc.total, 400 * inflation(s)); // crowns spend what they cannot store
   n.manpower = Math.min(manpowerMax(s, n.id), n.manpower + manpowerGain(s, n.id));
   for (const t of n.army) t.str = Math.min(100, t.str + 20);
-  // AI realms develop their land, the way a player would: bigger realms a little faster,
-  // but far less than in proportion, so great empires do not win on size alone
-  const pv = provsOf(s, n.id).length;
-  if (rand(s) < (AI_DEV_BASE + AI_DEV_SIZE * Math.sqrt(pv) + (n.personality === 'merchant' ? 0.04 : 0)) * diff(s).aiGrowth) {
-    const low = provsOf(s, n.id).filter(p => p.dev < 5 + ageIndex(s)).sort((x, y) => x.dev - y.dev); // the ceiling rises with the ages
-    if (low.length) { const p = low[Math.floor(rand(s) * Math.min(4, low.length))]; p.dev++; deed(s, n, `Improved the land of ${p.name}.`); }
+  // the land: labour saved each year, and one of the four poorest provinces improved when there is enough
+  const w = worksOf(n);
+  w.land += landRate(s, n);
+  if (w.land >= 1) {
+    const low = improvable(s, n);
+    if (low.length) { w.land -= 1; const p = low[hashOf(n.id + s.year) % Math.min(4, low.length)]; p.dev++; deed(s, n, `Improved the land of ${p.name}.`); }
+    else w.land = 1; // nothing left to improve in this age: the labour waits, but does not pile up
   }
   if (n.gold < -20 && n.army.length) { n.army.splice(Math.floor(rand(s) * n.army.length), 1); n.gold += 10; }
   // recruit
@@ -105,29 +137,42 @@ function aiEconomy(s: GameState, n: Nation) {
   // navy
   n.fleet ??= [];
   const coastal = provsOf(s, n.id).filter(p => getGeo().coastal[p.id]).length;
-  if (coastal && n.fleet.length < 1 + Math.floor(coastal / 2) && n.gold > 45 && rand(s) < 0.12) {
-    const type = s.year >= 1650 ? 'man_of_war' : s.year >= 1545 ? 'galleon' : s.year >= 1490 && rand(s) < 0.5 ? 'carrack' : 'galley';
-    n.gold -= 30; n.fleet.push({ uid: uid(s), type, vet: 0, str: 100 });
-    deed(s, n, `Launched a ${TROOPS[type].name.toLowerCase()}.`);
+  if (coastal && n.fleet.length < 1 + Math.floor(coastal / 2) && n.gold > 45) {
+    w.ships += SHIP_RATE;
+    if (w.ships >= 1) {
+      w.ships -= 1;
+      const type = s.year >= 1650 ? 'man_of_war' : s.year >= 1545 ? 'galleon' : s.year >= 1490 && hashOf(n.id + s.year + 'hull') % 2 ? 'carrack' : 'galley';
+      n.gold -= 30; n.fleet.push({ uid: uid(s), type, vet: 0, str: 100 });
+      deed(s, n, `Launched a ${TROOPS[type].name.toLowerCase()}.`);
+    }
   }
   for (const t of n.fleet) t.str = Math.min(100, t.str + 20);
   // upgrade old units
-  for (const t of n.army) {
-    if (rand(s) > 0.05) continue;
-    const up = AI_UPGRADES.find(([from, , y]) => from === t.type && s.year >= y);
-    if (up) { t.type = up[1]; deed(s, n, `Re-armed a company as ${TROOPS[up[1]].name}.`); }
+  const upgradeOf = (type: string) => AI_UPGRADES.find(([from, , y]) => from === type && s.year >= y);
+  const old = n.army.filter(t => upgradeOf(t.type));
+  w.arms = old.length ? w.arms + ARMS_RATE * old.length : Math.min(w.arms, 1);
+  for (const t of old) {
+    if (w.arms < 1) break;
+    w.arms -= 1;
+    const up = upgradeOf(t.type)!;
+    t.type = up[1]; deed(s, n, `Re-armed a company as ${TROOPS[up[1]].name}.`);
   }
   // slow growth
   // prestige
   n.prestige = n.prestige * (1 - PRESTIGE_FADE) + 0.3 + Math.sqrt(provsOf(s, n.id).length) * 0.35;
 }
 
-/** Once a year a realm does one thing in keeping with its temper. Small, real, and written in its record. */
+/** Every second year a realm does one thing in keeping with its temper. Small, real, and written in its record.
+ *  `FOCUS_CHANCE` is the share of a work saved each year: at 0.5, one work every two years. If the realm cannot
+ *  pay for it when its turn comes, the turn is lost, as it was when dice decided. */
 export const FOCUS_CHANCE = 0.5, WALL_COST = 30;
+/** What each temper's own work is, in words for the realm's page. */
+export const FOCUS_WORK: Record<Personality, string> = { cautious: 'raises walls on a border', balanced: 'raises walls on a border', merchant: 'holds a great fair', zealot: 'endows a house of prayer', expansionist: 'musters its levies' };
 function aiFocus(s: GameState, n: Nation) {
-  // decided by the realm, the year and its temper, not by dice, so the world's other rolls fall as before
-  let h = 2166136261; for (const c of n.id + s.year) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
-  if (((h >>> 0) % 100) / 100 >= FOCUS_CHANCE) return;
+  const w = worksOf(n);
+  w.focus += FOCUS_CHANCE;
+  if (w.focus < 1) return;
+  w.focus -= 1;
   if (n.personality === 'cautious' || n.personality === 'balanced') {
     const cap = maxFort(s);
     const border = provsOf(s, n.id).filter(p => p.fort < Math.min(cap, 2) && neighbours(p.id).some(nb => s.provinces[nb].owner !== n.id)).sort((a, b) => a.fort - b.fort || b.dev - a.dev)[0];

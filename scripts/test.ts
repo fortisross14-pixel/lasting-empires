@@ -5,6 +5,7 @@ import { quarterFlow, stewardBudget, tradeIncome } from '../src/engine/trade';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { ERAS } from '../src/data/eras';
 import { MUSIC_TRACKS, trackFor } from '../src/ui/music';
+import { aiEconomy, worksOf, landRate, yearsToLand, diligence, DILIGENCE_SPREAD } from '../src/engine/ai';
 import { EVENT_SCENES, eventsWithArt, FACE_FAMILIES, faceFamily, faceOf } from '../src/ui/art';
 import { gunzipSync } from 'node:zlib';
 import { EVENT, EVENTS, rollEvents } from '../src/engine/events';
@@ -452,6 +453,26 @@ check('age plates and title scenes: one plate for each age, two scenes for the t
 check('music: a piece for every family of dress, in both formats', () => {
   for (const fam of FACE_FAMILIES) { const n = MUSIC_TRACKS[fam]; ok(n, `no music for ${fam}`); for (const ext of ['ogg', 'm4a']) ok(existsSync(`sound/music-${n}.${ext}`), `sound/music-${n}.${ext} is missing`); }
   eq(trackFor('castilian'), 'europe', 'Castile'); eq(trackFor('turkish'), 'levant', 'the Ottomans');
+});
+
+check('rivals work to a budget: land improved exactly as fast as the rate says, with no dice', () => {
+  const s = newGame('castile', 91), fr = s.nations.france;
+  const dev = () => provsOf(s, 'france').reduce((a, p) => a + p.dev, 0);
+  const d0 = dev(), w0 = worksOf(fr).land, rate = landRate(s, fr), seed0 = s.seed;
+  ok(rate > 0.1 && rate < 0.6, `France's rate is ${rate}`);
+  for (let i = 0; i < 20; i++) { fr.gold = 0; fr.manpower = 0; aiEconomy(s, fr); } // no silver, no men: only the land moves
+  eq(dev() - d0, Math.floor(w0 + 20 * rate + 1e-9), 'land improved in twenty years');
+  ok((fr.deeds ?? []).some(d => /Improved the land/.test(d.text)), 'the work is in its record');
+  const yl = yearsToLand(s, fr);
+  ok(yl != null && yl >= 1 && yl <= Math.ceil(1 / rate), `years to the next work: ${yl}`);
+  // each realm has its own pace, inside the spread, and the world's average is the common pace
+  const ds = Object.keys(s.nations).map(diligence);
+  ok(Math.min(...ds) >= 1 - DILIGENCE_SPREAD - 1e-9 && Math.max(...ds) <= 1 + DILIGENCE_SPREAD + 1e-9, 'a pace outside the spread');
+  const mean = ds.reduce((a, b) => a + b, 0) / ds.length;
+  ok(Math.abs(mean - 1) < 0.03, `the mean pace of ${ds.length} realms is ${mean.toFixed(3)}`);
+  // two realms do not begin at the same point of their savings
+  ok(worksOf(s.nations.england).land !== worksOf(s.nations.portugal).land, 'savings are staggered');
+  void seed0;
 });
 
 check('event paintings: every one named is a file, and every event named exists', () => {

@@ -1,6 +1,6 @@
 // Side panels: province, realm, goals, tasks, overseas, chronicle, and the rows they share.
 import { attitude, goalOf, goalKnown, deedsKnown, TEMPERS, GOAL_MIN, GOAL_YEARS, GOAL_DRIFT, WARNING_VALID } from '../engine/rivals';
-import { threatOf } from '../engine/ai';
+import { threatOf, yearsToLand, FOCUS_WORK, diligence } from '../engine/ai';
 import { TERRAINS, type Terrain } from '../data/terrain';
 import { TRAIT_TACTIC_CHANCE } from '../data/troops';
 import { RESERVE_FRESH, RETREAT_COST, ALLY_COMPANIES } from '../engine/battle';
@@ -335,6 +335,12 @@ export function nationSheet(id: string, body: HTMLElement) {
   if (goal) body.append(h('p', { class: 'goal' + (goal === S.player ? ' bad' : '') }, h('span', { html: icon('eye', 14) }), ' ',
     known ? (goal === S.player ? 'What it wants: your lands.' : `What it wants: the lands of ${nationName(S, goal)}.`) : 'What it wants is not known to you. An embassy, a spy or an alliance would tell.'));
   if (deedsKnown(S, id) && n.deeds?.length) body.append(h('div', { class: 'deeds' }, h('h3', {}, 'Lately'), h('ul', {}, n.deeds.map(d => h('li', {}, h('b', {}, String(d.year)), ' ', d.text)))));
+  // what it is working towards: the same record the realm itself keeps (worksOf in ai.ts)
+  if (deedsKnown(S, id) && !n.overlord) {
+    const yl = yearsToLand(S, n);
+    const pace = diligence(id) > 1.08 ? 'An industrious realm. ' : diligence(id) < 0.92 ? 'A realm slow to mend its land. ' : '';
+    body.append(h('p', { class: 'muted works' }, h('b', {}, 'At work. '), pace, yl == null ? 'Its land is as rich as this age allows. ' : `It next improves its land in about ${yl} year${yl === 1 ? '' : 's'}. `, `Every second year it ${FOCUS_WORK[n.personality]}.`));
+  }
   const goods = [...ownGoods(S, id)].map(g => GOODS[g]?.name ?? g);
   body.append(h('p', { class: 'muted' }, `Goods: ${goods.join(', ') || 'none'}.`));
   const theirWars = enemiesOf(S, id).filter(e => e !== S.player).map(e => nationName(S, e));
