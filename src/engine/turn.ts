@@ -25,7 +25,7 @@ import {
   rand, pick, randInt, uid, clamp, player, provsOf, incomeOf, log, push, addRel, playerManpower, initialSettlement, grade,
   addTreaty, hasTech, genCharacter, declareWar, nationName, atWar, getRel, hasGood, armyPower, hasCore, coreSlots, hasTreaty, ageId,
   resetProvIndex, techFx, diff } from './core';
-import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS, trimHand } from './cards';
+import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS, trimHand, queuePicks } from './cards';
 import { advanceMissions, MISSION_INFO, quarterlyReturns } from './missions';
 import { runAI, PRESTIGE_FADE } from './ai';
 import { quarterlyRevolution } from './government';
@@ -443,6 +443,7 @@ export function endTurn(s: GameState): YearReport | null {
   s.quarter = (q + 1) % 4;
   if (s.quarter === 0) {
     // the year turns
+    queuePicks(s);
     yearlyPlayer(s);
     yearlyStrain(s);
     yearlySubjects(s);

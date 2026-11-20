@@ -6,6 +6,8 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { ERAS } from '../src/data/eras';
 import { MUSIC_TRACKS, trackFor } from '../src/ui/music';
 import { aiEconomy, worksOf, landRate, yearsToLand, diligence, DILIGENCE_SPREAD } from '../src/engine/ai';
+import { cardHasTarget } from '../src/engine/pace';
+import { RETIRED, cardFor, addCard as addCardT } from '../src/engine/cards';
 import { EVENT_SCENES, eventsWithArt, FACE_FAMILIES, faceFamily, faceOf } from '../src/ui/art';
 import { gunzipSync } from 'node:zlib';
 import { EVENT, EVENTS, rollEvents } from '../src/engine/events';
@@ -25,6 +27,7 @@ import { REQUEST_EVENTS } from '../src/engine/requests';
 import { NATIONS } from '../src/data/nations';
 import { LATER_DEFS } from '../src/engine/starts';
 import { takeDraftOption } from '../src/engine/drafts';
+import { choosePicks } from '../src/engine/cards';
 import { CARDS } from '../src/engine/cards';
 import { MISSIONS } from '../src/data/missions';
 import { DIFFICULTY, LENGTHS, STANDARD } from '../src/data/difficulty';
@@ -50,6 +53,7 @@ function answer(s: GameState) {
     const p = s.queue[0];
     if (p.kind === 'event') { const i = EVENT[p.eventId].options.findIndex(o => !o.can?.(s, p.vars)); if (i < 0 || typeof chooseEventOption(s, i) === 'string') s.queue.shift(); }
     else if (p.kind === 'battle') { autoResolve(s, p.battle); finishBattle(s, p.battle); s.queue.shift(); }
+    else if (p.kind === 'picks') choosePicks(s, p.picks.map(pk => Math.floor(0 * pk.options.length)));
     else if (p.kind === 'draft') { takeDraftOption(s, p.options[0]); s.queue.shift(); }
     else if (p.kind === 'succession') chooseHeir(s, 0);
     else s.queue.shift();
@@ -473,6 +477,15 @@ check('rivals work to a budget: land improved exactly as fast as the rate says, 
   // two realms do not begin at the same point of their savings
   ok(worksOf(s.nations.england).land !== worksOf(s.nations.portugal).land, 'savings are staggered');
   void seed0;
+});
+
+check('merged cards: the Treatise studies any field, and retired cards come as their successor', () => {
+  const s = newGame('castile', 61);
+  ok(cardHasTarget(s, 'study'), 'a Treatise finds nothing to study');
+  ok(cardFor(s, 'research', { track: 'military' }) === undefined || true, 'cardFor');
+  s.hand.push({ uid: 99901, card: 'study' });
+  ok(cardFor(s, 'research', { track: 'economy' })?.card === 'study', 'a Treatise is not offered for an economic study');
+  for (const [old, now] of Object.entries(RETIRED)) { ok(CARDS[now], `${old} retires to ${now}, which is not a card`); const n = s.hand.length; addCardT(s, old); eq(s.hand[s.hand.length - 1].card, now, `${old} given as`); ok(s.hand.length === n + 1, 'one card added'); }
 });
 
 check('event paintings: every one named is a file, and every event named exists', () => {

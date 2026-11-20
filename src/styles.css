@@ -2114,3 +2114,67 @@ p.more:not([hidden]) { border-left: 2px solid var(--line); padding-left: 10px; }
 .fx { padding: 2px 8px; border: 1.5px solid currentColor; font-family: var(--f-title); font-size: calc(13px * var(--ts, 1)); font-weight: 700; white-space: nowrap; }
 .fx.good { color: var(--good); } .fx.bad { color: var(--wax); }
 .reveal-row .fx-chips + .c-text { font-size: calc(11px * var(--ts, 1)); opacity: .85; }
+
+/* ---------- the goal, always in view (roadmap 5.1–5.3) ---------- */
+#goalbar { position: absolute; z-index: 3; top: 8px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 16px); }
+#goalbar:not([hidden]) ~ #timeline { top: 62px; }
+.gb-main { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 14px; background: var(--card, #fffdf8); color: var(--text); border: 1.5px solid var(--text); box-shadow: 3px 3px 0 var(--text); font-family: var(--f-title); font-size: calc(16px * var(--ts, 1)); white-space: nowrap; cursor: pointer; max-width: 100%; }
+.gb-t { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.gb-i { color: var(--wax); display: grid; }
+.gb-dots { display: flex; gap: 4px; } .gb-dots i { width: 9px; height: 9px; border: 1.5px solid var(--text); border-radius: 50%; } .gb-dots i.on { background: var(--good); border-color: var(--good); }
+.gb-left, .gb-rank { padding-left: 10px; border-left: 1px solid var(--line); color: var(--muted); font-family: var(--f-body); font-size: calc(14px * var(--ts, 1)); }
+#goalbar.late .gb-main { border-color: var(--wax); box-shadow: 3px 3px 0 var(--wax); } #goalbar.late .gb-left { color: var(--wax); font-weight: 700; }
+.gb-stamp { position: absolute; right: -10px; top: -12px; padding: 2px 10px; border: 2.5px solid var(--good); color: var(--good); background: var(--card, #fffdf8); font: 700 calc(15px * var(--ts, 1)) var(--f-title); letter-spacing: .12em; text-transform: uppercase; transform: rotate(-12deg); animation: stamp .45s cubic-bezier(.2, 1.6, .4, 1) both, fade-out .6s 2.6s forwards; pointer-events: none; }
+@keyframes stamp { from { opacity: 0; transform: rotate(-12deg) scale(2.2); } to { opacity: 1; transform: rotate(-12deg) scale(1); } }
+@keyframes fade-out { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .gb-stamp { animation: fade-out .6s 2.6s forwards; } }
+#map .goalpin .gp-pole { stroke: #241c17; stroke-width: 2; fill: none; }
+#map .goalpin .gp-flag { fill: var(--wax, #9e1f2a); stroke: #241c17; stroke-width: 1.4; }
+#map .goalpin.held .gp-flag { fill: var(--good, #3e7a3e); }
+@media (max-width: 640px) { #goalbar { left: 8px; transform: none; max-width: calc(100% - 16px); } .gb-main { font-size: calc(15px * var(--ts, 1)); gap: 8px; padding: 4px 10px; } }
+
+/* ---------- the map comes alive (roadmap 5.4–5.8) ---------- */
+#map .army.piece .pc-body { stroke: #241c17; stroke-width: 1.4; }
+#map .army.piece .pc-pole { stroke: #241c17; stroke-width: 1.4; }
+#map .army.piece .pc-flag { stroke: #241c17; stroke-width: 1; }
+#map .army.piece .pc-base { fill: #fffdf8; stroke: #241c17; stroke-width: 1.2; }
+#map .army.piece .army-n { fill: #241c17; stroke: none; font: 700 9px/1 var(--f-body); text-anchor: middle; }
+#map .army.piece.foe .pc-body { stroke-dasharray: 3 2; }
+#map .route { fill: none; stroke: #241c17; stroke-width: 1.6; stroke-dasharray: 2 5; stroke-linecap: round; vector-effect: non-scaling-stroke; opacity: .7; pointer-events: none; }
+#map .route.k-general, #map .route.k-conqueror, #map .route.k-admiral { stroke: var(--wax, #9e1f2a); }
+#map .tv-c { fill: #fffdf8; stroke: #241c17; stroke-width: 2; }
+#map .tv-c.k-general, #map .tv-c.k-conqueror { fill: var(--wax, #9e1f2a); }
+#map .tv-c.k-diplomat, #map .tv-c.k-explorer { fill: #2f5d8a; }
+#map .tv-c.k-merchant { fill: #c49b3a; }
+#map .seal-mark .sm-wax { fill: var(--wax, #9e1f2a); stroke: #241c17; stroke-width: 1.2; }
+#map .seal-mark .sm-tick { fill: none; stroke: #f6ecd6; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#map .fx { pointer-events: none; }
+#map .floater text { font: 700 26px var(--f-title); text-anchor: middle; paint-order: stroke; stroke: #f6ecd6; stroke-width: 4px; stroke-linejoin: round; animation: float-up 1.6s ease-out forwards; }
+#map .floater.good text { fill: #2d6a2d; } #map .floater.bad text { fill: var(--wax, #9e1f2a); }
+@keyframes float-up { from { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; } to { opacity: 0; transform: translateY(-26px); } }
+#map .burst .bu-ring { fill: #fffdf8; stroke: #241c17; stroke-width: 2; animation: burst-in .35s cubic-bezier(.2, 1.6, .4, 1) both; transform-box: fill-box; transform-origin: center; }
+#map .burst .bu-swords { fill: none; stroke: #241c17; stroke-width: 3; stroke-linecap: round; animation: burst-in .35s cubic-bezier(.2, 1.6, .4, 1) both; transform-box: fill-box; transform-origin: center; }
+#map .burst.good .bu-ring { stroke: #2d6a2d; } #map .burst.bad .bu-ring { stroke: var(--wax, #9e1f2a); }
+#map .burst .bu-t { font: 700 24px var(--f-title); text-anchor: middle; paint-order: stroke; stroke: #f6ecd6; stroke-width: 4px; }
+#map .burst.good .bu-t { fill: #2d6a2d; } #map .burst.bad .bu-t { fill: var(--wax, #9e1f2a); }
+#map .burst { animation: fade-late 2.2s forwards; }
+@keyframes burst-in { from { transform: scale(0); } to { transform: scale(1); } }
+@keyframes fade-late { 80% { opacity: 1; } to { opacity: 0; } }
+#map .prov.taken { animation: taken .9s ease-out; }
+@keyframes taken { 0% { fill-opacity: .2; } 60% { fill-opacity: 1; stroke-width: 3; } 100% { fill-opacity: .9; } }
+@media (prefers-reduced-motion: reduce) { #map .floater text, #map .burst, #map .burst * { animation: none; } }
+[data-motion="calm"] #map .floater text, [data-motion="calm"] #map .burst, [data-motion="calm"] #map .burst * { animation: none; }
+#handbtn.ready { animation: hand-glow 2.4s ease-in-out infinite; }
+@keyframes hand-glow { 0%, 100% { box-shadow: 3px 3px 0 var(--text), 0 0 0 0 rgba(196, 155, 58, 0); } 50% { box-shadow: 3px 3px 0 var(--text), 0 0 0 7px rgba(196, 155, 58, .55); } }
+@media (prefers-reduced-motion: reduce) { #handbtn.ready { animation: none; outline: 3px solid #c49b3a; } }
+[data-motion="calm"] #handbtn.ready { animation: none; outline: 3px solid #c49b3a; }
+
+/* ---------- the year's new cards (roadmap 5.12) ---------- */
+.mbox.picks { width: min(640px, 100%); }
+.pk-deck h3 { display: flex; align-items: center; gap: 6px; margin: 10px 0 6px; color: var(--cc); }
+.pk-row { display: flex; gap: 10px; justify-content: center; }
+.pk-row .card { cursor: pointer; flex: 0 1 auto; }
+.pk-row .card .c-text { display: none; }
+.pk-row .card.chosen { outline: 3px solid var(--wax, #9e1f2a); outline-offset: 3px; }
+.pk-what { min-height: 2.6em; margin: 6px 2px 0; font-size: calc(14px * var(--ts, 1)); text-align: center; }
+@media (max-width: 640px) { .pk-row { gap: 6px; } .pk-row .card { width: calc((100vw - 64px) / 3); height: auto; min-height: 150px; } }

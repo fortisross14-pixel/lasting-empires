@@ -87,7 +87,7 @@ export function missionTargets(handUid: number, all = false): TargetRow[] {
       rows.push({ label: n.name, sub: `Relations ${getRel(S, S.player, n.id)}`, color: n.color, acts: [{ label: MISSION_INFO[kind].name, kind, target: n.id, why }] });
     }
   } else if (kind === 'research') {
-    for (const t of TECHS.filter(t => t.track === d.track && !S.techs.includes(t.id) && t.age <= ageIndex(S))) rows.push({ label: t.name, sub: `${techCost(S, t.id)} points · ${techYears(t.id)} · ${t.desc}`, acts: [{ label: 'Study', kind, target: t.id, why: missionBlocked(S, 'research', t.id) }] });
+    for (const t of TECHS.filter(t => (!d.track || t.track === d.track) && !S.techs.includes(t.id) && t.age <= ageIndex(S))) rows.push({ label: t.name, sub: `${techCost(S, t.id)} points · ${techYears(t.id)} · ${t.desc}`, acts: [{ label: 'Study', kind, target: t.id, why: missionBlocked(S, 'research', t.id) }] });
   } else if (kind === 'build') {
     for (const p of provsOf(S, S.player)) {
       const acts = Object.values(BUILDINGS).filter(b => b.group === d.group && (!b.tech || S.techs.includes(b.tech))).map(b => ({ label: b.name, kind, target: p.id, building: b.id, why: missionBlocked(S, 'build', p.id, b.id) })).filter(a => !a.why || a.why.startsWith('Needs') && !a.why.startsWith('Needs Ocean') || a.why.startsWith('No free'));

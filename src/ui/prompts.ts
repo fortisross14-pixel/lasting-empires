@@ -2,7 +2,7 @@
 import { showHistory } from './sheets';
 import { commanderOf } from '../engine/commanders';
 import { sfx, buzz, type Sfx } from './sound';
-import type { DraftOption, RevealItem, Battle, Heir, BattleUnit, BattleSide } from '../types';
+import type { DraftOption, RevealItem, Battle, Heir, BattleUnit, BattleSide, Cat } from '../types';
 import { RULER_ARCHS } from '../data/nations';
 import { TROOPS, EQUIPMENT, TACTICS, TRAIT_TACTIC } from '../data/troops';
 import { MISSIONS } from '../data/missions';
@@ -11,7 +11,7 @@ import { commandOf, GENERIC_COMMAND, OUTCOMES, TRAITS } from '../data/characters
 import { player, provsOf, atWar, armyPower, nationName } from '../engine/core';
 import { newMissionGame, chooseEventOption, ranking, chooseHeir } from '../engine/turn';
 import { EVENT, eventTitle } from '../engine/events';
-import { CARDS } from '../engine/cards';
+import { CARDS, CAT_INFO, choosePicks } from '../engine/cards';
 import { takeDraftOption, AMBITIONS } from '../engine/drafts';
 import { alliedHelp, playRound, autoResolve, finishBattle, ratio, breakLevel, hp, startOdds, canReserve, setReserve, reserveOf, commitReserve, canRetreat, retreat, RESERVE_FRESH } from '../engine/battle';
 import { TERRAINS, LANDING_FIRE, terrainOf, type Terrain } from '../data/terrain';
@@ -21,21 +21,22 @@ import { icon } from './icons';
 import { troopCard, charCard, handCard, tacticCard, backCard, flipCard } from './cards';
 import { warScore, peaceTerms, enemyDemands, concludePeace } from '../engine/diplo';
 import { troopsNear, setDefence } from '../engine/army';
-import { S, pendingReport, modalOpen, slot, saveNow, save, clearSlot, startIn, shield } from './state';
+import { S, pendingReport, modalOpen, slot, saveNow, save, clearSlot, startIn, shield, setPendingReport } from './state';
 import { eventArt, artImg } from './art';
 import { ERAS } from '../data/eras';
 import { recordMission, doneCount, showMissions, showTitle, setMissionYear } from './title';
 import { refresh, toast } from './app';
 import { openModal, closeModal } from './modal';
-import { showTurnReport } from './endturn';
 
 export function processQueue() {
-  if (!modalOpen && !S.queue.length && pendingReport) { showTurnReport(); return; }
+  // the year's report no longer opens by itself: its changes are shown on the map, and the report waits in the menu
+  if (!modalOpen && !S.queue.length && pendingReport) setPendingReport(false);
   if (modalOpen || !S.queue.length) return;
   const p = S.queue[0];
   if (p.kind === 'reveal') showReveal(p.title, p.subtitle, p.items, () => { S.queue.shift(); afterPrompt(); }, p.alarm);
   else if (p.kind === 'event') showEvent();
   else if (p.kind === 'draft') showDraft(p.draft, p.options);
+  else if (p.kind === 'picks') showPicks(p.year, p.picks);
   else if (p.kind === 'battle') { if (!quickBattle(p.battle)) showBattle(p.battle); }
   else if (p.kind === 'succession') showSuccession(p.heirs, p.old);
   else if (p.kind === 'peace') showPeace(p.enemy, p.offered, p.surrender);
@@ -146,6 +147,36 @@ export function draftFront(o: DraftOption) {
 
 export function optName(o: DraftOption) {
   return o.t === 'troop' ? TROOPS[o.type].name : o.t === 'equip' ? EQUIPMENT[o.type].name : o.t === 'char' ? o.ch.name : o.t === 'card' ? CARDS[o.card].name : AMBITIONS.find(a => a.id === o.id)!.name;
+}
+
+/** The year's new cards on one screen: a row of three for each card due; tap one in every row, then take them.
+ *  A tapped card says what it does under its row. */
+export function showPicks(year: number, picks: { cat: Cat; options: string[] }[]) {
+  const chosen: (number | null)[] = picks.map(() => null);
+  const take = h('button', { class: 'btn primary blocked', onclick: () => {
+    if (chosen.some(c => c == null)) return toast(`Choose one card in each row (${chosen.filter(c => c != null).length} of ${picks.length})`);
+    const names = picks.map((pk, i) => CARDS[pk.options[chosen[i]!]]?.name).filter(Boolean);
+    choosePicks(S, chosen as number[]);
+    sfx('draw'); closeModal(); refresh();
+    toast(names.length > 2 ? `${names.length} new cards` : `New: ${names.join(', ')}`, 'good');
+    afterPrompt();
+  } }, `Take ${picks.length === 1 ? 'it' : 'them'}`);
+  const rows = picks.map((pk, i) => {
+    const what = h('p', { class: 'pk-what muted' }, 'Tap a card to see what it does.');
+    const row = h('div', { class: 'pk-row' }, pk.options.map((id, j) => {
+      const el = handCard(id);
+      el.addEventListener('click', () => {
+        chosen[i] = j;
+        for (const x of Array.from(row.children)) x.classList.toggle('chosen', x === el);
+        what.textContent = `${CARDS[id].name}: ${CARDS[id].text}`;
+        take.classList.toggle('blocked', chosen.some(c => c == null));
+        sfx('flip');
+      });
+      return el;
+    }));
+    return h('div', { class: 'pk-deck', style: `--cc:${CAT_INFO[pk.cat].color}` }, h('h3', {}, h('span', { html: icon(CAT_INFO[pk.cat].icon, 16) }), CAT_INFO[pk.cat].name), row, what);
+  });
+  openModal(h('div', { class: 'mbox picks' }, h('h2', {}, `New cards, ${year}`), h('p', { class: 'muted' }, picks.length === 1 ? 'Keep one of three.' : `Keep one of three in each row.`), ...rows, h('div', { class: 'mrow' }, take)));
 }
 
 export function showDraft(kind: string, options: DraftOption[]) {

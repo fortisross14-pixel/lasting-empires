@@ -1,3 +1,4 @@
+import { setRetired } from './culture';
 import { maxFort } from './core';
 // Cards are the actions of the game. Five kinds, each drawn at its own yearly rate.
 import { happinessOf } from './society';
@@ -65,7 +66,7 @@ export const CARD_TYPE_NAME: Record<CardType, string> = { people: 'People', troo
 
 /** How many cards you may keep, by realm rank: per deck and in all. Permanent cards and burdens do not count.
  *  Cards always arrive; over the limit you sell the extras (half a nation point each) before the turn ends. */
-export const HAND_LIMITS: [number, number][] = [[8, 22], [10, 28], [12, 34], [15, 40]]; // Small Kingdom, Kingdom, Great Kingdom, Empire
+export const HAND_LIMITS: [number, number][] = [[6, 20], [7, 24], [8, 28], [10, 32]]; // Small Kingdom, Kingdom, Great Kingdom, Empire (roadmap 5.11: was 8–15 a deck)
 const RANK_MIN = [0, 5, 13, 30]; // as RANKS in realm.ts
 function limitRow(s: GameState): [number, number] {
   if ((globalThis as { NOHANDLIMIT?: boolean }).NOHANDLIMIT) return [Infinity, Infinity];
@@ -168,9 +169,9 @@ add({ id: 'march_orders', name: 'March Orders', cat: 'military', kind: 'mission'
 add({ id: 'forced_march', name: 'Forced March', cat: 'military', kind: 'instant', target: 'mission', icon: 'boot', text: 'A mission takes 1 year less (minimum 1).', weight: () => 0.9,
   targetOk: (s, t) => { const m = s.missions.find(x => String(x.id) === t); return !!m && m.turnsLeft > 1 && m.kind !== 'research'; },
   play: (s, t) => { s.missions.find(x => String(x.id) === t)!.turnsLeft--; return 'The mission speeds up'; } });
-add({ id: 'drill', name: 'Drill Sergeant', cat: 'military', kind: 'instant', improve: true, target: 'troop', icon: 'banner', text: 'A troop gains a veteran star.', weight: () => 1,
+add({ id: 'drill', name: 'Drill Sergeant', cat: 'military', kind: 'instant', improve: true, target: 'troop', icon: 'banner', text: 'A troop gains a veteran star, and your troops at home return to full strength.', weight: () => 1.8,
   targetOk: (s, t) => s.troops.some(x => String(x.uid) === t && x.vet < 3),
-  play: (s, t) => { const x = s.troops.find(y => String(y.uid) === t)!; x.vet++; return `${TROOPS[x.type].name} gains a star`; } });
+  play: (s, t) => { const x = s.troops.find(y => String(y.uid) === t)!; x.vet++; for (const u of s.troops) if (u.mission == null) u.str = 100; return `${TROOPS[x.type].name} gains a star; ranks refilled`; } });
 add({ id: 'fresh_recruits', name: 'Fresh Recruits', cat: 'military', kind: 'instant', icon: 'spear', text: 'Troops at home return to full strength.', weight: () => 0.8,
   play: s => { for (const t of s.troops) if (t.mission == null) t.str = 100; return 'Ranks refilled'; } });
 add({ id: 'ambush', name: 'Ambush', cat: 'military', kind: 'instant', icon: 'eye', text: 'In your next battle you see the enemy\'s tactic every round.', weight: () => 0.8,
@@ -219,6 +220,8 @@ add({ id: 'conquista', name: 'Conquista', cat: 'military', kind: 'mission', miss
 add({ id: 'hire_admin', name: 'Appoint an Administrator', cat: 'internal', kind: 'hire', role: 'admin', icon: 'quill', text: 'Meet three officials, keep one. Costs 1 manpower.', weight: () => 1.1 });
 add({ id: 'royal_works', name: 'Royal Works', cat: 'internal', kind: 'mission', missions: ['build'], group: 'internal', icon: 'hammer', text: 'Build a temple, library, barracks, fortress, courthouse or university.', weight: () => 2.5 });
 add({ id: 'settlers', name: 'Settlers', cat: 'internal', kind: 'mission', missions: ['develop'], icon: 'wheat', text: 'Develop a province: +1 development.', weight: () => 1.5 });
+// one Treatise for every field: the researcher chooses the study when it is played (roadmap 5.10)
+add({ id: 'study', name: 'Treatise', cat: 'research', kind: 'mission', missions: ['research'], icon: 'book', text: 'A researcher studies a technology of any field.', weight: s => trackOpen(s, 'military') + trackOpen(s, 'economy') + trackOpen(s, 'state') });
 add({ id: 'found_settlement', name: 'Found a Settlement', cat: 'internal', kind: 'mission', missions: ['found'], icon: 'tower', text: 'Found a village, town or city where there is none. The better the administrator, the bigger it starts.', weight: s => (provsOf(s, s.player).some(p => !p.settlement) ? 1.4 : 0) });
 add({ id: 'grow_settlement', name: 'Grow your Settlement', cat: 'internal', kind: 'mission', missions: ['grow'], icon: 'tower', text: 'Grow a village to a town, a town to a city, a city to a metropolis.', weight: () => 1.3 });
 add({ id: 'royal_progress', name: 'Royal Progress', cat: 'internal', kind: 'mission', missions: ['progress'], icon: 'crown', text: 'Tour the realm: stability +1, prestige +2, control +10 everywhere.', weight: () => 1.2 });
@@ -249,10 +252,10 @@ add({ id: 'charter', name: 'Charter of Privileges', cat: 'culture', kind: 'insta
   play: s => { const c = largestForeignCulture(s)!; s.accepted.push(c); return `${CULTURE_NAMES[c] ?? c} culture is accepted`; } });
 add({ id: 'tolerance', name: 'Edict of Tolerance', cat: 'culture', kind: 'instant', icon: 'dove', text: 'For 20 years, other faiths are less unhappy. The Papacy disapproves (−20).', weight: s => (provsOf(s, s.player).some(p => p.religion !== s.stateReligion) ? 0.6 : 0),
   play: s => { s.flags.tolerance_until = s.year + 20; addRel(s, s.player, 'papacy', -20); return 'Other faiths may worship in peace'; } });
-add({ id: 'harvest', name: 'Bountiful Harvest', cat: 'internal', kind: 'instant', icon: 'wheat', text: 'Stability +1, manpower +2.', weight: () => 1,
-  play: s => { stab(s, 1); player(s).manpower += 2; return 'Stability +1, manpower +2'; } });
-add({ id: 'sermon', name: 'Inspired Sermon', cat: 'culture', kind: 'instant', icon: 'church', text: 'Stability +1, prestige +3.', weight: () => 1,
-  play: s => { stab(s, 1); player(s).prestige += 3; return 'Stability +1, prestige +3'; } });
+add({ id: 'harvest', name: 'Bountiful Harvest', cat: 'internal', kind: 'instant', icon: 'wheat', text: 'Stability +1, manpower +3.', weight: () => 1.9,
+  play: s => { stab(s, 1); player(s).manpower += 3; return 'Stability +1, manpower +3'; } });
+add({ id: 'sermon', name: 'Inspired Sermon', cat: 'culture', kind: 'instant', icon: 'church', text: 'Stability +1, prestige +5.', weight: () => 1.4,
+  play: s => { stab(s, 1); player(s).prestige += 5; return 'Stability +1, prestige +5'; } });
 add({ id: 'census', name: 'Royal Census', cat: 'internal', kind: 'instant', icon: 'people', text: 'Manpower +3.', weight: () => 0.9,
   play: s => { player(s).manpower += 3; return 'Manpower +3'; } });
 add({ id: 'pacify', name: 'Royal Pardon', cat: 'internal', kind: 'instant', icon: 'dove', text: 'Control +15 in every province.', weight: () => 0.9,
@@ -274,8 +277,8 @@ add({ id: 'tax_farm', name: 'Tax Farmers', cat: 'economy', kind: 'mission', miss
 add({ id: 'irrigation', name: 'Irrigation', cat: 'economy', kind: 'mission', missions: ['develop'], icon: 'wheat', text: 'Develop a province: +1 development.', weight: () => 1 });
 add({ id: 'levy_tax', name: 'Extraordinary Levy', cat: 'economy', kind: 'instant', icon: 'coin', text: 'Gain 6 + 2 per province in ducats. Stability −1.', weight: () => 1.2,
   play: s => { const g = Math.round((6 + 2 * provsOf(s, s.player).length) * inflation(s)); player(s).gold += g; stab(s, -1); s.taxBurden = Math.min(30, s.taxBurden + 10); return `+${g} ducats, stability −1, taxes weigh on the people`; } });
-add({ id: 'windfall', name: 'Silver Windfall', cat: 'economy', kind: 'instant', icon: 'coin', text: 'Gain 35 ducats.', weight: () => 0.9,
-  play: s => { const g = Math.round(35 * inflation(s)); player(s).gold += g; return `+${g} ducats`; } });
+add({ id: 'windfall', name: 'Silver Windfall', cat: 'economy', kind: 'instant', icon: 'coin', text: 'Gain 35 ducats, or 8 for every trade treaty and 5 more if that is greater.', weight: () => 1.9,
+  play: s => { const n = s.treaties.filter(t => t.kind === 'trade' && (t.a === s.player || t.b === s.player)).length; const g = Math.round(Math.max(35, 5 + 8 * n) * inflation(s)); player(s).gold += g; return `+${g} ducats`; } });
 add({ id: 'trade_fair', name: 'Trade Fair', cat: 'economy', kind: 'instant', icon: 'scales', text: 'Gain 8 ducats per trade treaty, and 5 more.', weight: () => 1,
   play: s => { const n = s.treaties.filter(t => t.kind === 'trade' && (t.a === s.player || t.b === s.player)).length; const g = Math.round((5 + 8 * n) * inflation(s)); player(s).gold += g; return `+${g} ducats`; } });
 add({ id: 'loan', name: 'Genoese Loan', cat: 'economy', kind: 'instant', icon: 'chain', text: 'Gain 60 ducats now. A Crown Debt card is added.', weight: () => 0.7,
@@ -305,7 +308,15 @@ add({ id: 'greek_scholars', name: 'Greek Scholars', cat: 'research', kind: 'inst
 export const handOf = (s: GameState, cat: Cat) => s.hand.filter(h => CARDS[h.card]?.cat === cat);
 
 /** Add a card to hand. Respects the hand limit unless forced (burdens always arrive). */
-export function addCard(s: GameState, card: string, force = false): boolean {
+/** Cards merged into another (roadmap 5.10): no longer drawn, and given as their successor; one already in a hand
+ *  still plays as it always did. */
+export const RETIRED: Record<string, string> = {
+  census: 'harvest', trade_fair: 'windfall', relic: 'sermon', fresh_recruits: 'drill', irrigation: 'settlers',
+  study_military: 'study', study_economy: 'study', study_state: 'study',
+};
+setRetired(RETIRED);
+export function addCard(s: GameState, card0: string, force = false): boolean {
+  const card = RETIRED[card0] ?? card0;
   const def = CARDS[card];
   if (def?.permanent && s.hand.some(h => h.card === card)) { s.np += 1; return false; } // you already hold it: a nation point instead
   void force;
@@ -316,10 +327,34 @@ export function addCard(s: GameState, card: string, force = false): boolean {
 export function randomCard(s: GameState, cat: Cat, type?: CardType): string {
   // never offer what can't be used: a permanent card you already hold, or a hire with a full court
   const courtFull = courtCount(s) >= courtCap(s);
-  const pool = Object.values(CARDS).filter(c => c.cat === cat && (!type || cardType(c) === type) && !(c.permanent && s.hand.some(h => h.card === c.id)) && !(c.kind === 'hire' && courtFull))
+  const pool = Object.values(CARDS).filter(c => c.cat === cat && !RETIRED[c.id] && (!type || cardType(c) === type) && !(c.permanent && s.hand.some(h => h.card === c.id)) && !(c.kind === 'hire' && courtFull))
     .map(c => [c.id, c.weight(s)] as [string, number]).filter(([, w]) => w > 0);
   if (!pool.length) return Object.values(CARDS).filter(c => c.cat === cat && !c.permanent && c.weight(s) > 0)[0]?.id ?? 'scholar';
   return weighted(s, pool);
+}
+
+/** How many cards each pick offers. */
+export const PICK_OF = 3;
+/** Three different cards of a deck to choose from (fewer only if the deck has fewer to give). */
+export function pickOptions(s: GameState, cat: Cat): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < 12 && out.length < PICK_OF; i++) { const c = randomCard(s, cat); if (!out.includes(c)) out.push(c); }
+  return out;
+}
+/** When the year turns: the cards due become one screen of picks. */
+export function queuePicks(s: GameState) {
+  const due = s.picksDue ?? {};
+  const picks: { cat: Cat; options: string[] }[] = [];
+  for (const c of CATS) for (let i = 0; i < (due[c] ?? 0); i++) picks.push({ cat: c, options: pickOptions(s, c) });
+  s.picksDue = {};
+  if (picks.length) s.queue.push({ kind: 'picks', year: s.year, picks });
+}
+/** Take the chosen card of each pick (by its place in the options), and close the screen. */
+export function choosePicks(s: GameState, chosen: number[]) {
+  const p = s.queue[0];
+  if (!p || p.kind !== 'picks') return;
+  p.picks.forEach((pk, i) => { const id = pk.options[chosen[i] ?? 0] ?? pk.options[0]; if (id) addCard(s, id); });
+  s.queue.shift();
 }
 
 export function drawCat(s: GameState, cat: Cat): boolean {
@@ -387,7 +422,9 @@ export function yearlyCards(s: GameState, share = 1): Record<Cat, number> {
     got[c] = 0;
     while (s.cardAccum[c] >= 1) {
       s.cardAccum[c] -= 1;
-      if (drawCat(s, c)) got[c]++;
+      // a card due is not handed over at once: it waits to be chosen, one of three, when the year turns
+      (s.picksDue ??= {})[c] = (s.picksDue[c] ?? 0) + 1;
+      got[c]++;
     }
   }
   s.np += npRate(s).rate * share;
@@ -466,7 +503,7 @@ export function cardFor(s: GameState, kind: MissionKind, opts: { track?: TechTra
   return s.hand.find(h => {
     const d = CARDS[h.card];
     if (d.kind !== 'mission' || !d.missions?.includes(kind)) return false;
-    if (opts.track && d.track !== opts.track) return false;
+    if (opts.track && d.track && d.track !== opts.track) return false; // a Treatise without a field studies any
     if (opts.group && d.group !== opts.group) return false;
     return true;
   });

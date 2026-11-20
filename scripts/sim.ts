@@ -7,6 +7,8 @@ import { goalView } from '../src/engine/goals';
 import { revolutionBlocked, startRevolution } from '../src/engine/government';
 import { autoResolve, finishBattle } from '../src/engine/battle';
 import { takeDraftOption, doMerge, mergePreview, buyCard, hireWithCard, sellOffices, officeCost } from '../src/engine/drafts';
+import { choosePicks } from '../src/engine/cards';
+import { cardHasTarget } from '../src/engine/pace';
 import { launchMission, missionBlocked, cardRole, cardRoles, attackRoute } from '../src/engine/missions';
 import { discoverable, provRegion } from '../src/engine/overseas';
 import { hireShip, transportOf } from '../src/engine/navy';
@@ -37,6 +39,8 @@ function resolveQueue(s: GameState) {
       const r = chooseEventOption(s, ok[Math.floor(R() * ok.length)][1]);
       if (typeof r === 'string') s.queue.shift();
     } else if (p.kind === 'battle') { autoResolve(s, p.battle); finishBattle(s, p.battle); s.queue.shift(); }
+    // the bot picks as a player would: a card it can use now, otherwise the one the deck rates highest
+    else if (p.kind === 'picks') choosePicks(s, p.picks.map(pk => { const score = (id: string) => (cardHasTarget(s, id) ? 10 : 0) + (CARDS[id]?.weight(s) ?? 0) + R() * 0.5; let b = 0; pk.options.forEach((id, i) => { if (score(id) > score(pk.options[b])) b = i; }); return b; }));
     else if (p.kind === 'draft') { takeDraftOption(s, p.options[Math.floor(R() * p.options.length)]); s.queue.shift(); }
     else if (p.kind === 'succession') chooseHeir(s, Math.floor(R() * p.heirs.length));
     else if (p.kind === 'peace') {
@@ -137,7 +141,7 @@ function botTurn(s: GameState) {
       }
     } else if (kind === 'research') {
       const r = free(s, role); if (!r) continue;
-      const t = TECHS.find(t => t.track === d.track && !missionBlocked(s, 'research', t.id));
+      const t = TECHS.find(t => (!d.track || t.track === d.track) && !missionBlocked(s, 'research', t.id));
       if (t) launchMission(s, 'research', r.uid, t.id, [], undefined, h.uid);
     } else {
       const a = free(s, role) ?? s.characters.filter(c => !c.ruler && c.mission == null && cardRoles(d.id).includes(c.role)).sort((x, y) => y.skill - x.skill)[0]; if (!a) continue;

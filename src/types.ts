@@ -238,6 +238,8 @@ export type Prompt =
   | { kind: 'battle'; battle: Battle }
   | { kind: 'reveal'; title: string; subtitle?: string; items: RevealItem[]; alarm?: boolean }
   | { kind: 'draft'; draft: 'buy' | 'court' | 'ambition' | 'gift'; cat?: Cat; options: DraftOption[] }
+  /** The year's new cards: for each card due, a choice of three (roadmap 5.12). */
+  | { kind: 'picks'; year: number; picks: { cat: Cat; options: string[] }[] }
   | { kind: 'succession'; heirs: Heir[]; old: string }
   | { kind: 'peace'; enemy: string; offered: boolean; surrender?: boolean }
   | { kind: 'incoming'; id: number }
@@ -275,6 +277,8 @@ export interface GameState {
   scenario?: Scenario;              // mission mode: goals and a deadline
   archive?: HandCard[];             // cards set aside: they do not count against the hand limit
   cardAccum: Record<Cat, number>;
+  /** Cards due but not yet chosen: offered as picks of three when the year turns. */
+  picksDue?: Partial<Record<Cat, number>>;
   bought: Record<Cat, number>;      // cards bought this year (price rises)
   np: number;                       // nation points
   imports: { good: string; from: string }[]; // old saves only

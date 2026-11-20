@@ -1,6 +1,7 @@
 // The game screen: top bar, map, deck tabs, the strip of wars and tasks, the tutorial, and refresh().
 import { syncMusic } from './music';
 import { showHand, renderHandBtn } from './hand';
+import { renderGoalBar } from './goalbar';
 import { sfx } from './sound';
 import type { GameState, RevealItem } from '../types';
 import { CATS } from '../types';
@@ -37,7 +38,7 @@ export function start(s: GameState) {
   const root = clear($('#app'));
   root.append(
     h('header', { id: 'top' }),
-    h('main', { id: 'board' }, h('div', { id: 'timeline' }), h('button', { id: 'handbtn', 'aria-label': 'Your cards', onclick: () => showHand() }),
+    h('main', { id: 'board' }, h('div', { id: 'goalbar', hidden: true }), h('div', { id: 'timeline' }), h('button', { id: 'handbtn', 'aria-label': 'Your cards', onclick: () => showHand() }),
       h('button', { class: 'viewpill', id: 'modebtn', 'aria-label': 'Map view', onclick: () => toggleModes() }, h('span', { html: icon('map', 16) }), h('span', { id: 'modelabel' }, 'Map: Realms'), h('span', { class: 'caret' }, '▾')),
       h('div', { id: 'modes', hidden: true }), h('div', { id: 'legend', hidden: true }),
       h('div', { id: 'tracker' })),
@@ -103,6 +104,9 @@ export function renderTutorial() {
       st.next ? h('button', { class: 'btn primary small', onclick: () => { S.tutorial = i + 1; renderTutorial(); save(); } }, i === TUTORIAL.length - 1 ? 'Finish' : 'Next') : null));
 }
 
+/** Test hooks for the browser checks: the game in play, and a redraw. */
+(globalThis as { __game?: () => unknown; __refresh?: () => void }).__game = () => S;
+(globalThis as { __refresh?: () => void }).__refresh = () => refresh();
 export function refresh() {
   if (undoSnap && gameMark() !== undoMark) clearUndo(); // something else was done since: the snapshot is stale
   setCardGame(S);
@@ -110,7 +114,7 @@ export function refresh() {
   map.realm = sheet?.kind === 'nation' ? sheet.arg ?? null : shownRealm;
   setTodo(attention(S));
   for (const id of [...seenTodo]) if (!todo.some(a => a.id === id)) seenTodo.delete(id); // gone and back again is news
-  renderTop(); renderTabs(); renderHandBtn(); map.render(S); renderTimeline(); renderTracker(); renderLegend();
+  renderTop(); renderTabs(); renderHandBtn(); renderGoalBar(); map.render(S); renderTimeline(); renderTracker(); renderLegend();
   syncMusic(player(S).culture);
   if (sheet) renderSheet();
   if (win) renderWin();
@@ -199,7 +203,7 @@ export function renderTop() {
       chip('laurel', fmt(me.prestige), '', 'Prestige'),
     ),
     h('div', { class: 'top-btns' },
-      sc ? h('button', { class: 'tbtn goals-b' + (sheet?.kind === 'goals' ? ' on' : '') + ' st-' + sc.status, onclick: () => toggleSheet('goals'), title: 'Mission goals', 'aria-label': 'Mission goals' },
+      false && sc ? h('button', { class: 'tbtn goals-b' + (sheet?.kind === 'goals' ? ' on' : '') + ' st-' + sc!.status, onclick: () => toggleSheet('goals'), title: 'Mission goals', 'aria-label': 'Mission goals' },
         h('span', { html: icon('star', 18) }), h('span', { class: 'tb-l' }, 'Goals'), h('span', { class: 'badge' }, goalsBadge)) : null,
       h('button', { class: 'tbtn menu-b', onclick: () => showGameMenu(), title: 'Menu', 'aria-label': 'Menu' },
         h('span', { html: icon('list', 18) }), h('span', { class: 'tb-l' }, 'Menu'), S.missions.length ? h('span', { class: 'badge' }, String(S.missions.length)) : null),
@@ -230,13 +234,7 @@ export function renderTabs() {
 /** The strip over the map: your wars first, then missions under way. */
 export function renderTimeline() {
   const tl = clear($('#timeline'));
-  // a guided mission: the next step, always in view
-  const sc = S.scenario;
-  if (sc?.steps?.length && sc.status === 'active' && (sc.step ?? 0) < sc.steps.length) {
-    const st = sc.steps[sc.step ?? 0];
-    tl.append(h('span', { class: 'tl-h step-h' }, `Step ${(sc.step ?? 0) + 1}/${sc.steps.length}`),
-      h('button', { class: 'tl-card tl-step', onclick: () => openSheet('goals') }, h('span', { class: 'tl-rose', html: icon('star', 14) }), h('span', { class: 'tl-t' }, goalView(S, st.g, sc.deadline).title), h('small', {}, 'Tap for how')));
-  }
+  // a guided mission's next step is shown in the goal banner (goalbar.ts)
   const foes = enemiesOf(S, S.player);
   const inc = S.incoming ?? [];
   if (foes.length) {

@@ -111,7 +111,7 @@ export function createWork(s: GameState, ch: Character, genre: string, o: number
   if (genre === 'sacred') addChurchRel(s, o >= 2 ? 5 : 2);
   for (let i = 0; i < q.cards; i++) {
     const pool = Object.keys(CARDS_BY_CAT(s, g.cat));
-    if (pool.length) s.hand.push({ uid: uid(s), card: pick(s, pool) });
+    if (pool.length) { const c = pick(s, pool); s.hand.push({ uid: uid(s), card: retiredTo?.[c] ?? c }); } // a merged card comes as its successor
   }
   const bits = [`+${q.happy} happiness everywhere, fading over ${years >= 1 ? Math.round(years) + ' year' + (Math.round(years) > 1 ? 's' : '') : 'a season'}`];
   if (q.gold) bits.push(`${q.gold} ducats a year for ${q.goldYears} years`);
@@ -125,6 +125,9 @@ export function createWork(s: GameState, ch: Character, genre: string, o: number
 // cards are looked up lazily to avoid an import cycle with cards.ts
 let cardsByCat: ((s: GameState, cat: string) => Record<string, true>) | null = null;
 export function setCardPool(f: (s: GameState, cat: string) => Record<string, true>) { cardsByCat = f; }
+/** Merged cards and their successors, set by cards.ts (which this module cannot import without a cycle). */
+export let retiredTo: Record<string, string> | null = null;
+export const setRetired = (r: Record<string, string>) => { retiredTo = r; };
 const CARDS_BY_CAT = (s: GameState, cat: string) => (cardsByCat ? cardsByCat(s, cat) : {});
 
 // ---------- cultures ----------

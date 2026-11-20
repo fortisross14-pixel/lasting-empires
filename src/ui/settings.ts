@@ -24,7 +24,7 @@ export interface Settings {
 }
 
 const KEY = 'lasting-empires.settings';
-const DEFAULTS: Settings = { warn: true, skip: true, calm: false, sfx: 1, music: 0.5, haptics: true, quickBattles: false, text: 1, difficulty: STANDARD, length: 'age' };
+const DEFAULTS: Settings = { warn: false, skip: true, calm: false, sfx: 1, music: 0.5, haptics: true, quickBattles: false, text: 1, difficulty: STANDARD, length: 'age' };
 
 let cache: Settings | null = null;
 export function settings(): Settings {

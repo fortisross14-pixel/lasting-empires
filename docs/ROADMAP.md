@@ -63,13 +63,13 @@ Reference games, and what we take from each:
 | Area | Target | How it is measured |
 |---|---|---|
 | Pace | The player never presses End Turn twice in a row with nothing new | `quietRun` in `npm test` stays 0 when skip-ahead is used |
-| Session | A beginner mission 10–15 min; a historic mission 60–120 min; an open game "Reign" 60–90 min | playtest timing (Phase 5) |
+| Session | A beginner mission 10–15 min; a historic mission 60–120 min; an open game "Reign" 60–90 min | playtest timing (Phase 6) |
 | Difficulty | The reasonable bot finishes top 3 in about 80% of games on Gentle, 55–65% on Standard, 30–40% on Hard | `DIFF=0|1|2 npm run sim` |
 | Story | At least one event a year on average; 8 or more dated events in every half century; 10 chains | counts in `npm test` |
 | Opponents | Every realm of 5+ provinces shows a character and a goal the player can read | nation sheet |
 | Feel | Sound on every card, reveal and battle; map borders no longer straight | screens and ears |
 | Stability | `npm test` and the simulation pass on every push | GitHub Actions |
-| Performance | Start under 2 s and map pan at 50 fps or more on a mid-range phone | Phase 5 device tests |
+| Performance | Start under 2 s and map pan at 50 fps or more on a mid-range phone | Phase 6 device tests |
 
 ## 4. Phases at a glance
 
@@ -79,7 +79,8 @@ Reference games, and what we take from each:
 | 2 | Feel | The map, sound, motion and navigation of a premium game | 6–8 weeks |
 | 3 | Story | People with lives, events that remember, a chronicle worth sharing | 8–10 weeks |
 | 4 | Opponents and battles | Rivals with plans the player can read; battles with three real choices | 6–8 weeks |
-| 5 | Ship | Store builds, saves that travel, languages, playtests, balance on real data | 4–6 weeks |
+| 5 | Play | A goal always in view, things happening on the map, fewer and bigger choices | 7–8 weeks |
+| 6 | Ship | Store builds, saves that travel, languages, playtests, balance on real data | 4–6 weeks |
 
 Order matters: Phase 1 makes the game comfortable to play for an hour, which every later playtest depends on.
 Phase 2 comes before content because sound and the map change how every event and battle is judged.
@@ -242,21 +243,68 @@ A mobile player does not need a symmetric AI. They need rivals whose character a
 |---|---|---|---|
 | 4.13 ☑ | **Tune the three difficulties** against the targets in section 3. Done with 60 simulated games a level (two runs of 30): top three in 78% on Gentle, 58% on Standard, 37% on Hard. One number changed: on Hard rivals now grow at ×1.6 (was ×1.3). Three variants of Hard were tried; more and earlier wars moved nothing for the bot, faster rivals did. | `src/data/difficulty.ts`; the tables in `docs/BALANCE.md` | Done for Gentle and Standard. Measured again after the rivals' budget (60 games each): Gentle 77%, Standard 55%. Hard stands at about 45% (82 of 180 games across rival growth ×1.6, ×1.7 and ×1.8, which do not differ), above its band: see 5.7 |
 
-## Phase 5 — Ship
+## Phase 5 — Play
+
+Status: **built but for the balance (5.14)**. Written after playing the build on a phone: the game reads as menus over a map. Three aims,
+in this order: always know what you are working towards; see things happen on the map; fewer, bigger choices each
+turn. Short games are already covered by scenarios. The art of the interface (buttons, icons, map pieces in the
+woodcut style) waits for later.
+
+### A goal always in view (about 1 week)
 
 | Id | Action | Where | Done when |
 |---|---|---|---|
-| 5.1 | **Store builds** for iOS and Android by wrapping the web game (Capacitor), with the right icons, splash and safe areas. | new `app/` folder | Installs from TestFlight and an Android test track |
-| 5.2 | **Speed on real devices.** Measure start time and map pan on a 9th-generation iPad and a mid-range Android phone. In the test browser (no graphics chip) a frame of panning takes about 22 ms with the paper grain and ground marks of 2.4. If pan is under 50 fps, first hide the ground marks while a finger is down; if still under, draw the province layer to a canvas at far zoom and keep SVG near. | `src/ui/map.ts` | Targets of section 3 met |
-| 5.3 | **A smaller start.** The page is 1.59 MB with the 651 KB world inside. Load the world map as a separate cached file. Art (4.9 MB) and music (4.3 MB in two formats) are already fetched only when needed; for the store builds, ship one music format for each platform (Ogg on Android, AAC on iOS) and so save 2 MB. | `scripts/build.mjs` | First paint under 1 s on a mid-range phone; each store build under 12 MB |
-| 5.4 | **Saves that travel, and cannot fail.** A campaign is 430 KB when it starts and 650 KB or more late on, kept as text in the browser's small store (about 5 MB for everything): three long campaigns come near the limit. Move saves to the larger store (IndexedDB), compressed, with the old ones carried over. Then: export and import a campaign as a file through the share sheet; cloud save through the store's own service in the wrapper. | `src/ui/state.ts`, `src/ui/title.ts` | Three campaigns of 1750 saved and loaded; a game moves from phone to tablet |
-| 5.5 | **Languages.** Move every text out of the code into tables (`t('key')`), starting with `events.ts` (97 KB of text and rules together). First languages: Spanish, German, French, Brazilian Portuguese, Simplified Chinese, Japanese. Add a serif with CJK coverage. | `src/i18n/` | The game plays through in Spanish with no English left |
-| 5.6 | **Ten outside players**, recorded with permission: time to finish the first beginner mission, the turn where they stop, what they tap that does nothing. Target: 70% finish the nine beginner missions. | playtest notes in `docs/` | Findings turned into a short Phase 6 list |
-| 5.7 | **Balance on those games**: difficulty, card rates, mission deadlines. Known before it starts: on Hard the bot is in the top three in about 45% of games, over the 30–40% target, and faster rival growth (×1.6 to ×1.8) does not change it. First lever to try: a wider spread of rival pace on Hard only (a new `aiSpread` in `src/data/difficulty.ts` in place of the fixed `DILIGENCE_SPREAD`), 120 games. The bot ignores warnings and keeps its army at home, so how hard Hard is for people is decided by the recorded games, not by the bot. Also unmeasured: starts near the Alps and in the Balkans after the ground corrections of 2.4. | `docs/BALANCE.md`, `src/data/difficulty.ts` | Targets of section 3 hold for real players |
-| 5.8 | **The offer.** One price. The free demo is the nine beginner missions and one historic mission; the purchase opens the rest. Store page: five screenshots, a 30-second trailer, the map as the first image. | store listings | Listings approved |
-| 5.9 | **Missions as achievements** in Game Center and Play Games (the 40 missions already are a list of them). | wrapper | Each mission unlocks one |
-| 5.10 | **Deploy by action.** GitHub Pages is built by a workflow on `main`, so the built `index.html` no longer lives in the repository. | `.github/workflows/pages.yml` | No built files in commits |
-| 5.11 | **Loose ends of the art.** Decide whether the title scene stays an oil painting or is redone as a woodcut like the rest (same file names, nothing else changes). Optionally a sixth sheet of faces for India and the steppe, which now wear the Islamic sheet, and South-East Asia, which wears the East Asian one. Replace the 13 card paintings still shared between cards (batch 4, sheet A of `docs/art-brief.md`). | `art/`, `ALIAS` in `src/ui/art.ts` | No shared card painting; the title matches or is kept on purpose |
+| 5.1 ☑ | **A goal banner on the map**, top centre: in a mission its goals with progress ("Granada: 2 of 4 provinces", "Navarre a subject ✗", "1478 · 27 years left"); in an open game the current ambition and your rank ("Ambition: a great kingdom · 3rd of 157"). One line on a phone, tap to open the goals page. Built from `goalView`, which already measures every goal. | new `goalBanner` in `src/ui/app.ts`; `goalView` in `src/engine/goals.ts` | Shown in every mission and open game at both sizes; 15 words or fewer |
+| 5.2 ☑ | **The map points at the goal.** Provinces a goal names carry a small flag pin, wax when still to take, green when held; a goal realm is outlined. | `marks` layer in `src/ui/map.ts` | Every `own`/`ownLands` goal province is pinned |
+| 5.3 ☑ | **Progress is a moment.** When a goal is met: a stamp on the banner, a short sting, the pin turns green. When the deadline is five years off, the banner turns wax. | `goalBanner`; `sfx('great')` | A browser check meets a goal and sees the stamp |
+
+### Things happen on the map (about 3 weeks)
+
+| Id | Action | Where | Done when |
+|---|---|---|---|
+| 5.4 ☑ | **Armies as pieces.** Your companies at a place show as one standing piece with a count (a drawn pawn and banner in the realm's colour), not a numbered box; a spied enemy army the same in its colour. | `render`, army marks in `src/ui/map.ts` | Pieces at 390 px are 28 px or more and tappable |
+| 5.5 ☑ | **Tasks travel.** A task under way draws a dotted route from home to its target with its piece on it, moved forward each season (`turnsLeft` against its length); a diplomat, merchant or scholar has their own small piece. The strip of tasks over the map stays, but the map shows the same thing. | `missions` marks in `src/ui/map.ts` | Every task with a province target has a route |
+| 5.6 ☑ | **Battles on the province.** When a battle is fought (quick or auto), crossed swords burst on the province with the clash sound, then a small result tag ("Won · −2 companies"). The battle screen opens only for battles you choose to fight. | `quickBattle`, `processQueue` in `src/ui/prompts.ts`; map marks | Every battle in a season shows on its province |
+| 5.7 ☑ | **Conquest you can see.** A province taken fills with its new colour from the attacker's side over 600 ms and takes a wax seal for a season; lost land the same in reverse. | `render` in `map.ts`; the paint cache | Off under reduced motion |
+| 5.8 ☑ | **Numbers that float up where they happen**: +1 development, a new building, +12 ducats of plunder, happiness changes over 5, at the province, 1.2 s, at most five a season. | new `floaters` in `src/ui/map.ts`, fed by the turn's log | Shown after every task that changes a province |
+| 5.9 ☑ | **The year on the map, not in a report.** The end of a year shows its changes as marks on the map (conquests, new buildings, battles); the written year report becomes optional, behind ⓘ in the year flash. | `yearFlash`, `showTurnReport` in `src/ui/endturn.ts` | The report no longer opens by itself |
+
+### Fewer, bigger choices (about 3 weeks, then balance)
+
+| Id | Action | Where | Done when |
+|---|---|---|---|
+| 5.10 ◐ | **Fewer kinds of card.** Done in part: eight cards merged into five (Treatise for any field; Harvest takes in Census, Windfall the Trade Fair, Sermon the Relic, Drill the Fresh Recruits; Irrigation gives way to Settlers), the retired ones no longer drawn and given as their successor. Still open: the military deck (troops, ships and improvements by era). The first aim was: 102 cards become about 60: cards with the same effect merge (Settlers and Irrigation are both +1 development; the three Treatises become one that asks for its field when played; small instants such as Royal Census and Bountiful Harvest fold into one Good Year card that offers its choice). No effect is lost: the merged card offers what the old ones did. | `src/engine/cards.ts`, `CARDS`; card art aliases | At most 12 kinds a deck; every old effect reachable; saves with old cards still load (a migration) |
+| 5.11 ☑ | **A smaller hand.** Hand limits from 8–15 by rank (`HAND_LIMITS`) to 6–10 (5–8 cost too much in balance), so the hand fits in one row of the Cards tray. | `HAND_LIMITS` | The tray shows the whole hand without scrolling at 1180 px |
+| 5.12 ☑ | **New cards are a choice.** When a card is due, you pick 1 of 3 instead of being given one; all picks of a year come together on one screen with the year flash, not one by one. Card rates fall to match (about one pick per deck a year), so the number of cards played stays about the same. | `yearlyCards`, `drawCat` in `src/engine/cards.ts`; the draft prompt | One screen of picks a year; cards played per campaign within 15% of today (`npm run sim`) |
+| 5.13 ☑ | **Ending a turn asks nothing by default.** The "Still to do" list becomes off by default; instead the Cards button glows with the number of cards you could play now. | `Settings.warn`; `renderHandBtn` | A turn ends in one tap |
+| 5.14 ◐ | **Balance after 5.10–5.12** (open: see `docs/BALANCE.md`, "Phase 5"; Gentle 60%, Standard 40%, Hard 20%): card rates, hand limits and costs tuned until the difficulty targets of section 3 hold again (60 games a level). | `docs/BALANCE.md` | Gentle about 80%, Standard 55–65%, Hard 30–40% |
+
+### Measures for the whole phase
+- Words: no first screen (map, hand, a card, an event) over 40 words; the counting script used for the
+  simplification pass runs in the smoke test and fails above that.
+- A turn in a mission, with nothing to decide, is one tap.
+- Every result of a task is seen on the map before it is read in a dialog.
+
+### Order and checkpoints
+1. 5.1–5.3 first: small, and it changes every session. **Checkpoint: you play a mission.**
+2. 5.4–5.9: the map comes alive. **Checkpoint: you play again.**
+3. 5.10–5.14 last: they change the rules and need balance runs, and the first two steps may change how busy turns feel.
+
+## Phase 6 — Ship
+
+| Id | Action | Where | Done when |
+|---|---|---|---|
+| 6.1 | **Store builds** for iOS and Android by wrapping the web game (Capacitor), with the right icons, splash and safe areas. | new `app/` folder | Installs from TestFlight and an Android test track |
+| 6.2 | **Speed on real devices.** Measure start time and map pan on a 9th-generation iPad and a mid-range Android phone. In the test browser (no graphics chip) a frame of panning takes about 22 ms with the paper grain and ground marks of 2.4. If pan is under 50 fps, first hide the ground marks while a finger is down; if still under, draw the province layer to a canvas at far zoom and keep SVG near. | `src/ui/map.ts` | Targets of section 3 met |
+| 6.3 | **A smaller start.** The page is 1.59 MB with the 651 KB world inside. Load the world map as a separate cached file. Art (4.9 MB) and music (4.3 MB in two formats) are already fetched only when needed; for the store builds, ship one music format for each platform (Ogg on Android, AAC on iOS) and so save 2 MB. | `scripts/build.mjs` | First paint under 1 s on a mid-range phone; each store build under 12 MB |
+| 6.4 | **Saves that travel, and cannot fail.** A campaign is 430 KB when it starts and 650 KB or more late on, kept as text in the browser's small store (about 5 MB for everything): three long campaigns come near the limit. Move saves to the larger store (IndexedDB), compressed, with the old ones carried over. Then: export and import a campaign as a file through the share sheet; cloud save through the store's own service in the wrapper. | `src/ui/state.ts`, `src/ui/title.ts` | Three campaigns of 1750 saved and loaded; a game moves from phone to tablet |
+| 6.5 | **Languages.** Move every text out of the code into tables (`t('key')`), starting with `events.ts` (97 KB of text and rules together). First languages: Spanish, German, French, Brazilian Portuguese, Simplified Chinese, Japanese. Add a serif with CJK coverage. | `src/i18n/` | The game plays through in Spanish with no English left |
+| 6.6 | **Ten outside players**, recorded with permission: time to finish the first beginner mission, the turn where they stop, what they tap that does nothing. Target: 70% finish the nine beginner missions. | playtest notes in `docs/` | Findings turned into a short Phase 6 list |
+| 6.7 | **Balance on those games**: difficulty, card rates, mission deadlines. Known before it starts: on Hard the bot is in the top three in about 45% of games, over the 30–40% target, and faster rival growth (×1.6 to ×1.8) does not change it. First lever to try: a wider spread of rival pace on Hard only (a new `aiSpread` in `src/data/difficulty.ts` in place of the fixed `DILIGENCE_SPREAD`), 120 games. The bot ignores warnings and keeps its army at home, so how hard Hard is for people is decided by the recorded games, not by the bot. Also unmeasured: starts near the Alps and in the Balkans after the ground corrections of 2.4. | `docs/BALANCE.md`, `src/data/difficulty.ts` | Targets of section 3 hold for real players |
+| 6.8 | **The offer.** One price. The free demo is the nine beginner missions and one historic mission; the purchase opens the rest. Store page: five screenshots, a 30-second trailer, the map as the first image. | store listings | Listings approved |
+| 6.9 | **Missions as achievements** in Game Center and Play Games (the 40 missions already are a list of them). | wrapper | Each mission unlocks one |
+| 6.10 | **Deploy by action.** GitHub Pages is built by a workflow on `main`, so the built `index.html` no longer lives in the repository. | `.github/workflows/pages.yml` | No built files in commits |
+| 6.11 | **Loose ends of the art.** Decide whether the title scene stays an oil painting or is redone as a woodcut like the rest (same file names, nothing else changes). Optionally a sixth sheet of faces for India and the steppe, which now wear the Islamic sheet, and South-East Asia, which wears the East Asian one. Replace the 13 card paintings still shared between cards (batch 4, sheet A of `docs/art-brief.md`). | `art/`, `ALIAS` in `src/ui/art.ts` | No shared card painting; the title matches or is kept on purpose |
 
 ## What we will not do
 
