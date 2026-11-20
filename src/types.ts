@@ -39,7 +39,17 @@ export interface Character {
   back?: number;       // quarters until back at court after a mission abroad
   wins?: number;
   losses?: number;
+  loyalty?: number;    // 0..100: how firmly they stand by the crown (court.ts); 60 when missing
+  face?: number;       // which of the sixteen portraits of their people they wear (ui/art.ts), chosen once
+  wish?: Wish;         // the one thing they want from you
+  rival?: number;      // uid of a rival at court
+  friend?: number;     // uid of a friend at court
+  honours?: number;    // titles and matches already granted, so the same favour is not asked twice
 }
+/** What a person at court hopes for. */
+export type Wish = 'title' | 'gold' | 'glory' | 'faith' | 'family' | 'rest';
+/** A rival realm's commander, met by name on the battlefield. */
+export interface Commander { name: string; skill: number; traits: string[]; since: number; captive?: boolean; }
 
 export interface HandCard {
   uid: number;
@@ -53,6 +63,8 @@ export interface Ruler {
   skill: number;
   from: number;
   to: number;
+  /** The realm as this reign began, to sum it up when it ends. */
+  start?: { provs: number; won: number; lost: number; works: number; built: number; techs: number };
   prestigeAtStart?: number;
 }
 
@@ -78,6 +90,11 @@ export interface Nation {
   alive: boolean;
   ruler: Ruler;
   spiedUntil?: number;
+  general?: Commander;  // rivals of some size keep one named general (commanders.ts)
+  /** What the realm has saved towards its next work of each kind; at 1 the work is done (ai.ts). */
+  work?: { land: number; focus: number; ships: number; arms: number };
+  goal?: { target: string; since: number }; // the realm this one means to have (rivals.ts)
+  deeds?: { year: number; text: string }[]; // what it has lately done, newest first
 }
 
 export interface Province {
@@ -146,6 +163,9 @@ export interface BattleUnit {
   str: number;
   start: number;
   garrison?: boolean;
+  reserve?: boolean;   // held back by the player: takes no part until sent in
+  fresh?: number;      // the round (0-based) in which the reserve entered: it strikes harder then
+  ally?: string;       // a company lent by this ally
 }
 
 export interface BattleGeneral { name: string; skill: number; traits: string[]; uid?: number; mult?: number; }
@@ -192,6 +212,9 @@ export interface Battle {
   camp?: boolean;  // an attack on a half-built invasion base
   rebel?: { cause: string; name: string; adj: string }; // a rising: if it wins, a civil war
   naval?: boolean;
+  terrain?: string;   // the ground (data/terrain.ts); none at sea
+  landing?: boolean;  // the attacker came ashore from ships
+  retreated?: boolean; // the player withdrew in good order
   follow?: { type: 'land-attack' | 'land-defend'; missionId?: number; nation?: string; force?: number[] };
   missionId?: number;
   done: boolean;
@@ -293,14 +316,19 @@ export interface GameState {
   ambition: string | null;
   ambitionDone: boolean;
   over: boolean;
+  difficulty?: number;              // index into DIFFICULTY (data/difficulty.ts); Standard when missing
+  pending?: { id: string; year: number; vars: Record<string, string | number> }[]; // events an earlier choice set in motion
+  steward?: { on: boolean; share: number }; // the goods steward buys what a need lacks, up to this share of province income
+  length?: string;                  // open game only: a LENGTHS id when the game ends before the age does
   savedAt?: number; // when the game was last written, to offer Continue on the title screen
 }
 
 export interface Stats {
   battles: Record<string, { won: number; lost: number }>;
-  kings: { name: string; arch: string; from: number; to: number; prestige: number }[];
+  kings: { name: string; arch: string; from: number; to: number; prestige: number; epithet?: string }[];
   fallen: { name: string; role: Role; skill: number; wins: number; losses: number; until: number }[];
   wars: { won: number; lost: number };
+  annals?: { year: number; text: string; w: number }[]; // the weighty moments of the campaign (chronicle.ts)
 }
 
 /** A goal of a mission. Lands are named by their owner in 1451 ("the lands of Granada"), or by province. */

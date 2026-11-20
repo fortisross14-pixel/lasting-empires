@@ -1,7 +1,11 @@
-import { inflation, ageIndex } from './core';
+import { goalOf, yearlyGoals, deed, warned, warnedNow, markWarned, GOAL_WEIGHT } from './rivals';
+import { later } from './eventkit';
+import { maxFort } from './core';
+import { dispatch } from './annals';
+import { inflation, ageIndex, diff } from './core';
 import { commandOf, GENERIC_COMMAND } from '../data/characters';
 // AI nations: economy, recruiting, upgrades, war and peace.
-import type { GameState, Nation, TroopCard, RevealItem } from '../types';
+import type { Personality, GameState, Nation, TroopCard, RevealItem } from '../types';
 import { TROOPS } from '../data/troops';
 import {
   rand, pick, uid, clamp, provsOf, incomeOf, manpowerGain, manpowerMax, getRel, addRel, atWar, findWar,
@@ -45,13 +49,12 @@ export const RISERS: Record<string, [number, number]> = {
 export const RISER_MAX = 70;
 /** Is this realm in its historical age of expansion? */
 export const rising = (s: GameState, id: string) => { const w = RISERS[id]; return !!w && s.year >= w[0] && s.year <= w[1] && provsOf(s, id).length < RISER_MAX; };
-/** Years between AI declarations of war on the player (any realm), so attacks come now and then, not every year. */
-export const AI_WAR_ON_PLAYER_GAP = 30;
+// Years between AI declarations of war on the player, and how strong the attacker must be: see data/difficulty.ts.
 
 export function aiArmyCap(s: GameState, n: Nation): number {
   const ps = provsOf(s, n.id).length;
   const bonus = (n.personality === 'expansionist' ? 2 : n.personality === 'cautious' ? 0 : 1) + (rising(s, n.id) ? 2 : 0);
-  return Math.round(2 + Math.sqrt(ps) * 2.6 + bonus + (s.year - 1453) / 100);
+  return Math.max(1, Math.round(2 + Math.sqrt(ps) * 2.6 + bonus + (s.year - 1453) / 100) + diff(s).aiArmy);
 }
 
 /** What the player can bring to bear on the border with `n`: the troops within reach of it and the walls there,
@@ -71,19 +74,53 @@ export const playerPower = (s: GameState) =>
 const powerOf = (s: GameState, n: string) => (n === s.player ? playerPower(s) : nationPower(s, n));
 
 /** Balance levers: AI development a year (chance of +1) and how fast every crown's prestige fades. */
+/** Provinces a realm needs for its wars to be news at the player's court. */
+export const GREAT_POWER = 12;
 export const AI_DEV_BASE = 0.14, AI_DEV_SIZE = 0.025, PRESTIGE_FADE = 0.03;
 
-function aiEconomy(s: GameState, n: Nation) {
+// ---------- a rival's works: a budget, not dice ----------
+// Each year a realm sets labour aside for four kinds of work. When a whole unit is saved, the work is done and
+// written in its record. The rates are what the dice used to give on average, so realms grow as fast as before,
+// but steadily, and a player who reads a realm's page can see what it is about.
+/** Ships laid down a year by a realm with a coast, room in its harbours and silver to spare. */
+export const SHIP_RATE = 0.12;
+/** Companies re-armed a year, for each company whose arms have been overtaken. */
+export const ARMS_RATE = 0.05;
+const hashOf = (t: string) => { let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+/** How far a realm's pace on the land may lie from the common one, either way. When dice decided, luck spread
+ *  realms about this much over three centuries (one in ten ended a tenth ahead or behind); without it no rival
+ *  ever pulls ahead and the player's place in the ranking rises. The spread is now each realm's own nature. */
+export const DILIGENCE_SPREAD = 0.17;
+/** A realm's own pace, fixed for the whole game: from 1 − spread to 1 + spread, 1 on average. */
+export const diligence = (id: string) => 1 - DILIGENCE_SPREAD + ((hashOf(id + 'diligence') % 1000) / 999) * 2 * DILIGENCE_SPREAD;
+/** Works on the land a year: bigger realms a little faster, but far less than in proportion, so great empires do
+ *  not win on size alone; merchants faster; each realm at its own pace; multiplied by the difficulty. */
+export const landRate = (s: GameState, n: Nation) => (AI_DEV_BASE + AI_DEV_SIZE * Math.sqrt(provsOf(s, n.id).length) + (n.personality === 'merchant' ? 0.04 : 0)) * diligence(n.id) * diff(s).aiGrowth;
+/** A realm's savings towards its works. They begin part-way, differently for each realm, so the world does not
+ *  all build in the same year. */
+export function worksOf(n: Nation) {
+  return (n.work ??= { land: (hashOf(n.id + 'land') % 100) / 100, focus: (hashOf(n.id + 'focus') % 100) / 100, ships: (hashOf(n.id + 'ships') % 100) / 100, arms: (hashOf(n.id + 'arms') % 100) / 100 });
+}
+/** The land a realm can still improve, poorest first: the ceiling rises with the ages. */
+const improvable = (s: GameState, n: Nation) => provsOf(s, n.id).filter(p => p.dev < 5 + ageIndex(s)).sort((x, y) => x.dev - y.dev || (x.id < y.id ? -1 : 1));
+/** Years until a realm next improves its land, for the player's spies; null when it has none left to improve. */
+export function yearsToLand(s: GameState, n: Nation): number | null {
+  if (!improvable(s, n).length) return null;
+  return Math.max(1, Math.ceil((1 - worksOf(n).land) / Math.max(0.01, landRate(s, n))));
+}
+
+export function aiEconomy(s: GameState, n: Nation) {
   const inc = incomeOf(s, n.id);
   n.gold = Math.min(n.gold + inc.total, 400 * inflation(s)); // crowns spend what they cannot store
   n.manpower = Math.min(manpowerMax(s, n.id), n.manpower + manpowerGain(s, n.id));
   for (const t of n.army) t.str = Math.min(100, t.str + 20);
-  // AI realms develop their land, the way a player would: bigger realms a little faster,
-  // but far less than in proportion, so great empires do not win on size alone
-  const pv = provsOf(s, n.id).length;
-  if (rand(s) < AI_DEV_BASE + AI_DEV_SIZE * Math.sqrt(pv) + (n.personality === 'merchant' ? 0.04 : 0)) {
-    const low = provsOf(s, n.id).filter(p => p.dev < 5 + ageIndex(s)).sort((x, y) => x.dev - y.dev); // the ceiling rises with the ages
-    if (low.length) low[Math.floor(rand(s) * Math.min(4, low.length))].dev++;
+  // the land: labour saved each year, and one of the four poorest provinces improved when there is enough
+  const w = worksOf(n);
+  w.land += landRate(s, n);
+  if (w.land >= 1) {
+    const low = improvable(s, n);
+    if (low.length) { w.land -= 1; const p = low[hashOf(n.id + s.year) % Math.min(4, low.length)]; p.dev++; deed(s, n, `Improved the land of ${p.name}.`); }
+    else w.land = 1; // nothing left to improve in this age: the labour waits, but does not pile up
   }
   if (n.gold < -20 && n.army.length) { n.army.splice(Math.floor(rand(s) * n.army.length), 1); n.gold += 10; }
   // recruit
@@ -95,24 +132,58 @@ function aiEconomy(s: GameState, n: Nation) {
     if (n.gold < cost + 10 || n.manpower < 2) break;
     n.gold -= cost; n.manpower -= 2;
     n.army.push({ uid: uid(s), type, vet: 0, str: 100 });
+    deed(s, n, `Raised a company of ${TROOPS[type].name}.`);
   }
   // navy
   n.fleet ??= [];
   const coastal = provsOf(s, n.id).filter(p => getGeo().coastal[p.id]).length;
-  if (coastal && n.fleet.length < 1 + Math.floor(coastal / 2) && n.gold > 45 && rand(s) < 0.12) {
-    const type = s.year >= 1650 ? 'man_of_war' : s.year >= 1545 ? 'galleon' : s.year >= 1490 && rand(s) < 0.5 ? 'carrack' : 'galley';
-    n.gold -= 30; n.fleet.push({ uid: uid(s), type, vet: 0, str: 100 });
+  if (coastal && n.fleet.length < 1 + Math.floor(coastal / 2) && n.gold > 45) {
+    w.ships += SHIP_RATE;
+    if (w.ships >= 1) {
+      w.ships -= 1;
+      const type = s.year >= 1650 ? 'man_of_war' : s.year >= 1545 ? 'galleon' : s.year >= 1490 && hashOf(n.id + s.year + 'hull') % 2 ? 'carrack' : 'galley';
+      n.gold -= 30; n.fleet.push({ uid: uid(s), type, vet: 0, str: 100 });
+      deed(s, n, `Launched a ${TROOPS[type].name.toLowerCase()}.`);
+    }
   }
   for (const t of n.fleet) t.str = Math.min(100, t.str + 20);
   // upgrade old units
-  for (const t of n.army) {
-    if (rand(s) > 0.05) continue;
-    const up = AI_UPGRADES.find(([from, , y]) => from === t.type && s.year >= y);
-    if (up) t.type = up[1];
+  const upgradeOf = (type: string) => AI_UPGRADES.find(([from, , y]) => from === type && s.year >= y);
+  const old = n.army.filter(t => upgradeOf(t.type));
+  w.arms = old.length ? w.arms + ARMS_RATE * old.length : Math.min(w.arms, 1);
+  for (const t of old) {
+    if (w.arms < 1) break;
+    w.arms -= 1;
+    const up = upgradeOf(t.type)!;
+    t.type = up[1]; deed(s, n, `Re-armed a company as ${TROOPS[up[1]].name}.`);
   }
   // slow growth
   // prestige
   n.prestige = n.prestige * (1 - PRESTIGE_FADE) + 0.3 + Math.sqrt(provsOf(s, n.id).length) * 0.35;
+}
+
+/** Every second year a realm does one thing in keeping with its temper. Small, real, and written in its record.
+ *  `FOCUS_CHANCE` is the share of a work saved each year: at 0.5, one work every two years. If the realm cannot
+ *  pay for it when its turn comes, the turn is lost, as it was when dice decided. */
+export const FOCUS_CHANCE = 0.5, WALL_COST = 30;
+/** What each temper's own work is, in words for the realm's page. */
+export const FOCUS_WORK: Record<Personality, string> = { cautious: 'raises walls on a border', balanced: 'raises walls on a border', merchant: 'holds a great fair', zealot: 'endows a house of prayer', expansionist: 'musters its levies' };
+function aiFocus(s: GameState, n: Nation) {
+  const w = worksOf(n);
+  w.focus += FOCUS_CHANCE;
+  if (w.focus < 1) return;
+  w.focus -= 1;
+  if (n.personality === 'cautious' || n.personality === 'balanced') {
+    const cap = maxFort(s);
+    const border = provsOf(s, n.id).filter(p => p.fort < Math.min(cap, 2) && neighbours(p.id).some(nb => s.provinces[nb].owner !== n.id)).sort((a, b) => a.fort - b.fort || b.dev - a.dev)[0];
+    if (border && n.gold >= WALL_COST * inflation(s) + 20) { n.gold -= WALL_COST * inflation(s); border.fort++; deed(s, n, `Strengthened the walls of ${border.name}.`); }
+  } else if (n.personality === 'merchant') {
+    n.gold += 10 * inflation(s); deed(s, n, 'Held a great fair.');
+  } else if (n.personality === 'zealot') {
+    n.prestige += 1; deed(s, n, 'Endowed a house of prayer.');
+  } else {
+    n.manpower = Math.min(manpowerMax(s, n.id), n.manpower + 2); deed(s, n, 'Mustered its levies.');
+  }
 }
 
 function weightedPick(s: GameState, items: [string, number][]): string {
@@ -139,6 +210,30 @@ function pickTarget(s: GameState, n: string, enemy: string): string | null {
 
 let attacksOnPlayer = 0;
 
+/** Would this realm go to war with the player now? Past the years of peace and the gap between such wars,
+ *  disliking the player enough, and stronger where they meet by the margin the difficulty asks. */
+export function wantsPlayer(s: GameState, n: Nation): boolean {
+  if (!n.alive || n.overlord || atWar(s, n.id, s.player) || inTruce(s, n.id, s.player) || hasTreaty(s, n.id, s.player, 'alliance') || hasTreaty(s, n.id, s.player, 'marriage') || s.nations[s.player].overlord === n.id) return false;
+  if (s.year < s.startYear + diff(s).grace || (s.flags.ai_war_on_player ?? -99) + diff(s).warGap > s.year) return false;
+  if (getRel(s, n.id, s.player) > (rising(s, n.id) ? -10 : -40)) return false;
+  const t = threatOf(s, n.id);
+  return t.theirs > t.needed;
+}
+/** What a realm can bring against the player, and what it would want before attacking. */
+export function threatOf(s: GameState, id: string): { theirs: number; needed: number } {
+  const friends = alliesOf(s, id).filter(a => getRel(s, a, s.player) < 0).reduce((a, x) => a + powerOf(s, x) * 0.5, 0);
+  return { theirs: nationPower(s, id) + friends, needed: playerGuard(s, id) * diff(s).warEdge };
+}
+/** May this realm declare war on the player now? Only if it wants to and was seen gathering at least a year ago;
+ *  the first time it wants to, the warning goes out instead and it waits. */
+export function mayStrikePlayer(s: GameState, n: Nation): boolean {
+  if (!wantsPlayer(s, n)) return false;
+  if (warned(s, n.id)) return true;
+  if (!warnedNow(s, n.id)) { markWarned(s, n.id); later(s, 'war_warning', 0, 0, { nation: n.id }); }
+  return false;
+}
+const neighboursPlayer = (s: GameState, id: string) => provsOf(s, id).some(p => neighbours(p.id).some(nb => s.provinces[nb].owner === s.player));
+
 function aiWar(s: GameState, n: Nation) {
   // attack enemies
   for (const e of enemiesOf(s, n.id)) {
@@ -147,7 +242,7 @@ function aiWar(s: GameState, n: Nation) {
     const rise = rising(s, n.id);
     if (!n.army.length || rand(s) > (revolt ? 0.8 : rise ? 0.6 : 0.4)) continue;
     // a casual game: a crown on its last legs is rarely hunted down
-    if (e === s.player && !revolt && provsOf(s, s.player).length <= 3 && rand(s) < 0.7) continue;
+    if (e === s.player && !revolt && provsOf(s, s.player).length <= 3 && rand(s) < diff(s).mercy) continue;
     const target = pickTarget(s, n.id, e);
     if (!target) continue;
     const prov = s.provinces[target];
@@ -236,11 +331,13 @@ function aiDiplomacy(s: GameState, n: Nation) {
   // declare war
   const atWarCount = enemiesOf(s, n.id).length;
   if (atWarCount > 0 || n.overlord) return;
+  // a realm that has been seen gathering against the player, and still wants the war a year later, goes to it
+  const bent = wantsPlayer(s, n) && warned(s, n.id) && neighboursPlayer(s, n.id);
   const base = { expansionist: 0.07, zealot: 0.05, balanced: 0.035, merchant: 0.02, cautious: 0.012 }[n.personality];
   const size = provsOf(s, n.id).length;
   const rise = rising(s, n.id);
   // great powers still go to war, just less eagerly; a realm in its age of conquest more so
-  if (rand(s) > (rise ? Math.max(base, 0.06) * 1.5 / (1 + size / 40) : base / (1 + size / 20))) return;
+  if (!bent && rand(s) > (rise ? Math.max(base, 0.06) * 1.5 / (1 + size / 40) : base / (1 + size / 20))) return;
   const neigh = new Set<string>();
   for (const p of provsOf(s, n.id)) for (const nb of neighbours(p.id)) { const o = s.provinces[nb].owner; if (o !== n.id) neigh.add(o); }
   const myPow = nationPower(s, n.id);
@@ -249,19 +346,21 @@ function aiDiplomacy(s: GameState, n: Nation) {
     if (s.nations[t].overlord === n.id || n.overlord === t) return false;
     const rel = getRel(s, n.id, t);
     if (t === s.player) {
-      // the player is attacked now and then: by a neighbour that hates it and is clearly stronger where they meet
-      if (s.year < s.startYear + 10 || (s.flags.ai_war_on_player ?? -99) + AI_WAR_ON_PLAYER_GAP > s.year) return false;
-      if (rel > (rise ? -10 : -40)) return false;
-      const friends = alliesOf(s, n.id).filter(a => getRel(s, a, s.player) < 0).reduce((a, x) => a + powerOf(s, x) * 0.5, 0);
-      return myPow + friends > playerGuard(s, n.id) * 1.25;
+      // the player is attacked now and then: by a neighbour that hates it and is clearly stronger where they meet.
+      // No such war comes unannounced: the first time a realm wants it, the player is warned and it waits a year.
+      return mayStrikePlayer(s, n);
     }
     if (rel > (rise ? 30 : n.personality === 'expansionist' ? 15 : -10)) return false;
     const theirPow = powerOf(s, t) + alliesOf(s, t).reduce((a, x) => a + powerOf(s, x) * 0.5, 0);
     return myPow > theirPow * (rise ? 1.0 : 1.25);
   });
   if (!options.length) return;
-  const t = pick(s, options);
+  // what the realm wants weighs more than what merely lies near; a realm bent on the player goes for the player
+  const goal = goalOf(s, n.id);
+  const t = bent && options.includes(s.player) ? s.player : pick(s, options.flatMap(o => (o === goal ? Array<string>(GOAL_WEIGHT).fill(o) : [o])));
   declareWar(s, n.id, t);
+  deed(s, n, `Declared war on ${nationName(s, t)}.`);
+  if (t !== s.player && size >= GREAT_POWER && provsOf(s, t).length >= GREAT_POWER) dispatch(s, n.id, `${n.name} has declared war on ${nationName(s, t)}.`);
   if (t === s.player) {
     s.flags.ai_war_on_player = s.year;
     log(s, `${n.name} declares war on you!`, 'bad');
@@ -370,6 +469,8 @@ export function runAI(s: GameState, q = 3) {
     const n = s.nations[id];
     if (!n.alive || !provsOf(s, id).length) continue; // no land left: waits for the peace table
     aiEconomy(s, n);
+    aiFocus(s, n);
+    yearlyGoals(s, n);
     aiDiplomacy(s, n);
     aiAlliances(s, n);
     aiRedeploy(s, n.id);

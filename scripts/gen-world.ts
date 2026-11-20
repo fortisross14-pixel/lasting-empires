@@ -117,11 +117,68 @@ const lands: Poly[] = [];
 polys.forEach((p, i) => { if (keepIdx[i]) { remap.set(i, lands.length); lands.push(p); } });
 for (const [k, v] of owner) owner.set(k, remap.get(v)!);
 
+// Where the map data is cut off at the top, one outline can join two lands half a world apart (northern Norway and
+// the tip of Siberia): split such an outline at its two long jumps. The piece with the provinces keeps its number.
+for (let i = 0, n = lands.length; i < n; i++) {
+  const ring = lands[i][0];
+  const open = ring.length > 1 && ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1] ? ring.slice(0, -1) : ring;
+  const cuts: number[] = [];
+  open.forEach((a, k) => { if (Math.abs(a[0] - open[(k + 1) % open.length][0]) > 150) cuts.push(k); });
+  if (cuts.length !== 2) continue;
+  const pieces: P[][] = [open.slice(cuts[0] + 1, cuts[1] + 1), [...open.slice(cuts[1] + 1), ...open.slice(0, cuts[0] + 1)]];
+  const mine = seeds.filter(s => owner.get(s.id) === i);
+  const count = (r: P[]) => mine.filter(s => inRing([s.lon, s.lat], r)).length;
+  pieces.sort((x, y) => count(y) - count(x));
+  console.warn(`land ${i} split in two at the edge of the map`);
+  lands[i] = [pieces[0], ...lands[i].slice(1)];
+  lands.push([pieces[1]]);
+}
+
 const fmt = (pts: P[]) => 'M' + pts.map(q => { const [x, y] = proj(q); return x.toFixed(1) + ',' + y.toFixed(1); }).join('L') + 'Z';
 const fmtXY = (pts: P[]) => 'M' + pts.map(([x, y]) => x.toFixed(1) + ',' + y.toFixed(1)).join('L') + 'Z';
 const landPaths = lands.map(p => p.map(fmt).join(''));
 const landXY = lands.map(p => p.map(r => r.map(proj)));
 const inPolyXY = (q: P, poly: P[][]) => inRing(q, poly[0]) && !poly.slice(1).some(h => inRing(q, h));
+
+// ---------- borders that are not straight ----------
+// Each inland edge of a cell is bent into a gentle wave. The wave is worked out from the edge's two end points alone
+// (rounded, and always taken in the same order), so the two provinces that share the edge get the very same line
+// and no gap opens between them. The corners where three provinces meet stay where they were.
+const WOBBLE = [0.07, 0.045, 0.03, 0.02]; // share of the edge's length for each wave, longest wave first
+const WOBBLE_MAX_LEN = 75;                 // longer edges bend as if they were this long, so no border bulges
+const hash = (s: string) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+const rng = (seed: number) => () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+const r1 = (v: number) => Math.round(v * 10) / 10;
+/** The points between a and b along their bent border (a and b themselves are left out). */
+function wobble(a: P, b: P): P[] {
+  const A: P = [r1(a[0]), r1(a[1])], B: P = [r1(b[0]), r1(b[1])];
+  const flip = A[0] > B[0] || (A[0] === B[0] && A[1] > B[1]);
+  const [p, q] = flip ? [B, A] : [A, B];
+  const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
+  if (len < 5) return [];
+  const n = Math.max(3, Math.min(9, Math.round(len / 8)));
+  const rnd = rng(hash(`${p[0]},${p[1]}|${q[0]},${q[1]}`));
+  const amp = WOBBLE.slice(0, Math.max(2, n - 2)).map(k => k * Math.min(len, WOBBLE_MAX_LEN) * (rnd() * 2 - 1));
+  const nx = -(q[1] - p[1]) / len, ny = (q[0] - p[0]) / len;
+  const pts: P[] = [];
+  for (let i = 1; i < n; i++) {
+    const t = i / n;
+    const off = amp.reduce((s, k, j) => s + k * Math.sin((j + 1) * Math.PI * t), 0);
+    pts.push([p[0] + (q[0] - p[0]) * t + nx * off, p[1] + (q[1] - p[1]) * t + ny * off]);
+  }
+  return flip ? pts.reverse() : pts;
+}
+/** A cell with its inland edges bent. Edges that lie wholly in the sea stay straight: the coast hides them. */
+function wobbleRing(ring: P[], land: P[][]): P[] {
+  const out: P[] = [];
+  for (let i = 0; i < ring.length - 1; i++) {
+    const a = ring[i], b = ring[i + 1];
+    out.push(a);
+    const mid: P = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    if (inPolyXY(a, land) || inPolyXY(b, land) || inPolyXY(mid, land)) out.push(...wobble(a, b));
+  }
+  return out; // fmtXY closes the ring
+}
 
 const cells: Record<string, string> = {}, center: Record<string, P> = {}, landOf: Record<string, number> = {};
 const adj: Record<string, string[]> = {}, coastal: Record<string, boolean> = {};
@@ -135,7 +192,7 @@ for (const [k, list] of byLand) {
   const vor = Delaunay.from(list.map(id => center[id])).voronoi([Math.min(...xs) - 20, Math.min(...ys) - 20, Math.max(...xs) + 20, Math.max(...ys) + 20]);
   const cps = list.map((_, i) => (vor.cellPolygon(i) ?? []) as P[]);
   list.forEach((id, i) => {
-    cells[id] = fmtXY(cps[i]);
+    cells[id] = fmtXY(wobbleRing(cps[i], poly));
     coastal[id] = false;
   });
   // coastal = the coastline passes through the province's cell

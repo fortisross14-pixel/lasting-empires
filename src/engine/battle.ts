@@ -1,17 +1,53 @@
 // Battles: three rounds, each side commits a face-down tactic, then both flip.
+import { TERRAINS, LANDING_FIRE, terrainOf, type Terrain } from '../data/terrain';
+import { troopsNear } from './army';
+import { commanderFate } from './commanders';
+import { addLoyalty, wishOf } from './court';
 import { rebelsTake } from './realm';
 import { siegeAftermath } from './history';
 import { campLost, turnNo } from './army';
 import { addInfamy } from './coalition';
 import type { GameState, Battle, BattleSide, BattleUnit, BattleGeneral, RoundLog, TroopCard, BattleRecord } from '../types';
-import { TROOPS, TACTICS } from '../data/troops';
+import { TROOPS, TACTICS, TRAIT_TACTIC, TRAIT_TACTIC_CHANCE } from '../data/troops';
 import { rand, pick, weighted, uid, clamp, hasTech, rulerMod, log, nationName, addRel, player, findWar, promoteRarity, hasCore, alliesOf, enemiesOf, troopPower, techFx, push } from './core';
 import { landPhase } from './missions';
 import { landDefence } from './ai';
 
 export const breakLevel = (side: BattleSide) => (side.general?.traits.includes('inspiring') ? 0.25 : 0.35);
-export const hp = (side: BattleSide) => side.units.reduce((a, u) => a + u.str, 0);
-export const ratio = (side: BattleSide) => (side.startHP > 0 ? hp(side) / side.startHP : 0);
+/** Strength in the fight: a company held in reserve does not count until it is sent in. */
+export const hp = (side: BattleSide) => side.units.reduce((a, u) => a + (u.reserve ? 0 : u.str), 0);
+/** How much of its starting strength a side still has. Sending in the reserve raises it: fresh men steady a line. */
+export const ratio = (side: BattleSide) => { const start = side.units.reduce((a, u) => a + (u.reserve ? 0 : u.start), 0); return start > 0 ? hp(side) / start : 0; };
+
+// ---------- what the player may do in a battle: hold a reserve, send it in, withdraw ----------
+/** A reserve strikes this much harder in the round it enters. */
+export const RESERVE_FRESH = 1.5;
+/** Strength every company loses in an orderly withdrawal. */
+export const RETREAT_COST = 10;
+const mySide = (b: Battle) => (b.playerSide === 'att' ? b.att : b.def);
+export const reserveOf = (b: Battle) => mySide(b).units.find(u => u.reserve);
+/** A company may be held back before the first round, if at least two stand in the field (not the men on the walls). */
+export const canReserve = (b: Battle) => b.round === 0 && !b.done && mySide(b).units.filter(u => !u.garrison && u.str > 0).length >= 2;
+/** Before the first round: hold one company back (or none, with null). */
+export function setReserve(b: Battle, unitUid: number | null) {
+  if (b.round !== 0 || b.done) return;
+  for (const u of mySide(b).units) delete u.reserve;
+  const u = unitUid == null ? undefined : mySide(b).units.find(x => x.uid === unitUid && !x.garrison && x.str > 0);
+  if (u && canReserve(b)) u.reserve = true;
+}
+/** Send the reserve in: it fights from the coming round, and harder in that one. */
+export function commitReserve(b: Battle) {
+  const u = reserveOf(b);
+  if (!u || b.done) return;
+  delete u.reserve; u.fresh = b.round;
+}
+/** After the first or second round the player may break off. Not from the walls of Constantinople. */
+export const canRetreat = (b: Battle) => !b.done && b.round >= 1 && !b.siege;
+export function retreat(b: Battle) {
+  if (!canRetreat(b)) return;
+  b.done = true; b.retreated = true;
+  b.winner = b.playerSide === 'att' ? 'def' : 'att';
+}
 
 export function toBattleUnits(cards: TroopCard[]): BattleUnit[] {
   return cards.filter(c => c.str > 0).map(c => ({ uid: c.uid, type: c.type, vet: c.vet, str: c.str, start: c.str, might: c.might }));
@@ -24,10 +60,13 @@ export function makeSide(nation: string, units: BattleUnit[], general: BattleGen
 }
 
 export function createBattle(s: GameState, att: BattleSide, def: BattleSide, province: string,
-  context: Battle['context'], missionId?: number, opts: { naval?: boolean; follow?: Battle['follow'] } = {}): Battle {
+  context: Battle['context'], missionId?: number, opts: { naval?: boolean; follow?: Battle['follow']; landing?: boolean } = {}): Battle {
   const b: Battle = {
     id: uid(s), att, def, province, round: 0, logs: [], playerSide: att.player ? 'att' : 'def',
     context, missionId, done: false, options: [], enemyNext: 'hold', scout: false, ambush: false, naval: !!opts.naval, follow: opts.follow,
+    // ground counts only where the player fights: the wars between other realms were balanced without it,
+    // and a world where every attacker is hindered is a world where rivals stop growing
+    terrain: opts.naval || !(att.player || def.player) || !s.provinces[province] ? undefined : terrainOf(s.provinces[province]), landing: opts.landing || undefined,
   };
   if ((att.player || def.player) && (s.flags.ambush ?? 0) > 0) { b.ambush = true; s.flags.ambush = 0; }
   prepareRound(s, b);
@@ -48,6 +87,9 @@ export function available(side: BattleSide, naval = false): string[] {
 function aiPick(s: GameState, me: BattleSide, foe: BattleSide, naval = false): string {
   if (naval) return pick(s, available(me, true));
   const opts = available(me);
+  // a general with a character reaches for what suits him, when his army can do it: so he can be read
+  const fav = (me.general?.traits ?? []).flatMap(t => TRAIT_TACTIC[t] ?? []).find(t => opts.includes(t));
+  if (fav && rand(s) < TRAIT_TACTIC_CHANCE) return fav;
   const foeAlive = foe.units.filter(u => u.str > 0);
   const foeCav = foeAlive.filter(u => TROOPS[u.type].kind === 'cav').length / Math.max(1, foeAlive.length);
   const foeShot = foeAlive.filter(u => TROOPS[u.type].fire >= 3).length / Math.max(1, foeAlive.length);
@@ -98,11 +140,11 @@ function attackOutput(s: GameState, side: BattleSide, round: number, my: Mods, n
   const g = side.general;
   // frontage: only so many companies fight at once; the rest are reserves
   const FRONT = naval ? 6 : 5;
-  const order = side.units.filter(u => u.str > 0).sort((x, y) => (TROOPS[y.type].melee + TROOPS[y.type].fire) * y.str - (TROOPS[x.type].melee + TROOPS[x.type].fire) * x.str);
+  const order = side.units.filter(u => u.str > 0 && !u.reserve).sort((x, y) => (TROOPS[y.type].melee + TROOPS[y.type].fire) * y.str - (TROOPS[x.type].melee + TROOPS[x.type].fire) * x.str);
   const inFront = new Set(order.slice(0, FRONT).map(u => u.uid));
   for (const u of side.units) {
-    if (u.str <= 0) continue;
-    const reserve = inFront.has(u.uid) ? 1 : 0.4;
+    if (u.str <= 0 || u.reserve) continue;
+    const reserve = (inFront.has(u.uid) ? 1 : 0.4) * (u.fresh === round ? RESERVE_FRESH : 1);
     const d = TROOPS[u.type];
     const eff = (1 + 0.15 * u.vet) * (u.str / 100) * reserve * (u.might ?? 1);
     let f = d.fire * eff * ROUND_MULT[round].fire * my.fire;
@@ -127,7 +169,7 @@ function attackOutput(s: GameState, side: BattleSide, round: number, my: Mods, n
 }
 
 function applyDamage(s: GameState, target: BattleSide, attacker: BattleSide, out: { fire: number; melee: number }, tm: Mods, effFort: number): number {
-  const alive = target.units.filter(u => u.str > 0);
+  const alive = target.units.filter(u => u.str > 0 && !u.reserve);
   if (!alive.length) return 0;
   let incoming = out.fire * tm.incoming + out.melee * tm.incoming * tm.incomingMelee;
   if (target.general?.traits.includes('cautious')) incoming *= 1 - 0.15 * (target.general.mult ?? 1);
@@ -159,6 +201,18 @@ function effectiveFort(b: Battle): number {
   return clamp(b.def.fort - Math.floor(siege / 2) - sm, 0, 5);
 }
 
+/** What the ground does to both sides' tactics this round (data/terrain.ts). */
+function ground(b: Battle, am: Mods, dm: Mods, round: number) {
+  const t = TERRAINS[(b.terrain ?? 'plains') as Terrain];
+  if (t) {
+    am.cav *= t.attCav; dm.cav *= t.defCav;
+    am.fire *= t.fire * t.attAll; am.melee *= t.attAll;
+    dm.fire *= t.fire * t.defFire;
+    dm.incoming *= t.defTaken;
+  }
+  if (b.landing && round === 0) dm.fire *= LANDING_FIRE;
+}
+
 /** Play one round. playerTactic may be null for AI-vs-AI or auto mode. */
 export function playRound(s: GameState, b: Battle, playerTactic: string | null): RoundLog {
   const r = b.round;
@@ -172,6 +226,7 @@ export function playRound(s: GameState, b: Battle, playerTactic: string | null):
   const attCountered = TACTICS[attTac].counteredBy.includes(defTac);
   const defCountered = TACTICS[defTac].counteredBy.includes(attTac);
   const am = mods(attTac, attCountered), dm = mods(defTac, defCountered);
+  ground(b, am, dm, r);
   const ef = effectiveFort(b);
   const attOut = attackOutput(s, b.att, r, am, b.naval);
   const defOut = attackOutput(s, b.def, r, dm, b.naval);
@@ -194,19 +249,20 @@ export function playRound(s: GameState, b: Battle, playerTactic: string | null):
   return lg;
 }
 
+/** Play the battle out with no more choices. A reserve still held goes in for the second round. */
 export function autoResolve(s: GameState, b: Battle) {
-  while (!b.done) playRound(s, b, null);
+  while (!b.done) { if (b.round >= 1) commitReserve(b); playRound(s, b, null); }
 }
 
 // ---------- applying results ----------
-function syncPlayerTroops(s: GameState, side: BattleSide, won: boolean): { lost: string[]; promoted: string[] } {
+function syncPlayerTroops(s: GameState, side: BattleSide, won: boolean, retreated = false): { lost: string[]; promoted: string[] } {
   const lost: string[] = [], promoted: string[] = [];
   for (const u of side.units) {
     if (u.garrison) continue;
     const card = s.troops.find(t => t.uid === u.uid) ?? s.fleet.find(t => t.uid === u.uid);
     if (!card) continue;
     let str = u.str;
-    if (!won) str *= 0.85;
+    if (retreated) str -= RETREAT_COST; else if (!won) str *= 0.85; // a withdrawal in good order costs less than a rout
     if (str < 8) { lost.push(TROOPS[card.type].name); s.troops = s.troops.filter(t => t.uid !== card.uid); s.fleet = s.fleet.filter(t => t.uid !== card.uid); continue; }
     card.str = Math.round(str); card.fought = turnNo(s);
     if (won && card.vet < 3 && rand(s) < 0.25) { card.vet++; promoted.push(TROOPS[card.type].name); }
@@ -226,6 +282,36 @@ function syncAITroops(s: GameState, side: BattleSide, won: boolean) {
     if (str < 8) { nat.army = nat.army.filter(t => t.uid !== card.uid); nat.fleet = (nat.fleet ?? []).filter(t => t.uid !== card.uid); }
     else { card.str = Math.round(str); card.fought = turnNo(s); if (won && card.vet < 3 && rand(s) < 0.15) card.vet++; }
   }
+}
+
+// ---------- allies in the line ----------
+/** Companies an ally may lend to one battle. */
+export const ALLY_COMPANIES = 2;
+/** Allies who are in this war and stand within a quarter's march send their best companies to fight under the
+ *  player's general. They are counted on top of what the general can command. */
+export function alliedHelp(s: GameState, enemy: string, provId: string): BattleUnit[] {
+  const out: BattleUnit[] = [];
+  for (const a of alliesOf(s, s.player)) {
+    const n = s.nations[a];
+    if (!n?.alive || !findWar(s, a, enemy)) continue;
+    for (const t of troopsNear(s, a, provId).filter(x => x.str >= 50).sort((x, y) => troopPower(y) - troopPower(x))) {
+      if (out.length >= ALLY_COMPANIES) return out;
+      out.push({ ...toBattleUnits([t])[0], ally: a });
+    }
+  }
+  return out;
+}
+/** After the battle the lent companies go home as they are. Returns a line for the report. */
+function syncAllies(s: GameState, side: BattleSide): string | null {
+  const lent = side.units.filter(u => u.ally);
+  if (!lent.length) return null;
+  for (const u of lent) {
+    const nat = s.nations[u.ally!], card = nat?.army.find(t => t.uid === u.uid);
+    if (!nat || !card) continue;
+    if (u.str < 8) nat.army = nat.army.filter(t => t.uid !== u.uid); else { card.str = Math.round(u.str); card.fought = turnNo(s); }
+  }
+  const who = [...new Set(lent.map(u => nationName(s, u.ally!)))];
+  return `${lent.length === 1 ? 'A company' : `${lent.length} companies`} of ${who.join(' and ')} fought beside you.`;
 }
 
 export function transferProvince(s: GameState, provId: string, to: string) {
@@ -311,12 +397,16 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
   }
 
   const playerWon = (b.playerSide === 'att') === attWon;
-  const res = syncPlayerTroops(s, pSide, playerWon);
+  const res = syncPlayerTroops(s, pSide, playerWon, !!b.retreated);
+  const lent = syncAllies(s, pSide);
   if (!b.def.player || b.context !== 'rebels') syncAITroops(s, eSide, !playerWon);
   if (b.context === 'rebels' && b.att.player === false) { /* rebels vanish */ }
 
   const gen = pSide.general?.uid != null ? s.characters.find(c => c.uid === pSide.general!.uid) : undefined;
   if (gen) { if (playerWon) gen.wins = (gen.wins ?? 0) + 1; else gen.losses = (gen.losses ?? 0) + 1; }
+  if (gen && playerWon && !gen.ruler) addLoyalty(gen, wishOf(gen) === 'glory' ? 6 : 3); // victory binds a general to the crown
+  const fate = commanderFate(s, eSide, playerWon);
+  if (fate) lines.push(fate);
   if (gen && playerWon) { gen.xp++; if (gen.xp >= 3) { gen.xp = 0; if (promoteRarity(s, gen)) lines.push(`${gen.name} rises to ${gen.rarity}.`); } }
 
   const me = player(s);
@@ -346,6 +436,9 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
       me.prestige += hasCore(s, 'expansion') ? 10 : 5;
       lines.push(`${prov.name} now belongs to ${me.name}. Prestige +5.`);
       good = true;
+    } else if (b.retreated) {
+      title = `Withdrawal from ${prov.name}`;
+      lines.push('The army breaks off and falls back in good order. No stability is lost.');
     } else {
       title = `Defeat at ${prov.name}`;
       lines.push(`The army falls back. Stability −${me.ruler.traits.includes('Reckless') ? 2 : 1}.`);
@@ -359,7 +452,8 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
       title = `Raid on ${prov.name}`;
       lines.push(`Your soldiers return with ${loot} ducats of plunder.`);
       good = true;
-    } else { title = `Raid on ${prov.name} repulsed`; lines.push('The raiders are driven off.'); }
+    } else if (b.retreated) { title = `Raid on ${prov.name} called off`; lines.push('The raiders turn for home before it grows worse.'); }
+    else { title = `Raid on ${prov.name} repulsed`; lines.push('The raiders are driven off.'); }
   } else if (b.context === 'defend' && b.camp) {
     title = playerWon ? 'The camp holds' : 'The camp is overrun';
     good = playerWon;
@@ -391,6 +485,8 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
     }
     else { title = 'The rebels triumph'; me.gold = Math.max(0, me.gold - 30); prov.control = Math.min(prov.control, 10); me.stability = clamp(me.stability - 1, -3, 3); lines.push('The rebels loot the treasury (−30 ducats) and the province defies you.'); }
   }
+  if (b.retreated && b.context !== 'conquer' && b.context !== 'raid') lines.push('Your companies withdrew in good order.');
+  if (lent) lines.push(lent);
   if (res.lost.length) lines.push(`Lost: ${res.lost.join(', ')}.`);
   if (res.promoted.length) lines.push(`Veterans: ${res.promoted.join(', ')} gain a star.`);
   if (b.missionId != null) {

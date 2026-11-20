@@ -1,14 +1,15 @@
 // SVG map with pan, pinch-zoom and tap-to-select.
+import { terrainOf } from '../data/terrain';
 import type { GameState } from '../types';
 import { getGeo } from '../engine/map';
-import { atWar, provsOf, population } from '../engine/core';
+import { atWar, provsOf, population, getRel, hasTreaty } from '../engine/core';
 import { provKnown } from '../engine/overseas';
 import { happinessOf } from '../engine/society';
 import { NO_STATE } from '../data/nations';
 
-export type MapMode = 'political' | 'culture' | 'religion' | 'goods' | 'happiness' | 'population';
+export type MapMode = 'political' | 'relations' | 'culture' | 'religion' | 'goods' | 'happiness' | 'population';
 export const MAP_MODES: { id: MapMode; name: string; icon: string }[] = [
-  { id: 'political', name: 'Realms', icon: 'crown' }, { id: 'culture', name: 'Culture', icon: 'scroll' },
+  { id: 'political', name: 'Realms', icon: 'crown' }, { id: 'relations', name: 'Relations', icon: 'hands' }, { id: 'culture', name: 'Culture', icon: 'scroll' },
   { id: 'religion', name: 'Religion', icon: 'church' }, { id: 'goods', name: 'Raw materials', icon: 'anvil' },
   { id: 'happiness', name: 'Happiness', icon: 'mood' }, { id: 'population', name: 'Population', icon: 'people' },
 ];
@@ -16,12 +17,30 @@ export const RELIGION_COLORS: Record<string, string> = {
   catholic: '#d9c27a', protestant: '#5b8fc9', orthodox: '#9a6ac0', coptic: '#b07a4a', muslim: '#3f9a5a', hindu: '#e08a3a',
   buddhist: '#e0c040', confucian: '#c05050', shinto: '#e06a8a', animist: '#8a7a5a', nahuatl: '#3aa0a0', inti: '#e0a020',
 };
+/** How a realm stands towards the player, for the relations view: the same words the diplomacy screens use. */
+export type Stance = 'mine' | 'subject' | 'ally' | 'friendly' | 'neutral' | 'hostile' | 'war' | 'none';
+export const STANCE: Record<Stance, { name: string; color: string }> = {
+  mine: { name: 'your realm', color: '#3f5f8f' }, subject: { name: 'your subject', color: '#8fa8cf' }, ally: { name: 'ally', color: '#2e6b34' },
+  friendly: { name: 'friendly (30 or more)', color: '#9cc09a' }, neutral: { name: 'neutral', color: '#ddd5c0' },
+  hostile: { name: 'hostile (−30 or less)', color: '#e0a070' }, war: { name: 'at war', color: '#b3261e' }, none: { name: 'no state', color: '#cfc6ad' },
+};
+export function stanceOf(s: GameState, n: string): Stance {
+  if (n === s.player) return 'mine';
+  if (n === NO_STATE || !s.nations[n]?.alive) return 'none';
+  if (atWar(s, s.player, n)) return 'war';
+  if (s.nations[n].overlord === s.player) return 'subject';
+  if (hasTreaty(s, s.player, n, 'alliance')) return 'ally';
+  const rel = getRel(s, s.player, n);
+  return rel >= 30 ? 'friendly' : rel <= -30 ? 'hostile' : 'neutral';
+}
 const hue = (k: string) => { let x = 7; for (const c of k) x = (x * 31 + c.charCodeAt(0)) % 997; return `hsl(${(x * 47) % 360} 42% ${48 + (x % 3) * 8}%)`; };
 const ramp = (t: number) => `hsl(${Math.round(4 + t * 116)} 55% ${44 + Math.round(t * 6)}%)`; // red → green
 import { MISSION_INFO } from '../engine/missions';
 import { icon, iconPath } from './icons';
 import { GOODS, RAW } from '../data/goods';
 
+/** Screen pixels per map unit below which the map shows realm names instead of province names. */
+const REALM_VIEW = 1.3;
 const NS = 'http://www.w3.org/2000/svg';
 const svgEl = (tag: string, attrs: Record<string, string | number> = {}) => {
   const e = document.createElementNS(NS, tag);
@@ -31,7 +50,7 @@ const svgEl = (tag: string, attrs: Record<string, string | number> = {}) => {
 
 /** A pale watercolour wash of a realm's colour: mixed toward the paper, so the map reads like an engraved chart. */
 const WASH: Record<string, string> = {};
-function wash(hex: string, k: number): string {
+export function wash(hex: string, k: number): string {
   const key = hex + k;
   if (WASH[key]) return WASH[key];
   const m = /^#?([0-9a-f]{6})$/i.exec(hex);
@@ -43,6 +62,45 @@ function wash(hex: string, k: number): string {
 
 /** The coastline to ink. Skips edges that are not real coast: flat edges where the map data is cut off at the top,
  *  and long closing jumps of outlines that were cut there. Filling still uses the full outline. */
+/** How pale the player's own land is washed (0 the full colour, 1 paper): paler than it was, now that a band of
+ *  the full colour runs along the inside of the border (others are at 0.42). */
+const MINE_WASH = 0.3;
+/** Map units one tile of paper grain covers, and the tile's size in pixels. */
+const GRAIN_UNITS = 150, GRAIN_PX = 256;
+/** A tile of paper grain: faint dark and light specks and a few fibres, the same every time. */
+function grainTile(): string | null {
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = GRAIN_PX;
+    const x = c.getContext('2d');
+    if (!x) return null;
+    let seed = 7;
+    const r = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const img = x.createImageData(GRAIN_PX, GRAIN_PX);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const v = r(), dark = v < 0.5;
+      img.data[i] = dark ? 60 : 255; img.data[i + 1] = dark ? 44 : 250; img.data[i + 2] = dark ? 28 : 235;
+      img.data[i + 3] = Math.round(Math.abs(v - 0.5) ** 1.6 * 2 * 52);
+    }
+    x.putImageData(img, 0, 0);
+    x.strokeStyle = 'rgba(70,52,34,.10)'; x.lineWidth = 0.7;
+    for (let i = 0; i < 70; i++) { // fibres, drawn twice across the edge so the tile repeats without a seam
+      const fx = r() * GRAIN_PX, fy = r() * GRAIN_PX, a = r() * Math.PI, len = 4 + r() * 12;
+      for (const [ox, oy] of [[0, 0], [-GRAIN_PX, 0], [0, -GRAIN_PX]]) { x.beginPath(); x.moveTo(fx + ox, fy + oy); x.lineTo(fx + ox + Math.cos(a) * len, fy + oy + Math.sin(a) * len); x.stroke(); }
+    }
+    return c.toDataURL('image/png');
+  } catch { return null; }
+}
+/** Ink marks for the ground, drawn in a 24-unit box. Only M, L and Q with every point written "x y", so a mark
+ *  can be moved and sized by rewriting its numbers. */
+const TERRAIN_MARKS: Record<string, string> = {
+  forest: 'M7 3 L2.5 13 L11.5 13 L7 3 M7 13 L7 18 M17 8 L13.5 16 L20.5 16 L17 8 M17 16 L17 20',
+  hills: 'M1 17 Q7 5 13 17 M10 17 Q16 8 23 17 M5 13 L6.5 16 M15.5 13.5 L17 16',
+  mountains: 'M1 20 L9 4 L13.5 12 M11 20 L16.5 9 L23 20 M9 4 L10 11 L8 14 M16.5 9 L17.5 14',
+  desert: 'M1 14 Q6.5 7 12 14 Q17.5 7 23 14 M5 19 L5.4 19 M12 18 L12.4 18 M19 19 L19.4 19',
+};
+const hashStr = (t: string) => { let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+
 function coastLine(d: string): string {
   let px = 0, py = 0, sx = 0, sy = 0;
   const flatTop = (x: number, y: number) => y < 210 && Math.abs(x - px) > 20 && Math.abs(y - py) < (y < 20 ? 3 : 0.6);
@@ -67,6 +125,22 @@ export class MapView {
   private size: Record<string, number> = {};
   private lastPx = 0;
   cells: Record<string, SVGPathElement> = {};
+  /** Realm borders: one heavy line per landmass, over the hairlines between provinces. */
+  private edgeEls: Record<string, SVGPathElement> = {};
+  private byLand: Record<string, string[]> = {};
+  private edgeD: Record<string, string> = {};
+  /** The player's realm: a watercolour band along the inside of its border, one per landmass. */
+  private mineG: SVGGElement;
+  private mineKey = '';
+  /** Ink symbols for the ground of each province, drawn once the first game is shown. */
+  private terrainG: SVGGElement;
+  private ter: Record<string, SVGPathElement> = {};
+  private terBuilt = false;
+  private landEl: Record<string, SVGPathElement> = {};
+  /** Realm names written across their lands, for the far view. */
+  private rlabels: SVGGElement;
+  private rsize = new Map<SVGTextElement, number>();
+  private owners = '';
   labels: Record<string, SVGTextElement> = {};
   marks: SVGGElement;
   gicons: Record<string, SVGGElement> = {};
@@ -113,7 +187,11 @@ export class MapView {
     }
     this.svg.append(rh);
     // land shadow
-    for (const d of Object.values(g.landPaths)) this.svg.append(svgEl('path', { d, class: 'land-shadow', 'fill-rule': 'evenodd' }));
+    for (const [lid, d] of Object.entries(g.landPaths)) {
+      const sh = svgEl('path', { d, class: 'land-shadow', 'fill-rule': 'evenodd' }) as SVGPathElement;
+      this.landEl[lid] = sh;
+      this.svg.append(sh);
+    }
     // provinces
     const byLand: Record<string, string[]> = {};
     for (const [id, l] of Object.entries(g.land)) (byLand[l] ??= []).push(id);
@@ -126,7 +204,42 @@ export class MapView {
       }
       this.svg.append(grp);
     }
+    this.byLand = byLand;
+    // paper grain over the land: one small tile, made once, repeated
+    const tile = grainTile();
+    if (tile) {
+      const pat = svgEl('pattern', { id: 'grain', patternUnits: 'userSpaceOnUse', width: GRAIN_UNITS, height: GRAIN_UNITS });
+      pat.append(svgEl('image', { href: tile, width: GRAIN_UNITS, height: GRAIN_UNITS, preserveAspectRatio: 'none' }));
+      defs.append(pat);
+      for (const d of Object.values(g.landPaths)) this.svg.append(svgEl('path', { d, class: 'grain', 'fill-rule': 'evenodd' }));
+    }
+    this.mineG = svgEl('g', { class: 'mine-bands' }) as SVGGElement;
+    this.svg.append(this.mineG);
+    // the borders between neighbours, cut out of the cells once: the points two cells have in common
+    const ring: Record<string, string[]> = {};
+    const pts = (id: string) => (ring[id] ??= g.cells[id].replace(/^M|Z$/g, '').split('L'));
+    for (const [a, nbs] of Object.entries(g.adj)) for (const b of nbs) {
+      if (a >= b) continue;
+      const ra = pts(a), inB = new Set(pts(b)), n = ra.length;
+      let start = -1;
+      for (let i = 0; i < n; i++) if (inB.has(ra[i]) && !inB.has(ra[(i + n - 1) % n])) { start = i; break; }
+      if (start < 0) continue;
+      const run: string[] = [];
+      for (let i = start; run.length < n && inB.has(ra[i % n]); i++) run.push(ra[i % n]);
+      if (run.length >= 2) this.edgeD[a + '|' + b] = 'M' + run.join('L');
+    }
+    for (const [lid, ids] of Object.entries(byLand)) {
+      if (ids.length < 2) continue;
+      const grp = svgEl('g', { 'clip-path': `url(#clip-${lid})`, class: 'edges' });
+      const e = svgEl('path', { class: 'realm-edge' }) as SVGPathElement;
+      this.edgeEls[lid] = e;
+      grp.append(e);
+      this.svg.append(grp);
+    }
     for (const d of Object.values(g.landPaths)) this.svg.append(svgEl('path', { d: coastLine(d), class: 'coast', 'fill-rule': 'evenodd' }));
+    // the ground: one small path of ink marks for each province that is not open country (see buildTerrain)
+    this.terrainG = svgEl('g', { class: 'terrain' }) as SVGGElement;
+    this.svg.append(this.terrainG);
     const lab = svgEl('g', { class: 'labels' });
     for (const [id, [x, y]] of Object.entries(g.center)) {
       const t = svgEl('text', { x, y: y + 3, class: 'plabel' }) as SVGTextElement;
@@ -138,6 +251,8 @@ export class MapView {
       lab.append(t);
     }
     this.svg.append(lab);
+    this.rlabels = svgEl('g', { class: 'rlabels' }) as SVGGElement;
+    this.svg.append(this.rlabels);
     // raw-material icons, shown on the goods map
     for (const g of Object.values(GOODS)) {
       const sym = svgEl('symbol', { id: 'gi-' + g.id, viewBox: '0 0 24 24' });
@@ -191,7 +306,9 @@ export class MapView {
     // only what is on screen (with a margin) is drawn
     const g = getGeo();
     const mx = w * 0.15, my = h * 0.15;
-    const far = pxPerUnit < 0.9;
+    const far = pxPerUnit < REALM_VIEW; // from here out, realm names take over from province names
+    this.svg.classList.toggle('realm-view', far);
+    for (const [t, fs] of this.rsize) { const px = fs * pxPerUnit; t.classList.toggle('off', !far || px < 10.5 || px > 72); }
     const goods = this.mode === 'goods';
     for (const [id, [cx, cy]] of Object.entries(g.center)) {
       const on = cx > x - mx && cx < x + w + mx && cy > y - my && cy < y + h + my;
@@ -342,6 +459,47 @@ export class MapView {
     return target?.getAttribute('data-id') ?? null;
   }
 
+  /** Write each realm's name once across the largest piece of its land, along the land's longer axis. */
+  private nameRealms(s: GameState, seen: (id: string) => boolean) {
+    const g = getGeo();
+    while (this.rlabels.firstChild) this.rlabels.removeChild(this.rlabels.firstChild);
+    this.rsize.clear();
+    const lands: Record<string, string[]> = {};
+    for (const p of Object.values(s.provinces)) if (p.owner !== NO_STATE && s.nations[p.owner]?.alive && seen(p.id)) (lands[p.owner] ??= []).push(p.id);
+    for (const [owner, ids] of Object.entries(lands)) {
+      // the largest group of provinces that touch each other
+      const left = new Set(ids); let best: string[] = [];
+      while (left.size) {
+        const first = left.values().next().value as string; left.delete(first);
+        const comp = [first];
+        for (let i = 0; i < comp.length; i++) for (const nb of g.adj[comp[i]]) if (left.has(nb)) { left.delete(nb); comp.push(nb); }
+        if (comp.length > best.length) best = comp;
+      }
+      const cs = best.map(id => g.center[id]);
+      const mx = cs.reduce((a, c) => a + c[0], 0) / cs.length, my = cs.reduce((a, c) => a + c[1], 0) / cs.length;
+      let sxx = 0, syy = 0, sxy = 0;
+      for (const [x, y] of cs) { sxx += (x - mx) ** 2; syy += (y - my) ** 2; sxy += (x - mx) * (y - my); }
+      let ang = cs.length > 1 ? 0.5 * Math.atan2(2 * sxy, sxx - syy) : 0;
+      ang = Math.max(-0.9, Math.min(0.9, ang)); // never steeper than about 50°: the name must stay easy to read
+      const ux = Math.cos(ang), uy = Math.sin(ang);
+      // how far the land reaches along the name and across it, with half a province of margin at each end
+      let lo = 0, hi = 0, across = 0;
+      best.forEach((id, i) => {
+        const dx = cs[i][0] - mx, dy = cs[i][1] - my, half = this.size[id] * 0.45;
+        lo = Math.min(lo, dx * ux + dy * uy - half); hi = Math.max(hi, dx * ux + dy * uy + half);
+        across = Math.max(across, Math.abs(-dx * uy + dy * ux) + half);
+      });
+      const name = s.nations[owner].name;
+      const fs = Math.min(((hi - lo) * 0.82) / (name.length * 0.74), across * 0.7, 80);
+      if (fs < 3) continue;
+      const cx = mx + ((lo + hi) / 2) * ux, cy = my + ((lo + hi) / 2) * uy;
+      const t = svgEl('text', { x: cx.toFixed(1), y: cy.toFixed(1), class: 'rlabel off' + (owner === s.player && !this.revealAll ? ' mine' : ''), 'font-size': fs.toFixed(1), transform: `rotate(${((ang * 180) / Math.PI).toFixed(1)} ${cx.toFixed(1)} ${cy.toFixed(1)})` }) as SVGTextElement;
+      t.textContent = name;
+      this.rsize.set(t, fs);
+      this.rlabels.append(t);
+    }
+  }
+
   setPick(on: boolean, targets: Iterable<string> = []) {
     this.pickMode = on;
     this.targets = new Set(on ? targets : []);
@@ -353,6 +511,7 @@ export class MapView {
 
   private fill(s: GameState, p: GameState['provinces'][string], maxPop: number): string | null {
     switch (this.mode) {
+      case 'relations': return STANCE[stanceOf(s, p.owner)].color;
       case 'culture': return hue(p.culture);
       case 'religion': return RELIGION_COLORS[p.religion] ?? hue(p.religion);
       case 'goods': return GOODS[p.good]?.color ?? hue(p.good);
@@ -362,8 +521,79 @@ export class MapView {
     }
   }
 
+  /** Two or three small ink marks in every province that is not open ground: trees, humps, peaks or dunes. */
+  private buildTerrain(s: GameState) {
+    const g = getGeo();
+    this.terBuilt = true;
+    for (const [id, p] of Object.entries(s.provinces)) {
+      const kind = terrainOf(p), c = g.center[id];
+      if (kind === 'plains' || !c || !g.cells[id]) continue;
+      const ring = g.cells[id].replace(/^M|Z$/g, '').split('L').map(q => q.split(',').map(Number));
+      // a cell reaches out into the sea and is cut to the coast when drawn, so a mark must be on the land as well
+      const land = this.landEl[g.land[id]];
+      const ashore = (x: number, y: number) => { try { return !land?.isPointInFill || land.isPointInFill(new DOMPoint(x, y)); } catch { return true; } };
+      const inside = (x: number, y: number) => {
+        if (!ashore(x, y)) return false;
+        let ok = false;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+          const [xi, yi] = ring[i], [xj, yj] = ring[j];
+          if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) ok = !ok;
+        }
+        return ok;
+      };
+      const size = this.size[id], w = Math.max(5.5, Math.min(15, size * 0.23));
+      let d = '';
+      // above and below the name, a little off the regular so it reads as drawn by hand
+      const h = hashStr(id);
+      const spots: [number, number][] = [[-0.24, -0.22], [0.22, -0.27], [0.03, 0.25], [-0.3, 0.12], [0.31, 0.1]];
+      const n = size > 90 ? 5 : size > 50 ? 3 : 2;
+      for (let i = 0; i < n; i++) {
+        const jx = (((h >> (i * 5)) & 15) / 15 - 0.5) * 0.1, jy = (((h >> (i * 5 + 2)) & 15) / 15 - 0.5) * 0.08;
+        const x = c[0] + (spots[i][0] + jx) * size, y = c[1] + (spots[i][1] + jy) * size * 0.62;
+        if (!inside(x, y) || !inside(x - w / 2, y) || !inside(x + w / 2, y)) continue;
+        const k = w / 24, ox = x - w / 2, oy = y - w / 2;
+        d += TERRAIN_MARKS[kind].replace(/(-?[\d.]+) (-?[\d.]+)/g, (_m, a: string, b: string) => `${(ox + +a * k).toFixed(1)} ${(oy + +b * k).toFixed(1)}`);
+      }
+      if (!d) continue;
+      // one element for each province, not one for the world: the browser then skips what is off screen
+      const el = svgEl('path', { d, class: 'ter t-' + kind }) as SVGPathElement;
+      this.ter[id] = el;
+      this.terrainG.append(el);
+    }
+  }
+
+  /** A band of the realm's colour along the inside of the player's border, like a wash laid against an ink line.
+   *  The border is stroked wide and then cut to the realm's own land, so only the inner half is seen. */
+  private mineBand(s: GameState) {
+    const g = getGeo();
+    const mine = this.revealAll ? [] : Object.values(s.provinces).filter(p => p.owner === s.player).map(p => p.id);
+    const key = mine.join(',');
+    if (key === this.mineKey) return;
+    this.mineKey = key;
+    const defs = this.svg.querySelector('defs')!;
+    defs.querySelectorAll('.clip-mine').forEach(e => e.remove());
+    while (this.mineG.firstChild) this.mineG.removeChild(this.mineG.firstChild);
+    const lands: Record<string, string[]> = {};
+    for (const id of mine) (lands[g.land[id]] ??= []).push(id);
+    const own = new Set(mine);
+    for (const [lid, ids] of Object.entries(lands)) {
+      const cp = svgEl('clipPath', { id: 'clip-mine-' + lid, class: 'clip-mine' });
+      cp.append(svgEl('path', { d: ids.map(id => g.cells[id]).join('') }));
+      defs.append(cp);
+      let d = '';
+      for (const a of ids) for (const b of g.adj[a]) if (!own.has(b)) d += this.edgeD[a < b ? a + '|' + b : b + '|' + a] ?? '';
+      const grp = svgEl('g', { 'clip-path': `url(#clip-${lid})` });
+      // the coast of this land too: cut to the realm's provinces, only its own shore is washed
+      grp.append(svgEl('path', { d: d + coastLine(g.landPaths[lid]), class: 'mine-band', 'clip-path': `url(#clip-mine-${lid})`, style: `stroke:${s.nations[s.player].color}` }));
+      this.mineG.append(grp);
+    }
+  }
+
   render(s: GameState) {
     const g = getGeo();
+    if (!this.terBuilt) this.buildTerrain(s);
+    this.mineBand(s);
+    const dirty = new Set<string>();
     let maxPop = 1;
     if (this.mode === 'population') for (const p of Object.values(s.provinces)) maxPop = Math.max(maxPop, population(s, p));
     for (const [id, p] of Object.entries(s.provinces)) {
@@ -376,8 +606,11 @@ export class MapView {
       const key = `${known ? 1 : 0}|${p.owner}|${p.name}|${occ ? p.occupiedFrom : ''}|${this.mode}|${this.picked}|${this.realm}|${this.revealAll ? 1 : 0}|${p.control < 30 ? 1 : 0}|${this.mode === 'political' ? '' : this.fill(s, p, maxPop)}|${nat?.overlord === s.player ? 1 : 0}|${nat?.capital === id ? 1 : 0}|${p.owner !== s.player && atWar(s, s.player, p.owner) ? 1 : 0}|${p.good}|${nat?.color}`;
       if (this.paint.get(id) === key) continue;
       this.paint.set(id, key);
+      dirty.add(g.land[id]);
       c.classList.toggle('fog', !known);
       if (lbl.textContent !== (known ? p.name : '')) { lbl.textContent = known ? p.name : ''; this.shown.delete(id); }
+      const ter = this.ter[id];
+      if (ter) ter.style.display = known ? '' : 'none';
       const gi = this.gicons[id];
       if (gi) {
         gi.style.display = known && GOODS[p.good] ? '' : 'none';
@@ -385,7 +618,7 @@ export class MapView {
       }
       if (!known) { c.style.fill = ''; for (const k of ['mine', 'subject', 'enemy', 'unrest', 'native']) c.classList.remove(k); continue; }
       const occupied = this.mode === 'political' && p.occupiedFrom && s.nations[p.occupiedFrom]?.alive && atWar(s, p.owner, p.occupiedFrom);
-      c.style.fill = occupied ? `url(#${this.stripes(nat?.color ?? '#777', s.nations[p.occupiedFrom!].color, p.owner + '_' + p.occupiedFrom)})` : this.fill(s, p, maxPop) ?? wash(nat?.color ?? '#777', p.owner === s.player || p.owner === this.picked ? 0.12 : 0.42);
+      c.style.fill = occupied ? `url(#${this.stripes(nat?.color ?? '#777', s.nations[p.occupiedFrom!].color, p.owner + '_' + p.occupiedFrom)})` : this.fill(s, p, maxPop) ?? wash(nat?.color ?? '#777', p.owner === this.picked ? 0.12 : p.owner === s.player && !this.revealAll ? MINE_WASH : 0.42);
       const pol = this.mode === 'political';
       c.classList.toggle('native', p.owner === NO_STATE && pol);
       c.classList.toggle('mine', !this.revealAll && p.owner === s.player);
@@ -395,6 +628,21 @@ export class MapView {
       c.classList.toggle('unrest', pol && p.owner === s.player && p.control < 30);
       lbl.classList.toggle('cap', nat?.capital === id);
     }
+    const seen = (id: string) => this.revealAll || provKnown(s, id);
+    // realm borders, for the lands where something changed
+    for (const lid of dirty) {
+      const el = this.edgeEls[lid];
+      if (!el) continue;
+      let d = '';
+      for (const a of this.byLand[lid]) for (const b of g.adj[a]) {
+        if (a >= b || s.provinces[a].owner === s.provinces[b].owner || !(seen(a) || seen(b))) continue;
+        d += this.edgeD[a + '|' + b] ?? '';
+      }
+      el.setAttribute('d', d);
+    }
+    // realm names: written again only when land has changed hands or come into view
+    const owners = Object.values(s.provinces).map(p => (seen(p.id) ? p.owner : '')).join(',');
+    if (owners !== this.owners) { this.owners = owners; this.nameRealms(s, seen); }
     // mission markers and capitals
     while (this.marks.firstChild) this.marks.removeChild(this.marks.firstChild);
     for (const n of Object.values(s.nations)) {
@@ -465,6 +713,7 @@ export function legendFor(s: GameState, mode: MapMode): LegendItem[] {
     for (const p of Object.values(s.provinces)) if (provKnown(s, p.id)) c[f(p)] = (c[f(p)] ?? 0) + 1;
     return Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k]) => k);
   };
+  if (mode === 'relations') return (Object.keys(STANCE) as Stance[]).filter(k => k !== 'none').map(k => ({ color: STANCE[k].color, label: STANCE[k].name }));
   if (mode === 'religion') return count(p => p.religion).map(k => ({ color: RELIGION_COLORS[k] ?? hue(k), label: k }));
   if (mode === 'goods') return RAW.map(k => ({ color: GOODS[k].color, label: k, icon: GOODS[k].icon }));
   if (mode === 'happiness') return [{ color: ramp(0), label: 'angry' }, { color: ramp(0.5), label: 'restless' }, { color: ramp(1), label: 'joyful' }, { color: '#8a8478', label: 'not yours' }];

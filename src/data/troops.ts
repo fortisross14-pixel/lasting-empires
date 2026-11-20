@@ -84,6 +84,10 @@ export const RECIPES: Recipe[] = [
 
 export interface TacticDef { id: string; name: string; desc: string; counteredBy: string[]; needs?: 'cav' | 'shot' | 'art' | 'pike'; naval?: boolean; }
 
+/** What a general's character makes him reach for: he chooses it this often when his army can do it. */
+export const TRAIT_TACTIC_CHANCE = 0.5;
+export const TRAIT_TACTIC: Record<string, string[]> = { bold: ['charge', 'flank'], cautious: ['hold'], gunner: ['volley', 'barrage'], cunning: ['flank'], siegemaster: ['barrage', 'volley'] };
+
 export const TACTICS: Record<string, TacticDef> = {
   volley:  { id: 'volley', name: 'Volley Fire', desc: 'Fire ×1.7', counteredBy: ['charge'], needs: 'shot' },
   charge:  { id: 'charge', name: 'Cavalry Charge', desc: 'Cavalry melee ×2, foot ×1.2', counteredBy: ['pike'], needs: 'cav' },
