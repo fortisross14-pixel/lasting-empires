@@ -1,4 +1,5 @@
 // SVG map with pan, pinch-zoom and tap-to-select.
+import { terrainOf } from '../data/terrain';
 import type { GameState } from '../types';
 import { getGeo } from '../engine/map';
 import { atWar, provsOf, population, getRel, hasTreaty } from '../engine/core';
@@ -61,6 +62,45 @@ export function wash(hex: string, k: number): string {
 
 /** The coastline to ink. Skips edges that are not real coast: flat edges where the map data is cut off at the top,
  *  and long closing jumps of outlines that were cut there. Filling still uses the full outline. */
+/** How pale the player's own land is washed (0 the full colour, 1 paper): paler than it was, now that a band of
+ *  the full colour runs along the inside of the border (others are at 0.42). */
+const MINE_WASH = 0.3;
+/** Map units one tile of paper grain covers, and the tile's size in pixels. */
+const GRAIN_UNITS = 150, GRAIN_PX = 256;
+/** A tile of paper grain: faint dark and light specks and a few fibres, the same every time. */
+function grainTile(): string | null {
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = GRAIN_PX;
+    const x = c.getContext('2d');
+    if (!x) return null;
+    let seed = 7;
+    const r = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const img = x.createImageData(GRAIN_PX, GRAIN_PX);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const v = r(), dark = v < 0.5;
+      img.data[i] = dark ? 60 : 255; img.data[i + 1] = dark ? 44 : 250; img.data[i + 2] = dark ? 28 : 235;
+      img.data[i + 3] = Math.round(Math.abs(v - 0.5) ** 1.6 * 2 * 52);
+    }
+    x.putImageData(img, 0, 0);
+    x.strokeStyle = 'rgba(70,52,34,.10)'; x.lineWidth = 0.7;
+    for (let i = 0; i < 70; i++) { // fibres, drawn twice across the edge so the tile repeats without a seam
+      const fx = r() * GRAIN_PX, fy = r() * GRAIN_PX, a = r() * Math.PI, len = 4 + r() * 12;
+      for (const [ox, oy] of [[0, 0], [-GRAIN_PX, 0], [0, -GRAIN_PX]]) { x.beginPath(); x.moveTo(fx + ox, fy + oy); x.lineTo(fx + ox + Math.cos(a) * len, fy + oy + Math.sin(a) * len); x.stroke(); }
+    }
+    return c.toDataURL('image/png');
+  } catch { return null; }
+}
+/** Ink marks for the ground, drawn in a 24-unit box. Only M, L and Q with every point written "x y", so a mark
+ *  can be moved and sized by rewriting its numbers. */
+const TERRAIN_MARKS: Record<string, string> = {
+  forest: 'M7 3 L2.5 13 L11.5 13 L7 3 M7 13 L7 18 M17 8 L13.5 16 L20.5 16 L17 8 M17 16 L17 20',
+  hills: 'M1 17 Q7 5 13 17 M10 17 Q16 8 23 17 M5 13 L6.5 16 M15.5 13.5 L17 16',
+  mountains: 'M1 20 L9 4 L13.5 12 M11 20 L16.5 9 L23 20 M9 4 L10 11 L8 14 M16.5 9 L17.5 14',
+  desert: 'M1 14 Q6.5 7 12 14 Q17.5 7 23 14 M5 19 L5.4 19 M12 18 L12.4 18 M19 19 L19.4 19',
+};
+const hashStr = (t: string) => { let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+
 function coastLine(d: string): string {
   let px = 0, py = 0, sx = 0, sy = 0;
   const flatTop = (x: number, y: number) => y < 210 && Math.abs(x - px) > 20 && Math.abs(y - py) < (y < 20 ? 3 : 0.6);
@@ -89,6 +129,14 @@ export class MapView {
   private edgeEls: Record<string, SVGPathElement> = {};
   private byLand: Record<string, string[]> = {};
   private edgeD: Record<string, string> = {};
+  /** The player's realm: a watercolour band along the inside of its border, one per landmass. */
+  private mineG: SVGGElement;
+  private mineKey = '';
+  /** Ink symbols for the ground of each province, drawn once the first game is shown. */
+  private terrainG: SVGGElement;
+  private ter: Record<string, SVGPathElement> = {};
+  private terBuilt = false;
+  private landEl: Record<string, SVGPathElement> = {};
   /** Realm names written across their lands, for the far view. */
   private rlabels: SVGGElement;
   private rsize = new Map<SVGTextElement, number>();
@@ -139,7 +187,11 @@ export class MapView {
     }
     this.svg.append(rh);
     // land shadow
-    for (const d of Object.values(g.landPaths)) this.svg.append(svgEl('path', { d, class: 'land-shadow', 'fill-rule': 'evenodd' }));
+    for (const [lid, d] of Object.entries(g.landPaths)) {
+      const sh = svgEl('path', { d, class: 'land-shadow', 'fill-rule': 'evenodd' }) as SVGPathElement;
+      this.landEl[lid] = sh;
+      this.svg.append(sh);
+    }
     // provinces
     const byLand: Record<string, string[]> = {};
     for (const [id, l] of Object.entries(g.land)) (byLand[l] ??= []).push(id);
@@ -153,6 +205,16 @@ export class MapView {
       this.svg.append(grp);
     }
     this.byLand = byLand;
+    // paper grain over the land: one small tile, made once, repeated
+    const tile = grainTile();
+    if (tile) {
+      const pat = svgEl('pattern', { id: 'grain', patternUnits: 'userSpaceOnUse', width: GRAIN_UNITS, height: GRAIN_UNITS });
+      pat.append(svgEl('image', { href: tile, width: GRAIN_UNITS, height: GRAIN_UNITS, preserveAspectRatio: 'none' }));
+      defs.append(pat);
+      for (const d of Object.values(g.landPaths)) this.svg.append(svgEl('path', { d, class: 'grain', 'fill-rule': 'evenodd' }));
+    }
+    this.mineG = svgEl('g', { class: 'mine-bands' }) as SVGGElement;
+    this.svg.append(this.mineG);
     // the borders between neighbours, cut out of the cells once: the points two cells have in common
     const ring: Record<string, string[]> = {};
     const pts = (id: string) => (ring[id] ??= g.cells[id].replace(/^M|Z$/g, '').split('L'));
@@ -175,6 +237,9 @@ export class MapView {
       this.svg.append(grp);
     }
     for (const d of Object.values(g.landPaths)) this.svg.append(svgEl('path', { d: coastLine(d), class: 'coast', 'fill-rule': 'evenodd' }));
+    // the ground: one small path of ink marks for each province that is not open country (see buildTerrain)
+    this.terrainG = svgEl('g', { class: 'terrain' }) as SVGGElement;
+    this.svg.append(this.terrainG);
     const lab = svgEl('g', { class: 'labels' });
     for (const [id, [x, y]] of Object.entries(g.center)) {
       const t = svgEl('text', { x, y: y + 3, class: 'plabel' }) as SVGTextElement;
@@ -456,8 +521,78 @@ export class MapView {
     }
   }
 
+  /** Two or three small ink marks in every province that is not open ground: trees, humps, peaks or dunes. */
+  private buildTerrain(s: GameState) {
+    const g = getGeo();
+    this.terBuilt = true;
+    for (const [id, p] of Object.entries(s.provinces)) {
+      const kind = terrainOf(p), c = g.center[id];
+      if (kind === 'plains' || !c || !g.cells[id]) continue;
+      const ring = g.cells[id].replace(/^M|Z$/g, '').split('L').map(q => q.split(',').map(Number));
+      // a cell reaches out into the sea and is cut to the coast when drawn, so a mark must be on the land as well
+      const land = this.landEl[g.land[id]];
+      const ashore = (x: number, y: number) => { try { return !land?.isPointInFill || land.isPointInFill(new DOMPoint(x, y)); } catch { return true; } };
+      const inside = (x: number, y: number) => {
+        if (!ashore(x, y)) return false;
+        let ok = false;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+          const [xi, yi] = ring[i], [xj, yj] = ring[j];
+          if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) ok = !ok;
+        }
+        return ok;
+      };
+      const size = this.size[id], w = Math.max(5.5, Math.min(15, size * 0.23));
+      let d = '';
+      // above and below the name, a little off the regular so it reads as drawn by hand
+      const h = hashStr(id);
+      const spots: [number, number][] = [[-0.24, -0.22], [0.22, -0.27], [0.03, 0.25], [-0.3, 0.12], [0.31, 0.1]];
+      const n = size > 90 ? 5 : size > 50 ? 3 : 2;
+      for (let i = 0; i < n; i++) {
+        const jx = (((h >> (i * 5)) & 15) / 15 - 0.5) * 0.1, jy = (((h >> (i * 5 + 2)) & 15) / 15 - 0.5) * 0.08;
+        const x = c[0] + (spots[i][0] + jx) * size, y = c[1] + (spots[i][1] + jy) * size * 0.62;
+        if (!inside(x, y) || !inside(x - w / 2, y) || !inside(x + w / 2, y)) continue;
+        const k = w / 24, ox = x - w / 2, oy = y - w / 2;
+        d += TERRAIN_MARKS[kind].replace(/(-?[\d.]+) (-?[\d.]+)/g, (_m, a: string, b: string) => `${(ox + +a * k).toFixed(1)} ${(oy + +b * k).toFixed(1)}`);
+      }
+      if (!d) continue;
+      // one element for each province, not one for the world: the browser then skips what is off screen
+      const el = svgEl('path', { d, class: 'ter t-' + kind }) as SVGPathElement;
+      this.ter[id] = el;
+      this.terrainG.append(el);
+    }
+  }
+
+  /** A band of the realm's colour along the inside of the player's border, like a wash laid against an ink line.
+   *  The border is stroked wide and then cut to the realm's own land, so only the inner half is seen. */
+  private mineBand(s: GameState) {
+    const g = getGeo();
+    const mine = this.revealAll ? [] : Object.values(s.provinces).filter(p => p.owner === s.player).map(p => p.id);
+    const key = mine.join(',');
+    if (key === this.mineKey) return;
+    this.mineKey = key;
+    const defs = this.svg.querySelector('defs')!;
+    defs.querySelectorAll('.clip-mine').forEach(e => e.remove());
+    while (this.mineG.firstChild) this.mineG.removeChild(this.mineG.firstChild);
+    const lands: Record<string, string[]> = {};
+    for (const id of mine) (lands[g.land[id]] ??= []).push(id);
+    const own = new Set(mine);
+    for (const [lid, ids] of Object.entries(lands)) {
+      const cp = svgEl('clipPath', { id: 'clip-mine-' + lid, class: 'clip-mine' });
+      cp.append(svgEl('path', { d: ids.map(id => g.cells[id]).join('') }));
+      defs.append(cp);
+      let d = '';
+      for (const a of ids) for (const b of g.adj[a]) if (!own.has(b)) d += this.edgeD[a < b ? a + '|' + b : b + '|' + a] ?? '';
+      const grp = svgEl('g', { 'clip-path': `url(#clip-${lid})` });
+      // the coast of this land too: cut to the realm's provinces, only its own shore is washed
+      grp.append(svgEl('path', { d: d + coastLine(g.landPaths[lid]), class: 'mine-band', 'clip-path': `url(#clip-mine-${lid})`, style: `stroke:${s.nations[s.player].color}` }));
+      this.mineG.append(grp);
+    }
+  }
+
   render(s: GameState) {
     const g = getGeo();
+    if (!this.terBuilt) this.buildTerrain(s);
+    this.mineBand(s);
     const dirty = new Set<string>();
     let maxPop = 1;
     if (this.mode === 'population') for (const p of Object.values(s.provinces)) maxPop = Math.max(maxPop, population(s, p));
@@ -474,6 +609,8 @@ export class MapView {
       dirty.add(g.land[id]);
       c.classList.toggle('fog', !known);
       if (lbl.textContent !== (known ? p.name : '')) { lbl.textContent = known ? p.name : ''; this.shown.delete(id); }
+      const ter = this.ter[id];
+      if (ter) ter.style.display = known ? '' : 'none';
       const gi = this.gicons[id];
       if (gi) {
         gi.style.display = known && GOODS[p.good] ? '' : 'none';
@@ -481,7 +618,7 @@ export class MapView {
       }
       if (!known) { c.style.fill = ''; for (const k of ['mine', 'subject', 'enemy', 'unrest', 'native']) c.classList.remove(k); continue; }
       const occupied = this.mode === 'political' && p.occupiedFrom && s.nations[p.occupiedFrom]?.alive && atWar(s, p.owner, p.occupiedFrom);
-      c.style.fill = occupied ? `url(#${this.stripes(nat?.color ?? '#777', s.nations[p.occupiedFrom!].color, p.owner + '_' + p.occupiedFrom)})` : this.fill(s, p, maxPop) ?? wash(nat?.color ?? '#777', p.owner === s.player || p.owner === this.picked ? 0.12 : 0.42);
+      c.style.fill = occupied ? `url(#${this.stripes(nat?.color ?? '#777', s.nations[p.occupiedFrom!].color, p.owner + '_' + p.occupiedFrom)})` : this.fill(s, p, maxPop) ?? wash(nat?.color ?? '#777', p.owner === this.picked ? 0.12 : p.owner === s.player && !this.revealAll ? MINE_WASH : 0.42);
       const pol = this.mode === 'political';
       c.classList.toggle('native', p.owner === NO_STATE && pol);
       c.classList.toggle('mine', !this.revealAll && p.owner === s.player);
@@ -491,8 +628,8 @@ export class MapView {
       c.classList.toggle('unrest', pol && p.owner === s.player && p.control < 30);
       lbl.classList.toggle('cap', nat?.capital === id);
     }
-    // realm borders, for the lands where something changed
     const seen = (id: string) => this.revealAll || provKnown(s, id);
+    // realm borders, for the lands where something changed
     for (const lid of dirty) {
       const el = this.edgeEls[lid];
       if (!el) continue;

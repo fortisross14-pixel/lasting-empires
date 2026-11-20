@@ -1977,3 +1977,12 @@ div.set-row { cursor: default; }
 .deeds b { display: inline-block; min-width: 3em; color: var(--muted); font-variant-numeric: lining-nums; font-weight: 600; }
 .att .relbar { height: 10px; border: 1px solid var(--text); border-radius: 0; background: linear-gradient(90deg, #b3261e55, transparent 45%, transparent 55%, #2e6b3455); }
 .att .relbar i { top: -3px; bottom: -3px; width: 3px; background: var(--text); border-radius: 0; }
+
+/* ---------- map: paper, ground and the player's wash (roadmap 2.4, 2.5) ---------- */
+#map .grain { fill: url(#grain); pointer-events: none; }
+#map .terrain { pointer-events: none; opacity: .62; }
+#map .ter { fill: none; stroke: #241c17; stroke-width: calc(var(--k, 1) * 1.2px); stroke-linecap: round; stroke-linejoin: round; }
+#map.realm-view .terrain, #map.moving .terrain { display: none; }
+#map .mine-band { fill: none; stroke-width: 12; stroke-opacity: .5; stroke-linejoin: round; vector-effect: non-scaling-stroke; pointer-events: none; }
+#map.zoom-far .mine-band { stroke-width: 7; }
+#map.picking .mine-bands { display: none; }
