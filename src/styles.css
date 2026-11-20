@@ -750,7 +750,7 @@ ul.traits { margin: 0; padding-left: 18px; }
 [data-style="chancery"] #map .rhumbs line.major { stroke: rgba(36, 28, 23, .16); }
 [data-style="chancery"] #map .rose { stroke: rgba(158, 31, 42, .45); } [data-style="chancery"] #map .rose-star { fill: rgba(158, 31, 42, .35); }
 [data-style="chancery"] #map .land-shadow { fill: #241c17; opacity: .14; }
-[data-style="chancery"] #map .prov { stroke: rgba(36, 28, 23, .7); fill-opacity: .78; }
+[data-style="chancery"] #map .prov { stroke: rgba(36, 28, 23, .34); stroke-width: .7; fill-opacity: .78; } /* hairlines inside a realm; realm borders are drawn over them (.realm-edge) */
 [data-style="chancery"] #map .prov.mine { fill-opacity: .92; }
 [data-style="chancery"] #map .prov.selected { stroke: var(--wax); }
 [data-style="chancery"] #map .coast { stroke: #241c17; stroke-width: 1.8; }
@@ -1815,3 +1815,12 @@ details[open] > summary .br-chev { rotate: 180deg; }
   .needs { margin-bottom: 4px; }
   .steward { margin-bottom: 6px; }
 }
+
+/* ---- map: two weights of line and realm names (roadmap 2.1–2.3) ---- */
+#map .realm-edge { fill: none; stroke: #241c17; stroke-width: 2.3; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; pointer-events: none; }
+#map.zoom-far .realm-edge { stroke-width: 1.5; }
+#map .rlabel { font-family: var(--f-display); font-weight: 600; letter-spacing: .14em; text-anchor: middle; dominant-baseline: central; fill: #241c17; fill-opacity: .62; stroke: rgba(246, 241, 230, .5); stroke-width: .07em; paint-order: stroke; pointer-events: none; }
+#map .rlabel.mine { fill-opacity: .8; }
+#map .rlabel.off { display: none; }
+#map.moving .rlabels { visibility: hidden; }
+#map.picking .rlabels { display: none; }

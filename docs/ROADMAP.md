@@ -120,6 +120,8 @@ Status: **done** (November 2026).
 
 ## Phase 2 — Feel
 
+Status: **in progress**. Actions marked ☑ beside their id are done.
+
 The map is on screen 80% of the time and the game is silent. These two facts decide how the game is judged in its
 first minute.
 
@@ -127,9 +129,9 @@ first minute.
 
 | Id | Action | Where | Done when |
 |---|---|---|---|
-| 2.1 | **Borders that are not straight.** When the world is generated, cut every shared edge into 4–6 pieces and push each joint sideways by seeded noise of up to 12% of the edge length. Both neighbours use the same joints (key: the two province ids, sorted), so no gaps open. | `scripts/gen-world.ts`, then `npm run gen-world` | No straight inland border longer than 40 map units |
-| 2.2 | **Two weights of line.** Realm borders 2.5 px ink; province borders inside a realm 0.6 px at 35% opacity; the coast keeps its heavy line. | `.prov`, new `.realm-edge` layer in `src/ui/map.ts` | A realm reads as one shape at world zoom |
-| 2.3 | **Realm names on the map.** At far zoom, hide province names and write each realm's name once across its land, in Cormorant SC, letter-spaced, sized to the realm, along its longest axis. Province names return at near zoom, never under 11 px on screen. | `src/ui/map.ts` (labels group) | 148 realms labelled with no overlap at world zoom |
+| 2.1 ☑ | **Borders that are not straight.** When the world is generated, every inland edge of a province is bent into a gentle wave of 3–9 pieces (up to 12% of the edge's length, never more than 9 map units). The wave is worked out from the edge's two end points alone, so both neighbours get the very same line and no gap opens; edges lying in the sea stay straight. The generator now also makes the split of the Norway–Siberia outline that had been patched into `world.json` by hand, so `npm run gen-world` reproduces the land data exactly. | `wobble`, `wobbleRing` in `scripts/gen-world.ts`, then `npm run gen-world` | Done. `world.json` grew from 486 to 636 KB (see 5.3) |
+| 2.2 ☑ | **Two weights of line.** Realm borders 2.3 px ink (1.5 px at far zoom), drawn as one path per landmass from the points two neighbouring cells share, and redrawn only for lands where something changed; province borders inside a realm 0.7 px at 34% opacity; the coast keeps its heavy line. | `.realm-edge`, `edgeD` in `src/ui/map.ts`; `.prov` in `src/styles.css` | Done: a realm reads as one shape at world zoom |
+| 2.3 ☑ | **Realm names on the map.** Below 1.3 screen pixels per map unit, province names give way to each realm's name, written once across the largest connected piece of its land, in Cormorant SC, letter-spaced, sized to the land and turned along its longer axis (never steeper than about 50°). Names that would be under 10.5 px on screen are left out until the player zooms in. | `nameRealms`, `REALM_VIEW` in `src/ui/map.ts` | Done: 44 names on a tablet at the opening view |
 | 2.4 | **Paper and terrain.** One paper-grain texture under the land (a 512 px tile, not a live SVG filter, for speed) and small ink symbols by terrain: hills, mountains, forest, desert, marsh. Terrain is a new field on each province, first derived from its raw material (wood → forest, iron and coal → hills, salt and spices in dry latitudes → desert) and then corrected by hand for the 209 European provinces. | `terrain` in `src/data/provinces.ts`, `src/ui/map.ts` | Terrain visible at near zoom; pan stays above 50 fps |
 | 2.5 | **A watercolour edge for the player's realm**: an inner stroke 6 px wide in the realm colour at 50%, so the player's land stands out without a darker fill. | `src/ui/map.ts` | Visible in all six map views |
 | 2.6 | **A relations view**: every realm tinted by its attitude to the player (ally, friendly, wary, rival, at war). | `MAP_MODES` | Seventh entry in the map view menu |

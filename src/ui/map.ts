@@ -22,6 +22,8 @@ import { MISSION_INFO } from '../engine/missions';
 import { icon, iconPath } from './icons';
 import { GOODS, RAW } from '../data/goods';
 
+/** Screen pixels per map unit below which the map shows realm names instead of province names. */
+const REALM_VIEW = 1.3;
 const NS = 'http://www.w3.org/2000/svg';
 const svgEl = (tag: string, attrs: Record<string, string | number> = {}) => {
   const e = document.createElementNS(NS, tag);
@@ -67,6 +69,14 @@ export class MapView {
   private size: Record<string, number> = {};
   private lastPx = 0;
   cells: Record<string, SVGPathElement> = {};
+  /** Realm borders: one heavy line per landmass, over the hairlines between provinces. */
+  private edgeEls: Record<string, SVGPathElement> = {};
+  private byLand: Record<string, string[]> = {};
+  private edgeD: Record<string, string> = {};
+  /** Realm names written across their lands, for the far view. */
+  private rlabels: SVGGElement;
+  private rsize = new Map<SVGTextElement, number>();
+  private owners = '';
   labels: Record<string, SVGTextElement> = {};
   marks: SVGGElement;
   gicons: Record<string, SVGGElement> = {};
@@ -126,6 +136,28 @@ export class MapView {
       }
       this.svg.append(grp);
     }
+    this.byLand = byLand;
+    // the borders between neighbours, cut out of the cells once: the points two cells have in common
+    const ring: Record<string, string[]> = {};
+    const pts = (id: string) => (ring[id] ??= g.cells[id].replace(/^M|Z$/g, '').split('L'));
+    for (const [a, nbs] of Object.entries(g.adj)) for (const b of nbs) {
+      if (a >= b) continue;
+      const ra = pts(a), inB = new Set(pts(b)), n = ra.length;
+      let start = -1;
+      for (let i = 0; i < n; i++) if (inB.has(ra[i]) && !inB.has(ra[(i + n - 1) % n])) { start = i; break; }
+      if (start < 0) continue;
+      const run: string[] = [];
+      for (let i = start; run.length < n && inB.has(ra[i % n]); i++) run.push(ra[i % n]);
+      if (run.length >= 2) this.edgeD[a + '|' + b] = 'M' + run.join('L');
+    }
+    for (const [lid, ids] of Object.entries(byLand)) {
+      if (ids.length < 2) continue;
+      const grp = svgEl('g', { 'clip-path': `url(#clip-${lid})`, class: 'edges' });
+      const e = svgEl('path', { class: 'realm-edge' }) as SVGPathElement;
+      this.edgeEls[lid] = e;
+      grp.append(e);
+      this.svg.append(grp);
+    }
     for (const d of Object.values(g.landPaths)) this.svg.append(svgEl('path', { d: coastLine(d), class: 'coast', 'fill-rule': 'evenodd' }));
     const lab = svgEl('g', { class: 'labels' });
     for (const [id, [x, y]] of Object.entries(g.center)) {
@@ -138,6 +170,8 @@ export class MapView {
       lab.append(t);
     }
     this.svg.append(lab);
+    this.rlabels = svgEl('g', { class: 'rlabels' }) as SVGGElement;
+    this.svg.append(this.rlabels);
     // raw-material icons, shown on the goods map
     for (const g of Object.values(GOODS)) {
       const sym = svgEl('symbol', { id: 'gi-' + g.id, viewBox: '0 0 24 24' });
@@ -191,7 +225,9 @@ export class MapView {
     // only what is on screen (with a margin) is drawn
     const g = getGeo();
     const mx = w * 0.15, my = h * 0.15;
-    const far = pxPerUnit < 0.9;
+    const far = pxPerUnit < REALM_VIEW; // from here out, realm names take over from province names
+    this.svg.classList.toggle('realm-view', far);
+    for (const [t, fs] of this.rsize) { const px = fs * pxPerUnit; t.classList.toggle('off', !far || px < 10.5 || px > 72); }
     const goods = this.mode === 'goods';
     for (const [id, [cx, cy]] of Object.entries(g.center)) {
       const on = cx > x - mx && cx < x + w + mx && cy > y - my && cy < y + h + my;
@@ -342,6 +378,47 @@ export class MapView {
     return target?.getAttribute('data-id') ?? null;
   }
 
+  /** Write each realm's name once across the largest piece of its land, along the land's longer axis. */
+  private nameRealms(s: GameState, seen: (id: string) => boolean) {
+    const g = getGeo();
+    while (this.rlabels.firstChild) this.rlabels.removeChild(this.rlabels.firstChild);
+    this.rsize.clear();
+    const lands: Record<string, string[]> = {};
+    for (const p of Object.values(s.provinces)) if (p.owner !== NO_STATE && s.nations[p.owner]?.alive && seen(p.id)) (lands[p.owner] ??= []).push(p.id);
+    for (const [owner, ids] of Object.entries(lands)) {
+      // the largest group of provinces that touch each other
+      const left = new Set(ids); let best: string[] = [];
+      while (left.size) {
+        const first = left.values().next().value as string; left.delete(first);
+        const comp = [first];
+        for (let i = 0; i < comp.length; i++) for (const nb of g.adj[comp[i]]) if (left.has(nb)) { left.delete(nb); comp.push(nb); }
+        if (comp.length > best.length) best = comp;
+      }
+      const cs = best.map(id => g.center[id]);
+      const mx = cs.reduce((a, c) => a + c[0], 0) / cs.length, my = cs.reduce((a, c) => a + c[1], 0) / cs.length;
+      let sxx = 0, syy = 0, sxy = 0;
+      for (const [x, y] of cs) { sxx += (x - mx) ** 2; syy += (y - my) ** 2; sxy += (x - mx) * (y - my); }
+      let ang = cs.length > 1 ? 0.5 * Math.atan2(2 * sxy, sxx - syy) : 0;
+      ang = Math.max(-0.9, Math.min(0.9, ang)); // never steeper than about 50°: the name must stay easy to read
+      const ux = Math.cos(ang), uy = Math.sin(ang);
+      // how far the land reaches along the name and across it, with half a province of margin at each end
+      let lo = 0, hi = 0, across = 0;
+      best.forEach((id, i) => {
+        const dx = cs[i][0] - mx, dy = cs[i][1] - my, half = this.size[id] * 0.45;
+        lo = Math.min(lo, dx * ux + dy * uy - half); hi = Math.max(hi, dx * ux + dy * uy + half);
+        across = Math.max(across, Math.abs(-dx * uy + dy * ux) + half);
+      });
+      const name = s.nations[owner].name;
+      const fs = Math.min(((hi - lo) * 0.82) / (name.length * 0.74), across * 0.7, 80);
+      if (fs < 3) continue;
+      const cx = mx + ((lo + hi) / 2) * ux, cy = my + ((lo + hi) / 2) * uy;
+      const t = svgEl('text', { x: cx.toFixed(1), y: cy.toFixed(1), class: 'rlabel off' + (owner === s.player && !this.revealAll ? ' mine' : ''), 'font-size': fs.toFixed(1), transform: `rotate(${((ang * 180) / Math.PI).toFixed(1)} ${cx.toFixed(1)} ${cy.toFixed(1)})` }) as SVGTextElement;
+      t.textContent = name;
+      this.rsize.set(t, fs);
+      this.rlabels.append(t);
+    }
+  }
+
   setPick(on: boolean, targets: Iterable<string> = []) {
     this.pickMode = on;
     this.targets = new Set(on ? targets : []);
@@ -364,6 +441,7 @@ export class MapView {
 
   render(s: GameState) {
     const g = getGeo();
+    const dirty = new Set<string>();
     let maxPop = 1;
     if (this.mode === 'population') for (const p of Object.values(s.provinces)) maxPop = Math.max(maxPop, population(s, p));
     for (const [id, p] of Object.entries(s.provinces)) {
@@ -376,6 +454,7 @@ export class MapView {
       const key = `${known ? 1 : 0}|${p.owner}|${p.name}|${occ ? p.occupiedFrom : ''}|${this.mode}|${this.picked}|${this.realm}|${this.revealAll ? 1 : 0}|${p.control < 30 ? 1 : 0}|${this.mode === 'political' ? '' : this.fill(s, p, maxPop)}|${nat?.overlord === s.player ? 1 : 0}|${nat?.capital === id ? 1 : 0}|${p.owner !== s.player && atWar(s, s.player, p.owner) ? 1 : 0}|${p.good}|${nat?.color}`;
       if (this.paint.get(id) === key) continue;
       this.paint.set(id, key);
+      dirty.add(g.land[id]);
       c.classList.toggle('fog', !known);
       if (lbl.textContent !== (known ? p.name : '')) { lbl.textContent = known ? p.name : ''; this.shown.delete(id); }
       const gi = this.gicons[id];
@@ -395,6 +474,21 @@ export class MapView {
       c.classList.toggle('unrest', pol && p.owner === s.player && p.control < 30);
       lbl.classList.toggle('cap', nat?.capital === id);
     }
+    // realm borders, for the lands where something changed
+    const seen = (id: string) => this.revealAll || provKnown(s, id);
+    for (const lid of dirty) {
+      const el = this.edgeEls[lid];
+      if (!el) continue;
+      let d = '';
+      for (const a of this.byLand[lid]) for (const b of g.adj[a]) {
+        if (a >= b || s.provinces[a].owner === s.provinces[b].owner || !(seen(a) || seen(b))) continue;
+        d += this.edgeD[a + '|' + b] ?? '';
+      }
+      el.setAttribute('d', d);
+    }
+    // realm names: written again only when land has changed hands or come into view
+    const owners = Object.values(s.provinces).map(p => (seen(p.id) ? p.owner : '')).join(',');
+    if (owners !== this.owners) { this.owners = owners; this.nameRealms(s, seen); }
     // mission markers and capitals
     while (this.marks.firstChild) this.marks.removeChild(this.marks.firstChild);
     for (const n of Object.values(s.nations)) {
