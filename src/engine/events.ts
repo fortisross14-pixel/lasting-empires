@@ -1,3 +1,4 @@
+import { REQUEST_EVENTS } from './requests';
 import { HISTORY_EVENTS, CORE_EVENTS, NEWS_EVENTS } from './annals';
 import { good, bad, neutral, stab, P, scaled, needs, type EventDef, type Vars } from './eventkit';
 import { COURT_EVENTS } from './court';
@@ -1077,6 +1078,7 @@ export const EVENTS: EventDef[] = [
   ...CHAIN_EVENTS,
   ...CORE_EVENTS,
   ...NEWS_EVENTS,
+  ...REQUEST_EVENTS,
 ];
 
 export const EVENT: Record<string, EventDef> = Object.fromEntries(EVENTS.map(e => [e.id, e]));

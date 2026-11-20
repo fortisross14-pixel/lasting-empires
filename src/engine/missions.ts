@@ -1,3 +1,4 @@
+import { learnGoal, goalOf } from './rivals';
 import { addLoyalty } from './court';
 import { commanderOf } from './commanders';
 import { maxFort } from './core';
@@ -684,7 +685,7 @@ function resolveOther(s: GameState, m: Mission, ch: Character) {
     const tname = tn.name;
     if (ok) {
       switch (m.kind) {
-        case 'relations': addRel(s, s.player, target, 25); items.push({ title: 'Friendship', text: `Relations with ${tname} +25.`, tone: 'good', kind: 'scroll' }); break;
+        case 'relations': addRel(s, s.player, target, 25); learnGoal(s, target); items.push({ title: 'Friendship', text: `Relations with ${tname} +25.${goalOf(s, target) && goalOf(s, target) !== s.player ? ` Your envoy learns where their ambition lies: ${nationName(s, goalOf(s, target)!)}.` : goalOf(s, target) === s.player ? ' Your envoy learns what they want: your lands.' : ''}`, tone: 'good', kind: 'scroll' }); break;
         case 'trade': {
           addTreaty(s, s.player, target, 'trade'); addRel(s, s.player, target, 10); me.prestige += 2;
           if (ch.traits.includes('merchant')) s.flags['trade_bonus_' + target] = 2;

@@ -14,7 +14,12 @@ import { commanderOf, COMMANDER_MIN } from '../src/engine/commanders';
 import { autoResolve, finishBattle, createBattle, makeSide, playRound, ratio, canReserve, setReserve, reserveOf, commitReserve, canRetreat, retreat, alliedHelp, RETREAT_COST, ALLY_COMPANIES } from '../src/engine/battle';
 import { TERRAINS, TERRAIN_OVERRIDES, terrainOf } from '../src/data/terrain';
 import { TACTICS, TRAIT_TACTIC } from '../src/data/troops';
-import { declareWar } from '../src/engine/core';
+import { declareWar, getRel, addRel, atWar, hasTreaty } from '../src/engine/core';
+import { goalOf, attitude, HIST_GOALS, TEMPERS, GOAL_MIN, DEEDS_KEPT } from '../src/engine/rivals';
+import { wantsPlayer, mayStrikePlayer, threatOf } from '../src/engine/ai';
+import { REQUEST_EVENTS } from '../src/engine/requests';
+import { NATIONS } from '../src/data/nations';
+import { LATER_DEFS } from '../src/engine/starts';
 import { takeDraftOption } from '../src/engine/drafts';
 import { CARDS } from '../src/engine/cards';
 import { MISSIONS } from '../src/data/missions';
@@ -488,6 +493,91 @@ check('allies in the war send up to two companies, and take them home afterwards
   const help = alliedHelp(s, 'granada', 'granada');
   ok(help.length >= 1 && help.length <= ALLY_COMPANIES && help.every(u => u.ally === 'france'), `France sent ${help.length} companies`);
   ok(s.nations.france.army.some(t => t.uid === help[0].uid), 'the lent company is not one of France\'s own');
+});
+
+// ---------- rivals ----------
+check('rivals want something: history first, then the neighbour they like least, without dice', () => {
+  const s = newGame('castile', 701);
+  for (const [id, list] of Object.entries(HIST_GOALS)) for (const [t] of list) ok(NATIONS.some(n => n.id === id) && (NATIONS.some(n => n.id === t) || LATER_DEFS.some(n => n.id === t)), `history gives ${id} the goal ${t}, which is not a realm`);
+  const rng = s.rng;
+  eq(goalOf(s, 'ottomans'), 'byzantium', 'what the Ottomans want in 1451');
+  eq(goalOf(s, 'france'), 'burgundy', 'what France wants in 1451');
+  const big = Object.values(s.nations).filter(n => n.alive && n.id !== s.player && provsOf(s, n.id).length >= GOAL_MIN);
+  ok(big.filter(n => goalOf(s, n.id)).length >= big.length * 0.8, 'most realms of some size have no goal');
+  for (const n of big) { const g = goalOf(s, n.id); ok(g !== n.id, `${n.id} wants itself`); eq(goalOf(s, n.id), g, `${n.id}: the goal changed when asked twice`); }
+  const small = Object.values(s.nations).find(n => n.alive && provsOf(s, n.id).length > 0 && provsOf(s, n.id).length < GOAL_MIN)!;
+  eq(goalOf(s, small.id), null, 'a small realm has a goal');
+  eq(s.rng, rng, 'choosing goals rolled the dice');
+  s.nations.byzantium.alive = false;
+  ok(goalOf(s, 'ottomans') !== 'byzantium', 'the Ottomans still want a realm that is gone');
+  for (const p of ['expansionist', 'zealot', 'balanced', 'merchant', 'cautious'] as const) ok(TEMPERS[p]?.text.length > 20, `no words for the ${p} temper`);
+});
+
+/** Portugal with Castile as an angry, stronger neighbour, past the years of peace. */
+function threatened(seed: number) {
+  const s = newGame('portugal', seed); s.queue = []; s.pending = [];
+  s.year = s.startYear + 20; s.rel[['castile', 'portugal'].sort().join('|')] = -60;
+  if (getRel(s, 'portugal', 'castile') !== -60) addRel(s, 'portugal', 'castile', -60 - getRel(s, 'portugal', 'castile'));
+  s.troops = []; for (const p of provsOf(s, 'portugal')) p.fort = 0;
+  s.treaties = s.treaties.filter(t => !((t.a === 'castile' && t.b === 'portugal') || (t.b === 'castile' && t.a === 'portugal')));
+  return s;
+}
+
+check('no war on the player arrives unannounced: first the warning, a year later the blow', () => {
+  const s = threatened(711), castile = s.nations.castile;
+  ok(wantsPlayer(s, castile), 'the test neighbour does not want the war');
+  eq(mayStrikePlayer(s, castile), false, 'struck with no warning');
+  eq(s.pending!.filter(x => x.id === 'war_warning').length, 1, 'warnings sent');
+  eq(mayStrikePlayer(s, castile), false, 'struck in the year of the warning');
+  eq(s.pending!.filter(x => x.id === 'war_warning').length, 1, 'warnings after asking twice');
+  s.year++;
+  eq(mayStrikePlayer(s, castile), true, 'held back a year after the warning');
+  // the player answered: an envoy lifted relations, and the levies go home
+  addRel(s, 'portugal', 'castile', 40);
+  eq(mayStrikePlayer(s, castile), false, 'struck although relations were mended');
+  const a = attitude(s, 'castile', threatOf(s, 'castile'));
+  ok(a.reasons.length > 0 && a.word.length > 0, 'no attitude towards the player');
+  declareWar(s, 'castile', 'portugal');
+  eq(attitude(s, 'castile').word, 'At war', 'the word for a realm at war with the player');
+});
+
+check('rivals ask: a warning, an ultimatum, silver, a joint war, a friend given up', () => {
+  for (const def of REQUEST_EVENTS) {
+    const s = threatened(721);
+    player(s).gold = 5000;
+    addRel(s, 'portugal', 'england', 40 - getRel(s, 'portugal', 'england')); addRel(s, 'portugal', 'france', -5 - getRel(s, 'portugal', 'france'));
+    if (!hasTreaty(s, 'portugal', 'england', 'alliance')) s.treaties.push({ a: 'england', b: 'portugal', kind: 'alliance', since: s.year });
+    if (!atWar(s, 'england', 'france')) declareWar(s, 'england', 'france');
+    addRel(s, 'france', 'england', -60 - getRel(s, 'france', 'england'));
+    s.nations.england.goal = { target: 'castile', since: s.year };
+    const fixed: Record<string, Record<string, string | number>> = { war_warning: { nation: 'castile' }, ultimatum_due: { nation: 'castile', prov: provsOf(s, 'portugal').find(p => p.id !== player(s).capital)!.id } };
+    ok(!def.cond || def.cond(s), `${def.id}: its condition fails in a game made for it`);
+    const v = fixed[def.id] ?? (def.setup ? def.setup(s) : {});
+    ok(v, `${def.id}: found no realm to ask`);
+    const text = def.text(s, v!);
+    ok(words(text) <= MAX_WORDS && !/undefined/.test(text), `${def.id}: ${words(text)} words, or a hole in the text`);
+    ok((typeof def.title === 'string' ? def.title : def.title(s, v!)).length > 5, `${def.id}: no title`);
+    for (const o of def.options) {
+      const c = JSON.parse(JSON.stringify(s)) as GameState;
+      if (o.can?.(c, v!)) continue;
+      const items = o.run(c, v!);
+      ok(items.length > 0 && items.every(it => it.title && it.text), `${def.id}: "${o.label}" shows nothing`);
+    }
+  }
+  // giving up a province really moves it, and refusing really means war
+  const s = threatened(722), v = { nation: 'castile', prov: provsOf(s, 'portugal').find(p => p.id !== player(s).capital)!.id };
+  const a = JSON.parse(JSON.stringify(s)) as GameState; EVENT.ultimatum_due.options[0].run(a, v);
+  eq(a.provinces[v.prov].owner, 'castile', 'owner of the province given up');
+  ok(a.truces.some(t => t.a === 'castile' && t.b === 'portugal'), 'no truce after giving way');
+  const b = JSON.parse(JSON.stringify(s)) as GameState; EVENT.ultimatum_due.options[1].run(b, v);
+  ok(atWar(b, 'castile', 'portugal'), 'no war after refusing');
+});
+
+check('rivals leave a record of what they do', () => {
+  const s = play(newGame('castile', 731), 40);
+  const withDeeds = Object.values(s.nations).filter(n => n.alive && n.id !== s.player && (n.deeds ?? []).length > 0);
+  ok(withDeeds.length >= 20, `only ${withDeeds.length} realms did anything worth writing down in ten years`);
+  ok(withDeeds.every(n => n.deeds!.length <= DEEDS_KEPT && n.deeds!.every((d, i) => i === 0 || d.year <= n.deeds![i - 1].year)), 'a record is too long or out of order');
 });
 
 console.log(`${passed} passed, ${failed} failed`);

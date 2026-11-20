@@ -1,4 +1,6 @@
 // Side panels: province, realm, goals, tasks, overseas, chronicle, and the rows they share.
+import { attitude, goalOf, goalKnown, deedsKnown, TEMPERS } from '../engine/rivals';
+import { threatOf } from '../engine/ai';
 import { TERRAINS, type Terrain } from '../data/terrain';
 import { TRAIT_TACTIC_CHANCE } from '../data/troops';
 import { RESERVE_FRESH, RETREAT_COST, ALLY_COMPANIES } from '../engine/battle';
@@ -319,10 +321,20 @@ export function nationSheet(id: string, body: HTMLElement) {
   const rel = getRel(S, S.player, id);
   const war = atWar(S, S.player, id);
   const tre = ['trade', 'alliance', 'marriage'].filter(k => hasTreaty(S, S.player, id, k));
-  body.append(h('div', { class: 'relbar' }, h('i', { style: `left:${(rel + 100) / 2}%` }), h('span', {}, `Relations ${rel}`)));
+  // how they stand towards you, in one word, and the currents under it
+  const att = attitude(S, id, n.overlord || !provsOf(S, id).length ? undefined : threatOf(S, id));
+  const goal = goalOf(S, id), known = goalKnown(S, id);
+  body.append(h('div', { class: 'att a-' + att.word.toLowerCase().replace(/ /g, '-') },
+    h('div', { class: 'att-h' }, h('b', {}, att.word), h('span', {}, `relations ${rel > 0 ? '+' : rel < 0 ? '−' : ''}${Math.abs(rel)}`)),
+    h('div', { class: 'relbar' }, h('i', { style: `left:${(rel + 100) / 2}%` })),
+    h('ul', { class: 'att-why' }, att.reasons.map(r => h('li', { class: 't-' + r.tone }, r.text)))));
   body.append(h('div', { class: 'stats' },
-    stat('Provinces', provsOf(S, id).length), stat('Ruler', n.ruler.name), stat('Temper', n.personality),
+    stat('Provinces', provsOf(S, id).length), stat('Ruler', n.ruler.name),
     stat('Status', war ? 'At war with you' : tre.length ? tre.join(', ') : 'Neutral')));
+  body.append(h('p', { class: 'temper' }, h('b', {}, TEMPERS[n.personality].name), '. ', TEMPERS[n.personality].text));
+  if (goal) body.append(h('p', { class: 'goal' + (goal === S.player ? ' bad' : '') }, h('span', { html: icon('eye', 14) }), ' ',
+    known ? (goal === S.player ? 'What it wants: your lands.' : `What it wants: the lands of ${nationName(S, goal)}.`) : 'What it wants is not known to you. An embassy, a spy or an alliance would tell.'));
+  if (deedsKnown(S, id) && n.deeds?.length) body.append(h('div', { class: 'deeds' }, h('h3', {}, 'Lately'), h('ul', {}, n.deeds.map(d => h('li', {}, h('b', {}, String(d.year)), ' ', d.text)))));
   const goods = [...ownGoods(S, id)].map(g => GOODS[g]?.name ?? g);
   body.append(h('p', { class: 'muted' }, `Goods: ${goods.join(', ') || 'none'}.`));
   const theirWars = enemiesOf(S, id).filter(e => e !== S.player).map(e => nationName(S, e));
