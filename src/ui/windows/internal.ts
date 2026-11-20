@@ -1,4 +1,5 @@
 // Internal window: government, core cards, rank and viceroys, provinces.
+import { infoToggle } from '../simplify';
 import { TECH } from '../../data/techs';
 import { GOVS, GOV_ORDER } from '../../data/governments';
 import { revolutionBlocked, revolutionLands, startRevolution, REVOLUTION_YEARS } from '../../engine/government';
@@ -24,8 +25,10 @@ export function govCard(id: string, current: boolean): HTMLElement {
   const why = current ? null : revolutionBlocked(S, id);
   const box = h('div', { class: 'gov' + (current ? ' now' : '') + (!current && why ? ' locked' : '') },
     h('div', { class: 'gov-h' }, h('span', { class: 'gov-i', html: icon(g.icon, 26) }), h('div', {}, h('b', {}, g.name), h('small', {}, current ? 'Your government' : g.tech ? `Needs ${TECH[g.tech].name}${S.techs.includes(g.tech) ? ' ✓' : ''}` : 'The old way'))),
-    h('p', { class: 'gov-t' }, g.text),
     h('ul', { class: 'gov-b' }, g.buffs.map(b => h('li', {}, b))));
+  const flavour = h('p', { class: 'gov-t', hidden: true }, g.text);
+  box.querySelector('.gov-h b')?.after(infoToggle([flavour], `About ${g.name}`));
+  box.querySelector('.gov-h')?.after(flavour);
   if (!current) box.append(h('button', { class: 'btn' + (why ? ' blocked' : ' primary'), onclick: () => (why ? toast(why, 'bad') : confirmRevolution(id)) }, why ?? 'Start a revolution'));
   return box;
 }
@@ -120,8 +123,9 @@ export function coreSection() {
     const side = (id: string) => {
       const why = coreBlocked(S, id);
       return h('div', { class: 'ax-side' + (cur === id ? ' on' : '') }, coreCard(id, { small: true }),
-        h('div', { class: 'ax-txt' }, h('b', {}, CORE[id].name), h('small', { class: 'good' }, CORE[id].pros.join(' · ')), h('small', { class: 'bad' }, CORE[id].cons.join(' · ')),
-          cur === id ? h('span', { class: 'tag ally' }, 'Adopted') : h('button', { class: 'btn small' + (why ? ' blocked' : ''), onclick: () => (why ? toast(why, 'bad') : act(() => adoptCore(S, id), `${CORE[id].name} adopted`)) }, why ?? `Adopt · ${coreCost(S)} NP`)));
+        (() => { const full = [h('small', { class: 'good', hidden: true }, CORE[id].pros.join(' · ')), h('small', { class: 'bad', hidden: true }, CORE[id].cons.join(' · '))];
+          return h('div', { class: 'ax-txt' }, h('b', {}, CORE[id].name, infoToggle(full, `What ${CORE[id].name} does`)), h('small', { class: 'good' }, CORE[id].pros[0] ?? ''), ...full, 
+          cur === id ? h('span', { class: 'tag ally' }, 'Adopted') : h('button', { class: 'btn small' + (why ? ' blocked' : ''), onclick: () => (why ? toast(why, 'bad') : act(() => adoptCore(S, id), `${CORE[id].name} adopted`)) }, why ?? `Adopt · ${coreCost(S)} NP`)); })());
     };
     wrap.append(h('div', { class: 'axis' }, h('div', { class: 'ax-h' }, h('b', {}, ax.name), h('span', { class: 'ax-meter' }, h('i', { style: `left:${cur === ax.left ? 8 : cur === ax.right ? 92 : 50}%` }))), side(ax.left), side(ax.right)));
   }

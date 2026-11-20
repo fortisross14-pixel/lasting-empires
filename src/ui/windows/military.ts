@@ -27,8 +27,8 @@ export function unitsPanel() {
     const d = TROOPS[now];
     box.append(h('div', { class: 'unit-row' },
       troopCard({ type: now, vet: 0, str: 100 }, { small: true }),
-      h('div', { class: 'g-t' }, h('b', {}, CLASS_NAME[cls]), h('small', {}, `${d.name} · melee ${d.melee}, fire ${d.fire}, defence ${d.def} · upkeep ${d.upkeep}`),
-        h('small', { class: 'muted' }, next ? `Next: ${TROOPS[next].name} with ${TECH[TROOPS[next].tech!]?.name ?? 'research'}` : 'The best of its kind'))));
+      h('div', { class: 'g-t' }, h('b', {}, CLASS_NAME[cls]), h('small', {}, `upkeep ${d.upkeep} a year`),
+        h('small', { class: 'muted' }, next ? `Next: ${TROOPS[next].name} (${TECH[TROOPS[next].tech!]?.name ?? 'research'})` : 'Best of its kind'))));
   }
   return box;
 }
@@ -36,7 +36,6 @@ export function unitsPanel() {
 export function armyTab(body: HTMLElement) {
   // where troops stand now, plus the capital, barracks and bases
   const gs = [...new Set([...garrisons(S), ...S.troops.filter(t => !t.moving && t.loc).map(t => t.loc!)])];
-  body.append(h('h3', {}, 'Your units'), h('p', { class: 'muted small' }, 'Troop cards hire the best unit of their kind you have researched. Better kinds (Tercios, Knights, Cuirassiers, Galleons…) come from the recipes in the Forge: two companies, or a company and an improvement card.'), unitsPanel());
   body.append(h('p', { class: 'muted' }, 'Troops stand in the capital, in provinces with Barracks, or at an invasion base. They heal every season: fastest with Barracks, then the capital, at half speed on the march or in camp. Only troops within a quarter\'s march can attack or defend a province. Tap troops to select them, then move them.'));
   body.append(h('p', { class: 'muted small' }, 'On troop cards: M = Melee (close combat), F = Fire (range), D = Defence. Tap a company to see its details and move it.'));
   body.append(h('h3', {}, `Armies (${S.troops.length}/${armyCap(S)}) · upkeep ${incomeOf(S, S.player).upkeep.toFixed(1)} a year`));
@@ -65,6 +64,8 @@ export function armyTab(body: HTMLElement) {
         sel.length === 1 ? h('button', { class: 'btn ghost danger small', onclick: () => confirmBox(`Disband ${TROOPS[from.type].name}?`, 'The troop is removed for good.', 'Disband', () => { setForge([]); act(() => disbandTroop(S, from.uid)); }) }, 'Disband') : null)));
   }
   if (!provsOf(S, S.player).some(p => p.buildings.includes('barracks'))) body.append(h('p', { class: 'muted' }, 'Tip: Barracks (Internal) make troops heal 50% faster there.'));
+  // reference: what each troop card hires now and next, folded under the armies
+  body.append(h('details', { class: 'fold' }, h('summary', {}, h('b', {}, 'What your troop cards hire'), h('small', {}, 'five kinds of company'), h('span', { class: 'caret' }, '▾')), h('p', { class: 'muted small' }, 'Troop cards hire the best unit of their kind you have researched. Better kinds (Tercios, Knights, Cuirassiers, Galleons…) come from the recipes in the Forge: two companies, or a company and an improvement card.'), unitsPanel()));
 }
 
 export function navyTab(body: HTMLElement) {

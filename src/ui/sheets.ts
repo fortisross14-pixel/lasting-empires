@@ -5,6 +5,7 @@ import { TERRAINS, type Terrain } from '../data/terrain';
 import { TRAIT_TACTIC_CHANCE } from '../data/troops';
 import { RESERVE_FRESH, RETREAT_COST, ALLY_COMPANIES } from '../engine/battle';
 import { shareHistory } from './share';
+import { simplify } from './simplify';
 import { HAND_LIMITS, RATE_CAP, CARD_BASE } from '../engine/cards';
 import { DIFFICULTY } from '../data/difficulty';
 import { LOYALTY_LEVELS, DISLOYAL, LEAVES } from '../engine/court';
@@ -99,6 +100,7 @@ export function renderSheet() {
   else if (k === 'chronicle') parts = chronicleSheet(body);
   else if (k === 'realm') parts = realmSheet(body);
   else if (k === 'overseas') parts = overseasSheet(body);
+  for (const part of parts) if (part.classList.contains('sh-body')) simplify(part);
   // phones: a handle to pull the panel up to full height, or back down to half
   if (innerWidth <= 760) {
     const grab = h('button', { class: 'sh-grab', 'aria-label': sheetTall ? 'Show less' : 'Show more', 'aria-expanded': String(sheetTall), onclick: () => setSheetTall(!sheetTall) }, h('i'));

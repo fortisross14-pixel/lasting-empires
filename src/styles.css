@@ -2091,3 +2091,26 @@ p.bad::before { content: '! '; font-weight: 700; }
 .hand-tray .card .c-art { flex: 1 1 auto; min-height: 0; }
 .hand-tray .card .c-art img, .hand-tray .card .c-art .c-pic { height: 100%; width: 100%; object-fit: cover; }
 .ht-n { position: absolute; top: 4px; right: 4px; min-width: 26px; height: 22px; padding: 0 5px; border-radius: 11px; background: var(--text); color: var(--panel); font-size: calc(13px * var(--ts, 1)); line-height: 22px; text-align: center; z-index: 2; }
+
+/* ---------- summary first: explanations behind ⓘ (src/ui/simplify.ts) ---------- */
+.info-t { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 8px; padding: 0; vertical-align: middle; border: 1.5px solid currentColor; border-radius: 50%; background: none; color: var(--muted); font: italic 700 calc(13px * var(--ts, 1)) / 1 var(--f-body); letter-spacing: 0; text-transform: none; cursor: pointer; flex: none; }
+.info-t[aria-expanded="true"] { background: var(--text); border-color: var(--text); color: var(--panel); }
+h3 .info-t, h2 .info-t { position: relative; top: -2px; }
+/* a bigger target than it looks, for a thumb */
+.info-t::after { content: ''; position: absolute; inset: -11px; }
+.info-t { position: relative; }
+.info-row { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.info-row .info-t { margin-left: 0; }
+p.more:not([hidden]) { border-left: 2px solid var(--line); padding-left: 10px; }
+/* cards listed in a deck show their picture, name and figures; what a card does is on its own page, a tap away */
+.win-body .card.wide .c-text { display: none; }
+.win-body .card.wide { height: auto; min-height: 96px; }
+/* technologies: name, time and what they unlock; the rest behind ⓘ */
+.tc-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.tc-more { display: grid; gap: 4px; }
+.tc-more[hidden] { display: none; }
+.ev-more { display: inline; padding: 0 2px; border: 0; border-bottom: 1px solid currentColor; background: none; color: var(--wax); font: inherit; font-style: italic; cursor: pointer; }
+.fx-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; padding: 2px 8px 6px; }
+.fx { padding: 2px 8px; border: 1.5px solid currentColor; font-family: var(--f-title); font-size: calc(13px * var(--ts, 1)); font-weight: 700; white-space: nowrap; }
+.fx.good { color: var(--good); } .fx.bad { color: var(--wax); }
+.reveal-row .fx-chips + .c-text { font-size: calc(11px * var(--ts, 1)); opacity: .85; }

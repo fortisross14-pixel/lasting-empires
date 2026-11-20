@@ -57,7 +57,21 @@ export function infoCard(it: RevealItem) {
     lvl >= 0 ? h('div', { class: 'o-mark', 'aria-hidden': 'true' }, OUTCOME_MARKS[lvl]) : null,
     // colour is never the only signal: news that is not an outcome carries a small mark for good or bad
     lvl < 0 && it.tone !== 'neutral' ? h('span', { class: 'tone-mark', 'aria-hidden': 'true' }, it.tone === 'good' ? '▴' : '▾') : null,
+    effectChips(it.text),
     h('div', { class: 'c-text' }, it.text));
+}
+/** The figures a result states ("Prestige +15", "stability −1", "+25 relations"), pulled out as marks so the
+ *  result reads at a glance; the sentence stays under them. */
+export function effectChips(text: string): HTMLElement | null {
+  const found: string[] = [];
+  const re = /\b([A-Za-z]+) ([+−-]\d+(?:\.\d+)?%?)|([+−-]\d+(?:\.\d+)?%?) ([a-z]+(?: points)?)\b/g;
+  for (const m of text.matchAll(re)) {
+    const [name, v] = m[1] ? [m[1], m[2]] : [m[4], m[3]];
+    if (/^(and|with|at|by|of|for|to|in|the|a|an|only|gets|get|is|are|gains|loses|by|from|than|of)$/i.test(name)) continue;
+    found.push(`${name.charAt(0).toUpperCase()}${name.slice(1)} ${v}`);
+  }
+  if (!found.length) return null;
+  return h('div', { class: 'fx-chips' }, [...new Set(found)].slice(0, 4).map(f => h('span', { class: 'fx ' + (/[−-]/.test(f) ? 'bad' : 'good') }, f)));
 }
 
 export async function flipAll(flips: { flip: () => void }[], delay = 380) {
@@ -86,6 +100,14 @@ function stingFor(items: RevealItem[], alarm: boolean): Sfx | null {
   return null;
 }
 
+/** An event's story: its first sentence in view, the rest a tap away, so the choices come quickly. */
+export function eventText(full: string): HTMLElement {
+  const m = /^(.+?[.!?])(\s+)(.+)$/s.exec(full);
+  if (!m || m[1].split(/\s+/).length > 30 || m[3].split(/\s+/).length < 6) return h('div', { class: 'c-text' }, full);
+  const rest = h('span', { class: 'ev-rest', hidden: true }, ' ' + m[3]);
+  const more = h('button', { class: 'ev-more', onclick: (ev: Event) => { ev.stopPropagation(); rest.hidden = false; more.remove(); } }, 'Read more');
+  return h('div', { class: 'c-text' }, m[1], rest, ' ', more);
+}
 export function showEvent() {
   const p = S.queue[0];
   if (p.kind !== 'event') return;
@@ -95,7 +117,7 @@ export function showEvent() {
     h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, e.history ? 'History' : 'Event')),
     h('div', { class: 'c-art' + (pic ? ' ev-art' : ''), html: pic ?? icon(e.art, 40) }),
     h('div', { class: 'c-name c-title' }, eventTitle(S, p.eventId, p.vars)),
-    h('div', { class: 'c-text' }, e.text(S, p.vars)));
+    eventText(e.text(S, p.vars)));
   const f = flipCard(front, e.history ? 'History' : 'Event', true);
   const opts = h('div', { class: 'ev-opts hidden-opts' });
   e.options.forEach((o, i) => {

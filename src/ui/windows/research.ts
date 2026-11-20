@@ -1,4 +1,5 @@
 // Research window: technologies by age and field.
+import { infoToggle } from '../simplify';
 import { TROOPS, EQUIPMENT } from '../../data/troops';
 import { TECHS, TECH, BUILDINGS, AGE_NAMES, type TechTrack } from '../../data/techs';
 import { GOODS } from '../../data/goods';
@@ -48,18 +49,21 @@ export function techCard(t: (typeof TECHS)[number]): HTMLElement {
   const why = known ? null : missionBlocked(S, 'research', t.id);
   const card = cardFor(S, 'research', { track: t.track });
   const cost = techCost(S, t.id);
-  const status = known ? 'Known' : m ? `Studying · ${Math.floor(m.progress)}/${cost} points · ${qLabel(m.turnsLeft)} left` : `${cost} research points · ${techYears(t.id)}`;
+  const status = known ? 'Known' : m ? `Studying · ${Math.floor(m.progress)}/${cost} · ${qLabel(m.turnsLeft)} left` : techYears(t.id);
   const unlocks = techUnlocks(t.id);
   const tap = () => known ? toast(t.desc) : m ? toast(`Being studied: ${qText(m.turnsLeft)} left`) : why ? toast(why, 'bad') : !card ? toast(`Needs a ${TRACK_NAME[t.track]} study card (buy one in the Cards tab)`, 'bad') : openPlanner('research', t.id, undefined, card.uid);
-  return h('button', { class: `tcard tr-${t.track}${known ? ' known' : m ? ' active' : why ? ' locked' : ''}`, onclick: tap },
+  // what it does, what it needs and what it opens: one tap on ⓘ away
+  const more = h('span', { class: 'tc-more', hidden: true },
+    h('span', { class: 'tc-desc' }, t.desc),
+    !known && t.req?.length ? h('small', { class: 'tc-req' + (t.req.every(r => S.techs.includes(r)) ? '' : ' bad') }, 'Needs ' + t.req.map(r => TECH[r].name + (S.techs.includes(r) ? ' ✓' : '')).join(', ')) : null,
+    AGE_TECH[t.id] ? h('span', { class: 'tech-age' }, `Opens the ${ERA[AGE_TECH[t.id]].name} for the whole world`) : null);
+  return h('div', { class: `tcard tr-${t.track}${known ? ' known' : m ? ' active' : why ? ' locked' : ''}`, role: 'button', tabindex: '0', onclick: tap },
     h('span', { class: 'tc-side' }, h('span', { class: 'tc-ico', html: icon(TRACK_ICON[t.track], 26) }), h('b', { class: 'tc-pts' }, known ? '✓' : String(cost)), h('small', {}, known ? 'known' : 'points')),
     h('span', { class: 'tc-body' },
-      h('b', { class: 'tc-name' }, t.name),
+      h('span', { class: 'tc-head' }, h('b', { class: 'tc-name' }, t.name), infoToggle([more], `About ${t.name}`)),
       h('small', { class: 'tc-status' }, status),
-      h('span', { class: 'tc-desc' }, t.desc),
-      unlocks.length ? h('span', { class: 'tc-unl' }, h('small', {}, 'Unlocks'), unlocks.map(u => h('i', {}, u))) : null,
-      !known && t.req?.length ? h('small', { class: 'tc-req' + (t.req.every(r => S.techs.includes(r)) ? '' : ' bad') }, 'Needs ' + t.req.map(r => TECH[r].name + (S.techs.includes(r) ? ' ✓' : '')).join(', ')) : null,
-      AGE_TECH[t.id] ? h('span', { class: 'tech-age' }, `Opens the ${ERA[AGE_TECH[t.id]].name} for the whole world`) : null,
+      unlocks.length ? h('span', { class: 'tc-unl' }, unlocks.map(u => h('i', {}, u))) : null,
+      more,
       !known && !m && why && !why.startsWith('Needs ') ? h('small', { class: 'bad' }, why) : null));
 }
 

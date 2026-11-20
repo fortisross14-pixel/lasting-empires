@@ -2,6 +2,7 @@
 import type { Character, Cat } from '../../types';
 import { CATS } from '../../types';
 import { reduced } from '../dom';
+import { simplify } from '../simplify';
 import { TECHS } from '../../data/techs';
 import { churchRel, cultureRows } from '../../engine/culture';
 import { provsOf, incomeOf, enemiesOf, alliesOf, armyPower, armyCap } from '../../engine/core';
@@ -71,6 +72,7 @@ export function renderWin() {
     h('button', { class: 'win-tab' + (tab === id ? ' on' : ''), role: 'tab', 'aria-selected': String(tab === id), onclick: () => { setWin({ cat, tab: id }); renderWin(); } }, label,
       id === 'cards' ? h('span', { class: 'win-n' }, String(handOf(S, cat).length)) : id === 'missions' ? h('span', { class: 'win-n' }, String(missionsOfCat(cat).length)) : null)));
   winTab(cat, tab, body);
+  simplify(body);
   el.append(head, tabs, body);
   if (slide) { body.classList.add(slide > 0 ? 'from-right' : 'from-left'); slide = 0; } else body.scrollTop = prev;
   bindSwipe(body);
