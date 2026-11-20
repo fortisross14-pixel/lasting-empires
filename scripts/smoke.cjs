@@ -23,7 +23,7 @@ async function run(browser, name, opts) {
   const shot = async what => { await wait(); await check(what); await p.screenshot({ path: path.join(OUT, `${name}-${what}.png`) }); };
   const tap = async (sel, what = sel) => { try { await p.locator(sel).first().click({ timeout: 4000 }); await wait(); return true; } catch { problems.push(`${name}: could not tap ${what}`); return false; } };
   /** Answer whatever the game asks, the first way offered. */
-  const answer = async () => { for (let i = 0; i < 16; i++) { const open = await p.evaluate(() => { const m = document.querySelector('#modal'); if (!m || m.hidden) return false; (m.querySelector('.btn.opt:not(.blocked)') || m.querySelector('.mbox .btn.primary') || m.querySelector('.mbox .card:not(.back)') || m.querySelector('.mbox button'))?.click(); return true; }); if (!open) return; await wait(600); } problems.push(`${name}: a dialog would not close`); };
+  const answer = async () => { for (let i = 0; i < 16; i++) { const open = await p.evaluate(() => { const m = document.querySelector('#modal'); if (!m || m.hidden) return false; if (m.querySelector('.mbox.picks')) { m.querySelectorAll('.pk-row').forEach(r => r.querySelector('.card')?.click()); m.querySelector('.mbox.picks .btn.primary')?.click(); return true; } (m.querySelector('.btn.opt:not(.blocked)') || m.querySelector('.mbox .btn.primary') || m.querySelector('.mbox .card:not(.back)') || m.querySelector('.mbox button'))?.click(); return true; }); if (!open) return; await wait(600); } problems.push(`${name}: a dialog would not close`); };
   const closeWin = async () => { await p.evaluate(() => { const w = document.querySelector('#win'); if (w && !w.hidden) w.querySelector('.win-head .iconbtn')?.click(); }); await wait(200); };
 
   await shot('title');
@@ -36,6 +36,9 @@ async function run(browser, name, opts) {
   await p.locator('#tutcheck').uncheck().catch(() => {});
   await tap('.pick-panel .btn.primary', 'Play'); await wait(700); await answer();
   await shot('game');
+  // roadmap 5: the map screen stays a map, not a page of text
+  const words = await p.evaluate(() => { let n = 0; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); while (w.nextNode()) { const e = w.currentNode.parentElement; if (e.closest('#map, #toast, [hidden]') || !e.offsetParent) continue; n += (w.currentNode.textContent.match(/[A-Za-zÀ-ÿ]{2,}/g) || []).length; } return n; });
+  if (words > 40) problems.push(`${name}: the map screen shows ${words} words (40 at most)`);
   // every deck and every tab in it
   for (let d = 0; d < 6; d++) {
     await tap(`#tabs .tab >> nth=${d}`, `deck ${d}`);

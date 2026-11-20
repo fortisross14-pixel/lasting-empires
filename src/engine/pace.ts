@@ -30,7 +30,7 @@ export function cardHasTarget(s: GameState, cardId: string): boolean {
       return foes.size > 0 && Object.values(s.provinces).some(p => foes.has(p.owner) && provKnown(s, p.id) && ok(p.id));
     }
     if (DIPLO.includes(kind)) return Object.values(s.nations).some(n => n.alive && n.id !== s.player && n.id !== NO_STATE && ok(n.id));
-    if (kind === 'research') return TECHS.some(t => t.track === d.track && !s.techs.includes(t.id) && t.age <= ageIndex(s) && ok(t.id));
+    if (kind === 'research') return TECHS.some(t => (!d.track || t.track === d.track) && !s.techs.includes(t.id) && t.age <= ageIndex(s) && ok(t.id));
     if (kind === 'build') {
       const bs = Object.values(BUILDINGS).filter(b => b.group === d.group && (!b.tech || s.techs.includes(b.tech)));
       return mine().some(p => bs.some(b => ok(p.id, b.id)));

@@ -503,7 +503,7 @@ export function cardFor(s: GameState, kind: MissionKind, opts: { track?: TechTra
   return s.hand.find(h => {
     const d = CARDS[h.card];
     if (d.kind !== 'mission' || !d.missions?.includes(kind)) return false;
-    if (opts.track && d.track !== opts.track) return false;
+    if (opts.track && d.track && d.track !== opts.track) return false; // a Treatise without a field studies any
     if (opts.group && d.group !== opts.group) return false;
     return true;
   });

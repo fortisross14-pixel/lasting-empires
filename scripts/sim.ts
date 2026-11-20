@@ -139,7 +139,7 @@ function botTurn(s: GameState) {
       }
     } else if (kind === 'research') {
       const r = free(s, role); if (!r) continue;
-      const t = TECHS.find(t => t.track === d.track && !missionBlocked(s, 'research', t.id));
+      const t = TECHS.find(t => (!d.track || t.track === d.track) && !missionBlocked(s, 'research', t.id));
       if (t) launchMission(s, 'research', r.uid, t.id, [], undefined, h.uid);
     } else {
       const a = free(s, role) ?? s.characters.filter(c => !c.ruler && c.mission == null && cardRoles(d.id).includes(c.role)).sort((x, y) => y.skill - x.skill)[0]; if (!a) continue;
