@@ -63,6 +63,7 @@ const P: Record<string, string> = {
   list: 'M8 6 H21 M8 12 H21 M8 18 H21 M3 6 h.01 M3 12 h.01 M3 18 h.01',
   next: 'M5 4 L15 12 L5 20 Z M18 4 V20',
   skip: 'M3 5 L11 12 L3 19 Z M12 5 L20 12 L12 19 Z',
+  cards: 'M4 7 L12 4 L14.5 11 M8.5 8.5 H17.5 V20.5 H8.5 Z M11 12 H15 M11 15 H15',
   gear: 'M12 8.5 a3.5 3.5 0 1 0 0 7 a3.5 3.5 0 1 0 0 -7 Z M12 2.5 V5 M12 19 V21.5 M2.5 12 H5 M19 12 H21.5 M5.3 5.3 L7 7 M17 17 L18.7 18.7 M18.7 5.3 L17 7 M7 17 L5.3 18.7',
   torchfire: 'M12 2 C15 6 17 9 12 14 C7 9 9 6 12 2 Z',
 };

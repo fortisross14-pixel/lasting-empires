@@ -1,4 +1,5 @@
 // People window: cultures, religion, the arts.
+import { infoToggle } from '../simplify';
 import type { MissionKind } from '../../types';
 import { GENRES, QUALITY } from '../../data/culture';
 import {
@@ -72,7 +73,7 @@ export function artsTab(body: HTMLElement) {
   body.append(h('p', { class: 'muted small' }, `An artist makes one work per task. Quality is the outcome: the better it is, the longer it cheers the people; admired works pay fees for a few years, celebrated ones bring a free card of their kind and masterpieces may carry a famous name. Libraries show 1 work, universities 2, museums 4; ${museumsOpen(S) ? 'in this Age of Enlightenment visitors pay for them.' : 'from the Age of Enlightenment visitors will pay to see them.'}`));
   body.append(h('h3', {}, 'Commission a work'), h('p', { class: countCards('patronage') ? 'muted small' : 'bad small' }, `Each work takes a Commission a Work of Art card (you hold ${countCards('patronage')}) and a free artist or courtier. Draw them in the People deck or buy a pack.`));
   const list = h('div', { class: 'tlist' });
-  for (const gd of Object.values(GENRES)) list.append(h('div', { class: 'trow' }, h('span', { class: 'gico', html: icon(gd.icon, 20) }), h('div', { class: 'a-t' }, h('b', {}, gd.name), h('small', {}, `${artCost(S, gd.id)} ducats · ${gd.desc}`)), h('div', { class: 'r-acts' }, peopleAction('artwork', gd.id, 'Commission'))));
+  for (const gd of Object.values(GENRES)) list.append(h('div', { class: 'trow' }, h('span', { class: 'gico', html: icon(gd.icon, 20) }), (() => { const d = h('small', { hidden: true }, gd.desc); return h('div', { class: 'a-t' }, h('b', {}, gd.name, infoToggle([d], `About ${gd.name}`)), h('small', {}, `${artCost(S, gd.id)} ducats`), d); })(), h('div', { class: 'r-acts' }, peopleAction('artwork', gd.id, 'Commission'))));
   body.append(list);
   body.append(h('h3', {}, `The crown's collection (${works.length})`));
   if (!works.length) body.append(h('p', { class: 'muted' }, 'Nothing yet. Invite an artist or send a courtier with a Commission card.'));

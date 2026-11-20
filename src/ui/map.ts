@@ -417,7 +417,7 @@ export class MapView {
       if (this.held) { this.held = false; return; }
       if (was === 1 && this.moved <= 6 && e.type === 'pointerup') {
         const id = this.idAt(e.clientX, e.clientY);
-        if (this.pickMode && e.pointerType !== 'touch') { if (id) this.onPick(id); return; }
+        if (this.pickMode) { if (id) this.onPick(id); return; } // choosing where a card goes: a tap is enough
         this.select(id);
         this.onSelect(id);
       }

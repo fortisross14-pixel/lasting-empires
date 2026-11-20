@@ -1,4 +1,5 @@
 // Ending a turn: what must be settled first, skip ahead, settings, and the year's report.
+import { infoToggle } from './simplify';
 import { sfx } from './sound';
 import type { GameState, MissionKind, Cat, BattleRecord } from '../types';
 import { CATS } from '../types';
@@ -47,11 +48,14 @@ export function readyToEnd(again: () => void): boolean {
 export function showAttention(again: () => void) {
   const fresh = new Set(todo.filter(a => !seenTodo.has(a.id)).map(a => a.id));
   for (const a of todo) seenTodo.add(a.id);
+  // one line for each thing still open; who would do it, and how to stop these reminders, behind ⓘ
+  const subs = todo.map(a => h('small', { hidden: true }, a.text));
+  const note = h('p', { class: 'muted small gm-save', hidden: true }, 'You will not be asked again about these. Reminders can be switched off in Menu → Settings.');
   openModal(h('div', { class: 'mbox narrow gmenu todo' },
-    h('div', { class: 'gm-head' }, h('h2', {}, 'Before the turn ends'), h('button', { class: 'iconbtn', 'aria-label': 'Close', onclick: closeModal, html: icon('close', 18) })),
-    h('div', { class: 'gm-list' }, todo.map(a => h('button', { class: 'gm-row' + (fresh.has(a.id) ? ' new' : ''), onclick: () => { closeModal(); openWin(a.cat, a.tab); } },
-      h('span', { class: 'gm-i', html: icon(a.icon, 20) }), h('span', { class: 'gm-t' }, h('b', {}, a.title), h('small', {}, a.text)), h('span', { class: 'a-go', html: icon('next', 14) })))),
-    h('p', { class: 'muted small gm-save' }, 'You will not be asked again about these. Reminders can be switched off in Menu → Settings.'),
+    h('div', { class: 'gm-head' }, h('h2', {}, 'Still to do', infoToggle([...subs, note], 'Details')), h('button', { class: 'iconbtn', 'aria-label': 'Close', onclick: closeModal, html: icon('close', 18) })),
+    h('div', { class: 'gm-list' }, todo.map((a, i) => h('button', { class: 'gm-row' + (fresh.has(a.id) ? ' new' : ''), onclick: () => { closeModal(); openWin(a.cat, a.tab); } },
+      h('span', { class: 'gm-i', html: icon(a.icon, 20) }), h('span', { class: 'gm-t' }, h('b', {}, a.title), subs[i]), h('span', { class: 'a-go', html: icon('next', 14) })))),
+    note,
     h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: closeModal }, 'Back to the map'), h('button', { class: 'btn primary', onclick: () => { closeModal(); again(); } }, 'End the turn'))));
 }
 

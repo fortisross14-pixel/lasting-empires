@@ -2055,3 +2055,62 @@ p.bad::before { content: '! '; font-weight: 700; }
   .has-scene .title-head .eyebrow, [data-style="chancery"] .has-scene .title-head .eyebrow { color: #e9c98a; text-shadow: 0 1px 6px #000c; }
   .title-sheet { flex: 1 0 auto; padding: 20px 16px 30px; padding-bottom: max(30px, env(safe-area-inset-bottom, 0px)); background-color: var(--ink); background-image: var(--laid); border-top: 3px double var(--text); box-shadow: 0 -10px 26px #0008; }
 }
+
+/* ---------- the province at a glance (summary first, detail on a tap) ---------- */
+.ptiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.ptile { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 10px 4px 8px; background: var(--card, #fffdf8); border: 1.5px solid var(--text); box-shadow: 2px 2px 0 var(--text); color: var(--text); cursor: pointer; min-width: 0; }
+.ptile b { font-family: var(--f-title); font-size: calc(24px * var(--ts, 1)); line-height: 1.05; }
+.ptile span { font-size: calc(12px * var(--ts, 1)); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.ptile small { font-size: calc(12px * var(--ts, 1)); color: var(--muted); font-style: italic; }
+.ptile.good b { color: var(--good); } .ptile.bad b { color: var(--wax); }
+.ptile[aria-expanded="true"] { background: var(--text); color: var(--panel); } .ptile[aria-expanded="true"] span, .ptile[aria-expanded="true"] small, .ptile[aria-expanded="true"] b { color: var(--panel); }
+.ptile-detail { padding: 10px 12px; border: 1px solid var(--line); background: var(--panel-2, #f6f1e6); display: grid; gap: 8px; }
+.pparts { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: calc(14px * var(--ts, 1)); }
+.pparts li { display: flex; justify-content: space-between; } .pparts li.good b { color: var(--good); } .pparts li.bad b { color: var(--wax); }
+.pgoods { display: grid; gap: 4px; } .pgoods h3 { margin: 6px 0 2px; }
+.pgood { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 8px; padding: 6px 4px; background: none; border: 0; border-bottom: 1px solid var(--line); color: var(--text); text-align: left; font-size: calc(16px * var(--ts, 1)); cursor: pointer; }
+.pgood b { font-family: var(--f-title); font-variant-numeric: tabular-nums; }
+.pgood-more { grid-column: 2 / -1; color: var(--muted); font-size: calc(13px * var(--ts, 1)); }
+.pnext { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; padding: 10px; border: 1.5px solid var(--text); background: var(--card, #fffdf8); margin-top: 4px; }
+.pnext small { display: block; color: var(--muted); font-size: calc(13px * var(--ts, 1)); }
+.pnext .a-ico { color: var(--wax); }
+
+/* ---------- one Cards button over the map, in place of the zoom and shortcut buttons ---------- */
+#handbtn { position: absolute; z-index: 3; right: max(10px, env(safe-area-inset-right, 0px)); bottom: 12px; display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 16px 0 12px;
+  background: var(--wax, #9e1f2a); color: #fbf3e4; border: 1.5px solid var(--text); box-shadow: 3px 3px 0 var(--text); font-family: var(--f-title); font-size: calc(17px * var(--ts, 1)); letter-spacing: .04em; cursor: pointer; }
+#handbtn .hb-n { min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: #fbf3e4; color: var(--text); font-family: var(--f-body); font-size: calc(14px * var(--ts, 1)); line-height: 24px; text-align: center; }
+#handbtn .hb-i { display: grid; }
+#app:has(#win:not([hidden])) #handbtn, #app:has(#sheet:not([hidden])) #handbtn, body:has(#pickbar) #handbtn { display: none; }
+#modebtn { right: auto; left: max(10px, env(safe-area-inset-left, 0px)); }
+.hand-tray { width: min(760px, 100%); }
+.ht-h { flex: none; display: flex; align-items: center; gap: 6px; margin: 8px 0 4px; color: var(--cc); }
+.ht-row { flex: none; display: flex; gap: 8px; overflow-x: auto; padding: 2px 4px 8px 2px; scrollbar-width: none; }
+.ht-row .card { flex: none; cursor: pointer; }
+/* in the hand a card is its picture and its name; what it does is one tap away */
+.hand-tray .card .c-text { display: none; }
+.hand-tray .card .c-art { flex: 1 1 auto; min-height: 0; }
+.hand-tray .card .c-art img, .hand-tray .card .c-art .c-pic { height: 100%; width: 100%; object-fit: cover; }
+.ht-n { position: absolute; top: 4px; right: 4px; min-width: 26px; height: 22px; padding: 0 5px; border-radius: 11px; background: var(--text); color: var(--panel); font-size: calc(13px * var(--ts, 1)); line-height: 22px; text-align: center; z-index: 2; }
+
+/* ---------- summary first: explanations behind ⓘ (src/ui/simplify.ts) ---------- */
+.info-t { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 8px; padding: 0; vertical-align: middle; border: 1.5px solid currentColor; border-radius: 50%; background: none; color: var(--muted); font: italic 700 calc(13px * var(--ts, 1)) / 1 var(--f-body); letter-spacing: 0; text-transform: none; cursor: pointer; flex: none; }
+.info-t[aria-expanded="true"] { background: var(--text); border-color: var(--text); color: var(--panel); }
+h3 .info-t, h2 .info-t { position: relative; top: -2px; }
+/* a bigger target than it looks, for a thumb */
+.info-t::after { content: ''; position: absolute; inset: -11px; }
+.info-t { position: relative; }
+.info-row { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.info-row .info-t { margin-left: 0; }
+p.more:not([hidden]) { border-left: 2px solid var(--line); padding-left: 10px; }
+/* cards listed in a deck show their picture, name and figures; what a card does is on its own page, a tap away */
+.win-body .card.wide .c-text { display: none; }
+.win-body .card.wide { height: auto; min-height: 96px; }
+/* technologies: name, time and what they unlock; the rest behind ⓘ */
+.tc-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.tc-more { display: grid; gap: 4px; }
+.tc-more[hidden] { display: none; }
+.ev-more { display: inline; padding: 0 2px; border: 0; border-bottom: 1px solid currentColor; background: none; color: var(--wax); font: inherit; font-style: italic; cursor: pointer; }
+.fx-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; padding: 2px 8px 6px; }
+.fx { padding: 2px 8px; border: 1.5px solid currentColor; font-family: var(--f-title); font-size: calc(13px * var(--ts, 1)); font-weight: 700; white-space: nowrap; }
+.fx.good { color: var(--good); } .fx.bad { color: var(--wax); }
+.reveal-row .fx-chips + .c-text { font-size: calc(11px * var(--ts, 1)); opacity: .85; }
