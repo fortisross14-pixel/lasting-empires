@@ -80,10 +80,10 @@ the player per game, the 1451 top 10 changes by ~3 realms per century.
 Three levels in `src/data/difficulty.ts`, read through `diff(s)`: how much stronger than your border guard a rival
 must be to declare war on you (×1.6 / ×1.25 / ×1.0), years between such wars (45 / 30 / 12), years of peace at the
 start (15 / 10 / 5), mercy for a crown of three provinces or fewer (90% / 70% / 30%), starting treasure
-(×1.5 / ×1 / ×0.8), rival development (×0.8 / ×1 / ×1.3), rival army limit (−1 / 0 / +2). Standard is the game as it
+(×1.5 / ×1 / ×0.8), rival development (×0.8 / ×1 / ×1.6), rival army limit (−1 / 0 / +2). Standard is the game as it
 was: the same seed gives the same campaign as before the levels existed (checked in `npm test` and against the old code).
 
-`DIFF=0|1|2 MODE=reasonable SEEDS=4 SIMSEED=11 npm run sim` (12 games each, 1451–1750):
+First measurement, before the tuning below. `DIFF=0|1|2 MODE=reasonable SEEDS=4 SIMSEED=11 npm run sim` (12 games each, 1451–1750):
 
 | Level | Survived | Top 3 | First | Target for top 3 |
 |---|---|---|---|---|
@@ -95,6 +95,47 @@ The order is right and the spread is too narrow: Gentle is not gentle enough and
 Twelve games a level is a small sample, and the bot keeps its troops at home, so it feels war pressure less than a
 player would. Tuning the table against 30 games a level is roadmap action 4.13; the first levers to move are
 `aiGrowth` and `warEdge`.
+
+### Tuned against 60 games a level (roadmap 4.13)
+After the rivals of phase 4 (goals, warnings, requests). `DIFF=0|1|2 MODE=reasonable SEEDS=10 npm run sim`, run
+twice (`SIMSEED=11` and `SIMSEED=29`): Castile, Portugal and Aragon, ten worlds each, 1451–1750.
+
+| Level | Survived | Top 3, first run | Top 3, second run | Together | First | Target |
+|---|---|---|---|---|---|---|
+| Gentle | 60/60 | 25/30 | 22/30 | 47/60 (78%) | 40 | about 80% |
+| Standard | 60/60 | 20/30 | 15/30 | 35/60 (58%) | 27 | 55–65% |
+| Hard, rivals ×1.6 | 60/60 | 10/30 | 12/30 | 22/60 (37%) | 11 | 30–40% |
+
+One number changed: Hard's `aiGrowth`, 1.3 → 1.6. Gentle and Standard were in their bands already and are untouched,
+so Standard is still the game as it was. How Hard was chosen (30 games each, `SIMSEED=11`):
+
+| Hard variant | Survived | Top 3 |
+|---|---|---|
+| As it was: growth ×1.3, war at ×1.0, every 12 years, army +2 | 30/30 | 15 (50%) |
+| Growth ×1.6, the rest as it was (**chosen**) | 30/30 | 10 (33%) |
+| Growth ×1.5, war at ×0.9, army +3 | 29/30 | 11 (37%) |
+| Growth ×1.4, war at ×0.85, every 8 years, army +4 | 30/30 | 15 (50%) |
+
+What it shows: for the bot, the ranking follows how fast rivals grow, not how often they attack. More and earlier
+wars with bigger armies moved nothing (last row). Two reasons, both to remember when a person plays: the bot keeps
+its companies at home, so a strong border guard holds off most declarations; and since phase 4 a war on the player
+comes a year after its warning, which the bot does not use but a person can. War pressure on Hard is therefore
+judged by play, not by this table. Single runs of 30 games swing by about five games (Standard: 20, then 15), so
+do not tune on fewer than 60.
+
+## Rivals (roadmap 4.1–4.6)
+Levers, all without dice except the requests' own events:
+- **Goals** (`src/engine/rivals.ts`): `GOAL_MIN` 5 provinces to have one, kept `GOAL_YEARS` 25, `GOAL_WEIGHT` 3 (the
+  goal counts as three candidates when a realm picks a war), `GOAL_DRIFT` −2 relations a year towards the goal.
+  `HIST_GOALS` lists what history gave twelve realms to want.
+- **Warning** (`mayStrikePlayer` in `src/engine/ai.ts`): a realm that wants war with the player sends the dispatch
+  and waits a year; the warning holds `WARNING_VALID` 10 years. The wish itself is unchanged (`wantsPlayer`:
+  relations, grace, `warGap`, `warEdge`).
+- **What rivals do each year** (`aiFocus`): `FOCUS_CHANCE` 0.5; walls cost `WALL_COST` 30 × price level and stop at
+  fort 2, so the cautious do not turn the map into fortresses.
+- **Requests** (`src/engine/requests.ts`): chance a year while the conditions hold, and years before it may come
+  again: ultimatum 6% / 15, silver 7% / 8, joint war 6% / 12, drop an ally 5% / 15.
+- Great-power wars (both sides `GREAT_POWER` 12 provinces or more) reach the player as a dispatch.
 
 Pace, scripted runs with no player actions (seed 4242): 33–43% of turns brought no card and no prompt. With skip
 ahead (`stopReasons` in `src/engine/pace.ts`, at most 8 quarters a press) the same 400 turns take 16–36% fewer

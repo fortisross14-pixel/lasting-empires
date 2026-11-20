@@ -95,7 +95,7 @@ Status: **done** (November 2026).
 | 1.1 | **Skip ahead.** A second button beside End Turn plays quarters until something needs the player, at most 8 at a time. It stops when: a prompt is waiting (event, battle, attack, peace, succession); a card was drawn; a task finished; a war started; the hand is over its limit; the year turned in a year with battles. One line then says what passed ("3 seasons · +62 ducats · 1 Economy card"). | `src/engine/pace.ts` (`stopReasons`), `onSkipAhead` in `src/ui/endturn.ts` | With skip-ahead the scripted run never ends a turn with nothing new; the button is 44 px on a phone | ☑ |
 | 1.2 | **Things to do.** Before the turn ends the game lists what is still open, each row opening the right screen: a card in hand that a free person could carry out now (one line per deck; Embassy and Peace Envoy never count, they are always there); a free administrator, merchant, scholar or courtier with nothing to carry while a new card is affordable; a need more than 20% unmet; provinces under 25% happiness. End Turn shows the count. The list appears only for things not shown before, never blocks a second press, and stays silent during the tutorial and guided missions. | `attention()` and `cardHasTarget()` in `src/engine/pace.ts`; `readyToEnd`, `showAttention` in `src/ui/endturn.ts` | Each rule has a check in `npm test`; a setting turns the list off; computing it takes about 2 ms on the largest realms | ☑ |
 | 1.3 | **Deck dots.** A bottom tab shows a dot when that deck holds a card that a free person could carry now. | `renderTabs` | Dot appears and clears as people leave and return | ☑ |
-| 1.4 | **Three difficulties**: Gentle, Standard, Hard, chosen when a game or mission starts and shown in the Menu. Levers, all in one table: how much stronger a rival must be to declare war on you (×1.6 / ×1.25 / ×1.0), years between such wars (45 / 30 / 12), years of peace at the start (15 / 10 / 5), mercy for a crown of three provinces or fewer (90% / 70% / 30%), starting treasure (×1.5 / ×1 / ×0.8), rival growth (×0.8 / ×1 / ×1.3), rival army size (−1 / 0 / +2). | `src/data/difficulty.ts`, `diff()` in `src/engine/core.ts`, read in `src/engine/ai.ts` and `newGame` | `DIFF=0|1|2 npm run sim` runs; Standard gives the same results as before | ☑ |
+| 1.4 | **Three difficulties**: Gentle, Standard, Hard, chosen when a game or mission starts and shown in the Menu. Levers, all in one table: how much stronger a rival must be to declare war on you (×1.6 / ×1.25 / ×1.0), years between such wars (45 / 30 / 12), years of peace at the start (15 / 10 / 5), mercy for a crown of three provinces or fewer (90% / 70% / 30%), starting treasure (×1.5 / ×1 / ×0.8), rival growth (×0.8 / ×1 / ×1.3; Hard raised to ×1.6 by action 4.13), rival army size (−1 / 0 / +2). | `src/data/difficulty.ts`, `diff()` in `src/engine/core.ts`, read in `src/engine/ai.ts` and `newGame` | `DIFF=0|1|2 npm run sim` runs; Standard gives the same results as before | ☑ |
 | 1.5 | **Game length for the open game**: A reign (40 years, about 160 turns), A century (100 years), The whole age (to the end date). Missions keep their own deadline. | realm picker in `src/ui/title.ts`; `newGame(..., opts)` | The end screen arrives in the chosen year | ☑ |
 | 1.6 | **Settings** in the Menu: warn before ending a turn with things to do (on), show the skip-ahead button (on), reduced motion (follows the device, can be forced). Stored per device. Sound and text size join in Phase 2. | `src/ui/settings.ts` | Each setting survives a reload | ☑ |
 | 1.7 | **Tests.** `npm test` runs the engine without a browser: same seed gives the same game; a save survives `JSON` and `migrate`; 12 realms × 3 start dates play 40 turns with no error; every beginner mission's cards exist; pace and difficulty rules. | `scripts/test.ts` | Runs in under a minute | ☑ |
@@ -112,7 +112,7 @@ Status: **done** (November 2026).
 - **Pace:** in scripted runs of 400 turns, skip ahead cuts End Turn presses by 16–36% and never passes a card, a
   prompt or a finished task. An open game can now be 160 turns instead of 1,200.
 - **Difficulty:** 12 bot games a level finish in the top three 8, 6 and 5 times (Gentle, Standard, Hard). The order
-  is right, the spread narrower than the targets of section 3; tuning is action 4.13.
+  is right, the spread narrower than the targets of section 3; action 4.13 has since tuned it (78%, 58%, 37%).
 - **Checks:** 10 engine checks in about 20 seconds; typecheck, checks, build and a short bot campaign on every push.
 - **Goods:** the steward and the six-needs view replace 21 rows of bookkeeping as the first thing the player sees.
 - **Code:** the interface is 16 modules, none over 475 lines; saves migrate by numbered steps; a browser smoke test
@@ -204,7 +204,7 @@ Crusader Kings makes stories from people. Lasting Empires already has the people
 
 ## Phase 4 — Opponents and battles
 
-Status: **in progress**. ☑ done, ◐ partly done. Open: the budget of actions for rivals (4.5) and the tuning (4.13).
+Status: **done but for one part**. ☑ done, ◐ partly done. Open: the budget of actions for rivals (second half of 4.5).
 
 A mobile player does not need a symmetric AI. They need rivals whose character and plans can be read and acted on.
 
@@ -234,7 +234,7 @@ A mobile player does not need a symmetric AI. They need rivals whose character a
 
 | Id | Action | Where | Done when |
 |---|---|---|---|
-| 4.13 | **Tune the three difficulties** against the targets in section 3 with 30 simulated games each, and record the result in `docs/BALANCE.md`. | levers in `src/data/difficulty.ts` | The table matches the targets |
+| 4.13 ☑ | **Tune the three difficulties** against the targets in section 3. Done with 60 simulated games a level (two runs of 30): top three in 78% on Gentle, 58% on Standard, 37% on Hard. One number changed: on Hard rivals now grow at ×1.6 (was ×1.3). Three variants of Hard were tried; more and earlier wars moved nothing for the bot, faster rivals did. | `src/data/difficulty.ts`; the tables in `docs/BALANCE.md` | Done: all three in their bands |
 
 ## Phase 5 — Ship
 
