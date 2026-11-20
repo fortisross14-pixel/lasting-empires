@@ -290,6 +290,7 @@ check('every chain can be walked down every road to its end, and no step is too 
     const def = EVENT[id];
     if (def.window) s.year = Math.max(s.year, def.window[0]);
     if (id === 'loan_1') player(s).gold = 10;
+    if (id === 'printer_1') s.techs = s.techs.filter(x => x !== 'printing');
     ok(!def.cond || def.cond(s), `${id}: cannot begin in a plain game`);
     const v = def.setup ? def.setup(s) : {};
     ok(v, `${id}: found nowhere to happen`);
@@ -319,6 +320,21 @@ check('the new history, core and news events: every option runs and no text is t
   for (const id of Object.keys(CORE)) ok(EVENT['core_' + id], `the principle ${id} has no event`);
 });
 
+check('no event text is longer than the writers\' limit', () => {
+  const s = play(newGame('castile', 431), 8); s.queue = [];
+  let rendered = 0;
+  for (const e of EVENTS) {
+    let v: Record<string, string | number> | null = {};
+    try { v = e.setup ? e.setup(s) : {}; } catch { v = null; }
+    let text = '';
+    try { text = e.text(s, v ?? {}); } catch { continue; } // needs a situation this game is not in
+    if (/undefined/.test(text)) continue;
+    rendered++;
+    ok(words(text) <= MAX_WORDS, `${e.id}: ${words(text)} words, the limit is ${MAX_WORDS}`);
+  }
+  ok(rendered >= EVENTS.length * 0.8, `only ${rendered} of ${EVENTS.length} event texts could be read`);
+});
+
 check('the history deck has at least eight dated events in every half-century', () => {
   const count: Record<number, number> = {};
   for (const e of EVENTS) if (e.window) { const k = Math.min(1700, Math.max(1450, Math.floor(e.window[0] / 50) * 50)); count[k] = (count[k] ?? 0) + 1; }
@@ -329,6 +345,8 @@ check('the history deck has at least eight dated events in every half-century', 
 check('the history of the realm keeps the weighty moments and forgets the rest', () => {
   ok(momentWeight('You declare war on Granada.') > 0 && momentWeight('Ambition fulfilled: Reconquista!') > momentWeight('Peace with Granada.'), 'weights are out of order');
   eq(momentWeight('Hired Levy Infantry.'), 0, 'a hired company is remembered');
+  eq(momentWeight('Kashmir has fallen and is no more.'), 0, 'the fall of a far kingdom is kept as this realm\'s history');
+  ok(momentWeight('Granada is taken!') > momentWeight('Research complete: Pike Square.'), 'a conquest weighs no more than a study');
   const s = play(newGame('castile', 421), 60);
   ok((s.stats.annals ?? []).length > 0, 'fifteen years of Castile left no moment worth keeping');
   ok((s.stats.annals ?? []).length <= ANNALS_MAX, 'the annals outgrew their limit');

@@ -28,18 +28,21 @@ const prestige = (s: GameState, n: number) => { player(s).prestige = Math.max(0,
 const courtAll = (s: GameState, d: number) => { for (const c of s.characters) if (!c.ruler) addLoyalty(c, d); };
 /** The next step of the same story, with the same province or person and the road now taken. */
 const next = (s: GameState, v: Vars, id: string, min: number, max: number, road: string) => later(s, id, min, max, { ...v, path: road });
+/** The press arrives: the realm learns Printing Press, and when books are free every study gains a point a year. */
+const learnPrinting = (s: GameState, free: boolean) => { if (!s.techs.includes('printing')) s.techs.push('printing'); if (free) s.flags.printing_bonus = 1; };
 /** One line for each road into a step. */
 const byPath = (v: Vars, lines: Record<string, string>) => lines[path(v)] ?? Object.values(lines)[0];
 
 export const CHAIN_EVENTS: EventDef[] = [
   // ---------- 1. the printing house ----------
   {
-    id: 'printer_1', title: 'A Printer Asks for a Licence', art: 'book', window: [1455, 1560], chance: 0.1,
-    text: s => `A journeyman from Mainz has set up a press of metal letters behind the cloth market of ${capital(s)?.name ?? 'your capital'}. He can make two hundred Psalters in the time a scribe makes one, and asks only your licence to sell them.`,
+    id: 'printer_1', history: true, title: 'The Printing Press', art: 'book', window: [1458, 1480], chance: 0.15,
+    cond: s => !s.techs.includes('printing'),
+    text: s => `A journeyman from Mainz has set up a press of metal letters behind the cloth market of ${capital(s)?.name ?? 'your capital'}. He can make two hundred Psalters in the time a scribe makes one, and asks your licence, and a loan for paper.`,
     options: [
-      { label: 'Let him print what sells', run: (s, v) => { next(s, v, 'printer_2', 3, 6, 'free'); return [good('The press turns', 'The first sheets hang drying over the street within a week.', 'book')]; } },
-      { label: 'A licence, and a censor to read every sheet', run: (s, v) => { next(s, v, 'printer_2', 3, 6, 'censor'); addChurchRel(s, 3); return [neutral('Printed with permission', 'Each book will carry your seal and the bishop\'s. Favour with your church +3.', 'book')]; } },
-      { label: 'No. Scribes have served well enough', run: s => { addChurchRel(s, 6); return [neutral('The press is sold for its metal', 'The scribes\' guild sends you a fine Book of Hours in thanks. Favour with your church +6.', 'church')]; } },
+      { label: 'Let him print what sells', hint: 'a loan for paper', can: s => needs(s, 20), run: (s, v) => { pay(s, 20); learnPrinting(s, true); next(s, v, 'printer_2', 3, 6, 'free'); return [good('The press turns', 'You learn Printing Press, and every study gains +1 research a year. The first sheets hang drying over the street within a week.', 'book')]; } },
+      { label: 'A licence, and a censor to read every sheet', hint: 'a loan for paper', can: s => needs(s, 20), run: (s, v) => { pay(s, 20); learnPrinting(s, false); addChurchRel(s, 3); next(s, v, 'printer_2', 3, 6, 'censor'); return [neutral('Printed with permission', 'You learn Printing Press. Each book will carry your seal and the bishop\'s: favour with your church +3, but studies gain nothing yet.', 'book')]; } },
+      { label: 'No. Scribes have served well enough', run: s => { addChurchRel(s, 6); stab(s, 1); return [neutral('The press is sold for its metal', 'The scribes\' guild sends you a fine Book of Hours in thanks. Stability +1; favour with your church +6.', 'church')]; } },
     ],
   },
   {
@@ -49,7 +52,7 @@ export const CHAIN_EVENTS: EventDef[] = [
       censor: 'Your censor has forty titles waiting on his desk and reads four a month. The printer says a rival in Venice has offered him a shop, paper on credit and no questions, and he will go by Easter unless something changes.',
     }),
     options: [
-      { label: 'Leave the presses alone', run: (s, v) => { addChurchRel(s, -8); addCard(s, 'study_state'); next(s, v, 'printer_3', 4, 8, 'free'); return [neutral('The goose flies', 'The bishop is furious (favour −8). A printed treatise on government reaches your desk: one Treatise on Government card.', 'book')]; } },
+      { label: 'Leave the presses alone', run: (s, v) => { addChurchRel(s, -8); addCard(s, 'study_state'); learnPrinting(s, true); next(s, v, 'printer_3', 4, 8, 'free'); return [neutral('The goose flies', 'The bishop is furious (favour −8). With the presses free, every study gains +1 research a year, and a printed treatise reaches your desk: one Treatise on Government card.', 'book')]; } },
       { label: 'Tighten the hand on them', hint: 'more censors', can: s => needs(s, 15), run: (s, v) => { pay(s, 15); addChurchRel(s, 5); next(s, v, 'printer_3', 4, 8, 'closed'); return [neutral('Seals on every sheet', 'Three more censors are sworn in. Favour with your church +5.', 'lock')]; } },
     ],
   },

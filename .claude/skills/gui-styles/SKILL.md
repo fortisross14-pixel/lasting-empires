@@ -27,6 +27,10 @@ One style, `data-style="chancery"` on `<html>`; its rules are the override block
 - **Map**: realm colours are washed toward the paper with `wash(hex, k)` in `map.ts` (0.42 for others, 0.12 for the player and the picked realm) so the player's land reads first.
 - **Coats of arms**: `armsSvg(id, color)` in `src/ui/banners.ts`; use the `shield(id, color, small)` helper in `src/ui/state.ts`. Great realms have hand-made arms in `ARMS`; every other realm gets arms built from its id hash and colour (always the same). Add arms for a new major realm to `ARMS` rather than drawing letters.
 
+## People and pictures
+- A person's page (`charDetail` in `modal.ts`) uses the wide card (`charCard(c, S, { wide: true })`) so the portrait is never squeezed, then loyalty and wish.
+- `src/ui/share.ts` draws on a canvas with the same two fonts and the tokens' colours written out (a canvas cannot read CSS variables): keep `INK`, `PAPER`, `WAX` there in step with the style tokens.
+
 ## Sound
 - `sfx(name)` from `src/ui/sound.ts` plays one of the effects in `RECIPES`; `buzz()` is the matching touch of haptics. Call them where the thing happens (a card played, a card turned, End Turn), never from the engine.
 - Effects are synthesized (noise and tones), under a second, and never loop. A new moment gets a new recipe only if no existing one fits; the palette is paper, wax, quill, coin, drum, bell, lute.

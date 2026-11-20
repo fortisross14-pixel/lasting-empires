@@ -4,16 +4,18 @@ import type { GameState } from '../types';
 import { player } from './core';
 import { reignOf } from './court';
 
-/** What makes a line of the log worth remembering, and how much. Lines that match nothing are forgotten. */
+/** What makes a line of the log worth remembering, and how much. Lines that match nothing are forgotten.
+ *  Only what the realm itself did or suffered counts: the fall of a far kingdom is news, not this realm's history. */
 const WEIGHTS: [RegExp, number][] = [
   [/^Ambition fulfilled|^Mission accomplished|revolution triumphs|crowns of .+ are united/, 6],
-  [/^Civil war|^Revolution:|declares independence|declares bankruptcy|^Against all odds/, 5],
-  [/^You open the |opens the .*Age/, 5],
-  [/enters a personal union|is integrated into the realm|becomes its vassal/, 4],
+  [/^Civil war|^Revolution:|declares independence as ruler|declares bankruptcy|^Against all odds/, 5],
+  [/^You open the /, 5],
+  [/enters a personal union with your crown|is integrated into the realm/, 4],
   [/declares war on you|^You declare war on|^A coalition forms against/, 4],
   [/\((masterpiece|great work)\)/i, 4],
-  [/^Peace with|court moves from|discovers |^Colony founded|conquers .+ from the/, 3],
-  [/has fallen and is no more|is lost at sea|leaves your court|is absorbed by/, 2],
+  [/^Peace with|court moves from|discovers |^Colony founded|conquers .+ from the| is taken!$/, 3],
+  [/opens the .*Age/, 3],
+  [/^Defeat at | holds!$|is lost at sea|leaves your court|^Trade post opened|^Research complete: /, 1],
 ];
 export const momentWeight = (text: string) => WEIGHTS.find(([re]) => re.test(text))?.[1] ?? 0;
 /** How many moments a save keeps. When full, the lightest and oldest goes. */

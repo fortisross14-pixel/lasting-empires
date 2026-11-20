@@ -43,7 +43,7 @@ Reference games, and what we take from each:
 | Turns in a 1451–1750 campaign | 1,200 (one turn is a quarter) | `endTurn` in `src/engine/turn.ts` |
 | Turns that bring no card and no prompt | 33–43% (Portugal 33%, Venice 43%), up to 5 in a row | scripted run, seed 4242 |
 | Cards drawn | about 0.73 a turn | same run |
-| Events (before Phase 3; now 139 with 62 dated, at least 8 in every half-century) | 77, of which 53 dated: 20 before 1500, 7 in 1500–49, 4 in 1550–99, 6 in 1600–49, 6 in 1650–99, 10 after 1700 | `src/engine/events.ts` |
+| Events (before Phase 3; now 138 with 62 dated, at least 8 in every half-century) | 77, of which 53 dated: 20 before 1500, 7 in 1500–49, 4 in 1550–99, 6 in 1600–49, 6 in 1650–99, 10 after 1700 | `src/engine/events.ts` |
 | Event chains (a choice that comes back) | 0 (now 10) | same |
 | Realms with historical rulers | 30 of 216 | `RULERS` in `src/data/nations.ts` |
 | Character events | 0 (now 12): people have rarity, traits and a hidden year of death, nothing else | `Character` in `src/types.ts` |
@@ -170,7 +170,7 @@ first minute.
 
 ## Phase 3 — Story
 
-Status: **in progress**. ☑ done, ◐ partly done. Open: the older events' rewrite (3.10) and sharing the history as an image (3.12).
+Status: **done** (November 2026). ☑ beside an id marks a finished action.
 
 Crusader Kings makes stories from people. Lasting Empires already has the people: they only need lives.
 
@@ -192,7 +192,7 @@ Crusader Kings makes stories from people. Lasting Empires already has the people
 | 3.7 ☑ | **The thin half-centuries filled** to 8 dated events each: the Sack of Rome (1527), the Dutch Revolt (1566, with a debt repaid years later), St Bartholomew (1572), the Armada (1588), the Imjin War (1592, for East Asian realms), the tulip mania (1636), the Fronde (1648), the Royal Society (1660), the Glorious Revolution (1688). | `HISTORY_EVENTS` in `src/engine/annals.ts` | Done: counts are checked in `npm test` (21, 8, 8, 8, 8, 10) |
 | 3.8 ☑ | **Each core card answers back.** Adopting any of the eight principles brings its event within five years, once: the captains' petition, the shipwrights, the neighbours' envoys, the great survey, the clergy's objection, the young men who leave, the merchants' convoys, the commons. | `CORE_EVENTS` in `src/engine/annals.ts`; `adoptCore` in `turn.ts` | Done: old audit item 15 closed |
 | 3.9 ☑ | **News from abroad.** The 14 scripted turning points of the AI world, and every war declared between realms of 12 provinces or more, reach the court as a dispatch, one a year at most (the rest go only into the annals), with the choice to send an envoy: relations +8 and their armies known for two years. | `dispatch`, `NEWS_EVENTS` in `src/engine/annals.ts`; `worldMoments` in `history.ts`; `aiDiplomacy` in `ai.ts` | Done |
-| 3.10 ◐ | **One voice.** The rules for writers are written (`docs/WRITING.md`: speak to "you", 60 words or fewer, one concrete detail, no modern words, every option costs something), and all 62 new events follow them; `npm test` checks the length of every text it can render. Still to do: rewrite the 77 older events in the same voice (they are short enough, but many read as news, not as counsel). | `docs/WRITING.md`; `src/engine/events.ts` | The older events rewritten |
+| 3.10 ☑ | **One voice.** The rules for writers are in `docs/WRITING.md` (speak to "you", 60 words or fewer, one concrete detail, no modern words, every option costs something). The 62 new events were written to them, and 50 of the older events were rewritten: every text now has its detail ("a bombard twenty-seven feet long, which sixty oxen can barely move"), options are what a monarch would say, and the later history speaks to "you" instead of about "the King". The old one-step printing press is now the first step of the printing chain, which grants what it granted. `npm test` checks the length of every text it can render. | `docs/WRITING.md`; `src/engine/events.ts`, `chains.ts` | Done: 138 events, none over 60 words |
 | 3.13 ☑ | **The rules, in the game.** A Rules tab in the Chronicle, written from the same tables the engine uses (outcome odds by rarity, card rates and hand limits by rank, the difficulty levers, loyalty levels, the steward, the ranking, skip and undo), so it cannot disagree with the game. | `rulesTab` in `src/ui/sheets.ts` | Done: old audit item 22 closed |
 
 ### The chronicle
@@ -200,7 +200,7 @@ Crusader Kings makes stories from people. Lasting Empires already has the people
 | Id | Action | Where | Done when |
 |---|---|---|---|
 | 3.11 ☑ | **The history of your realm.** The weighty lines of the log (wars, peaces, unions, ages opened, masterpieces, civil wars, ambitions) are kept apart from the log, which forgets after 120 lines; the 15 heaviest are told reign by reign, each chapter under its ruler and by-name. Shown from the end screen and from the Chronicle's Annals at any time. | `remember`, `historyOf` in `src/engine/chronicle.ts`; `showHistory` in `src/ui/sheets.ts` | Done |
-| 3.12 | **Share it.** The scroll and the final map render to one image through the device's share sheet. | canvas in `src/ui/` | Works on iOS and Android |
+| 3.12 ☑ | **Share it.** The history of the realm becomes one picture, 1080 px wide: the map around the realm as it stands, the title, and a chapter for each reign. It goes to the device's share sheet where there is one and is saved as a file where there is not. | `historyCanvas`, `shareHistory` in `src/ui/share.ts`; the button in `showHistory` | Done in the browser (saved as a file); the share sheet itself is untested until the store builds of 5.1 |
 
 ## Phase 4 — Opponents and battles
 

@@ -49,7 +49,7 @@ const svgEl = (tag: string, attrs: Record<string, string | number> = {}) => {
 
 /** A pale watercolour wash of a realm's colour: mixed toward the paper, so the map reads like an engraved chart. */
 const WASH: Record<string, string> = {};
-function wash(hex: string, k: number): string {
+export function wash(hex: string, k: number): string {
   const key = hex + k;
   if (WASH[key]) return WASH[key];
   const m = /^#?([0-9a-f]{6})$/i.exec(hex);

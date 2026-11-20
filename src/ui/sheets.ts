@@ -1,4 +1,5 @@
 // Side panels: province, realm, goals, tasks, overseas, chronicle, and the rows they share.
+import { shareHistory } from './share';
 import { HAND_LIMITS, RATE_CAP, CARD_BASE } from '../engine/cards';
 import { DIFFICULTY } from '../data/difficulty';
 import { LOYALTY_LEVELS, DISLOYAL, LEAVES } from '../engine/court';
@@ -437,7 +438,9 @@ export function showHistory() {
       c.moments.length
         ? h('ul', { class: 'hist-list' }, c.moments.map(m => h('li', {}, h('b', {}, String(m.year)), ' ', said(m.text))))
         : h('p', { class: 'muted' }, 'A quiet reign, of which the chroniclers say little.'))),
-    h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: closeModal }, 'Close'))));
+    h('div', { class: 'mrow' },
+      h('button', { class: 'btn ghost', onclick: async () => { const r = await shareHistory(S); if (r === 'saved') toast('The history is saved as a picture', 'good'); else if (r === 'failed') toast('The picture could not be made on this device', 'bad'); } }, 'Share as a picture'),
+      h('button', { class: 'btn primary', onclick: closeModal }, 'Close'))));
 }
 
 /** The rules, written from the same tables the engine uses, so this page cannot disagree with the game. */

@@ -94,7 +94,7 @@ export function charDetail(c: Character) {
   const m = c.mission != null ? S.missions.find(x => x.id === c.mission) : null;
   const to = PROMOTION[c.role];
   openModal(h('div', { class: 'mbox narrow' },
-    h('div', { class: 'center' }, charCard(c, S)),
+    charCard(c, S, { wide: true }),
     h('h2', {}, c.name),
     h('p', { class: 'muted' }, `${c.ruler ? 'Monarch acting as ' : ''}${roleName[c.role]} · ${RARITY[c.rarity].name} (traits ×${RARITY[c.rarity].mult}) · experience ${c.xp}/3 · age ${S.year - c.born}`),
     h('ul', { class: 'traits' }, c.traits.map(t => h('li', {}, h('b', {}, TRAITS[t]?.name ?? t), ' ', TRAITS[t]?.desc ?? ''))),
