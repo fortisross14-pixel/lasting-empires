@@ -2031,3 +2031,27 @@ p.bad::before { content: '! '; font-weight: 700; }
 
 /* ---------- a played card travels to its target (roadmap 2.11) ---------- */
 .fly-card { position: fixed; z-index: 90; width: 56px; height: 76px; pointer-events: none; background: #fffdf8 center / cover no-repeat; border: 1.5px solid #241c17; box-shadow: 3px 3px 0 #241c17; will-change: transform, opacity; }
+
+/* ---------- age plates (roadmap 2.16): the plate opens the age, its name across the sky ---------- */
+.age-plate { position: relative; flex: none; width: min(460px, 100%, 52vh); margin: 0 auto 4px; border: 1px solid var(--text); box-shadow: var(--shadow, 3px 3px 0 #1b1a17); background: #efe6d2; }
+.age-plate img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; }
+.age-plate h2, [data-style="chancery"] .age-plate h2 { position: absolute; top: 5%; left: 0; right: 0; margin: 0; text-align: center; font-size: clamp(22px, 5.2vw, 34px); letter-spacing: .08em; color: #241c17; text-shadow: 0 0 6px #f6edd6, 0 0 2px #f6edd6; }
+
+/* ---------- the title scene (roadmap 2.17): the council table behind the page ---------- */
+.title-screen.has-scene { position: relative; padding: 0; overflow: hidden; background: #1c1612; }
+.title-bg { position: absolute; inset: 0 min(470px, 44vw) 0 0; background: #1c1612 url(art/title_wide.webp) center / cover no-repeat; }
+/* tablet and wider: the scene on the left, the page down the right */
+.has-scene .title-inner, [data-style="chancery"] .has-scene .title-inner { position: absolute; top: 0; right: 0; bottom: 0; width: min(470px, 44vw); max-width: none; margin: 0; overflow-y: auto; padding: 26px 24px 30px; padding-right: max(24px, env(safe-area-inset-right, 0px));
+  background-color: var(--ink); background-image: var(--laid); border-left: 3px double var(--text); box-shadow: -8px 0 24px #0006; gap: 14px; }
+.title-head { display: flex; flex-direction: column; gap: 6px; }
+.title-sheet { display: flex; flex-direction: column; gap: 14px; }
+/* phone and upright screens: the tall scene fills the screen, the name stands in its dark upper part, the page
+   comes up from below and scrolls over it */
+@media (max-width: 760px), (orientation: portrait) {
+  .title-bg { inset: 0; background-image: url(art/title_tall.webp); background-position: center top; }
+  .has-scene .title-inner, [data-style="chancery"] .has-scene .title-inner { position: absolute; inset: 0; width: auto; padding: 0; background: none; border: 0; box-shadow: none; gap: 0; }
+  .title-head { flex: none; min-height: min(52vh, 460px); padding: max(9vh, calc(env(safe-area-inset-top, 0px) + 28px)) 16px 0; justify-content: flex-start; }
+  .has-scene .title-head .title, [data-style="chancery"] .has-scene .title-head .title { color: #f6ecd6; text-shadow: 0 2px 10px #000c; }
+  .has-scene .title-head .eyebrow, [data-style="chancery"] .has-scene .title-head .eyebrow { color: #e9c98a; text-shadow: 0 1px 6px #000c; }
+  .title-sheet { flex: 1 0 auto; padding: 20px 16px 30px; padding-bottom: max(30px, env(safe-area-inset-bottom, 0px)); background-color: var(--ink); background-image: var(--laid); border-top: 3px double var(--text); box-shadow: 0 -10px 26px #0008; }
+}

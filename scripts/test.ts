@@ -3,6 +3,7 @@
 import { newGame, newMissionGame, endTurn, chooseEventOption, chooseHeir, migrate, adoptCore, SAVE_VERSION, OLDEST_SAVE } from '../src/engine/turn';
 import { quarterFlow, stewardBudget, tradeIncome } from '../src/engine/trade';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { ERAS } from '../src/data/eras';
 import { EVENT_SCENES, eventsWithArt, FACE_FAMILIES, faceFamily, faceOf } from '../src/ui/art';
 import { gunzipSync } from 'node:zlib';
 import { EVENT, EVENTS, rollEvents } from '../src/engine/events';
@@ -440,6 +441,11 @@ check('faces: sixteen for each family, kept on the person, and two generals diff
   eq(new Set(faces).size, 3, `three generals wear faces ${faces.join(', ')}`);
   eq(faceOf(court[0], s.characters), faces[0], 'the face is kept');
   for (const c of s.characters) { const f = faceOf(c, s.characters); ok(f >= 0 && f < 16, `${c.name} has face ${f}`); }
+});
+
+check('age plates and title scenes: one plate for each age, two scenes for the title', () => {
+  for (const e of ERAS) ok(existsSync(`art/age_${e.id}.webp`), `the plate of the ${e.name} is missing`);
+  for (const n of ['wide', 'tall']) ok(existsSync(`art/title_${n}.webp`), `art/title_${n}.webp is missing`);
 });
 
 check('event paintings: every one named is a file, and every event named exists', () => {

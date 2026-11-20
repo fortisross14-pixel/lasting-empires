@@ -334,12 +334,14 @@ export function showTitle() {
   setScreenBack(null);
   migrateOldSave();
   const root = clear($('#app'));
-  root.append(h('div', { class: 'title-screen' },
+  // the council table: a painted scene behind the page (wide on a tablet, tall on a phone), the name over it
+  root.append(h('div', { class: 'title-screen has-scene' },
+    h('div', { class: 'title-bg', 'aria-hidden': 'true' }),
     h('div', { class: 'title-inner' },
-      // three cards fanned out: what the game is made of
-      h('div', { class: 'hero', 'aria-hidden': 'true' }, ...['unit_knights', 'card_marriage', 'unit_galleon'].map((a, i) => h('span', { class: 'hero-card hc' + i }, h('img', { src: `art/${a}.webp`, alt: '', width: '256', height: '256', decoding: 'async' })))),
-      h('p', { class: 'eyebrow' }, 'Anno Domini 1451 – 1810'),
-      h('h1', { class: 'title' }, 'Lasting Empires'),
+      h('div', { class: 'title-head' },
+        h('p', { class: 'eyebrow' }, 'Anno Domini 1451 – 1810'),
+        h('h1', { class: 'title' }, 'Lasting Empires')),
+      h('div', { class: 'title-sheet' },
       h('p', { class: 'lede' }, 'Rule a realm from 1451 to 1810. Every action is a card; every card needs the right person. One turn is one season.'),
       (() => { // the game you were playing: one tap to go back in
         if (pending) return null;
@@ -365,7 +367,7 @@ export function showTitle() {
           h('li', {}, 'Forge troops in the Military panel: Levy + Long Pikes = Pikemen; Pikemen + Arquebusiers = Tercio.'),
           h('li', {}, 'In battle both sides play a tactic face-down. Counter the enemy and they take extra damage.'),
           h('li', {}, 'Diplomats can become Explorers, generals Conquerors, administrators Colonists, to win lands overseas. There is no going back.'),
-        )))));
+        ))))));
 }
 
 // Setters: other modules import these variables read-only, so they change them here.

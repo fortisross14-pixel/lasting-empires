@@ -31,6 +31,8 @@ One style, `data-style="chancery"` on `<html>`; its rules are the override block
 - **Coats of arms**: `armsSvg(id, color)` in `src/ui/banners.ts`; use the `shield(id, color, small)` helper in `src/ui/state.ts`. Great realms have hand-made arms in `ARMS`; every other realm gets arms built from its id hash and colour (always the same). Add arms for a new major realm to `ARMS` rather than drawing letters.
 
 ## People and pictures
+- Faces: `art/face_<family>_<row><col>.webp`, sixteen for each of five families of dress. `faceOf(c, court)` chooses a face once and keeps it on the person (`c.face`); `ROLE_FACES` says which suit each role, `POOL_FAMILY` which family a people wears. Hire cards keep the role paintings (`role_*.webp`).
+- Age plates: `art/age_<era id>.webp`, shown by `showReveal` when its title is the name of an age. Title scenes: `art/title_wide.webp` and `title_tall.webp`, set in CSS (`.title-bg`).
 - Event paintings: `art/event_<scene>.webp` (480 × 320), named for events in `EVENT_ART` (`src/ui/art.ts`). A new painting is a file and a line there; the prompts that made the set are in `docs/art-prompts-phase2.md`.
 - A person's page (`charDetail` in `modal.ts`) uses the wide card (`charCard(c, S, { wide: true })`) so the portrait is never squeezed, then loyalty and wish.
 - `src/ui/share.ts` draws on a canvas with the same two fonts and the tokens' colours written out (a canvas cannot read CSS variables): keep `INK`, `PAPER`, `WAX` there in step with the style tokens.

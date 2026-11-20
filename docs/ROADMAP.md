@@ -120,7 +120,7 @@ Status: **done** (November 2026).
 
 ## Phase 2 — Feel
 
-Status: **in progress**. Actions marked ☑ beside their id are done. Open: the music (2.9, waiting for four loops) and the art still to come (faces 2.15, age plates 2.16, title scenes 2.17).
+Status: **done but for the music** (2.9, waiting for four loops). Actions marked ☑ beside their id are done.
 
 The map is on screen 80% of the time and the game is silent. These two facts decide how the game is judged in its
 first minute.
@@ -153,9 +153,15 @@ first minute.
 | 2.12 ☑ | **Outcomes have weight.** The five outcome levels are told apart without reading: a cross, a dot, one, two or three stars under the title; a torn corner and a crooked card for the worst; a grey seal for the ordinary; a gold frame and one pass of gold leaf for Great; a double gold frame, a laurel and two passes for Exceptional. The closing note follows the level (two falling notes, one note, a rising figure). | `infoCard`, `outcomeLevel`, `stingFor` in `src/ui/prompts.ts`; `.k-info.o-0`…`.o-4` in `src/styles.css` | Done: the level can be told from the mark and the frame alone |
 | 2.13 ☑ | **Battles show the armies.** Each side is a row of painted company tiles (the 25 in `art/unit_*.webp`, the enemy's mirrored so the lines face each other) under its coat of arms, its general and one strength bar with the breaking point marked. Each round the tiles that were hit shake and show what they lost; a destroyed company is greyed and crossed out. A tap on a tile names it. The result sounds its own note. | `unitTile`, `showBattle` in `src/ui/prompts.ts` | Done: no line icons left on the battle screen where a painting exists |
 | 2.14 ☑ | **Event paintings.** 27 wide scenes open 40 events: Constantinople, the printing press, Columbus, the Cape route, Tordesillas, the Italian Wars, the Reformation, Potosí, Lepanto, the Thirty Years' War, Westphalia, Versailles, the plague, a bad harvest, a revolt, a court visitor, a great artist, tax riots, a golden age, a call to arms, the Armada, the Sack of Rome, the Estates-General, Vienna, the Seven Years' War, the warning before a war and the ultimatum. The steps of a chain share its painting. Prompts in `docs/art-prompts-phase2.md`. | `art/event_*.webp` (480 × 320, about 50 KB each, fetched when the event opens); `EVENT_ART`, `eventArt` in `src/ui/art.ts`; `showEvent` | Done: a check proves every painting named is a file and every event named exists |
-| 2.15 | **Faces for people.** Sixteen portraits for each of five dress families (Western, Islamic, East Asian, African, American): four soldiers, four men of affairs, four of learning and the church, four of the court. A person's role picks the row, their id the face, so the same person always has the same face. A realm whose family has no sheet yet keeps the role paintings. Prompts in `docs/art-prompts-phase2.md`. | `art/face_*.webp`, `src/ui/cards.ts` | Two generals at court look different |
-| 2.16 | **Six age plates**: a full-width illustration when an age opens, replacing the plain year flash. One image per age (a grid would be too small across a tablet). Prompts in `docs/art-prompts-phase2.md`. | `yearFlash`, `showEra` | Shown once per age |
-| 2.17 | **Title art**: one painted scene behind the title in place of three fanned cards, in a wide and a tall version. Prompts in `docs/art-prompts-phase2.md`. | `showTitle` | Under 150 KB each |
+| 2.15 ☑ | **Faces for people.** Eighty portraits: sixteen for each of five families of dress (Western, Islamic, East Asian, African, American), in four rows: soldiers, men of affairs, learning and faith, the court. A person's role picks the faces that suit (a diplomat the envoy, a priest the bishop or the friar); among those they take the best one nobody at court wears yet, and keep it for life, through any change of role. A woman's name takes one of the two ladies. The family follows the realm's people (Castile Western, the Ottomans Islamic, Ming East Asian). | `art/face_<family>_<row><col>.webp` (224 px); `faceOf`, `faceImg`, `ROLE_FACES` in `src/ui/art.ts`; `face` on `Character` | Done: a check proves three generals at one court wear three faces |
+| 2.16 ☑ | **Six age plates.** The page of an age, shown when it opens and from the year in the top bar, begins with its plate, the name of the age written across the sky. One image for each age. The year flash between years stays as it was. | `art/age_<id>.webp` (960 × 640, about 140 KB each, fetched when shown); `showReveal` in `src/ui/prompts.ts` | Done |
+| 2.17 ☑ | **Title art.** The council table behind the title: on a tablet the wide scene fills the left of the screen and the page (name, missions, open game, campaigns) runs down the right; on a phone the tall scene fills the screen, the name stands in its dark upper part and the page comes up from below. The scene is an oil painting, not a woodcut like the rest of the game's art: see the note under the table. | `art/title_wide.webp` (144 KB), `art/title_tall.webp` (109 KB); `showTitle`, `.title-bg` | Done: both under 150 KB |
+
+**The title scene and the house style.** Everything else painted for the game is a hand-coloured woodcut on
+parchment; the two title scenes are oil paintings. As key art on the first screen that can stand, and many games
+do it, but it is the one place where the game does not look like itself. If it should match, ask for the same
+scene with the STYLE block of `docs/art-prompts-phase2.md` and save it under the same two file names: nothing
+else changes.
 
 ### Navigation and type
 

@@ -23,6 +23,7 @@ import { warScore, peaceTerms, enemyDemands, concludePeace } from '../engine/dip
 import { troopsNear, setDefence } from '../engine/army';
 import { S, pendingReport, modalOpen, slot, saveNow, save, clearSlot, startIn, shield } from './state';
 import { eventArt, artImg } from './art';
+import { ERAS } from '../data/eras';
 import { recordMission, doneCount, showMissions, showTitle, setMissionYear } from './title';
 import { refresh, toast } from './app';
 import { openModal, closeModal } from './modal';
@@ -66,7 +67,10 @@ export async function flipAll(flips: { flip: () => void }[], delay = 380) {
 export function showReveal(title: string, subtitle: string | undefined, items: RevealItem[], done: () => void, alarm = false) {
   const row = h('div', { class: 'reveal-row' });
   const flips = items.map(it => { const f = flipCard(infoCard(it), ''); row.append(f.el); return f; });
-  openModal(h('div', { class: 'mbox reveal' + (alarm ? ' alarm' : '') }, alarm ? h('div', { class: 'alarm-band', html: icon('sword', 28) }) : null, h('h2', {}, title), subtitle ? h('p', { class: 'muted' }, subtitle) : null, row, h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: done }, 'Continue'))));
+  // an age opens (or its page is asked for) with its plate, the name written across the sky
+  const era = ERAS.find(e => e.name === title);
+  const plate = era ? h('div', { class: 'age-plate' }, h('img', { src: `art/age_${era.id}.webp`, alt: '', width: '960', height: '640', decoding: 'async' }), h('h2', {}, title)) : null;
+  openModal(h('div', { class: 'mbox reveal' + (alarm ? ' alarm' : '') + (plate ? ' has-plate' : '') }, alarm ? h('div', { class: 'alarm-band', html: icon('sword', 28) }) : null, plate ?? h('h2', {}, title), subtitle ? h('p', { class: 'muted' }, subtitle) : null, row, h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: done }, 'Continue'))));
   if (alarm) sfx('drum');
   void flipAll(flips).then(() => { const s = stingFor(items, alarm); if (s) sfx(s, 0.12); });
 }
