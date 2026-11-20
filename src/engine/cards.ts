@@ -66,7 +66,7 @@ export const CARD_TYPE_NAME: Record<CardType, string> = { people: 'People', troo
 
 /** How many cards you may keep, by realm rank: per deck and in all. Permanent cards and burdens do not count.
  *  Cards always arrive; over the limit you sell the extras (half a nation point each) before the turn ends. */
-export const HAND_LIMITS: [number, number][] = [[5, 18], [6, 22], [7, 25], [8, 28]]; // Small Kingdom, Kingdom, Great Kingdom, Empire (roadmap 5.11: was 8–15 a deck)
+export const HAND_LIMITS: [number, number][] = [[6, 20], [7, 24], [8, 28], [10, 32]]; // Small Kingdom, Kingdom, Great Kingdom, Empire (roadmap 5.11: was 8–15 a deck)
 const RANK_MIN = [0, 5, 13, 30]; // as RANKS in realm.ts
 function limitRow(s: GameState): [number, number] {
   if ((globalThis as { NOHANDLIMIT?: boolean }).NOHANDLIMIT) return [Infinity, Infinity];
