@@ -1,4 +1,4 @@
-import { inflation, ageIndex } from './core';
+import { inflation, ageIndex, diff } from './core';
 import { commandOf, GENERIC_COMMAND } from '../data/characters';
 // AI nations: economy, recruiting, upgrades, war and peace.
 import type { GameState, Nation, TroopCard, RevealItem } from '../types';
@@ -45,13 +45,12 @@ export const RISERS: Record<string, [number, number]> = {
 export const RISER_MAX = 70;
 /** Is this realm in its historical age of expansion? */
 export const rising = (s: GameState, id: string) => { const w = RISERS[id]; return !!w && s.year >= w[0] && s.year <= w[1] && provsOf(s, id).length < RISER_MAX; };
-/** Years between AI declarations of war on the player (any realm), so attacks come now and then, not every year. */
-export const AI_WAR_ON_PLAYER_GAP = 30;
+// Years between AI declarations of war on the player, and how strong the attacker must be: see data/difficulty.ts.
 
 export function aiArmyCap(s: GameState, n: Nation): number {
   const ps = provsOf(s, n.id).length;
   const bonus = (n.personality === 'expansionist' ? 2 : n.personality === 'cautious' ? 0 : 1) + (rising(s, n.id) ? 2 : 0);
-  return Math.round(2 + Math.sqrt(ps) * 2.6 + bonus + (s.year - 1453) / 100);
+  return Math.max(1, Math.round(2 + Math.sqrt(ps) * 2.6 + bonus + (s.year - 1453) / 100) + diff(s).aiArmy);
 }
 
 /** What the player can bring to bear on the border with `n`: the troops within reach of it and the walls there,
@@ -81,7 +80,7 @@ function aiEconomy(s: GameState, n: Nation) {
   // AI realms develop their land, the way a player would: bigger realms a little faster,
   // but far less than in proportion, so great empires do not win on size alone
   const pv = provsOf(s, n.id).length;
-  if (rand(s) < AI_DEV_BASE + AI_DEV_SIZE * Math.sqrt(pv) + (n.personality === 'merchant' ? 0.04 : 0)) {
+  if (rand(s) < (AI_DEV_BASE + AI_DEV_SIZE * Math.sqrt(pv) + (n.personality === 'merchant' ? 0.04 : 0)) * diff(s).aiGrowth) {
     const low = provsOf(s, n.id).filter(p => p.dev < 5 + ageIndex(s)).sort((x, y) => x.dev - y.dev); // the ceiling rises with the ages
     if (low.length) low[Math.floor(rand(s) * Math.min(4, low.length))].dev++;
   }
@@ -147,7 +146,7 @@ function aiWar(s: GameState, n: Nation) {
     const rise = rising(s, n.id);
     if (!n.army.length || rand(s) > (revolt ? 0.8 : rise ? 0.6 : 0.4)) continue;
     // a casual game: a crown on its last legs is rarely hunted down
-    if (e === s.player && !revolt && provsOf(s, s.player).length <= 3 && rand(s) < 0.7) continue;
+    if (e === s.player && !revolt && provsOf(s, s.player).length <= 3 && rand(s) < diff(s).mercy) continue;
     const target = pickTarget(s, n.id, e);
     if (!target) continue;
     const prov = s.provinces[target];
@@ -250,10 +249,10 @@ function aiDiplomacy(s: GameState, n: Nation) {
     const rel = getRel(s, n.id, t);
     if (t === s.player) {
       // the player is attacked now and then: by a neighbour that hates it and is clearly stronger where they meet
-      if (s.year < s.startYear + 10 || (s.flags.ai_war_on_player ?? -99) + AI_WAR_ON_PLAYER_GAP > s.year) return false;
+      if (s.year < s.startYear + diff(s).grace || (s.flags.ai_war_on_player ?? -99) + diff(s).warGap > s.year) return false;
       if (rel > (rise ? -10 : -40)) return false;
       const friends = alliesOf(s, n.id).filter(a => getRel(s, a, s.player) < 0).reduce((a, x) => a + powerOf(s, x) * 0.5, 0);
-      return myPow + friends > playerGuard(s, n.id) * 1.25;
+      return myPow + friends > playerGuard(s, n.id) * diff(s).warEdge;
     }
     if (rel > (rise ? 30 : n.personality === 'expansionist' ? 15 : -10)) return false;
     const theirPow = powerOf(s, t) + alliesOf(s, t).reduce((a, x) => a + powerOf(s, x) * 0.5, 0);

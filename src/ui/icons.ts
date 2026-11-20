@@ -62,6 +62,8 @@ const P: Record<string, string> = {
   map: 'M3 6 L9 3 L15 6 L21 3 V18 L15 21 L9 18 L3 21 Z M9 3 V18 M15 6 V21',
   list: 'M8 6 H21 M8 12 H21 M8 18 H21 M3 6 h.01 M3 12 h.01 M3 18 h.01',
   next: 'M5 4 L15 12 L5 20 Z M18 4 V20',
+  skip: 'M3 5 L11 12 L3 19 Z M12 5 L20 12 L12 19 Z',
+  gear: 'M12 8.5 a3.5 3.5 0 1 0 0 7 a3.5 3.5 0 1 0 0 -7 Z M12 2.5 V5 M12 19 V21.5 M2.5 12 H5 M19 12 H21.5 M5.3 5.3 L7 7 M17 17 L18.7 18.7 M18.7 5.3 L17 7 M7 17 L5.3 18.7',
   torchfire: 'M12 2 C15 6 17 9 12 14 C7 9 9 6 12 2 Z',
 };
 

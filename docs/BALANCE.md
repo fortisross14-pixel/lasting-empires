@@ -75,3 +75,29 @@ points (`worldMoments` in history.ts), 4 legendary generals (`src/data/legends.t
 with the troops actually near that border, at most once every 30 years per realm; tiny realms may become vassals of a
 rising neighbour and be absorbed after 20 years. Result (1451, 24 games): top 3 ~5/9, first ~3–4/9, ~2.6 AI wars on
 the player per game, the 1451 top 10 changes by ~3 realms per century.
+
+## Difficulty and pace (roadmap phase 1, November 2026)
+Three levels in `src/data/difficulty.ts`, read through `diff(s)`: how much stronger than your border guard a rival
+must be to declare war on you (×1.6 / ×1.25 / ×1.0), years between such wars (45 / 30 / 12), years of peace at the
+start (15 / 10 / 5), mercy for a crown of three provinces or fewer (90% / 70% / 30%), starting treasure
+(×1.5 / ×1 / ×0.8), rival development (×0.8 / ×1 / ×1.3), rival army limit (−1 / 0 / +2). Standard is the game as it
+was: the same seed gives the same campaign as before the levels existed (checked in `npm test` and against the old code).
+
+`DIFF=0|1|2 MODE=reasonable SEEDS=4 SIMSEED=11 npm run sim` (12 games each, 1451–1750):
+
+| Level | Survived | Top 3 | First | Target for top 3 |
+|---|---|---|---|---|
+| Gentle | 12/12 | 8 (67%) | 5 | about 80% |
+| Standard | 12/12 | 6 (50%) | 3 | 55–65% |
+| Hard | 12/12 | 5 (42%) | 2 | 30–40% |
+
+The order is right and the spread is too narrow: Gentle is not gentle enough and Hard not hard enough for the bot.
+Twelve games a level is a small sample, and the bot keeps its troops at home, so it feels war pressure less than a
+player would. Tuning the table against 30 games a level is roadmap action 4.13; the first levers to move are
+`aiGrowth` and `warEdge`.
+
+Pace, scripted runs with no player actions (seed 4242): 33–43% of turns brought no card and no prompt. With skip
+ahead (`stopReasons` in `src/engine/pace.ts`, at most 8 quarters a press) the same 400 turns take 16–36% fewer
+presses (Portugal 263, Venice 257, Ming 337), and no card, prompt or finished task is ever skipped past.
+An open game can end after a reign (40 years, 160 turns) or a century; a short game counts as won in the top three
+or when the realm finishes higher in the ranking than it began (`flags.rank0`).

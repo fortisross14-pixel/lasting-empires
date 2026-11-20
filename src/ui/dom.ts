@@ -21,6 +21,7 @@ export function h(tag: string, attrs: Record<string, unknown> = {}, ...kids: (Ki
 export const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
 export const clear = (el: HTMLElement) => { while (el.firstChild) el.removeChild(el.firstChild); return el; };
 export const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-export const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+/** Less motion: asked for by the device, or switched on in the game's settings. */
+export const reduced = () => document.documentElement.dataset.motion === 'calm' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 export const fmt = (n: number) => (Math.abs(n) >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(Math.round(n)));
 export const signed = (n: number) => (n >= 0 ? '+' : '−') + Math.abs(Math.round(n * 10) / 10);

@@ -293,6 +293,8 @@ export interface GameState {
   ambition: string | null;
   ambitionDone: boolean;
   over: boolean;
+  difficulty?: number;              // index into DIFFICULTY (data/difficulty.ts); Standard when missing
+  length?: string;                  // open game only: a LENGTHS id when the game ends before the age does
   savedAt?: number; // when the game was last written, to offer Continue on the title screen
 }
 

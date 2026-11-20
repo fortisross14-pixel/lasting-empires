@@ -15,6 +15,9 @@ Open `dist/index.html` in any browser. The core menus (Military, Diplomacy, Inte
 
 ## How it plays
 
+- **Pace.** *Skip* (beside End Turn) plays up to 8 quiet seasons in one tap and stops as soon as something needs you: a decision, a new card, a finished task, a war. End Turn shows how many things are still open (a card a free person could carry, someone with no task, a shortage, a province close to revolt) and lists them once before the turn ends; a dot on a deck means a card there can be played now. Both can be switched off in Menu → Settings.
+- **Difficulty and length.** Gentle, Standard or Hard, chosen when a game or a historic mission starts: it changes how readily rivals attack you, how fast they grow and your starting treasure (`src/data/difficulty.ts`). An open game can last a reign (40 years), a century, or the whole age.
+
 - **Everything is a card.** Five kinds: Military, Diplomacy, Internal, Economy, Research. You draw each at a yearly rate (1.0 base, fractions carry over), raised by buildings, research, cities and your monarch. Spend **nation points** to buy more: three are revealed, you keep one.
 - **Three currencies.** Manpower (1 per troop or person hired), nation points (buy cards), ducats (troop upkeep, building salaries, goods bought abroad).
 - **People** have a rarity: Common, Uncommon, Rare, Epic, Legendary. Rarity sets their skill and how strong their traits are. Roles: general, diplomat, administrator, merchant, researcher. Diplomats can become explorers, generals conquerors, administrators colonists — permanently.
@@ -39,7 +42,7 @@ Open `dist/index.html` in any browser. The core menus (Military, Diplomacy, Inte
 - **People menu.** A sixth kind of card. Courtiers take their first mission and become, for good, a churchman (Religious Mission, Mission to the Church), an artist (Work of Art) or a cultural leader (Royal Grace, Cultural Integration, Embrace a Culture); artists, churchmen and famous figures (Leonardo, Michelangelo, Sinan, Velázquez, Erasmus, Loyola…) can also be hired directly. Tabs: Cultures (each people's provinces, numbers and happiness; embrace up to 2 + 1 per 12 provinces), Religion (your church's leaders and their favour: blessed at 50+, censured at −40; Gift to the Church cards and churchman missions raise it, conversions and sacred art please it) and Arts.
 - **Works of art.** Sacred paintings, royal portraits, epics, treatises and monuments. Quality comes from the outcome: Forgettable (+1 happiness for a year) up to Masterpiece (+6 happiness fading over 8 years, 6 ducats a year for 5 years, +8 prestige, 2 free cards of the work's kind, sometimes a famous name such as Amadís de Gaula or Las Meninas). Monuments last half as long again. Libraries, universities and Museums (Enlightened Government) show the best works; from the Age of Enlightenment visitors pay for them.
 - **Card types.** Each deck has People cards (hire someone) and Action cards; Military also has Troops and Improvements. Troop cards are by kind: Levy Infantry, Hire Infantry, Hire Ranged, Hire Cavalry, Hire Artillery, each hiring the best unit of that kind you have researched (e.g. Crossbowmen → Arquebusiers → Musketeers → Line Infantry). Better kinds come from Forge recipes (Pikemen + Arquebusiers → Tercio). Military actions include March Orders, Conquista, Fortify and Spy Troop Positions; Research has Collaboration (a second scholar joins a study). Embassy and Peace Envoy are the permanent cards.
-- **Cards.** Everything you do takes a card: trade contracts, works of art, gifts, attacks, buildings. No hand limit: identical cards stack (×7). Declaring war gives 3 March Orders; being attacked gives 2.
+- **Cards.** Everything you do takes a card: trade contracts, works of art, gifts, attacks, buildings. Identical cards stack (×7); how many you may hold grows with your realm (see Hand limit). Declaring war gives 3 March Orders; being attacked gives 2.
 - **Map views.** Realms, culture, religion, raw materials (an icon on every province, with a legend), happiness and population.
 - **Ages.** Crusade → Discovery → Reformation → Absolutism → Enlightenment. An age opens when the first realm reaches its research (Ocean Navigation, Absolutism, Enlightened Government) or event (a prince protecting a reformer). No ocean voyages before Discovery. The pioneer gains prestige; if it is you, also nation points, cards and +0.4 cards a year for 25 years. Tap the year to see what opens the next age.
 - **Start dates.** 1451 (to 1750), 1600 (to 1780) or 1700 (to 1810), chosen in the realm picker. The later worlds have their own owners for all 1,038 provinces, 68 new realms (Dutch Republic, Mughals, Safavids, Qing, Marathas, Thirteen Colonies, Uzbek khanates, Ashanti, Dahomey...), Spain, Russia and Prussia under their new names, Protestant and colonial religions and cultures, vassals, the wars of the day, research already known, the government of the time and armies of the age. A sixth age, the Age of Revolutions, opens with the Rights of Man.
@@ -51,7 +54,7 @@ Open `dist/index.html` in any browser. The core menus (Military, Diplomacy, Inte
 - **Research.** 58 technologies, about 12 per age (4 each in Military, Economy and Statecraft). You can only study what belongs to the current age or earlier; later ages stay hidden until they open. Each technology shows its research points, how long your best free scholar would take (2–7 years is normal), what it unlocks and what it needs first. Filter by age and field in Research → Technologies.
 - **Buildings** show their cost (ducats, construction materials, time, upkeep) and their benefit side by side. Only buildings you have researched are offered.
 - **Monarchs.** When a ruler dies you choose one of three heirs. Each kind boosts different card rates, and some can act as a general, diplomat, merchant or researcher.
-- **Cards tab.** Every menu's Cards tab shows what you hold, with filters (cards, people, and in Military troops, ships and equipment), and buttons to buy a pack (3 revealed, keep 1), archive cards you do not need now (they stop counting against your hand; restore or discard them later), forge and read the recipes.
+- **Cards tab.** Every menu's Cards tab shows what you hold, with filters (cards, people, and in Military troops, ships and equipment), and buttons to buy a pack (3 revealed, keep 1), sell cards you do not need, forge and read the recipes.
 - **Forge.** Two companies of a kind become one company about 1.8× as strong (and a free slot); troops that match a recipe become a better kind keeping 90% of their joint strength; equipment upgrades one troop. The recipe book lists only what your research allows.
 - **Battles and history deck**: face-down tactics, branching historical events.
 - **Navy.** Ship cards (galleys, caravels, carracks, galleasses, galleons, ships of the line) are fitted out by a general, who becomes an admiral for good. Attacks by sea need ships to carry the troops; enemy fleets intercept with sea battles (broadside, boarding, line of battle, weather gauge).
@@ -61,6 +64,10 @@ Open `dist/index.html` in any browser. The core menus (Military, Diplomacy, Inte
 - **Overseas.** Explorers reveal regions of the map (Guinea, the Antilles, the Indies…). Colonists settle unclaimed native lands; conquerors take provinces of native empires. Colonial rivals and land neighbours settle the world too.
 - **A world that reacts.** Other crowns offer alliances, marriages and vassalage; events answer how you rule: the new faith spreading, tax riots, plotting vassals, a genius painter, idle fleets, a golden age, petitions from foreign peoples, rival settlers.
 
+## Where the project is going
+
+[docs/ROADMAP.md](docs/ROADMAP.md) is the plan of record: five phases of specific actions, each with its place in the code and its test. [docs/AUDIT.md](docs/AUDIT.md) holds the market audit behind it, [docs/BALANCE.md](docs/BALANCE.md) the balance targets and levers.
+
 ## Code
 
 - `src/data`: provinces (`provinces.ts`), generated map (`world.json`), nations, eras, troops and recipes, research, characters.
@@ -68,6 +75,8 @@ Open `dist/index.html` in any browser. The core menus (Military, Diplomacy, Inte
 - `src/engine`: pure game rules (seeded RNG, no DOM). `turn.ts` runs a year; `ai.ts` runs rival nations.
 - `src/ui`: map, cards, panels and modals.
 - `scripts/sim.ts`: headless bot that plays full campaigns, for balance and crash testing.
+- `scripts/test.ts`: engine checks that must never break (`npm test`): same seed same game, saves load, every mission starts, pace and difficulty rules. GitHub Actions runs the typecheck, these checks, the build and one short bot campaign on every push (`.github/workflows/ci.yml`).
+- `src/engine/pace.ts`: what still needs the player this turn, and when skipping ahead must stop.
 
 ## GitHub Pages
 

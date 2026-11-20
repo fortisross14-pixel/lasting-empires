@@ -6,7 +6,8 @@ description: Interface rules for Lasting Empires — layout, touch targets, the 
 # Lasting Empires — GUI rules
 
 ## Layout
-- One-screen app: top bar (crest, year, resources, Missions, Chronicle, End Turn) · map · bottom tabs (Military, Diplomacy, Internal, Economy, Research, People).
+- One-screen app: top bar (crest, year, resources, Goals, Menu, Skip, End Turn) · map · bottom tabs (Military, Diplomacy, Internal, Economy, Research, People).
+- End Turn carries the count of things still open (`todo`, from `attention(S)`), and a deck tab a dot when one of its cards can be played now. Device settings live in `src/ui/settings.ts` (`settings()`, `setSetting`), not in the save; `data-motion="calm"` on `<html>` switches motion off.
 - Each bottom tab opens a centred window with tabs (`WIN_TABS`): Cards, Missions, then the area's own tabs. The Cards tab always reads top to bottom: **Get cards** (one shop button per card type: person, action, and in Military troop and improvement) then **Your cards**, grouped by type, identical cards stacked (×N), wide faces with the picture on the left and the words on the right.
 - Side panels (`#sheet`) are for provinces, realms, missions and the chronicle.
 - Modals (`openModal`) are for decisions: card use, mission planner, reveals, battles, drafts, succession.

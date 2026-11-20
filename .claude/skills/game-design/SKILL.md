@@ -10,7 +10,7 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
    - **Card types** (`cardType`): People (hire someone), Actions (missions and orders), and in Military also Troops (by kind: Levy, Infantry, Ranged, Cavalry, Artillery; each hires the best unit of its kind researched, see `UNIT_LINES`) and Improvements (equipment, Drill Sergeant). Elite units come from Forge recipes.
    - **Getting cards:** free draws each quarter, or the Cards tab shop: buy a card of one type with nation points (`buyCard(s, cat, type)`: 3 shown, keep 1; a type with one card in the deck is given straight away).
    - **Permanent cards** (stay after use, the mission costs ducats): only Embassy and Peace Envoy. Everything else is used up.
-   - **No hand limit**: identical cards stack. Wars give March Orders (3 to the attacker, 2 to the defender); at peace only 2 are kept.
+   - **Identical cards stack**, and the hand has a limit by realm rank (see Hand limit). Wars give March Orders (3 to the attacker, 2 to the defender); at peace only 2 are kept.
 2. **People decide quality.** A mission card needs a person of the right role. The person's **rarity** (Common → Legendary) sets the outcome odds (`OUTCOME_ODDS` in `src/data/characters.ts`) and trait strength (`traitMult`). New missions must roll an outcome with `rollOutcome` (or `rollBest` when a core card grants advantage) and scale their result by it. Show the outcome with `outcomeItem` in the reveal.
 3. **Surprises are revealed, not hidden.** Results arrive as face-down cards that flip (`push(s, { kind: 'reveal', ... })`). History events are known in advance (timeline) but their outcomes branch.
 4. **Middle by default.** Core cards (`src/data/core.ts`) move the realm off the centre of an axis. Every core card has real pros and cons.
@@ -62,7 +62,13 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 
 ## Card rates
 - Six decks: Military, Diplomacy, Internal, Economy, Research, People (`culture`). Each draws `0.5 + bonuses` cards a year (capped at 1.4); fractions carry over (`cardAccum`). Add bonuses through `cardRates` parts (buildings, research, monarch, cities, core cards) so the breakdown stays visible to the player.
-- There is no hand limit (`handLimit` returns Infinity; the old limit only for balance tests). The yearly mission cap, army size and building slots are the limits.
+- The hand limit (below), the yearly mission cap, army size and building slots are the limits.
+
+## Pace and difficulty
+- `src/engine/pace.ts` is pure (no RNG, no changes). `attention(s)` lists what is still open this turn; `stopReasons` says when skip-ahead must stop. A new thing the player should not miss gets a rule in `attention` (with an id that stays the same while the thing is open) and a check in `scripts/test.ts`; a new kind of mission card needs a case in `cardHasTarget`.
+- Never list something the player cannot act on, and never list permanent cards: a list that nags is a list that is ignored.
+- Difficulty is one table, `DIFFICULTY` in `src/data/difficulty.ts`, read through `diff(s)`. Standard must stay the game as balanced; a new lever gets a neutral value there (×1 or +0) and is used as `diff(s).lever`, never as a number in the logic.
+- `newGame(nation, seed, startYear, { difficulty, length })`; `length` is a `LENGTHS` id and only shortens an open game.
 
 ## Balance workflow
 See `docs/BALANCE.md` for targets, current results and every lever. Run `MODE=reasonable|passive|greedy|big SEEDS=5 npm run sim` and compare against the targets table before and after any change.
@@ -80,4 +86,5 @@ See `docs/BALANCE.md` for targets, current results and every lever. Run `MODE=re
 2. A card (or a reason it is not card-driven).
 3. Outcome roll scaled by rarity, shown in a reveal.
 4. Visible in the right panel (Military, Diplomacy, Internal, Economy, Research) with the reason when blocked.
-5. Bot updated in `scripts/sim.ts`; `npm run typecheck` and `npm run sim` pass.
+5. Bot updated in `scripts/sim.ts`; `npm run typecheck`, `npm test` and `npm run sim` pass.
+6. The action ticked in `docs/ROADMAP.md` if it is one of them; no new system before Phase 4.

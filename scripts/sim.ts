@@ -168,7 +168,7 @@ function botTurn(s: GameState) {
 }
 
 // ---------- runner ----------
-// MODE=reasonable|passive|greedy  SEEDS=n
+// MODE=reasonable|passive|greedy  SEEDS=n  DIFF=0|1|2
 const MODE = process.env.MODE ?? 'reasonable';
 const SEEDS = Number(process.env.SEEDS ?? 4);
 const START_Y = Number(process.env.START ?? 1451);
@@ -197,7 +197,8 @@ function greedyExtra(s: GameState) {
 const PICK = process.env.NATIONS === 'all' ? NATIONS.filter(d => !d.native).map(d => d.id) : process.env.NATIONS ? process.env.NATIONS.split(',') : ['castile', 'portugal', 'aragon'];
 for (const n of (MODE === 'big' ? ['castile'] : PICK)) for (let seed = 1; seed <= SEEDS; seed++) {
   const START = Number(process.env.START ?? 1451);
-  const s = process.env.MISSION ? newMissionGame(n, process.env.MISSION, START) : newGame(n, seed * 7919 + (MODE === 'passive' ? 1 : MODE === 'greedy' ? 2 : 0), START);
+  const DIFF = process.env.DIFF != null ? Number(process.env.DIFF) : undefined; // 0 gentle, 1 standard, 2 hard (data/difficulty.ts)
+  const s = process.env.MISSION ? newMissionGame(n, process.env.MISSION, START, { difficulty: DIFF }) : newGame(n, seed * 7919 + (MODE === 'passive' ? 1 : MODE === 'greedy' ? 2 : 0), START, { difficulty: DIFF });
   if (MODE === 'big') { for (const id of ['granada', 'malaga', 'almeria', 'porto', 'lisbon', 'evora', 'faro', 'coimbra', 'pamplona', 'zaragoza', 'barcelona', 'valencia', 'tangier', 'fez', 'oran', 'tlemcen']) { const prov = s.provinces[id]; const from = prov.owner; prov.owner = n; if (!Object.values(s.provinces).some(x => x.owner === from)) s.nations[from].alive = false; } s.wars = s.wars.filter(w => s.nations[w.a].alive && s.nations[w.b].alive); for (let i = 0; i < 8; i++) s.troops.push({ uid: 50000 + i, type: 'pikemen', vet: 1, str: 100 }); }
   resolveQueue(s);
   let turns = 0;

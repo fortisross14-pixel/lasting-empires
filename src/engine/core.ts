@@ -1,3 +1,4 @@
+import { DIFFICULTY, STANDARD, type DifficultyDef } from '../data/difficulty';
 // Shared helpers: RNG, lookups, relations, treaties, wars, logging.
 import { poolFor } from '../data/names';
 import { eraOfYear, ERA, ERAS, PIONEER_YEARS } from '../data/eras';
@@ -39,6 +40,8 @@ export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.mi
 
 // ---------- lookups ----------
 export const player = (s: GameState): Nation => s.nations[s.player];
+/** The difficulty this game is played at (Standard when a save has none). */
+export const diff = (s: GameState): DifficultyDef => DIFFICULTY[s.difficulty ?? STANDARD] ?? DIFFICULTY[STANDARD];
 /** The current age (opened by research or events). */
 export const ageId = (s: GameState) => s.age?.id ?? eraOfYear(s.year).id;
 /** 0 for the first age, up to 4 for the Enlightenment. */

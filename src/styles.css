@@ -1738,3 +1738,43 @@ details[open] > summary .br-chev { rotate: 180deg; }
   #sheet .sh-head { padding-top: 14px; }
 }
 @media (max-width: 760px) and (prefers-reduced-motion: reduce) { #sheet { transition: none; } }
+
+/* ---- pace: skip ahead, things to do, settings, start options (roadmap phase 1) ---- */
+#top #endturn { position: relative; }
+#endturn .et-badge { position: absolute; top: -7px; right: -7px; min-width: 20px; height: 20px; padding: 0 5px; display: grid; place-items: center; border-radius: 999px; background: var(--text); color: var(--panel); border: 1.5px solid var(--panel); font: 700 12px/1 var(--f-body); font-variant-numeric: lining-nums; }
+.tbtn.skip-b { min-width: 44px; min-height: 44px; }
+.tab-dot { position: absolute; top: -3px; left: -9px; width: 9px; height: 9px; border-radius: 50%; background: var(--wax); box-shadow: 0 0 0 1.5px var(--panel); }
+.gm-row.new .gm-t b::after { content: 'new'; margin-left: 8px; padding: 1px 6px; font: 600 11px/1.4 var(--f-body); letter-spacing: .06em; text-transform: uppercase; color: var(--panel); background: var(--wax); vertical-align: 2px; }
+.todo .gm-t small { white-space: normal; }
+.set-row { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 4px; border-bottom: 1px solid #1b1a1726; cursor: pointer; }
+.set-row .gm-t small { white-space: normal; }
+.set-sw { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 50px; height: 30px; margin: 0; border: 1.5px solid var(--text); background: var(--card, #fffdf8); cursor: pointer; }
+.set-sw::after { content: ''; position: absolute; top: 3px; left: 3px; width: 21px; height: 21px; background: var(--muted); transition: translate .15s ease, background .15s ease; }
+.set-sw:checked::after { translate: 20px 0; background: var(--wax); }
+.set-sw:focus-visible { outline: 2px solid var(--lapis, #2f5d8a); outline-offset: 2px; }
+.set-note { margin: 4px 0 0; font-size: 14.5px; }
+.pick-opts { display: flex; flex-wrap: wrap; gap: 6px 18px; flex: 1 1 100%; }
+.opt { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 0 10px; min-width: 0; flex: 1 1 300px; }
+.opt-l { font-family: var(--f-display); font-size: 15px; letter-spacing: .06em; }
+.opt-seg .seg-b { min-height: 40px; padding: 6px 10px; white-space: nowrap; }
+.opt-hint { grid-column: 1 / -1; color: var(--muted); font-size: 13px; line-height: 1.25; min-height: 2.5em; }
+.md-opts { margin: 10px 0 2px; }
+@media (max-width: 640px) {
+  .tbtn.skip-b { min-width: 38px; min-height: 38px; }
+  .opt { grid-template-columns: 1fr; }
+  .opt-hint { min-height: 0; }
+}
+/* less motion, chosen in the game's settings (the device's own request is handled by the media queries above) */
+[data-motion="calm"] *, [data-motion="calm"] *::before, [data-motion="calm"] *::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
+[data-style="chancery"] .tab-dot { top: 9px; left: 9px; }
+@media (max-width: 640px) {
+  /* with a fourth button in the row, the season sits under the year so it is never cut off */
+  [data-style="chancery"] .year { flex-direction: column; align-items: flex-start; gap: 0; }
+  [data-style="chancery"] .year small { line-height: 1.1; }
+  #endturn .et-badge { top: -10px; right: -5px; }
+}
+@media (max-width: 640px) {
+  /* four buttons leave little room: a shorter realm name, and in a mission (a fifth, Goals) the shield alone */
+  [data-style="chancery"] .crest-t b { max-width: 20vw; }
+  [data-style="chancery"] #top:has(.goals-b) .crest-t { display: none; }
+}

@@ -22,7 +22,7 @@ import { CORE } from '../data/core';
 import {
   rand, pick, randInt, uid, clamp, player, provsOf, incomeOf, log, push, addRel, playerManpower, initialSettlement, grade,
   addTreaty, hasTech, genCharacter, declareWar, nationName, atWar, getRel, hasGood, armyPower, hasCore, coreSlots, hasTreaty, ageId,
-  resetProvIndex, techFx } from './core';
+  resetProvIndex, techFx, diff } from './core';
 import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS, trimHand } from './cards';
 import { advanceMissions, MISSION_INFO, quarterlyReturns } from './missions';
 import { runAI, PRESTIGE_FADE } from './ai';
@@ -30,6 +30,7 @@ import { quarterlyRevolution } from './government';
 import { applyStart, setupLaterPlayer, laterNation, LATER_DEFS } from './starts';
 import { STARTS } from '../data/starts';
 import { MISSION } from '../data/missions';
+import { DIFFICULTY, LENGTHS } from '../data/difficulty';
 import { yearlyGoals, checkGoals, scenarioFrom } from './goals';
 import { rollEvents, EVENT } from './events';
 import { AMBITIONS, ambitionOptions } from './drafts';
@@ -126,8 +127,8 @@ const START_WARS: Record<string, string> = {
 };
 
 /** A mission-mode game: the realm, its goals and deadline; no personal ambition on top. */
-export function newMissionGame(nationId: string, mission: string | import('../types').Scenario, startYear = START_YEAR): GameState {
-  const s = newGame(nationId, undefined, startYear);
+export function newMissionGame(nationId: string, mission: string | import('../types').Scenario, startYear = START_YEAR, opts: GameOptions = {}): GameState {
+  const s = newGame(nationId, opts.seed, startYear, { difficulty: opts.difficulty });
   s.scenario = typeof mission === 'string' ? scenarioFrom(mission) : mission;
   s.queue = s.queue.filter(q => !(q.kind === 'draft' && q.draft === 'ambition'));
   // starting points for goals that count what you do during the mission
@@ -142,7 +143,10 @@ export function newMissionGame(nationId: string, mission: string | import('../ty
   return s;
 }
 
-export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9), startYear = START_YEAR): GameState {
+/** Choices made when a game starts. `length` is a LENGTHS id (open game only). */
+export interface GameOptions { difficulty?: number; length?: string; seed?: number; }
+
+export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9), startYear = START_YEAR, opts: GameOptions = {}): GameState {
   const later = STARTS[startYear];
   const s: GameState = {
     version: SAVE_VERSION, seed, rng: seed, nextUid: 1, year: later ? startYear : START_YEAR, quarter: 0, startYear: later ? startYear : START_YEAR, endYear: later?.end ?? 1750, player: nationId,
@@ -227,6 +231,12 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   addCard(s, 'eq_plate');
   addCard(s, 'peace_envoy', true);
   if (later) setupLaterPlayer(s, startYear);
+  // the choices of the start screen: difficulty and, for an open game, how long it lasts
+  if (opts.difficulty != null && DIFFICULTY[opts.difficulty]) s.difficulty = opts.difficulty;
+  if (diff(s).gold !== 1) me.gold = Math.round(me.gold * diff(s).gold);
+  const len = LENGTHS.find(l => l.id === opts.length);
+  if (len?.years && s.startYear + len.years < s.endYear) { s.endYear = s.startYear + len.years; s.length = len.id; }
+  s.flags.rank0 = ranking(s).findIndex(x => x.id === nationId) + 1;
   settleArmies(s);
   s.stock = startStock(s);
   // wars you inherit on the first day: say so plainly
@@ -448,7 +458,12 @@ export function endTurn(s: GameState): YearReport | null {
     // in mission mode only the mission counts; in the open game, the ranking
     const sc = s.scenario;
     if (sc) push(s, { kind: 'gameover', victory: sc.status === 'won', reason: sc.status === 'won' ? `The year is ${s.year}. You accomplished ${sc.name} in ${sc.done}, and the world went on.` : `The year is ${s.year}. ${sc.name} was not accomplished.` });
-    else push(s, { kind: 'gameover', victory: place <= 3, reason: `The year is ${s.year}. ${player(s).name} ranks #${place} among the powers.` });
+    else {
+      // a short game is judged by the climb: few realms reach the top three in forty years
+      const from = s.flags.rank0 ?? place;
+      const climbed = !!s.length && place < from;
+      push(s, { kind: 'gameover', victory: place <= 3 || climbed, reason: `The year is ${s.year}. ${player(s).name} ranks #${place} among the powers${s.length && from !== place ? ` (it began at #${from})` : ''}.` });
+    }
   }
   const tl = s.turnLog!;
   tl.gold = (tl.gold ?? 0) + player(s).gold - g0; tl.np = (tl.np ?? 0) + s.np - np0;

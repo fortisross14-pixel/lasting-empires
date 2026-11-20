@@ -47,6 +47,9 @@ import { MapView, MAP_MODES, legendFor } from './map';
 import { scenarioCastilePortugal } from '../engine/scenarios';
 import { troopsNear, setDefence, garrisons, moveTroops, travel, locOf, nearestGarrison, baseFor, READY_STR, HEAL, healOf } from '../engine/army';
 import { armsSvg } from './banners';
+import { attention, markTurn, stopReasons, SKIP_MAX, type Attention } from '../engine/pace';
+import { DIFFICULTY, LENGTHS, STANDARD } from '../data/difficulty';
+import { settings, setSetting, applySettings, type Settings } from './settings';
 import { rankOf, nextRank, missionCap, missionsLeft, VICEROY_COST, viceroyBlocked, territoryOf, appointViceroy, recallViceroy, viceroyFocus, FOCUS_TEXT } from '../engine/realm';
 
 const KEY = 'lasting-empires.save.v2';
@@ -63,6 +66,9 @@ let cv: { filter: string; mode: 'browse' | 'select' | 'archive' | 'forge' | 'rec
 let modalOpen = false;
 let forge: number[] = [];
 let chronTab = 'powers';
+/** What is still open this turn (worked out once per refresh), and what the player has already been told about. */
+let todo: Attention[] = [];
+const seenTodo = new Set<string>();
 void vassalizeBlocked;
 const RARITY_ORDER_I = (c: Character) => ['common', 'uncommon', 'rare', 'epic', 'legendary'].indexOf(c.rarity);
 
@@ -152,6 +158,7 @@ function stylePicker(onChange: () => void) {
 // ---------- shell ----------
 export function boot(data: { save?: string; slot?: number }) {
   applyStyle();
+  applySettings();
   clear($('#app'));
   let restored: GameState | null = null;
   if (data?.save) { try { restored = JSON.parse(data.save); } catch { /* ignore */ } }
@@ -210,7 +217,8 @@ function saveCustom(list: (Scenario & { nation: string })[]) { try { localStorag
 
 function startMission(nation: string, mission: string | Scenario) {
   const start = typeof mission === 'string' ? MISSIONS.find(m => m.id === mission)?.start ?? 1451 : (mission as Scenario & { start?: number }).start ?? 1451;
-  const g = newMissionGame(nation, mission, start);
+  const beginner = typeof mission === 'string' && !!MISSIONS.find(m => m.id === mission)?.beginner; // lessons are always played as designed
+  const g = newMissionGame(nation, mission, start, { difficulty: beginner ? STANDARD : settings().difficulty });
   if (g.scenario?.steps?.length) g.tutorial = -1; // the steps teach instead
   startFresh(`the mission “${g.scenario?.name ?? 'Mission'}”`, () => g);
 }
@@ -251,6 +259,7 @@ function showMissionDetail(m: MissionDef) {
         : h('ul', { class: 'mc-g' }, m.goals.map(g => h('li', {}, goalTitle(g, m.deadline)))),
       m.cards?.length || m.gold ? h('p', { class: 'muted' }, 'You start with: ', [m.cards?.length ? `${m.cards.length} extra card${m.cards.length > 1 ? 's' : ''}` : '', m.gold ? `${m.gold} ducats` : ''].filter(Boolean).join(' and ')) : null,
       locked ? h('p', { class: 'md-lock' }, `Locked: complete the ${BEGINNER().length} beginner missions first (${beginnersDone()}/${BEGINNER().length}).`) : null,
+      m.beginner || locked ? null : h('div', { class: 'pick-opts md-opts' }, difficultySeg()),
       h('div', { class: 'md-play' }, m.nations.map(n => { const nn = pv.nations[n];
         return h('button', { class: 'btn primary' + (locked ? ' blocked' : ''), onclick: () => (locked ? toast(`Complete the ${BEGINNER().length} beginner missions first (${beginnersDone()}/${BEGINNER().length})`, 'bad') : startMission(n, m.id)) },
           nn ? shield(n, nn.color, true) : null, ` ${done ? 'Play again as' : 'Start mission as'} ${nn?.name ?? n}`); })))));
@@ -377,8 +386,23 @@ function showBuilder() {
 }
 
 function chooseNation(id: string, year = 1451) {
-  startFresh(`a new ${NATIONS.find(x => x.id === id)?.name ?? id} campaign`, () => newGame(id, undefined, year));
+  const opts = { difficulty: settings().difficulty, length: settings().length };
+  startFresh(`a new ${NATIONS.find(x => x.id === id)?.name ?? id} campaign`, () => newGame(id, undefined, year, opts));
 }
+
+/** A labelled choice of a few options with one line of explanation under it; the last choice is remembered. */
+function optSeg(label: string, options: { id: string; name: string; text: string }[], current: string, onPick: (id: string) => void) {
+  const hint = h('small', { class: 'opt-hint' }, options.find(o => o.id === current)?.text ?? '');
+  const seg = h('div', { class: 'seg opt-seg', role: 'radiogroup', 'aria-label': label });
+  for (const o of options) seg.append(h('button', { class: 'seg-b' + (o.id === current ? ' on' : ''), role: 'radio', 'aria-checked': String(o.id === current), onclick: () => {
+    onPick(o.id);
+    for (const b of Array.from(seg.children)) { const on = b.textContent === o.name; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }
+    hint.textContent = o.text;
+  } }, o.name));
+  return h('div', { class: 'opt' }, h('span', { class: 'opt-l' }, label), seg, hint);
+}
+const difficultySeg = () => optSeg('Difficulty', DIFFICULTY.map(d => ({ id: String(d.id), name: d.name, text: d.text })), String(settings().difficulty), id => setSetting('difficulty', Number(id)));
+const lengthSeg = () => optSeg('Length', LENGTHS.map(l => ({ id: l.id, name: l.name, text: l.text })), settings().length, id => setSetting('length', id));
 
 // ---------- realm picker: tap any realm on the world map ----------
 const FEATURED = ['castile', 'portugal', 'aragon', 'byzantium', 'ottomans', 'france', 'england', 'austria', 'muscovy', 'venice', 'mamluks', 'vijayanagara', 'ming', 'japan', 'mali', 'aztec', 'inca'];
@@ -427,6 +451,7 @@ function showPicker(initial?: string) {
           h('b', {}, n.name), h('span', { class: 'np-diff ' + d.cls }, d.label),
           h('small', {}, `${ps.length} province${ps.length > 1 ? 's' : ''} · capital ${cap?.name ?? '?'} · ${RELIGION_NAMES[cap?.religion ?? ''] ?? ''} · ${CULTURE_NAMES[n.culture]}`),
           h('small', { class: 'muted' }, (pickYear === 1451 ? def.blurb : undefined) ?? (near.size ? `Neighbours: ${[...near].slice(0, 5).map(o => preview.nations[o].name).join(', ')}.` : 'No neighbours by land.')))),
+      h('div', { class: 'pick-opts' }, difficultySeg(), lengthSeg()),
       h('label', { class: 'tutopt' }, h('input', { type: 'checkbox', id: 'tutcheck', checked: wantTutorial ? true : undefined, onchange: (e: Event) => { wantTutorial = (e.target as HTMLInputElement).checked; } }), 'Show me how to play'),
       h('button', { class: 'btn primary', onclick: () => chooseNation(id, pickYear) }, `Play as ${n.name} in ${pickYear}`));
   };
@@ -476,6 +501,7 @@ function showTitle() {
 
 function start(s: GameState) {
   S = s;
+  seenTodo.clear();
   const root = clear($('#app'));
   root.append(
     h('header', { id: 'top' }),
@@ -527,7 +553,7 @@ function renderLegend() {
 // ---------- tutorial: a few notes from the chancellor in the first game ----------
 interface TutStep { title: string; text: string; done?: () => boolean; next?: boolean; }
 const TUTORIAL: TutStep[] = [
-  { title: 'Welcome, Majesty', text: 'One turn is one quarter of a year. Everything you do starts with a card: you draw them each quarter in five kinds. Let me show you around.', next: true },
+  { title: 'Welcome, Majesty', text: 'One turn is one quarter of a year. Everything you do starts with a card: you draw them through the year, in six kinds. Let me show you around.', next: true },
   { title: 'Your treasury', text: 'At the top: ducats, manpower (1 per troop or person you hire), nation points (to buy cards), stability and the people\'s happiness. Tap the year to see the current age.', next: true },
   { title: 'Open a menu', text: 'The six menus are at the bottom. Open Internal.', done: () => win?.cat === 'internal' },
   { title: 'Cards', text: 'Every menu opens on your cards. Tap one to use it. The Buy row spends nation points (the star at the top) on a new person, troop or action card.', next: true },
@@ -554,6 +580,8 @@ function refresh() {
   setCardGame(S);
   recordMission();
   map.realm = sheet?.kind === 'nation' ? sheet.arg ?? null : shownRealm;
+  todo = attention(S);
+  for (const id of [...seenTodo]) if (!todo.some(a => a.id === id)) seenTodo.delete(id); // gone and back again is news
   renderTop(); renderTabs(); map.render(S); renderTimeline(); renderTracker(); renderLegend();
   if (sheet) renderSheet();
   if (win) renderWin();
@@ -617,7 +645,10 @@ function renderTop() {
         h('span', { html: icon('star', 18) }), h('span', { class: 'tb-l' }, 'Goals'), h('span', { class: 'badge' }, goalsBadge)) : null,
       h('button', { class: 'tbtn menu-b', onclick: () => showGameMenu(), title: 'Menu', 'aria-label': 'Menu' },
         h('span', { html: icon('list', 18) }), h('span', { class: 'tb-l' }, 'Menu'), S.missions.length ? h('span', { class: 'badge' }, String(S.missions.length)) : null),
-      h('button', { id: 'endturn', class: 'btn primary', onclick: onEndTurn }, h('span', { class: 'et-l' }, 'End Turn'), h('small', {}, `${SEASONS[S.quarter ?? 0]} ${S.year}`))),
+      settings().skip ? h('button', { class: 'tbtn skip-b', onclick: onSkipAhead, title: 'Skip ahead until something happens', 'aria-label': `Skip ahead: play up to ${SKIP_MAX} seasons, stopping when something needs you` },
+        h('span', { html: icon('skip', 18) }), h('span', { class: 'tb-l' }, 'Skip')) : null,
+      h('button', { id: 'endturn', class: 'btn primary', onclick: onEndTurn, 'aria-label': `End turn, ${SEASONS[S.quarter ?? 0]} ${S.year}${todo.length ? `. ${todo.length} thing${todo.length > 1 ? 's' : ''} to do` : ''}` },
+        h('span', { class: 'et-l' }, 'End Turn'), h('small', {}, `${SEASONS[S.quarter ?? 0]} ${S.year}`), todo.length ? h('span', { class: 'badge et-badge' }, String(todo.length)) : null)),
   );
 }
 function chip(ic: string, v: string, sub: string, label: string, tone = '') {
@@ -632,7 +663,7 @@ function renderTabs() {
   for (const c of CATS) {
     const n = handOf(S, c).length;
     nav.append(h('button', { class: 'tab' + (win?.cat === c ? ' on' : ''), onclick: () => toggleWin(c), style: `--cc:${CAT_INFO[c].color}` },
-      h('span', { class: 'tab-i', html: icon(CAT_INFO[c].icon, 20) }, n ? h('span', { class: 'tab-c' + (heldOf(S, c) > handLimit(S) ? ' over' : ''), 'aria-label': `${n} cards in hand, limit ${handLimit(S)}` }, String(n)) : null),
+      h('span', { class: 'tab-i', html: icon(CAT_INFO[c].icon, 20) }, todo.some(a => a.id === 'deck:' + c) ? h('i', { class: 'tab-dot', title: 'A card here can be played now' }) : null, n ? h('span', { class: 'tab-c' + (heldOf(S, c) > handLimit(S) ? ' over' : ''), 'aria-label': `${n} cards in hand, limit ${handLimit(S)}` }, String(n)) : null),
       h('span', { class: 'tab-l' }, c === 'diplomacy' ? 'Diplomacy' : CAT_INFO[c].name),
       h('span', { class: 'tab-n', title: 'New cards a year' }, `+${rates[c].rate.toFixed(1)}/yr`)));
   }
@@ -2033,7 +2064,8 @@ function showGameMenu() {
       row('hourglass', 'Tasks under way', S.missions.length ? 'Your people at work, and when they finish' : 'Nobody is at work right now', () => openSheet('missions'), S.missions.length ? String(S.missions.length) : ''),
       row('crown', 'Realm and ruler', `${player(S).ruler.name} · cards and nation points each year`, () => openSheet('realm')),
       row('laurel', 'Chronicle', 'Rankings of the powers, records and history', () => openSheet('chronicle')),
-      row('book', ageOf(S).name, 'The age you live in and the next one', () => showEra())),
+      row('book', ageOf(S).name, 'The age you live in and the next one', () => showEra()),
+      row('gear', 'Settings', `${(DIFFICULTY[S.difficulty ?? STANDARD] ?? DIFFICULTY[STANDARD]).name} · reminders ${settings().warn ? 'on' : 'off'}`, () => showSettings())),
     h('p', { class: 'muted small gm-save' }, `Saved in slot ${slot} every season.`),
     h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: () => { saveNow(); closeModal(); showTitle(); } }, 'Save and exit to title'), h('button', { class: 'btn primary', onclick: closeModal }, 'Continue'))));
 }
@@ -2459,10 +2491,12 @@ function openPlanner(kind: MissionKind, target: string, building: string | undef
 }
 
 // ---------- end turn & prompt queue ----------
-async function onEndTurn() {
+/** What must be settled before a turn can end: open decisions, a hand over its limit and, once, the list of things
+ *  still to do. Returns true when the turn may go on; `again` is called if the player chooses to end it anyway. */
+function readyToEnd(again: () => void): boolean {
   if (pickHand != null) stopMapPick();
-  if (modalOpen) return;
-  if (S.queue.length) { processQueue(); return; }
+  if (modalOpen) return false;
+  if (S.queue.length) { processQueue(); return false; }
   const ex = handExcess(S);
   if (ex.total > 0) {
     // too many cards: choose what to sell before the turn ends
@@ -2470,8 +2504,30 @@ async function onEndTurn() {
     win = { cat, tab: 'cards' }; cv = { filter: 'hand', mode: 'select', sel: [] };
     openWin(cat, 'cards');
     toast(`Your hand is over the limit: sell ${ex.total} card${ex.total > 1 ? 's' : ''} to end the turn`, 'bad');
-    return;
+    return false;
   }
+  // the chancellor's notes and a guided mission already say what to do next: no second voice on top of them
+  const guided = (S.tutorial ?? -1) >= 0 && (S.tutorial ?? -1) < TUTORIAL.length || (!!S.scenario?.steps?.length && S.scenario.status === 'active');
+  if (settings().warn && !guided && todo.some(a => !seenTodo.has(a.id))) { showAttention(again); return false; }
+  return true;
+}
+
+/** Before the turn ends: what is still open, each line leading to its screen. Shown once for each new thing. */
+function showAttention(again: () => void) {
+  const fresh = new Set(todo.filter(a => !seenTodo.has(a.id)).map(a => a.id));
+  for (const a of todo) seenTodo.add(a.id);
+  openModal(h('div', { class: 'mbox narrow gmenu todo' },
+    h('div', { class: 'gm-head' }, h('h2', {}, 'Before the turn ends'), h('button', { class: 'iconbtn', 'aria-label': 'Close', onclick: closeModal, html: icon('close', 18) })),
+    h('div', { class: 'gm-list' }, todo.map(a => h('button', { class: 'gm-row' + (fresh.has(a.id) ? ' new' : ''), onclick: () => { closeModal(); openWin(a.cat, a.tab); } },
+      h('span', { class: 'gm-i', html: icon(a.icon, 20) }), h('span', { class: 'gm-t' }, h('b', {}, a.title), h('small', {}, a.text)), h('span', { class: 'a-go', html: icon('next', 14) })))),
+    h('p', { class: 'muted small gm-save' }, 'You will not be asked again about these. Reminders can be switched off in Menu → Settings.'),
+    h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: closeModal }, 'Back to the map'), h('button', { class: 'btn primary', onclick: () => { closeModal(); again(); } }, 'End the turn'))));
+}
+
+const cardsLine = (cards: Record<string, number>) => (CATS.some(c => cards[c]) ? ' · cards: ' + CATS.filter(c => cards[c]).map(c => `${cards[c]} ${CAT_INFO[c].name}`).join(', ') : '');
+
+async function onEndTurn() {
+  if (!readyToEnd(onEndTurn)) return;
   const rep = endTurn(S);
   saveNow();
   if (sheet?.kind === 'province' && !S.provinces[sheet.arg!]) closeSheet();
@@ -2479,9 +2535,55 @@ async function onEndTurn() {
   if (rep) {
     lastReport = rep;
     if ((S.quarter ?? 0) === 0) { pendingReport = true; yearReport = S.turnLog ?? null; await yearFlash(S.year, ageOf(S).name); }
-    else toast(`${SEASONS[S.quarter ?? 0]} ${S.year} · ${signed(Math.round(rep.gold))} ducats${CATS.some(c => rep.cards[c]) ? ' · cards: ' + CATS.filter(c => rep.cards[c]).map(c => `${rep.cards[c]} ${CAT_INFO[c].name}`).join(', ') : ''}`);
+    else toast(`${SEASONS[S.quarter ?? 0]} ${S.year} · ${signed(Math.round(rep.gold))} ducats${cardsLine(rep.cards)}`);
   }
   processQueue();
+}
+
+/** Skip ahead: play quiet seasons one after another and stop as soon as something needs the player
+ *  (a decision, a new card, a finished task, a war, something new to do), after SKIP_MAX seasons at most. */
+function onSkipAhead() {
+  if (!readyToEnd(onSkipAhead)) return;
+  let n = 0, gold = 0, yearEnd = false;
+  const cards: Record<string, number> = {};
+  for (;;) {
+    const before = markTurn(S);
+    const rep = endTurn(S);
+    if (!rep) break;
+    n++; gold += rep.gold; lastReport = rep;
+    for (const [c, v] of Object.entries(rep.cards)) cards[c] = (cards[c] ?? 0) + v;
+    const why = stopReasons(S, before, rep);
+    yearEnd = (S.quarter ?? 0) === 0;
+    if (why.length || n >= SKIP_MAX) break;
+  }
+  // the year's report is shown when the skip ends on a new year; quiet years in between pass without one
+  if (n && yearEnd) { pendingReport = true; yearReport = S.turnLog ?? null; }
+  saveNow();
+  if (sheet?.kind === 'province' && !S.provinces[sheet.arg!]) closeSheet();
+  refresh();
+  if (n) toast(`${n} season${n > 1 ? 's' : ''} passed: now ${SEASONS[S.quarter ?? 0]} ${S.year} · ${signed(Math.round(gold))} ducats${cardsLine(cards)}`);
+  processQueue();
+}
+
+/** Settings of this device, and the choices this campaign was started with. */
+function showSettings() {
+  const st = settings();
+  const toggle = (k: 'warn' | 'skip' | 'calm', label: string, sub: string) => h('label', { class: 'set-row' },
+    h('span', { class: 'gm-t' }, h('b', {}, label), h('small', {}, sub)),
+    h('input', { type: 'checkbox', class: 'set-sw', role: 'switch', checked: st[k] ? true : undefined, onchange: (e: Event) => { setSetting(k, (e.target as HTMLInputElement).checked as Settings[typeof k]); refresh(); } }));
+  const d = DIFFICULTY[S.difficulty ?? STANDARD] ?? DIFFICULTY[STANDARD];
+  const len = LENGTHS.find(l => l.id === S.length);
+  openModal(h('div', { class: 'mbox narrow gmenu' },
+    h('div', { class: 'gm-head' }, h('h2', {}, 'Settings'), h('button', { class: 'iconbtn', 'aria-label': 'Close', onclick: closeModal, html: icon('close', 18) })),
+    h('div', { class: 'gm-list' },
+      toggle('warn', 'Things to do', 'Before a turn ends, list the cards and people still waiting.'),
+      toggle('skip', 'Skip ahead button', `Plays up to ${SKIP_MAX} quiet seasons in one tap and stops when something happens.`),
+      toggle('calm', 'Less motion', 'No sliding or turning cards. Always on when your device asks for reduced motion.')),
+    h('h3', {}, 'This campaign'),
+    h('p', { class: 'set-note' }, h('b', {}, d.name), ` · ${d.text}`),
+    h('p', { class: 'set-note' }, S.scenario ? `Mission: ${S.scenario.name}, to ${S.scenario.deadline}.` : `${len ? len.name : 'The whole age'}: the game ends after ${S.endYear}.`),
+    h('p', { class: 'muted small' }, 'Difficulty and length are chosen when a game starts.'),
+    h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: closeModal }, 'Done'))));
 }
 
 async function yearFlash(year: number, line: string) {
@@ -2827,7 +2929,7 @@ function showMissionEnd(won: boolean) {
   const def = MISSIONS.find(m => m.id === sc.id);
   const next = () => { S.queue.shift(); closeModal(); refresh(); afterPrompt(); };
   const toMissions = () => { S.queue.shift(); closeModal(); saveNow(); missionYear = def?.start ?? S.startYear; showMissions(); };
-  const retry = () => { S.queue.shift(); closeModal(); const fresh = newMissionGame(S.player, sc.custom ? { ...sc, status: 'active', done: undefined } : sc.id, S.startYear); if (fresh.scenario?.steps?.length) fresh.tutorial = -1; startIn(slot, fresh); };
+  const retry = () => { S.queue.shift(); closeModal(); const fresh = newMissionGame(S.player, sc.custom ? { ...sc, status: 'active', done: undefined } : sc.id, S.startYear, { difficulty: S.difficulty }); if (fresh.scenario?.steps?.length) fresh.tutorial = -1; startIn(slot, fresh); };
   const box = won
     ? h('div', { class: 'mbox celebrate' },
       h('div', { class: 'cel-rays' }), h('div', { class: 'cel-laurel', html: icon('laurel', 72) }),
