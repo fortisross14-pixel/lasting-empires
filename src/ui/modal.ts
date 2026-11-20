@@ -105,6 +105,7 @@ export function showGameMenu() {
       sc ? row('star', 'Mission goals', sc.name, () => openSheet('goals')) : null,
       row('hourglass', 'Tasks under way', S.missions.length ? 'Your people at work, and when they finish' : 'Nobody is at work right now', () => openSheet('missions'), S.missions.length ? String(S.missions.length) : ''),
       row('crown', 'Realm and ruler', `${player(S).ruler.name} · cards and nation points each year`, () => openSheet('realm')),
+      row('anchor', 'Overseas', 'Lands beyond the sea: discovered, settled, still unknown', () => openSheet('overseas')),
       row('laurel', 'Chronicle', 'Rankings of the powers, records and history', () => openSheet('chronicle')),
       row('book', ageOf(S).name, 'The age you live in and the next one', () => showEra()),
       row('gear', 'Settings', `${(DIFFICULTY[S.difficulty ?? STANDARD] ?? DIFFICULTY[STANDARD]).name} · reminders ${settings().warn ? 'on' : 'off'}`, () => showSettings())),

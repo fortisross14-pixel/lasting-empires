@@ -262,7 +262,7 @@ export function startMapPick(handUid: number) {
   document.getElementById('pickbar')?.remove();
   const touch = matchMedia('(pointer: coarse)').matches;
   document.body.append(h('div', { id: 'pickbar' },
-    h('span', {}, h('b', {}, `${CARDS[S.hand.find(x => x.uid === handUid)!.card].name}: `), touch ? 'hold a highlighted province to choose it.' : 'click a highlighted province.'),
+    h('span', {}, h('b', {}, `${CARDS[S.hand.find(x => x.uid === handUid)!.card].name}: `), touch ? 'tap a lit province.' : 'click a lit province.'),
     h('button', { class: 'btn small ghost', onclick: stopMapPick }, 'Cancel')));
 }
 

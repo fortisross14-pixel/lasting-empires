@@ -1,5 +1,6 @@
 // The game screen: top bar, map, deck tabs, the strip of wars and tasks, the tutorial, and refresh().
 import { syncMusic } from './music';
+import { showHand, renderHandBtn } from './hand';
 import { sfx } from './sound';
 import type { GameState, RevealItem } from '../types';
 import { CATS } from '../types';
@@ -36,12 +37,7 @@ export function start(s: GameState) {
   const root = clear($('#app'));
   root.append(
     h('header', { id: 'top' }),
-    h('main', { id: 'board' }, h('div', { id: 'timeline' }), h('div', { id: 'zoom' },
-      h('button', { class: 'zbtn', 'aria-label': 'Zoom in', onclick: () => map.zoomBy(0.75), html: icon('plus', 18) }),
-      h('button', { class: 'zbtn', 'aria-label': 'Zoom out', onclick: () => map.zoomBy(1.33), html: '<svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7"><path d="M5 12 H19"/></svg>' }),
-      h('button', { class: 'zbtn', 'aria-label': 'Show my realm', onclick: () => map.focus(provsOf(S, S.player).map(p => p.id)), html: icon('crown', 18) }),
-      h('button', { class: 'zbtn', 'aria-label': 'Overseas', title: 'Overseas', onclick: () => toggleSheet('overseas'), html: icon('anchor', 18) }),
-    ),
+    h('main', { id: 'board' }, h('div', { id: 'timeline' }), h('button', { id: 'handbtn', 'aria-label': 'Your cards', onclick: () => showHand() }),
       h('button', { class: 'viewpill', id: 'modebtn', 'aria-label': 'Map view', onclick: () => toggleModes() }, h('span', { html: icon('map', 16) }), h('span', { id: 'modelabel' }, 'Map: Realms'), h('span', { class: 'caret' }, '▾')),
       h('div', { id: 'modes', hidden: true }), h('div', { id: 'legend', hidden: true }),
       h('div', { id: 'tracker' })),
@@ -114,7 +110,7 @@ export function refresh() {
   map.realm = sheet?.kind === 'nation' ? sheet.arg ?? null : shownRealm;
   setTodo(attention(S));
   for (const id of [...seenTodo]) if (!todo.some(a => a.id === id)) seenTodo.delete(id); // gone and back again is news
-  renderTop(); renderTabs(); map.render(S); renderTimeline(); renderTracker(); renderLegend();
+  renderTop(); renderTabs(); renderHandBtn(); map.render(S); renderTimeline(); renderTracker(); renderLegend();
   syncMusic(player(S).culture);
   if (sheet) renderSheet();
   if (win) renderWin();

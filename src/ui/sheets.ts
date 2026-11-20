@@ -52,6 +52,7 @@ import { stacks } from './windows/cards';
 import { f1, workshopRow } from './windows/economy';
 import { armBack, sheetFrom, confirmBox, charDetail, setSheetFrom, openModal, closeModal } from './modal';
 import { openCardModal, openPlanner } from './planner';
+import { openWin } from './windows/frame';
 
 export function toggleSheet(kind: string, arg?: string) {
   if (sheet && sheet.kind === kind && sheet.arg === arg) closeSheet(); else openSheet(kind, arg);
@@ -197,41 +198,73 @@ export function peopleSection(roles: Character['role'][], title: string, empty =
 }
 
 // ---------- province ----------
-export function provinceSheet(id: string, body: HTMLElement) {
+export function provinceSheet(id: string, body0: HTMLElement) {
+  let body = body0;
   const p = S.provinces[id];
   const owner = S.nations[p.owner];
   const mine = p.owner === S.player;
   const g = getGeo();
   const tier = tierOf(p);
   // the realm it belongs to, one tap away
-  if (owner && p.owner !== NO_STATE) body.append(h('button', { class: 'owner-chip', onclick: () => (mine ? openSheet('realm') : openSheet('nation', p.owner)) },
+  if (owner && p.owner !== NO_STATE && !mine) body.append(h('button', { class: 'owner-chip', onclick: () => (mine ? openSheet('realm') : openSheet('nation', p.owner)) },
     shield(p.owner, owner.color, true), h('span', {}, h('b', {}, owner.name), h('small', {}, mine ? 'Your realm' : `${atWar(S, S.player, p.owner) ? 'At war with you · ' : ''}relations ${getRel(S, S.player, p.owner)} · all its provinces`)), h('span', { class: 'a-go', html: icon('next', 14) })));
-  body.append(h('div', { class: 'stats' },
-    stat(TIERS[tier].name, `${(population(S, p) / 1000).toFixed(0)}k people`), stat('Development', p.dev),
-    stat('Control', `${Math.round(p.control)}%`), stat('Raw material', GOODS[p.good]?.name ?? p.good),
-    stat('Income', provinceIncome(S, id).toFixed(1)), stat('Fort', p.fort ? '▮'.repeat(p.fort) : 'none'),
-    g.coastal[id] ? stat('Coast', 'yes') : null,
-    stat('Culture', `${CULTURE_NAMES[p.culture] ?? p.culture}${mine && !isAccepted(S, p.culture) ? ' (foreign)' : ''}`), stat('Faith', RELIGION_NAMES[p.religion] ?? p.religion)));
-  if (mine) {
-    const hp = happinessOf(S, p);
-    body.append(h('div', { class: 'mood' }, h('div', { class: 'mood-h' }, h('b', {}, `Happiness ${hp.value}%`), h('small', {}, moodName(hp.value))),
-      h('div', { class: 'ctl-bar' }, h('i', { style: `width:${hp.value}%`, class: hp.value < 35 ? 'low' : '' })),
-      h('div', { class: 'tags' }, hp.parts.filter(x => x.label !== 'Base').map(x => h('span', { class: 'tag ' + (x.v < 0 ? 'war' : 'ally') }, `${x.label} ${signed(x.v)}`)))));
-  }
   const site = (sname: 'town' | 'rural', label: string) => {
     const blds = p.buildings.filter(b => BUILDINGS[b]?.site === sname);
     const slots = sname === 'town' ? townSlots(p) : ruralSlots(p);
     return h('div', { class: 'site' }, h('h3', {}, `${label} (${builtAt(p, sname)}/${slots})`),
-      h('div', { class: 'tags' }, blds.length ? blds.map(b => h('span', { class: 'tag', html: icon(BUILDINGS[b].icon, 14) + ' ' + BUILDINGS[b].name + gradeLabel(p.grades?.[b] ?? 1) })) : h('span', { class: 'muted' }, sname === 'town' && !p.settlement ? 'No town yet. Found a settlement to build here.' : 'Nothing built yet')));
+      h('div', { class: 'tags' }, blds.length ? blds.map(b => h('span', { class: 'tag', html: icon(BUILDINGS[b].icon, 14) + ' ' + BUILDINGS[b].name + gradeLabel(p.grades?.[b] ?? 1) })) : h('span', { class: 'muted' }, 'Nothing built yet')));
   };
-  body.append(site('town', TIERS[tier].name), site('rural', 'Countryside'));
-  const best = Object.values(BUILDINGS).filter(b => b.match?.includes(p.good)).map(b => b.name);
+  // ---------- the summary: four figures, each one tap from its detail ----------
+  const hp = mine ? happinessOf(S, p) : null;
+  const detail = h('div', { class: 'ptile-detail', hidden: true });
+  let openTile = '';
+  const tile = (key: string, label: string, value: string, sub: string, tone: string, more: () => (HTMLElement | string | null)[]) => {
+    const b = h('button', { class: 'ptile ' + tone, 'aria-expanded': 'false', onclick: () => {
+      for (const x of Array.from(tiles.children)) x.setAttribute('aria-expanded', 'false');
+      if (openTile === key) { openTile = ''; detail.hidden = true; return; }
+      openTile = key; b.setAttribute('aria-expanded', 'true');
+      clear(detail).append(...more().filter(Boolean) as (HTMLElement | string)[]); detail.hidden = false;
+    } }, h('b', {}, value), h('span', {}, label), sub ? h('small', {}, sub) : null);
+    return b;
+  };
+  const people = `${(population(S, p) / 1000).toFixed(0)}k`;
+  const placeLine = () => h('p', { class: 'muted' }, `${TIERS[tier].name} · development ${p.dev} · ${CULTURE_NAMES[p.culture] ?? p.culture}${mine && !isAccepted(S, p.culture) ? ' (foreign)' : ''} · ${RELIGION_NAMES[p.religion] ?? p.religion}${p.fort ? ` · fort ${p.fort}` : ''}${g.coastal[id] ? ' · coast' : ''}`);
+  const tiles = h('div', { class: 'ptiles' },
+    hp ? tile('happy', 'Happiness', `${hp.value}%`, moodName(hp.value), hp.value < 35 ? 'bad' : hp.value >= 60 ? 'good' : '',
+      () => [h('div', { class: 'ctl-bar' }, h('i', { style: `width:${hp.value}%`, class: hp.value < 35 ? 'low' : '' })),
+        h('ul', { class: 'pparts' }, hp.parts.filter(x => x.label !== 'Base').map(x => h('li', { class: x.v < 0 ? 'bad' : 'good' }, h('span', {}, x.label), h('b', {}, signed(x.v)))))]) : null,
+    tile('income', 'Income', provinceIncome(S, id).toFixed(1), 'a year', '', () => [h('p', { class: 'muted' }, 'Ducats a year from this province. More development, a town and buildings raise it.')]),
+    tile('people', 'People', people, TIERS[tier].name, '', () => [placeLine()]),
+    tile('control', 'Control', `${Math.round(p.control)}%`, p.control < 30 ? 'unrest' : '', p.control < 30 ? 'bad' : '', () => [h('p', { class: 'muted' }, 'How firmly your officials hold it. Under 30% it pays less and may rise. A viceroy or a royal tour raises it.')]));
+  body.append(tiles, detail);
+  // ---------- what the land yields: one row a good ----------
   const out = provinceOutput(S, p), side = sideOutput(S, p);
-  body.append(h('p', { class: 'muted' }, h('span', { class: 'gico-in', style: `color:${GOODS[p.good]?.color}`, html: icon(GOODS[p.good]?.icon ?? 'star', 14) }),
-    ` Makes ${f1(out)} ${GOODS[p.good]?.name.toLowerCase() ?? p.good} a year${side.length ? ` and ${side.map(x => `${f1(x.v)} ${GOODS[x.good].name.toLowerCase()}`).join(', ')}` : ''}. ${GOODS[p.good]?.desc ?? ''}${best.length ? ` ${best.join(' or ')} double it.` : ''}`));
+  const goodsRows = [{ good: p.good, v: out }, ...side.map(x => ({ good: x.good, v: x.v }))];
+  const yields = h('div', { class: 'pgoods' }, h('h3', {}, 'Produces'), ...goodsRows.map(r => {
+    const gd = GOODS[r.good];
+    const best = Object.values(BUILDINGS).filter(b => b.match?.includes(r.good)).map(b => b.name);
+    const more = h('small', { class: 'pgood-more', hidden: true }, `${gd?.desc ?? ''}${best.length ? ` ${best.join(' or ')} double${best.length > 1 ? '' : 's'} it.` : ''}`);
+    return h('button', { class: 'pgood', onclick: () => { more.hidden = !more.hidden; } },
+      h('span', { class: 'gico-in', style: `color:${gd?.color}`, html: icon(gd?.icon ?? 'star', 18) }), h('span', { class: 'pg-n' }, gd?.name ?? r.good), h('b', {}, `${f1(r.v)}/yr`), more);
+  }));
+  body.append(yields);
+  // ---------- the town: what is there, or the one step to make one ----------
+  if (mine && !p.settlement) {
+    const fc = cardFor(S, 'found');
+    const why = fc ? missionBlocked(S, 'found', id) : null;
+    body.append(h('div', { class: 'pnext' }, h('span', { class: 'a-ico', html: icon('tower', 22) }),
+      h('div', {}, h('b', {}, 'No town yet'), h('small', {}, fc ? (why ?? `Found one: ${foundCost(S)} ducats, an administrator`) : 'Found one with a Found a Settlement card (Internal deck).')),
+      fc && !why ? h('button', { class: 'btn primary small', onclick: () => openPlanner('found', id, undefined, fc.uid) }, 'Found')
+        : !fc ? h('button', { class: 'btn small', onclick: () => openWin('internal', 'cards') }, 'Get card') : null));
+  } else if (p.settlement) {
+    const blds = p.buildings.map(b => BUILDINGS[b]).filter(Boolean);
+    body.append(h('div', { class: 'pnext' }, h('span', { class: 'a-ico', html: icon('tower', 22) }),
+      h('div', {}, h('b', {}, TIERS[tier].name), h('small', {}, blds.length ? blds.map(b => b.name).join(', ') : `Room for ${townSlots(p) + ruralSlots(p)} buildings`))));
+  }
   if (mine && workshopCap(S, p) > 0) body.append(workshopRow(p));
   if (mine) {
-    body.append(h('h3', {}, 'Actions'));
+    const outer = body;
+    body = h('div');
     const devCard = cardFor(S, 'develop');
     body.append(actionRow('wheat', 'Develop', `+1 development · ${developCost(S, id)} ducats · uses Settlers or Irrigation`, !devCard ? 'Needs a Settlers (Internal) or Irrigation (Economy) card' : missionBlocked(S, 'develop', id), () => openPlanner('develop', id, undefined, devCard!.uid)));
     if (p.religion !== S.stateReligion) {
@@ -247,11 +280,12 @@ export function provinceSheet(id: string, body: HTMLElement) {
     body.append(actionRow('mood', 'Royal grace', `Raise happiness here (+4 to +28, fading 1 a year) · ${graceCost(S)} ducats · 1–3 years`, !gr ? 'Needs a Royal Grace card (Internal)' : missionBlocked(S, 'grace', id), () => openPlanner('grace', id, undefined, gr!.uid)));
     if (!p.settlement) {
       const fc = cardFor(S, 'found');
-      body.append(actionRow('tower', 'Found a settlement', `A village, town or city, depending on your administrator · ${foundCost(S)} ducats`, !fc ? 'Needs a Found a Settlement card (Internal)' : missionBlocked(S, 'found', id), () => openPlanner('found', id, undefined, fc!.uid)));
+      if (false) body.append(actionRow('tower', 'Found a settlement', `A village, town or city, depending on your administrator · ${foundCost(S)} ducats`, !fc ? 'Needs a Found a Settlement card (Internal)' : missionBlocked(S, 'found', id), () => openPlanner('found', id, undefined, fc!.uid)));
     } else if (p.settlement < 4) {
       const gc = cardFor(S, 'grow');
       body.append(actionRow('tower', `Grow the ${TIERS[tierOf(p)].name.toLowerCase()}`, `Up to a ${TIERS[(['none', 'village', 'town', 'city', 'metropolis'] as const)[p.settlement + 1]].name.toLowerCase()} · ${growCost(S, id)} ducats`, !gc ? 'Needs a Grow your Settlement card (Internal)' : missionBlocked(S, 'grow', id), () => openPlanner('grow', id, undefined, gc!.uid)));
     }
+    const builds: HTMLElement[] = [];
     for (const [siteName, label] of [['town', 'Build in town'], ['rural', 'Build in the countryside']] as const) {
       const rows: HTMLElement[] = []; let ready = 0;
       for (const b of Object.values(BUILDINGS).filter(b => b.site === siteName)) {
@@ -265,8 +299,17 @@ export function provinceSheet(id: string, body: HTMLElement) {
         rows.push(buildRow(b.id, id, block, () => openPlanner('build', id, b.id, card!.uid)));
       }
       // folded by default: the panel stays short until you want to build
-      if (rows.length) body.append(h('details', { class: 'fold' }, h('summary', {}, h('b', {}, label), h('small', {}, ready ? `${ready} ready · ${rows.length} kinds` : `${rows.length} kinds · none ready`), h('span', { class: 'br-chev', 'aria-hidden': 'true' }, '▾')), ...rows));
+      if (rows.length) builds.push(h('details', { class: 'fold' }, h('summary', {}, h('b', {}, label), h('small', {}, ready ? `${ready} ready · ${rows.length} kinds` : `${rows.length} kinds · none ready`), h('span', { class: 'br-chev', 'aria-hidden': 'true' }, '▾')), ...rows));
     }
+    // what can be done now comes first; what needs another card waits in a fold
+    const all = Array.from(body.children) as HTMLElement[];
+    const ready = all.filter(e => !e.classList.contains('blocked')), later = all.filter(e => e.classList.contains('blocked'));
+    body = outer;
+    if (ready.length) body.append(h('h3', {}, 'You can'), ...ready);
+    if (workshopCap(S, p) > 0) builds.unshift(workshopRow(p));
+    builds.unshift(site('town', TIERS[tier].name), site('rural', 'Countryside'));
+    body.append(h('details', { class: 'fold' }, h('summary', {}, h('b', {}, 'Buildings'), h('small', {}, `${p.buildings.length} built`), h('span', { class: 'caret' }, '▾')), ...builds));
+    if (later.length) body.append(h('details', { class: 'fold' }, h('summary', {}, h('b', {}, 'With other cards'), h('small', {}, later.map(e => e.querySelector('b')?.textContent).join(', ')), h('span', { class: 'caret' }, '▾')), ...later));
   } else if (p.owner === NO_STATE) {
     const cc = cardFor(S, 'colonize');
     body.append(h('h3', {}, 'Unclaimed land'));
