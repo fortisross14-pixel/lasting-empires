@@ -123,6 +123,26 @@ comes a year after its warning, which the bot does not use but a person can. War
 judged by play, not by this table. Single runs of 30 games swing by about five games (Standard: 20, then 15), so
 do not tune on fewer than 60.
 
+## Ground at home is a gift to the player (roadmap 2.4)
+Correcting Europe's ground by hand moved the difficulty, and had to be cut back. Standard, 60 games
+(`DIFF=1 MODE=reasonable SEEDS=10`, `SIMSEED=11` and `29`; Castile, Portugal, Aragon):
+
+| Ground | Top 3 |
+|---|---|
+| As it was (three provinces set by hand) | 20 + 15 = 35 (58%) |
+| 80 provinces set by hand | 26 + 20 = 46 (77%) |
+| The same, with Lisbon and Évora left as hills | 23 + 17 = 40 (67%) |
+| The same, without 13 new hills and mountains inside Iberia (**kept**: 67 provinces) | 19 + 15 = 34 (57%) |
+
+Ground counts only in battles the player fights, so high ground in the player's own land helps the player and
+nobody else: thirteen provinces of it were worth 12 games in 60. Making Lisbon and Évora open ground (they had
+been hills) was worth about half as much again, by making Portugal easier to take.
+- Before giving high ground to a realm a player starts in, run this table.
+- The bot plays only the three Iberian realms. The corrections kept elsewhere (the Alps, Italy, the Balkans, the
+  north) are not measured: a start in Savoy, Switzerland or Austria is likely somewhat easier than it was.
+- To draw Iberia truly, first weaken what hills and mountains give the defender (`TERRAINS` in
+  `src/data/terrain.ts`), then add the provinces and run the table again.
+
 ## Rivals (roadmap 4.1–4.6)
 Levers, all without dice except the requests' own events:
 - **Goals** (`src/engine/rivals.ts`): `GOAL_MIN` 5 provinces to have one, kept `GOAL_YEARS` 25, `GOAL_WEIGHT` 3 (the

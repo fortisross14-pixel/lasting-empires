@@ -25,10 +25,14 @@ export const LANDING_FIRE = 1.3;
 
 /** Provinces whose ground is set by hand, where the raw material would mislead. */
 export const TERRAIN_OVERRIDES: Record<string, Terrain> = Object.fromEntries(Object.entries({
-  // Europe, corrected by hand: the Cantabrian range, the Pyrenees, the Alps, the Apennines, the Carpathians, the
-  // Balkans and Norway; the plains a mine or a salt pan had made into hills; the great northern woods.
-  mountains: 'granada oviedo santander huesca chambery grenoble bern innsbruck graz kolozsvar pressburg bosnia kruja abruzzo corsica bergen inverness',
-  hills: 'almeria malaga santiago lugo ourense leon soria avila teruel pamplona vitoria girona clermont limoges marseille genoa florence perugia ancona cosenza sassari '
+  // Europe, corrected by hand: the Alps, the Apennines, the Carpathians, the Balkans and Norway; the plains a mine
+  // or a salt pan had made into hills; the great northern woods.
+  // Not the inside of Iberia, on purpose: thirteen more hills and mountains there (the Cantabrian range, the
+  // Pyrenees, Galicia) took the bot's Castile, Portugal and Aragon from 58% to 77% in the top three, because ground
+  // counts only where the player fights and so is a gift to whoever defends it. See docs/BALANCE.md before adding
+  // high ground to a realm a player starts in.
+  mountains: 'granada chambery grenoble bern innsbruck graz kolozsvar pressburg bosnia kruja abruzzo corsica bergen inverness',
+  hills: 'almeria malaga clermont limoges marseille genoa florence perugia ancona cosenza sassari '
     + 'zurich ljubljana stuttgart dresden prague belgrade sofia thessaloniki athens mistra candia zara trondheim iceland glasgow exeter madeira canaries mashhad',
   forest: 'bayonne luxembourg erfurt stockholm norrland turku novgorod vologda dvina moscow nizhny kazan riga',
   plains: 'lisbon evora caen cologne luneburg munich breslau milan venice',
