@@ -1,5 +1,5 @@
 // Side panels: province, realm, goals, tasks, overseas, chronicle, and the rows they share.
-import { attitude, goalOf, goalKnown, deedsKnown, TEMPERS } from '../engine/rivals';
+import { attitude, goalOf, goalKnown, deedsKnown, TEMPERS, GOAL_MIN, GOAL_YEARS, GOAL_DRIFT, WARNING_VALID } from '../engine/rivals';
 import { threatOf } from '../engine/ai';
 import { TERRAINS, type Terrain } from '../data/terrain';
 import { TRAIT_TACTIC_CHANCE } from '../data/troops';
@@ -478,6 +478,8 @@ function rulesTab(body: HTMLElement) {
       ['Rivals grow', ...DIFFICULTY.map(d => `×${d.aiGrowth}`)],
       ['The steward starts', ...DIFFICULTY.map(d => (d.steward ? 'in office' : 'out of office'))],
     ]),
+    h('h3', {}, 'Rivals'),
+    h('p', {}, `A realm of ${GOAL_MIN} provinces or more wants the lands of one neighbour and holds to it for ${GOAL_YEARS} years: it likes that neighbour ${-GOAL_DRIFT} less each year and picks it first when it chooses a war. An embassy, a spy or an alliance tells you what a realm wants. No realm declares war on you without warning: the first time it would, a dispatch reaches you and it waits a year. If it is still the stronger and still ill-disposed then, it declares war. A warning holds for ${WARNING_VALID} years.`),
     h('h3', {}, 'The court'),
     h('p', {}, `A servant's loyalty runs from 0 to 100: ${LOYALTY_LEVELS.map(([min, word]) => `${word} from ${min}`).join(', ')}. Below ${DISLOYAL} they listen to other offers; below ${LEAVES} they may leave. A rival realm of ${COMMANDER_MIN} provinces or more is led by a named general, who may fall or be taken when you beat him.`),
     h('h3', {}, 'Battles'),
