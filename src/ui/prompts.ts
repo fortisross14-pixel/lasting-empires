@@ -2,9 +2,9 @@
 import { showHistory } from './sheets';
 import { commanderOf } from '../engine/commanders';
 import { sfx, buzz, type Sfx } from './sound';
-import type { DraftOption, RevealItem, Battle, Heir } from '../types';
+import type { DraftOption, RevealItem, Battle, Heir, BattleUnit, BattleSide } from '../types';
 import { RULER_ARCHS } from '../data/nations';
-import { TROOPS, EQUIPMENT } from '../data/troops';
+import { TROOPS, EQUIPMENT, TACTICS, TRAIT_TACTIC } from '../data/troops';
 import { MISSIONS } from '../data/missions';
 import { goalView } from '../engine/goals';
 import { commandOf, GENERIC_COMMAND, OUTCOMES, TRAITS } from '../data/characters';
@@ -13,7 +13,9 @@ import { newMissionGame, chooseEventOption, ranking, chooseHeir } from '../engin
 import { EVENT, eventTitle } from '../engine/events';
 import { CARDS } from '../engine/cards';
 import { takeDraftOption, AMBITIONS } from '../engine/drafts';
-import { playRound, autoResolve, finishBattle, ratio, breakLevel, hp } from '../engine/battle';
+import { alliedHelp, playRound, autoResolve, finishBattle, ratio, breakLevel, hp, startOdds, canReserve, setReserve, reserveOf, commitReserve, canRetreat, retreat, RESERVE_FRESH } from '../engine/battle';
+import { TERRAINS, LANDING_FIRE, terrainOf, type Terrain } from '../data/terrain';
+import { settings } from './settings';
 import { h, clear, sleep, reduced } from './dom';
 import { icon } from './icons';
 import { troopCard, charCard, handCard, tacticCard, backCard, flipCard } from './cards';
@@ -33,7 +35,7 @@ export function processQueue() {
   if (p.kind === 'reveal') showReveal(p.title, p.subtitle, p.items, () => { S.queue.shift(); afterPrompt(); }, p.alarm);
   else if (p.kind === 'event') showEvent();
   else if (p.kind === 'draft') showDraft(p.draft, p.options);
-  else if (p.kind === 'battle') showBattle(p.battle);
+  else if (p.kind === 'battle') { if (!quickBattle(p.battle)) showBattle(p.battle); }
   else if (p.kind === 'succession') showSuccession(p.heirs, p.old);
   else if (p.kind === 'peace') showPeace(p.enemy, p.offered, p.surrender);
   else if (p.kind === 'incoming') showIncoming(p.id);
@@ -177,42 +179,65 @@ export function unitChip(u: { type: string; vet: number; str: number; start: num
     h('span', { class: 'u-bar' }, h('i', { style: `width:${Math.max(0, u.str)}%` })));
 }
 
-/** A company on the battlefield: its painting, its strength, its stars, and what it lost this round. */
-export function unitTile(u: { type: string; vet: number; str: number; garrison?: boolean }, lost = 0) {
+/** A company on the battlefield: its painting, its strength, its stars, and what it lost this round.
+ *  `pick` makes it a button for choosing the reserve (before the first round). */
+export function unitTile(u: BattleUnit, lost = 0, pick?: () => void) {
   const d = TROOPS[u.type];
   const pic = artImg(u.garrison ? 'unit_garrison' : 'unit_' + u.type);
-  const name = d.name + (u.vet ? ' ' + '★'.repeat(u.vet) : '');
+  const from = u.ally ? ` of ${nationName(S, u.ally)}` : '';
+  const name = d.name + (u.vet ? ' ' + '★'.repeat(u.vet) : '') + from;
   const gone = u.str <= 0;
-  return h('button', { type: 'button', class: 'utile' + (gone ? ' dead' : '') + (lost > 0 ? ' hit' : ''), 'aria-label': `${name}, ${gone ? 'destroyed' : `strength ${Math.round(u.str)}%`}`,
-    onclick: () => toast(`${name}: ${gone ? 'destroyed' : `strength ${Math.round(u.str)}%`} · melee ${d.melee}, fire ${d.fire}, defence ${d.def}`) },
+  const state = gone ? 'destroyed' : `strength ${Math.round(u.str)}%${u.reserve ? ', held in reserve' : ''}`;
+  return h('button', { type: 'button', class: 'utile' + (gone ? ' dead' : '') + (lost > 0 ? ' hit' : '') + (u.reserve ? ' reserve' : '') + (u.ally ? ' lent' : '') + (pick ? ' pickable' : ''),
+    style: u.ally ? `--ac:${S.nations[u.ally]?.color ?? '#777'}` : '', 'aria-label': `${name}, ${state}`, 'aria-pressed': pick ? String(!!u.reserve) : undefined,
+    onclick: pick ?? (() => toast(`${name}: ${state} · melee ${d.melee}, fire ${d.fire}, defence ${d.def}`)) },
     h('span', { class: 'ut-pic', html: pic ?? icon(d.icon, 22) }),
     u.vet ? h('span', { class: 'ut-vet' }, '★'.repeat(u.vet)) : null,
+    u.reserve ? h('span', { class: 'ut-res' }, 'Reserve') : u.fresh != null && !gone ? h('span', { class: 'ut-res in' }, 'Fresh') : null,
     lost > 0 ? h('span', { class: 'ut-dmg' }, `−${Math.round(lost)}`) : null,
     h('span', { class: 'u-bar' }, h('i', { style: `width:${Math.max(0, Math.min(100, u.str))}%` })),
     h('span', { class: 'ut-n' }, d.name));
 }
 
+/** What a general's character means on the field, in a few words. */
+const habit = (g: BattleSide['general']) => {
+  const t = (g?.traits ?? []).find(x => TRAIT_TACTIC[x]);
+  return t ? `${TRAITS[t]?.name ?? t}: favours ${TRAIT_TACTIC[t].map(x => TACTICS[x].name.toLowerCase()).join(' or ')}` : '';
+};
+/** The ground of a battle, as one line. */
+export const groundLine = (terrain?: string, landing?: boolean) => {
+  const t = TERRAINS[(terrain ?? 'plains') as Terrain];
+  return `${t.name}. ${t.text}${landing ? ` You come ashore from ships: their fire is ×${LANDING_FIRE} in the first round.` : ''}`;
+};
+
+/** A battle. The generals choose the tactics; the player chooses what to hold back, when to send it in,
+ *  and whether to break off. */
 export function showBattle(b: Battle) {
   const me = b.playerSide === 'att' ? b.att : b.def;
   const foe = b.playerSide === 'att' ? b.def : b.att;
   const prov = S.provinces[b.province];
   const box = h('div', { class: 'mbox battle' });
   type Round = { mine: string; theirs: string; myC: boolean; theirC: boolean; dmgMe: number; dmgThem: number; lost: Map<number, number> };
+  let resultPlayed = false;
   const draw = (last?: Round) => {
     clear(box);
     const foeNat = S.nations[foe.nation];
     const foeName = foe.nation === 'rebels' ? 'Rebels' : nationName(S, foe.nation);
     const ctx = { conquer: 'Siege of', defend: 'Defence of', raid: 'Raid on', rebels: 'Fighting at', sea: 'Sea battle off' }[b.context];
-    box.append(h('div', { class: 'b-head' }, h('h2', {}, `${ctx} ${prov.name}`), h('p', { class: 'muted' }, `Round ${Math.min(3, b.round + (b.done ? 0 : 1))} of 3${foe.fort ? ` · their walls: level ${foe.fort}` : me.fort ? ` · your walls: level ${me.fort}` : ''}`)));
-    const side = (sd: typeof me, label: string, cls: string, nat?: { id: string; color: string }) => {
+    const deploy = b.round === 0 && !b.done;
+    box.append(h('div', { class: 'b-head' }, h('h2', {}, `${ctx} ${prov.name}`),
+      h('p', { class: 'muted' }, deploy ? 'Before the first round' : `Round ${Math.min(3, b.round + (b.done ? 0 : 1))} of 3`, foe.fort ? ` · their walls: level ${foe.fort}` : me.fort ? ` · your walls: level ${me.fort}` : ''),
+      b.naval ? null : h('p', { class: 'b-ground' }, h('span', { html: icon('map', 14) }), ' ', groundLine(b.terrain, b.landing && b.playerSide === 'att'))));
+    const side = (sd: typeof me, label: string, cls: string, nat: { id: string; color: string } | undefined, mine: boolean) => {
       const pct = Math.round(ratio(sd) * 100), brk = Math.round(breakLevel(sd) * 100);
       return h('div', { class: 'b-side ' + cls },
         h('div', { class: 'b-label' }, nat ? shield(nat.id, nat.color, true) : h('span', { class: 'b-rebel', html: icon('torch', 20) }),
-          h('span', { class: 'b-who' }, h('b', {}, label), h('small', {}, sd.general ? sd.general.name : 'No general')),
+          h('span', { class: 'b-who' }, h('b', {}, label), h('small', {}, sd.general ? sd.general.name : 'No general', habit(sd.general) ? ` · ${habit(sd.general)}` : '')),
           h('span', { class: 'hpbar', role: 'img', 'aria-label': `${label}: ${pct}% of its strength left; it breaks at ${brk}%` }, h('i', { style: `width:${pct}%` }), h('em', { style: `left:${brk}%` }), h('span', {}, `${pct}%`))),
-        h('div', { class: 'utiles' }, sd.units.map(u => unitTile(u, last?.lost.get(u.uid) ?? 0))));
+        h('div', { class: 'utiles' }, sd.units.map(u => unitTile(u, last?.lost.get(u.uid) ?? 0,
+          mine && deploy && canReserve(b) && !u.garrison ? () => { setReserve(b, u.reserve ? null : u.uid); draw(); } : undefined))));
     };
-    box.append(side(foe, foeName, 'foe', foeNat ? { id: foeNat.id, color: foeNat.color } : undefined));
+    box.append(side(foe, foeName, 'foe', foeNat ? { id: foeNat.id, color: foeNat.color } : undefined, false));
     const slotFoe = h('div', { class: 'slot' }), slotMe = h('div', { class: 'slot' });
     if (last) {
       slotFoe.append(tacticCard(last.theirs, { small: true, cls: last.theirC ? 'countered' : '' }));
@@ -224,7 +249,7 @@ export function showBattle(b: Battle) {
     box.append(h('div', { class: 'b-mid' }, slotFoe, h('div', { class: 'vs' }, last ? h('div', { class: 'dmg' },
       h('span', { class: 'good' }, `You deal ${last.dmgThem}`), h('span', { class: 'bad' }, `You take ${last.dmgMe}`),
       last.theirC ? h('span', { class: 'good' }, 'Their tactic was countered!') : null, last.myC ? h('span', { class: 'bad' }, 'Your tactic was countered!') : null) : 'vs'), slotMe));
-    box.append(side(me, 'Your army', 'mine', { id: S.player, color: player(S).color }));
+    box.append(side(me, 'Your army', 'mine', { id: S.player, color: player(S).color }, true));
     if (b.done) {
       const out = b.result ?? (b.result = finishBattle(S, b));
       save();
@@ -233,14 +258,18 @@ export function showBattle(b: Battle) {
       if (!resultPlayed) { resultPlayed = true; sfx(out.good ? 'great' : 'bad', 0.35); }
       return;
     }
-    // the generals fight it out: you watch
-    box.append(h('p', { class: 'muted center' }, me.general ? `${me.general.name} commands. Each round both sides commit a tactic.` : 'No general: your captains do what they can.'));
-    box.append(h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: () => { stop = true; autoResolve(S, b); draw(); } }, 'Skip to the result')));
-    if (!stop) timer = setTimeout(() => commit(), reduced() ? 300 : 1700);
+    const held = reserveOf(b), who = me.general ? me.general.name.split(' ')[0] : 'your captains';
+    box.append(h('p', { class: 'muted center b-help' }, deploy
+      ? (canReserve(b) ? (held ? `In reserve: ${TROOPS[held.type].name}. Out of the fight until you send them in, then ×${RESERVE_FRESH} for a round.` : 'Tap one of your companies to hold it in reserve, or begin with every company in the line.') : 'Too few companies to spare a reserve.')
+      : held ? `Still in reserve: ${TROOPS[held.type].name}. Sending them in steadies the line, and they strike at ×${RESERVE_FRESH} this round.`
+        : `${me.general ? me.general.name : 'Your captains'} will choose the tactic. You may fight on or break off.`));
+    const fight = (label: string, primary = true, before?: () => void) => h('button', { class: 'btn' + (primary ? ' primary' : ' ghost'), onclick: () => { before?.(); commit(); } }, label);
+    box.append(h('div', { class: 'mrow b-acts' },
+      h('button', { class: 'btn ghost small b-auto', onclick: () => { autoResolve(S, b); draw(); } }, `Leave it to ${who}`),
+      !deploy && canRetreat(b) ? h('button', { class: 'btn ghost danger', onclick: () => { retreat(b); sfx('knock'); draw(); } }, 'Withdraw') : null,
+      !deploy && held ? fight('Send in the reserve', false, () => commitReserve(b)) : null,
+      fight(deploy ? 'Begin' : 'Fight on')));
   };
-  let stop = false, resultPlayed = false;
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  void timer;
   const commit = () => {
     if (b.done || !document.body.contains(box)) return;
     const beforeMe = hp(me), beforeFoe = hp(foe);
@@ -249,11 +278,27 @@ export function showBattle(b: Battle) {
     sfx(b.round % 2 ? 'clash' : 'clash2'); buzz(15);
     const lost = new Map([...me.units, ...foe.units].map(u => [u.uid, Math.max(0, (was.get(u.uid) ?? u.str) - u.str)] as [number, number]));
     const att = b.playerSide === 'att';
-    draw({ mine: att ? lg.attTactic : lg.defTactic, theirs: att ? lg.defTactic : lg.attTactic, myC: att ? lg.attCountered : lg.defCountered, theirC: att ? lg.defCountered : lg.attCountered, dmgMe: Math.round(beforeMe - hp(me)), dmgThem: Math.round(beforeFoe - hp(foe)), lost });
+    draw({ mine: att ? lg.attTactic : lg.defTactic, theirs: att ? lg.defTactic : lg.attTactic, myC: att ? lg.attCountered : lg.defCountered, theirC: att ? lg.defCountered : lg.attCountered, dmgMe: Math.round(Math.max(0, beforeMe - hp(me))), dmgThem: Math.round(beforeFoe - hp(foe)), lost });
     box.querySelectorAll('.slot .card').forEach(c => c.classList.add('slam'));
   };
   draw();
   openModal(box);
+}
+
+/** With "quick battles" on, a battle whose outcome is hardly in doubt is fought without stopping the game. */
+export const QUICK_ODDS = 0.8;
+function quickBattle(b: Battle): boolean {
+  if (!settings().quickBattles || b.siege || b.round > 0) return false;
+  const odds = startOdds(b), mine = b.playerSide === 'att' ? odds : 1 - odds;
+  if (mine < QUICK_ODDS && mine > 1 - QUICK_ODDS) return false;
+  autoResolve(S, b);
+  const out = b.result ?? (b.result = finishBattle(S, b));
+  S.queue.shift();
+  sfx(out.good ? 'plain' : 'bad');
+  toast(`${out.title}${out.lines[0] ? ' · ' + out.lines[0] : ''}`, out.good ? 'good' : 'bad');
+  saveNow(); refresh();
+  setTimeout(processQueue, 60);
+  return true;
 }
 
 /** An enemy army is on its way: choose who defends. The battle comes next quarter and plays itself. */
@@ -273,8 +318,10 @@ export function showIncoming(id: number) {
   const draw = () => {
     clear(box);
     const mine = armyPower(S.troops.filter(t => picked.includes(t.uid))), theirs = armyPower(force);
-    box.append(h('h2', {}, `${n.name} marches on ${prov.name}`), h('p', { class: 'muted' }, `They arrive when you end this turn, with ${spied ? force.length : `about ${Math.max(1, force.length - 1)}–${force.length + 2}`} companies. Choose who stands to meet them; the battle then plays itself.`),
-      (() => { const g = commanderOf(S, n.id); return g ? h('p', { class: 'inc-gen' }, h('b', {}, g.name), ` leads them${g.traits.length ? `: ${g.traits.map(x => TRAITS[x]?.name ?? x).join(', ').toLowerCase()}` : ''}.`) : ''; })());
+    box.append(h('h2', {}, `${n.name} marches on ${prov.name}`), h('p', { class: 'muted' }, `They arrive when you end this turn, with ${spied ? force.length : `about ${Math.max(1, force.length - 1)}–${force.length + 2}`} companies. Choose who stands to meet them; you fight the battle when they come.`),
+      (() => { const g = commanderOf(S, n.id); return g ? h('p', { class: 'inc-gen' }, h('b', {}, g.name), ` leads them${habit(g) ? `. ${habit(g)}` : ''}.`) : ''; })(),
+      h('p', { class: 'b-ground' }, h('span', { html: icon('map', 14) }), ' You defend: ', groundLine(terrainOf(prov))),
+      (() => { const lent = alliedHelp(S, n.id, prov.id); return lent.length ? h('p', { class: 'inc-gen' }, `${[...new Set(lent.map(u => nationName(S, u.ally!)))].join(' and ')} will send ${lent.length === 1 ? 'a company' : `${lent.length} companies`} to stand with you.`) : ''; })());
     if (spied) box.append(h('div', { class: 'cards-row wrap' }, force.map(t => troopCard(t, { small: true }))));
     box.append(h('h3', {}, 'General'));
     const gr = h('div', { class: 'cards-row wrap' });

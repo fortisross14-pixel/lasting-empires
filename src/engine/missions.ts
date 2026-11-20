@@ -24,7 +24,7 @@ import {
   ageId, rand, pick, uid, log, nationName, armyPower, buildingAllowed, push, buildingCost, inflation, ownGoods, traitMult, promoteRarity,
   rollOutcome, outcomeName, TIERS, tierOf, GROW_DEV, hasCore, rollBest, rollTraits, techFx, ageIndex } from './core';
 import { getGeo } from './map';
-import { createBattle, makeSide, toBattleUnits, genericGeneral, freeMission, transferProvince } from './battle';
+import { createBattle, makeSide, toBattleUnits, genericGeneral, freeMission, transferProvince, alliedHelp } from './battle';
 
 export const MISSION_INFO: Record<MissionKind, { name: string; role: Role; icon: string; verb: string }> = {
   conquer: { name: 'Conquest', role: 'general', icon: 'sword', verb: 'Conquer' },
@@ -604,7 +604,7 @@ export function landPhase(s: GameState, missionId: number) {
     const enemy = s.nations[prov.owner];
     const troops = s.troops.filter(t => m.troops.includes(t.uid)).slice(0, commandOf(ch.skill));
     if (!troops.length) { finish(s, m); return; }
-    const att = makeSide(s.player, toBattleUnits(troops), { name: ch.name, skill: ch.skill, traits: ch.traits, uid: ch.uid, mult: traitMult(ch) }, 0, true);
+    const att = makeSide(s.player, [...toBattleUnits(troops), ...(m.kind === 'conquer' ? alliedHelp(s, enemy.id, prov.id) : [])], { name: ch.name, skill: ch.skill, traits: ch.traits, uid: ch.uid, mult: traitMult(ch) }, 0, true);
     const defUnits = [...troopsNear(s, enemy.id, prov.id)].sort((a, b) => armyPower([b]) - armyPower([a])).slice(0, m.kind === 'raid' ? 3 : GENERIC_COMMAND + (prov.id === enemy.capital ? 1 : 0));
     const fort = m.kind === 'raid' ? Math.max(0, prov.fort - 1) : prov.fort;
     if (!defUnits.length && fort === 0) {
@@ -624,7 +624,7 @@ export function landPhase(s: GameState, missionId: number) {
       finish(s, m); return;
     }
     const def = makeSide(enemy.id, toBattleUnits(defUnits), commanderOf(s, enemy.id) ?? genericGeneral(s), fort, false);
-    const b = createBattle(s, att, def, prov.id, m.kind as 'conquer' | 'raid', m.id);
+    const b = createBattle(s, att, def, prov.id, m.kind as 'conquer' | 'raid', m.id, { landing: !!m.ships?.length });
     push(s, { kind: 'battle', battle: b });
     return;
   }

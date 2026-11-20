@@ -1,4 +1,7 @@
 // Using a card: where it can go, picking a target on the map, and the planner that sends a person out.
+import { terrainOf } from '../data/terrain';
+import { alliedHelp } from '../engine/battle';
+import { groundLine } from './prompts';
 import { sfx, buzz } from './sound';
 import type { MissionKind, Character } from '../types';
 import { TROOPS } from '../data/troops';
@@ -403,6 +406,10 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
         const spied = (enemy.spiedUntil ?? 0) > S.year;
         const theirs = Math.round(armyPower([...enemy.army].sort((a, b) => armyPower([b]) - armyPower([a])).slice(0, kind === 'raid' ? 3 : 6)));
         facts.push(h('span', {}, `Your strength ${mine} vs `, h('b', {}, spied ? `${theirs}` : `~${Math.round(theirs * 0.8)}–${Math.round(theirs * 1.25)}`), ` · fort ${prov.fort}`));
+        const ground = terrainOf(prov), lent = kind === 'conquer' ? alliedHelp(S, prov.owner, prov.id) : [];
+        const bySea = !!attackRoute(S, prov.id)?.naval;
+        if (ground !== 'plains' || bySea) facts.push(h('span', { class: 'fact-ground' }, groundLine(ground, bySea)));
+        if (lent.length) facts.push(h('span', {}, `${[...new Set(lent.map(u => nationName(S, u.ally!)))].join(' and ')} will send ${lent.length === 1 ? 'a company' : `${lent.length} companies`}`));
       }
       if (!S.troops.some(t => t.mission == null && !picked.includes(t.uid))) facts.push(h('span', { class: 'bad' }, 'No troops left at home to defend'));
     }

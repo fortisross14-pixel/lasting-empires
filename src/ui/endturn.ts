@@ -19,7 +19,7 @@ import { missionRow } from './windows/cards';
 import { closeSheet } from './sheets';
 import { openModal, closeModal } from './modal';
 import { pickHand, stopMapPick } from './planner';
-import { processQueue } from './prompts';
+import { processQueue, QUICK_ODDS } from './prompts';
 
 // ---------- end turn & prompt queue ----------
 /** What must be settled before a turn can end: open decisions, a hand over its limit and, once, the list of things
@@ -105,7 +105,7 @@ export function onSkipAhead() {
 /** Settings of this device, and the choices this campaign was started with. */
 export function showSettings() {
   const st = settings();
-  const toggle = (k: 'warn' | 'skip' | 'calm' | 'haptics', label: string, sub: string) => h('label', { class: 'set-row' },
+  const toggle = (k: 'warn' | 'skip' | 'calm' | 'haptics' | 'quickBattles', label: string, sub: string) => h('label', { class: 'set-row' },
     h('span', { class: 'gm-t' }, h('b', {}, label), h('small', {}, sub)),
     h('input', { type: 'checkbox', class: 'set-sw', role: 'switch', checked: st[k] ? true : undefined, onchange: (e: Event) => { setSetting(k, (e.target as HTMLInputElement).checked as Settings[typeof k]); refresh(); } }));
   const d = DIFFICULTY[S.difficulty ?? STANDARD] ?? DIFFICULTY[STANDARD];
@@ -115,6 +115,7 @@ export function showSettings() {
     h('div', { class: 'gm-list' },
       toggle('warn', 'Things to do', 'Before a turn ends, list the cards and people still waiting.'),
       toggle('skip', 'Skip ahead button', `Plays up to ${SKIP_MAX} quiet seasons in one tap and stops when something happens.`),
+      toggle('quickBattles', 'Quick battles', `A battle you are nearly sure to win or lose (${Math.round(QUICK_ODDS * 100)}% or more either way) is fought without stopping, and told in one line.`),
       toggle('calm', 'Less motion', 'No sliding or turning cards. Always on when your device asks for reduced motion.'),
       h('div', { class: 'set-row' }, h('span', { class: 'gm-t' }, h('b', {}, 'Sound'), h('small', {}, 'Paper, wax, coin and drum, made on the device.')),
         h('div', { class: 'seg set-seg', role: 'radiogroup', 'aria-label': 'Sound' }, ([['Off', 0], ['Soft', 0.5], ['Full', 1]] as [string, number][]).map(([label, v]) =>

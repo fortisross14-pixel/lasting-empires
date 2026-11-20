@@ -158,6 +158,9 @@ export interface BattleUnit {
   str: number;
   start: number;
   garrison?: boolean;
+  reserve?: boolean;   // held back by the player: takes no part until sent in
+  fresh?: number;      // the round (0-based) in which the reserve entered: it strikes harder then
+  ally?: string;       // a company lent by this ally
 }
 
 export interface BattleGeneral { name: string; skill: number; traits: string[]; uid?: number; mult?: number; }
@@ -204,6 +207,9 @@ export interface Battle {
   camp?: boolean;  // an attack on a half-built invasion base
   rebel?: { cause: string; name: string; adj: string }; // a rising: if it wins, a civil war
   naval?: boolean;
+  terrain?: string;   // the ground (data/terrain.ts); none at sea
+  landing?: boolean;  // the attacker came ashore from ships
+  retreated?: boolean; // the player withdrew in good order
   follow?: { type: 'land-attack' | 'land-defend'; missionId?: number; nation?: string; force?: number[] };
   missionId?: number;
   done: boolean;

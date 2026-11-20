@@ -11,7 +11,10 @@ import { historyOf, momentWeight, ANNALS_MAX } from '../src/engine/chronicle';
 import { CHAIN_EVENTS } from '../src/engine/chains';
 import { COURT_EVENTS, loyaltyOf, wishOf, addLoyalty, loyaltyWord, reignOf, EPITHETS } from '../src/engine/court';
 import { commanderOf, COMMANDER_MIN } from '../src/engine/commanders';
-import { autoResolve, finishBattle } from '../src/engine/battle';
+import { autoResolve, finishBattle, createBattle, makeSide, playRound, ratio, canReserve, setReserve, reserveOf, commitReserve, canRetreat, retreat, alliedHelp, RETREAT_COST, ALLY_COMPANIES } from '../src/engine/battle';
+import { TERRAINS, TERRAIN_OVERRIDES, terrainOf } from '../src/data/terrain';
+import { TACTICS, TRAIT_TACTIC } from '../src/data/troops';
+import { declareWar } from '../src/engine/core';
 import { takeDraftOption } from '../src/engine/drafts';
 import { CARDS } from '../src/engine/cards';
 import { MISSIONS } from '../src/data/missions';
@@ -20,7 +23,7 @@ import { STARTS } from '../src/data/starts';
 import { attention, readyByDeck, markTurn, stopReasons, cardHasTarget, SKIP_MAX } from '../src/engine/pace';
 import { missionCap } from '../src/engine/realm';
 import { player, provsOf } from '../src/engine/core';
-import type { GameState } from '../src/types';
+import type { GameState, BattleUnit, BattleGeneral } from '../src/types';
 
 let failed = 0, passed = 0;
 function check(name: string, fn: () => void) {
@@ -401,6 +404,89 @@ check('a reign is summed up with a by-name earned by its deeds', () => {
   player(s).ruler.start!.provs += 6; player(s).ruler.start!.built -= 7;
   eq(reignOf(s).epithet, 'the Builder', 'seven buildings raised');
   ok(new Set(EPITHETS.map(e => e[0])).size === EPITHETS.length, 'two by-names are the same');
+});
+
+// ---------- battles ----------
+const unit = (uidN: number, type: string, str = 100): BattleUnit => ({ uid: uidN, type, vet: 0, str, start: str });
+const army = (base: number, types: string[]) => types.map((t, i) => unit(base + i, t));
+/** A battle on chosen ground between two plain armies, the player attacking. */
+function field(seed: number, terrain: string, mine: string[], theirs: string[], general: BattleGeneral | null = null) {
+  const s = newGame('castile', seed); s.queue = [];
+  const b = createBattle(s, makeSide('castile', army(900000, mine), general, 0, true), makeSide('portugal', army(910000, theirs), null, 0, false), 'porto', 'conquer');
+  b.terrain = terrain;
+  return { s, b };
+}
+
+check('ground: every province has one, and hills blunt a cavalry attack', () => {
+  const s = newGame('castile', 501);
+  const count: Record<string, number> = {};
+  for (const p of Object.values(s.provinces)) { const t = terrainOf(p); ok(TERRAINS[t], `${p.id}: unknown ground ${t}`); count[t] = (count[t] ?? 0) + 1; }
+  for (const id of Object.keys(TERRAIN_OVERRIDES)) ok(s.provinces[id], `ground is set by hand for ${id}, which is not a province`);
+  ok(Object.keys(count).length >= 4, `only ${Object.keys(count).length} kinds of ground in the world`);
+  const dealt = (terrain: string) => { let sum = 0; for (let k = 0; k < 12; k++) { const { s: g, b } = field(520 + k, terrain, ['knights', 'knights', 'knights', 'knights'], ['men_at_arms', 'men_at_arms', 'men_at_arms']); b.enemyNext = 'hold'; sum += playRound(g, b, 'charge').dmgToDef; } return sum; };
+  const open = dealt('plains'), hills = dealt('hills'), woods = dealt('forest');
+  ok(hills < open * 0.85 && woods < open * 0.85, `a charge deals ${open} on open ground, ${hills} on hills, ${woods} in woods`);
+  console.log(`       ground of the ${Object.keys(s.provinces).length} provinces: ${Object.entries(count).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+});
+
+check('a reserve stays out of the fight until it is sent in, then strikes harder', () => {
+  const { s, b } = field(531, 'plains', ['men_at_arms', 'men_at_arms', 'knights'], ['men_at_arms', 'men_at_arms', 'men_at_arms']);
+  ok(canReserve(b), 'three companies cannot spare a reserve');
+  setReserve(b, 900002);
+  eq(reserveOf(b)?.uid, 900002, 'the company held back');
+  const before = ratio(b.att);
+  playRound(s, b, null);
+  eq(b.att.units.find(u => u.uid === 900002)!.str, 100, 'strength of the reserve after a round it sat out');
+  ok(ratio(b.att) <= before, 'the line gained strength without the reserve');
+  setReserve(b, 900001);
+  eq(reserveOf(b)?.uid, 900002, 'the reserve was changed after the first round');
+  if (!b.done) {
+    const wavering = ratio(b.att);
+    commitReserve(b);
+    ok(!reserveOf(b) && b.att.units.find(u => u.uid === 900002)!.fresh === b.round, 'the reserve did not enter');
+    ok(ratio(b.att) > wavering, 'fresh men did not steady the line');
+  }
+  const { s: s2, b: b2 } = field(532, 'plains', ['men_at_arms', 'men_at_arms', 'knights'], ['men_at_arms', 'men_at_arms', 'men_at_arms']);
+  setReserve(b2, 900002); autoResolve(s2, b2);
+  ok(b2.done && (!reserveOf(b2) || b2.round === 1), 'left to the general, the reserve was never sent in');
+  const { b: b3 } = field(533, 'plains', ['men_at_arms'], ['men_at_arms']);
+  ok(!canReserve(b3), 'a single company was allowed a reserve');
+});
+
+check('a withdrawal saves the army: less strength lost than a rout, and no stability', () => {
+  const { s, b } = field(541, 'plains', ['levy', 'levy'], ['men_at_arms', 'men_at_arms', 'men_at_arms', 'knights']);
+  // real companies, so the result can be written back to them
+  s.troops = b.att.units.map(u => ({ uid: u.uid, type: u.type, vet: 0, str: 100 }));
+  ok(!canRetreat(b), 'a withdrawal was allowed before the first round');
+  playRound(s, b, null);
+  if (!b.done) {
+    ok(canRetreat(b), 'no withdrawal after the first round');
+    const left = b.att.units.map(u => u.str), stab = player(s).stability;
+    retreat(b);
+    ok(b.done && b.retreated && b.winner === 'def', 'the battle did not end as a withdrawal');
+    const out = finishBattle(s, b);
+    ok(/Withdrawal/.test(out.title), `the report calls it "${out.title}"`);
+    eq(player(s).stability, stab, 'stability after a withdrawal');
+    b.att.units.forEach((u, i) => { const card = s.troops.find(t => t.uid === u.uid); if (left[i] - RETREAT_COST >= 8) eq(card?.str, Math.round(left[i] - RETREAT_COST), 'strength kept by a company that withdrew'); });
+  }
+});
+
+check('a general can be read: a bold one charges, a cautious one holds, about half the time', () => {
+  const count = (trait: string, tactic: string) => { let n = 0; for (let k = 0; k < 120; k++) { const { s, b } = field(600 + k, 'plains', ['knights', 'men_at_arms', 'crossbow'], ['men_at_arms', 'men_at_arms'], { name: 'Test', skill: 3, traits: [trait] }); n += playRound(s, b, null).attTactic === tactic ? 1 : 0; } return n; };
+  const bold = count('bold', 'charge'), plain = count('inspiring', 'charge'), careful = count('cautious', 'hold');
+  ok(bold >= 60 && bold > plain + 20, `a bold general charged ${bold} times in 120, an ordinary one ${plain}`);
+  ok(careful >= 60, `a cautious general held ${careful} times in 120`);
+  for (const [trait, list] of Object.entries(TRAIT_TACTIC)) for (const tac of list) ok(TACTICS[tac], `${trait} favours an unknown tactic ${tac}`);
+});
+
+check('allies in the war send up to two companies, and take them home afterwards', () => {
+  const s = newGame('castile', 551); s.queue = [];
+  eq(alliedHelp(s, 'granada', 'granada').length, 0, 'help from an ally who is not in this war');
+  declareWar(s, 'france', 'granada');
+  for (const t of s.nations.france.army) t.loc = 'jaen'; // France's host stands beside the target, for the test
+  const help = alliedHelp(s, 'granada', 'granada');
+  ok(help.length >= 1 && help.length <= ALLY_COMPANIES && help.every(u => u.ally === 'france'), `France sent ${help.length} companies`);
+  ok(s.nations.france.army.some(t => t.uid === help[0].uid), 'the lent company is not one of France\'s own');
 });
 
 console.log(`${passed} passed, ${failed} failed`);

@@ -47,7 +47,7 @@ Reference games, and what we take from each:
 | Event chains (a choice that comes back) | 0 (now 10) | same |
 | Realms with historical rulers | 30 of 216 | `RULERS` in `src/data/nations.ts` |
 | Character events | 0 (now 12): people have rarity, traits and a hidden year of death, nothing else | `Character` in `src/types.ts` |
-| Battle decisions | 1 a round (a tactic), 3 rounds, 6 land tactics, 4 at sea | `src/engine/battle.ts` |
+| Battle decisions (before Phase 4, none: battles played themselves; now a reserve, when to send it in, and whether to withdraw) | 0; 3 rounds, 6 land tactics, 4 at sea | `src/engine/battle.ts` |
 | AI | 396 lines; no cards, people or buildings; develops on a dice roll; declares war on the player at most once every 30 years | `src/engine/ai.ts` |
 | Difficulty levels | none before this roadmap | — |
 | Sound | none | no audio code in `src/` |
@@ -204,6 +204,8 @@ Crusader Kings makes stories from people. Lasting Empires already has the people
 
 ## Phase 4 — Opponents and battles
 
+Status: **in progress**. The battles (4.7–4.12) are done; the rivals (4.1–4.6) and the tuning (4.13) are open.
+
 A mobile player does not need a symmetric AI. They need rivals whose character and plans can be read and acted on.
 
 ### Rivals
@@ -221,12 +223,12 @@ A mobile player does not need a symmetric AI. They need rivals whose character a
 
 | Id | Action | Where | Done when |
 |---|---|---|---|
-| 4.7 | **Ground matters.** Each province's terrain (from 2.4) changes the tactics: cavalry charges ×0.6 in forest, hills and marsh; volleys +20% for a defender on hills; a river or strait gives the defender the first round. The battle screen says so before the first choice. | `TACTICS` in `src/data/troops.ts`, `playRound` | Odds shown already include the ground |
-| 4.8 | **A reserve.** Before the battle the player holds one company back; it enters in round 2 or 3 at ×1.5 for that round. | `createBattle`, `showBattle` | A second real decision |
-| 4.9 | **Retreat.** After round 1 or 2 the player may withdraw: the battle is lost but the companies keep their strength less 15, where a rout destroys them. | `playRound`, `finishBattle` | A third real decision |
-| 4.10 | **The enemy can be read.** A named general (3.3) favours the tactic of his trait half the time (Bold charges, Cautious holds), and the screen says who commands. | `prepareRound` | Knowing the man changes the choice |
-| 4.11 | **Allies fight beside you.** An ally with troops within a quarter's march sends up to two companies under your general. | `troopsNear`, `landPhase` | Old audit item 11 closed |
-| 4.12 | **Skip the foregone.** A setting plays battles at 80% odds or better without stopping, and shows them in the year's report. | `processQueue` | Fewer interruptions late in the game |
+| 4.7 ☑ | **Ground matters.** Every province has one of five kinds of ground, worked out from what it yields and where it lies (711 open, 123 woods, 70 hills, 70 mountains, 64 desert; a few set by hand). Woods: cavalry ×0.6 and fire ×0.85 for both sides. Hills: the attacker's cavalry ×0.6, the defender's fire ×1.2. Mountains: the attacker's cavalry ×0.5, the defender takes ×0.85. Desert: the attacker fights at ×0.9. An army landed from ships meets ×1.3 fire in the first round. The planner, the attack warning and the battle screen say so in one line. | `TERRAINS`, `terrainOf` in `src/data/terrain.ts`; `ground` in `src/engine/battle.ts` | Done. Still to do with 2.4: draw the ground on the map, and correct the 209 European provinces by hand |
+| 4.8 ☑ | **A reserve.** Before the first round the player may hold one company back by tapping it. It takes no part and no harm, and does not count in the army's strength, until it is sent in: then it joins the line (which steadies an army close to breaking) and strikes at ×1.5 for that round. Left to the general, it goes in for the second round. | `setReserve`, `commitReserve`, `RESERVE_FRESH` in `src/engine/battle.ts`; `showBattle` in `src/ui/prompts.ts` | Done: the battle now waits for the player before each round |
+| 4.9 ☑ | **Retreat.** After the first or second round the player may withdraw. The battle is lost, but each company loses 10 strength and no more (a defeat costs 15% and whatever the remaining rounds would have taken), and an attack or raid broken off costs no stability. A province defended and given up is still lost. | `retreat`, `canRetreat`, `RETREAT_COST` in `src/engine/battle.ts` | Done |
+| 4.10 ☑ | **The enemy can be read.** A general with a character chooses the tactic that suits him half the time his army can use it: Bold charges or flanks, Cautious holds the line, a Gunner fires volleys or bombards, Cunning flanks, a Siegemaster bombards. The attack warning and the battle screen name the general and his habit, so the player can bring the troops that counter it. The same holds for the player's own generals. | `TRAIT_TACTIC` in `src/data/troops.ts`; `aiPick` in `src/engine/battle.ts` | Done: in 120 trial battles a bold general charges at least 60 times |
+| 4.11 ☑ | **Allies fight beside you.** An ally who is in the same war and has troops within a quarter's march lends up to two of its best companies to a conquest or a defence, on top of what your general can command. They wear their realm's colour on the field, take their wounds home, and are announced in the planner and the attack warning. | `alliedHelp`, `ALLY_COMPANIES` in `src/engine/battle.ts` | Done: old audit item 11 closed |
+| 4.12 ☑ | **Skip the foregone.** A setting, off by default: a battle whose odds are 80% or more either way is fought without stopping the game and told in one line; it still appears in the year's report. | `quickBattle`, `QUICK_ODDS` in `src/ui/prompts.ts`; `quickBattles` in settings | Done |
 
 ### Balance
 

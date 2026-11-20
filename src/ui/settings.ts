@@ -12,13 +12,15 @@ export interface Settings {
   sfx: number;
   /** A short buzz when a card is played or turned, where the device can. */
   haptics: boolean;
+  /** Fight battles that are hardly in doubt without stopping the game. */
+  quickBattles: boolean;
   /** The difficulty and open-game length chosen last, offered again next time. */
   difficulty: number;
   length: string;
 }
 
 const KEY = 'lasting-empires.settings';
-const DEFAULTS: Settings = { warn: true, skip: true, calm: false, sfx: 1, haptics: true, difficulty: STANDARD, length: 'age' };
+const DEFAULTS: Settings = { warn: true, skip: true, calm: false, sfx: 1, haptics: true, quickBattles: false, difficulty: STANDARD, length: 'age' };
 
 let cache: Settings | null = null;
 export function settings(): Settings {

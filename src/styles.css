@@ -1928,3 +1928,30 @@ div.set-row { cursor: default; }
 .ptable.rules td, .ptable.rules th { font-variant-numeric: lining-nums tabular-nums; white-space: nowrap; }
 .ptable.rules td:first-child { white-space: normal; }
 .sh-body > .tscroll { flex: none; } /* a scrolling table must keep its height inside the panel's column */
+
+/* ---- battles you take part in: ground, reserve, withdrawal, allies (roadmap 4.7–4.11) ---- */
+.b-ground { margin: 2px 0 0; font-size: 14px; color: var(--text); display: flex; gap: 6px; align-items: baseline; }
+.b-ground .ico { flex: none; color: var(--wax); translate: 0 2px; }
+.b-help { margin: 0; font-size: 14.5px; min-height: 2.6em; }
+.b-acts { flex-wrap: wrap; row-gap: 8px; align-items: center; }
+.b-acts .b-auto { margin-right: auto; }
+.utile.pickable .ut-pic { outline: 2px dashed var(--muted); outline-offset: 2px; }
+.utile.pickable:active .ut-pic { translate: 1px 1px; }
+.utile.reserve .ut-pic { outline: 3px solid var(--lapis, #2f5d8a); outline-offset: 2px; filter: saturate(.55); }
+.ut-res { position: absolute; left: 0; right: 0; top: 0; aspect-ratio: 1; display: grid; place-items: end center; pointer-events: none; }
+.ut-res { font: 700 10.5px/1 var(--f-body); letter-spacing: .06em; text-transform: uppercase; color: #fff; }
+.ut-res::after { content: ''; }
+.utile .ut-res { padding-bottom: 3px; text-shadow: 0 0 3px var(--lapis, #2f5d8a), 0 0 3px var(--lapis, #2f5d8a), 0 0 2px #000; }
+.utile .ut-res.in { text-shadow: 0 0 3px var(--good), 0 0 3px var(--good), 0 0 2px #000; }
+.utile.lent .ut-pic { border-color: var(--ac, var(--text)); box-shadow: 2px 2px 0 var(--ac, var(--text)); border-width: 2px; }
+.fact-ground { flex-basis: 100%; }
+@media (max-width: 640px) {
+  .b-acts .b-auto { flex-basis: 100%; margin: 0; order: 9; }
+  .b-acts .btn { flex: 1 1 auto; }
+}
+@media (max-width: 640px) {
+  .b-label { grid-template-columns: auto minmax(0, 1fr); row-gap: 5px; }
+  [data-style="chancery"] .b-label .hpbar { grid-column: 1 / -1; }
+  .b-who small { white-space: normal; line-height: 1.15; }
+  .utile .ut-res { font-size: 8.5px; letter-spacing: 0; }
+}

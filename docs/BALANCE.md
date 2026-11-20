@@ -121,3 +121,9 @@ as before the court existed; income 25 / 56 / 127 / 235 / 298 / 667 at 1500…17
 662. The early game is poorer because the bot answers events at random and many of the new options cost ducats; a
 player who chooses will not pay for every one. If playtests show thin early treasuries, raise the first-step
 `chance` conditions (none of the chains begins before the fourth year) or lower the costs passed to `needs`/`pay`.
+
+## Battles (roadmap 4.7–4.12)
+Levers: the five rows of `TERRAINS` and `LANDING_FIRE` 1.3 (`src/data/terrain.ts`); `RESERVE_FRESH` 1.5,
+`RETREAT_COST` 10 strength, `ALLY_COMPANIES` 2 (`src/engine/battle.ts`); `TRAIT_TACTIC_CHANCE` 0.5
+(`src/data/troops.ts`); `QUICK_ODDS` 0.8 (`src/ui/prompts.ts`). The bot holds no reserve and never withdraws, so the
+simulation measures only ground, generals' habits and allied companies.
