@@ -127,3 +127,12 @@ Levers: the five rows of `TERRAINS` and `LANDING_FIRE` 1.3 (`src/data/terrain.ts
 `RETREAT_COST` 10 strength, `ALLY_COMPANIES` 2 (`src/engine/battle.ts`); `TRAIT_TACTIC_CHANCE` 0.5
 (`src/data/troops.ts`); `QUICK_ODDS` 0.8 (`src/ui/prompts.ts`). The bot holds no reserve and never withdraws, so the
 simulation measures only ground, generals' habits and allied companies.
+
+First run with ground in every battle of the world: the `reasonable` bot finished top 3 in 9 of 9 and first in 8
+(it had been 4 and 3). Three runs with one change switched off each showed why: without allied companies 6 and 4,
+without generals' habits 8 and 5, without ground 3 and 2. Ground hindered every attacker, so rival realms conquered
+less and fell behind in a ranking that rewards growth. **Ground now counts only in battles the player fights**
+(`createBattle`): the wars between other realms are as they were tuned. Result, 18 games (SIMSEED 11 and 23,
+SEEDS=3): survived 18/18, top 3 in 10 (56%), first in 7; late income 675 and 637. That is inside the Standard target
+of 55–65%. Allied companies help the player (about two more top-3 finishes in nine); if playtests find alliances
+too strong, lower `ALLY_COMPANIES` to 1.

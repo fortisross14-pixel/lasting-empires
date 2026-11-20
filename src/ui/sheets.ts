@@ -470,6 +470,7 @@ function rulesTab(body: HTMLElement) {
     h('p', {}, `A servant's loyalty runs from 0 to 100: ${LOYALTY_LEVELS.map(([min, word]) => `${word} from ${min}`).join(', ')}. Below ${DISLOYAL} they listen to other offers; below ${LEAVES} they may leave. A rival realm of ${COMMANDER_MIN} provinces or more is led by a named general, who may fall or be taken when you beat him.`),
     h('h3', {}, 'Battles'),
     h('p', {}, `Three rounds; a side breaks below 35% of its strength (25% under an Inspiring general). The generals choose the tactics, and a general with a character chooses the one that suits him ${pct(TRAIT_TACTIC_CHANCE * 100)} of the time. Before the first round you may hold one company in reserve: it takes no part until you send it in, then strikes at ×${RESERVE_FRESH} for a round. After the first or second round you may withdraw: the battle is lost, each company loses ${RETREAT_COST} strength and no more, and an attack broken off costs no stability. Allies in the same war send up to ${ALLY_COMPANIES} companies from within a quarter's march.`),
+    h('p', { class: 'muted' }, 'The ground of the province counts in every battle you fight:'),
     table(['Ground', 'What it does'], (Object.keys(TERRAINS) as Terrain[]).map(k => [TERRAINS[k].name, TERRAINS[k].text])),
     h('h3', {}, 'Goods'),
     h('p', {}, `The steward buys what a need lacks at ${STEWARD_PRICE}× the market price, up to ${STEWARD_SHARES.map(v => pct(v * 100)).join(', ')} of what the provinces pay. Warehouses hold two years of use; the rest sells at home for half the price.`),

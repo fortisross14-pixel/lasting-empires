@@ -22,7 +22,7 @@ import { DIFFICULTY, LENGTHS, STANDARD } from '../src/data/difficulty';
 import { STARTS } from '../src/data/starts';
 import { attention, readyByDeck, markTurn, stopReasons, cardHasTarget, SKIP_MAX } from '../src/engine/pace';
 import { missionCap } from '../src/engine/realm';
-import { player, provsOf } from '../src/engine/core';
+import { player, provsOf, genCharacter } from '../src/engine/core';
 import type { GameState, BattleUnit, BattleGeneral } from '../src/types';
 
 let failed = 0, passed = 0;
@@ -289,6 +289,7 @@ check('every chain can be walked down every road to its end, and no step is too 
   for (const id of firsts) {
     const s = play(newGame('castile', 300 + firsts.indexOf(id)), 44); // eleven years in, so every story may begin
     s.queue = []; s.pending = []; s.flags.court_last = 0; player(s).gold = 5000;
+    while (s.characters.filter(c => !c.ruler).length < 4) s.characters.push(genCharacter(s, 'admin', player(s).culture, 1)); // a court to speak of, whatever the years did
     for (const c of s.characters) if (!c.ruler) { delete c.mission; c.loyalty = 70; }
     const def = EVENT[id];
     if (def.window) s.year = Math.max(s.year, def.window[0]);

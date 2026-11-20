@@ -64,7 +64,9 @@ export function createBattle(s: GameState, att: BattleSide, def: BattleSide, pro
   const b: Battle = {
     id: uid(s), att, def, province, round: 0, logs: [], playerSide: att.player ? 'att' : 'def',
     context, missionId, done: false, options: [], enemyNext: 'hold', scout: false, ambush: false, naval: !!opts.naval, follow: opts.follow,
-    terrain: opts.naval || !s.provinces[province] ? undefined : terrainOf(s.provinces[province]), landing: opts.landing || undefined,
+    // ground counts only where the player fights: the wars between other realms were balanced without it,
+    // and a world where every attacker is hindered is a world where rivals stop growing
+    terrain: opts.naval || !(att.player || def.player) || !s.provinces[province] ? undefined : terrainOf(s.provinces[province]), landing: opts.landing || undefined,
   };
   if ((att.player || def.player) && (s.flags.ambush ?? 0) > 0) { b.ambush = true; s.flags.ambush = 0; }
   prepareRound(s, b);
