@@ -11,7 +11,7 @@ import { h, sleep, reduced, signed } from './dom';
 import { icon } from './icons';
 import { markTurn, stopReasons, SKIP_MAX } from '../engine/pace';
 import { DIFFICULTY, LENGTHS, STANDARD } from '../data/difficulty';
-import { settings, setSetting, type Settings } from './settings';
+import { settings, setSetting, TEXT_SIZES, type Settings } from './settings';
 import { S, sheet, modalOpen, todo, seenTodo, saveNow, setCv, setWin, setPendingReport } from './state';
 import { TUTORIAL, refresh, toast, SEASONS, clearUndo } from './app';
 import { openWin } from './windows/frame';
@@ -120,7 +120,10 @@ export function showSettings() {
       h('div', { class: 'set-row' }, h('span', { class: 'gm-t' }, h('b', {}, 'Sound'), h('small', {}, 'Paper, wax, coin and drum, made on the device.')),
         h('div', { class: 'seg set-seg', role: 'radiogroup', 'aria-label': 'Sound' }, ([['Off', 0], ['Soft', 0.5], ['Full', 1]] as [string, number][]).map(([label, v]) =>
           h('button', { class: 'seg-b' + (st.sfx === v ? ' on' : ''), role: 'radio', 'aria-checked': String(st.sfx === v), onclick: () => { setSetting('sfx', v); closeModal(); showSettings(); sfx('coin'); } }, label)))),
-      toggle('haptics', 'Touch feedback', 'A short buzz when a card is played or turned, on phones that can.')),
+      toggle('haptics', 'Touch feedback', 'A short buzz when a card is played or turned, on phones that can.'),
+      h('div', { class: 'set-row' }, h('span', { class: 'gm-t' }, h('b', {}, 'Text size'), h('small', {}, 'Larger text in cards, windows and messages.')),
+        h('div', { class: 'seg set-seg', role: 'radiogroup', 'aria-label': 'Text size' }, TEXT_SIZES.map(v =>
+          h('button', { class: 'seg-b' + (st.text === v ? ' on' : ''), role: 'radio', 'aria-checked': String(st.text === v), onclick: () => { setSetting('text', v); closeModal(); showSettings(); refresh(); } }, `${Math.round(v * 100)}%`))))),
     h('h3', {}, 'This campaign'),
     h('p', { class: 'set-note' }, h('b', {}, d.name), ` · ${d.text}`),
     h('p', { class: 'set-note' }, S.scenario ? `Mission: ${S.scenario.name}, to ${S.scenario.deadline}.` : `${len ? len.name : 'The whole age'}: the game ends after ${S.endYear}.`),

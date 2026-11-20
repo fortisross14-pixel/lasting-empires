@@ -14,13 +14,15 @@ export interface Settings {
   haptics: boolean;
   /** Fight battles that are hardly in doubt without stopping the game. */
   quickBattles: boolean;
+  /** Text size: 1, 1.15 or 1.3 times the designed size. */
+  text: number;
   /** The difficulty and open-game length chosen last, offered again next time. */
   difficulty: number;
   length: string;
 }
 
 const KEY = 'lasting-empires.settings';
-const DEFAULTS: Settings = { warn: true, skip: true, calm: false, sfx: 1, haptics: true, quickBattles: false, difficulty: STANDARD, length: 'age' };
+const DEFAULTS: Settings = { warn: true, skip: true, calm: false, sfx: 1, haptics: true, quickBattles: false, text: 1, difficulty: STANDARD, length: 'age' };
 
 let cache: Settings | null = null;
 export function settings(): Settings {
@@ -35,7 +37,13 @@ export function setSetting<K extends keyof Settings>(k: K, v: Settings[K]) {
   try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* storage may be blocked */ }
   applySettings();
 }
-/** Settings that live on the page itself: `data-motion="calm"` switches the animations off in the stylesheet. */
+/** The text sizes offered. Every font size in the stylesheet is multiplied by `--ts`. */
+export const TEXT_SIZES = [1, 1.15, 1.3];
+/** Settings that live on the page itself: `data-motion="calm"` switches the animations off in the stylesheet,
+ *  `--ts` scales the text. */
 export function applySettings() {
   if (settings().calm) document.documentElement.dataset.motion = 'calm'; else delete document.documentElement.dataset.motion;
+  const ts = TEXT_SIZES.includes(settings().text) ? settings().text : 1;
+  if (ts === 1) document.documentElement.style.removeProperty('--ts'); else document.documentElement.style.setProperty('--ts', String(ts));
+  if (ts === 1) delete document.documentElement.dataset.text; else document.documentElement.dataset.text = ts > 1.2 ? 'l' : 'm';
 }
