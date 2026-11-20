@@ -3,6 +3,10 @@
 Sixteen images in all: 3 sheets of event paintings, 5 sheets of faces, 6 age plates and 2 title scenes.
 You make them in ChatGPT; I slice the sheets, compress the tiles and wire them into the game.
 
+## Received
+- The three event sheets: sliced into `art/event_*.webp` and in the game (roadmap 2.14).
+- Still to come: 5 sheets of faces, 6 age plates, 2 title scenes; and the music, if you supply it.
+
 ## How to use this file
 
 1. Open a new ChatGPT conversation. Attach three tiles we already have, so the style matches:

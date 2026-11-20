@@ -25,7 +25,8 @@ import {
 import { hireWithCard, mergePreview, doMerge } from '../engine/drafts';
 import { exploreChance, colonizeChance, conquistaChance, colonyCost, provRegion, provKnown, regionDef } from '../engine/overseas';
 import { getGeo } from '../engine/map';
-import { h, clear } from './dom';
+import { h, $, clear, reduced } from './dom';
+import { artName } from './art';
 import { icon } from './icons';
 import { troopCard, charCard, handCard, troopDetails } from './cards';
 import { navyCap, transportOf, hireShip, shipHireCost } from '../engine/navy';
@@ -435,8 +436,10 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
         const before = JSON.stringify(S), asked = S.queue.length;
         const r = launchMission(S, kind, ch.uid, target, picked, building, cardUid, good, ships, trade ? { dir: trade.dir, amount: trade.amount } : undefined);
         if (r) return toast(r, 'bad');
+        const from = (box.querySelector('.pl-foot .btn.primary') as HTMLElement | null)?.getBoundingClientRect() ?? null;
         closeModal();
         sfx('play'); buzz();
+        flyCard(card.card, from, target);
         // sending someone out shows nothing new, so it can be taken back; not if the game answered at once
         if (S.queue.length === asked) offerUndo(before, `${ch.name} sets out`); else toast(`${ch.name} sets out`, 'good');
         refresh();
@@ -444,4 +447,41 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
   };
   draw();
   openPage(box);
+}
+
+// ---------- a played card travels (roadmap 2.11) ----------
+/** How long the card is in the air, in milliseconds. */
+export const FLY_MS = 250;
+/** Where a task's target lies on screen: the province, or a realm's capital; null when it is off the board or
+ *  hidden under the open window, in which case the card goes to the strip of tasks instead. */
+function targetPoint(target: string): { x: number; y: number } | null {
+  const n = S.nations[target];
+  const prov = S.provinces[target] ? target : n ? (S.provinces[n.capital]?.owner === n.id ? n.capital : provsOf(S, n.id)[0]?.id) : null;
+  const c = prov ? getGeo().center[prov] : null, m = map.svg.getScreenCTM(), board = $('#board').getBoundingClientRect();
+  if (!c || !m) return null;
+  const x = m.a * c[0] + m.c * c[1] + m.e, y = m.b * c[0] + m.d * c[1] + m.f;
+  if (x < board.left + 8 || x > board.right - 8 || y < board.top + 8 || y > board.bottom - 8) return null;
+  const w = $('#win');
+  if (!w.hidden) { const r = w.getBoundingClientRect(); if (x > r.left && x < r.right && y > r.top && y < r.bottom) return null; }
+  return { x, y };
+}
+/** The card just played leaves the hand and flies to where it was sent: a small copy of it crosses the screen and
+ *  lands on the province, or on the strip of tasks over the map when the province cannot be seen. Not shown under
+ *  reduced motion. Nothing waits for it: the task is already under way. */
+export function flyCard(cardId: string, from: DOMRect | null, target: string) {
+  if (reduced() || !from) return;
+  const to = targetPoint(target) ?? (() => { const r = $('#timeline').getBoundingClientRect(); return { x: r.left + Math.min(r.width, 120) / 2 + 8, y: r.top + 24 }; })();
+  const pic = artName('card_' + cardId);
+  const ghost = h('div', { class: 'fly-card', 'aria-hidden': 'true', style: pic ? `background-image:url(art/${pic}.webp)` : '' });
+  const x0 = from.left + from.width / 2, y0 = from.top + from.height / 2;
+  ghost.style.left = `${x0 - 28}px`; ghost.style.top = `${y0 - 38}px`;
+  document.body.append(ghost);
+  const done = () => ghost.remove();
+  if (!ghost.animate) { setTimeout(done, FLY_MS); return; }
+  ghost.animate([
+    { transform: 'translate(0, 0) scale(1) rotate(-4deg)', opacity: 1 },
+    { transform: `translate(${(to.x - x0) * 0.55}px, ${(to.y - y0) * 0.55 - 26}px) scale(.9) rotate(5deg)`, opacity: 1, offset: 0.55 },
+    { transform: `translate(${to.x - x0}px, ${to.y - y0}px) scale(.42) rotate(0deg)`, opacity: 0.25 },
+  ], { duration: FLY_MS, easing: 'cubic-bezier(.3,.1,.3,1)' }).onfinish = done;
+  setTimeout(done, FLY_MS + 200); // in case the animation is never reported as finished
 }

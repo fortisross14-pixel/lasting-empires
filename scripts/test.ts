@@ -424,6 +424,12 @@ function field(seed: number, terrain: string, mine: string[], theirs: string[], 
   return { s, b };
 }
 
+check('text size: every font size in the stylesheet scales with --ts', () => {
+  const css = readFileSync('src/styles.css', 'utf8');
+  const bare = css.match(/font-size:\s*[\d.]+px/g) ?? [];
+  eq(bare.length, 0, `font sizes written without calc(… * var(--ts, 1)): ${bare.slice(0, 4).join(', ')}`);
+});
+
 check('event paintings: every one named is a file, and every event named exists', () => {
   for (const scene of EVENT_SCENES) ok(existsSync(`art/event_${scene}.webp`), `art/event_${scene}.webp is missing`);
   for (const id of eventsWithArt()) ok(EVENT[id], `a painting is set for ${id}, which is not an event`);

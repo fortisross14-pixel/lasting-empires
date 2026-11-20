@@ -2028,3 +2028,6 @@ p.bad::before { content: '! '; font-weight: 700; }
 .k-event.has-pic { width: min(348px, 86vw); }
 .k-event .c-art.ev-art { padding: 0; margin: 2px 10px 6px; border: 1px solid var(--text); background: #efe6d2; opacity: 1; }
 .k-event .ev-pic { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; }
+
+/* ---------- a played card travels to its target (roadmap 2.11) ---------- */
+.fly-card { position: fixed; z-index: 90; width: 56px; height: 76px; pointer-events: none; background: #fffdf8 center / cover no-repeat; border: 1.5px solid #241c17; box-shadow: 3px 3px 0 #241c17; will-change: transform, opacity; }

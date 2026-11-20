@@ -11,7 +11,8 @@ description: Interface rules for Lasting Empires — layout, touch targets, the 
 - Each bottom tab opens a centred window with tabs (`WIN_TABS`): Cards, Missions, then the area's own tabs. The Cards tab always reads top to bottom: **Get cards** (one shop button per card type: person, action, and in Military troop and improvement) then **Your cards**, grouped by type, identical cards stacked (×N), wide faces with the picture on the left and the words on the right.
 - The screens live in modules under `src/ui/` (`state`, `title`, `app`, `windows/*`, `sheets`, `planner`, `endturn`, `prompts`, `modal`). Shared state (`S`, `win`, `sheet`, `pick`…) is declared in `state.ts`; other modules read it by import and change it through its setter (`setWin(...)`), never by assignment.
 - Side panels (`#sheet`) are for provinces, realms, missions and the chronicle.
-- Modals (`openModal`) are for decisions: card use, mission planner, reveals, battles, drafts, succession.
+- **Never a window on top of a window.** What the player looks through (a card, the task planner, a person, a picker) opens with `openPage` (`src/ui/modal.ts`): a page inside the open deck window with a Back button, or a dialog when no window is open. `closeModal()` closes whichever is showing, so buttons need not know. Give every page a button named Back, Close, Cancel or Keep it: Escape and the device's back button press it.
+- Modals (`openModal`) are for what the game asks: events, reveals, battles, drafts, succession, confirmations. They may lie over a window or a page.
 - Every blocked action stays visible with its reason (`actionRow(..., blocked)`), never silently hidden, unless it can never apply (e.g. coastal-only buildings inland).
 
 ## Touch
@@ -24,10 +25,13 @@ One style, `data-style="chancery"` on `<html>`; its rules are the override block
 - **Tokens**: `--ink` #f6f1e6 (paper), `--panel` #fbf8f1, `--card` #fffdf8, `--text` #1b1a17 (ink), `--wax`/`--gold` #b3261e (the one accent), `--sea` #dfe7e3. All colours come from tokens; never add a literal surface colour.
 - **Fonts**: Cormorant SC for titles (`--f-display`, `--f-title`), EB Garamond for body (`--f-body`), shipped as `woff2` in `fonts/` and declared by `fonts/fonts.css` (inlined by `scripts/build.mjs`). No third family: a new one must be added to `fonts/` with its licence, to the Google link for the artifact page, and to the service worker list, so think twice.
 - **Shades**: no blurred shadows. Depth is a hard ink offset: `--shadow` (3px 3px 0) for buttons and cards, `--shadow-lg` (5px) for windows and modals. Frames are 1.2–1.5px ink lines. Active tab = ink background, paper text. The crimson accent is for the one main action (End Turn, primary buttons, progress), never decoration.
-- **Map**: realm colours are washed toward the paper with `wash(hex, k)` in `map.ts` (0.42 for others, 0.12 for the player and the picked realm) so the player's land reads first.
+- **Map**: realm colours are washed toward the paper with `wash(hex, k)` in `map.ts` (0.42 for others, `MINE_WASH` 0.3 for the player, 0.12 for the picked realm). The player's land reads first by the band of full colour along the inside of its border (`mineBand`), not by a darker fill.
+- **Text size**: write every font size as `calc(Npx * var(--ts, 1))`; a check in `npm test` fails on a bare `font-size: Npx`. The two bars set `--ts: 1` (fixed height). Anything with a fixed height that holds text needs a rule under `:root[data-text]` to let it grow. Test new screens at 130% (`localStorage` setting `text: 1.3`) on 390 px.
+- **Colour is never the only signal**: good and bad carry a mark as well (✓ ✕ on messages, ▴ ▾ in lists and on news cards, the outcome marks on outcomes). A new realm colour must stay apart from its neighbours' for colour-blind players: differ in lightness, not only in hue.
 - **Coats of arms**: `armsSvg(id, color)` in `src/ui/banners.ts`; use the `shield(id, color, small)` helper in `src/ui/state.ts`. Great realms have hand-made arms in `ARMS`; every other realm gets arms built from its id hash and colour (always the same). Add arms for a new major realm to `ARMS` rather than drawing letters.
 
 ## People and pictures
+- Event paintings: `art/event_<scene>.webp` (480 × 320), named for events in `EVENT_ART` (`src/ui/art.ts`). A new painting is a file and a line there; the prompts that made the set are in `docs/art-prompts-phase2.md`.
 - A person's page (`charDetail` in `modal.ts`) uses the wide card (`charCard(c, S, { wide: true })`) so the portrait is never squeezed, then loyalty and wish.
 - `src/ui/share.ts` draws on a canvas with the same two fonts and the tokens' colours written out (a canvas cannot read CSS variables): keep `INK`, `PAPER`, `WAX` there in step with the style tokens.
 
@@ -39,10 +43,13 @@ One style, `data-style="chancery"` on `<html>`; its rules are the override block
 ## Map
 - Province shapes come from `scripts/gen-world.ts` (`npm run gen-world` after editing provinces); never edit `src/data/world.json` by hand. Realm borders (`.realm-edge`) and realm names (`.rlabel`) are drawn by `map.ts` from ownership; `.prov` strokes are hairlines.
 - A new map view is an entry in `MAP_MODES`, a case in `fill` and one in `legendFor`.
+- Ground marks are one small path for each province (`buildTerrain`, shapes in `TERRAIN_MARKS`), shown where province names show. Keep them one element a province: one path for the whole world was three times slower to pan. The paper grain is a pattern fill from a tile made once (`grainTile`); never a live SVG filter.
 
 ## Motion
 - Windows and pop-ups rise 8px and fade in (`@keyframes rise`, ~180ms). Animate the `translate` property, never `transform`: `#win` is centred with `transform`, and a transform keyframe would knock it off centre.
 - `#win.fresh` (added by `openWin` for 500ms) plays the window rise and staggers its cards. Only play entrance motion when a window opens, not on every re-render.
+- A sideways swipe in a window moves between its tabs and on to the next deck (`stepTab`, `bindSwipe` in `windows/frame.ts`). Anything in a window that scrolls sideways must do so with `overflow-x: auto`, so the swipe is left to it.
+- A task sent flies as a small card to its target (`flyCard` in `planner.ts`); it never delays the game and is off under reduced motion.
 - Ink reveals use `@keyframes inkdraw` (clip-path). Keep motion under 300ms, and wrap it all in `@media (prefers-reduced-motion: reduce)` off-switches.
 
 ## Phone
