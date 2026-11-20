@@ -143,6 +143,25 @@ been hills) was worth about half as much again, by making Portugal easier to tak
 - To draw Iberia truly, first weaken what hills and mountains give the defender (`TERRAINS` in
   `src/data/terrain.ts`), then add the provinces and run the table again.
 
+## Rivals work to a budget (roadmap 4.5)
+The dice in what rivals build are gone: land, ships, re-arming and the temper's work are saved for at a yearly
+rate and done when a whole unit is saved (`worksOf` in `src/engine/ai.ts`). The rates are what the dice gave on
+average. `RIVALS=1 npm run sim` prints the rivals' totals. Standard, 60 games
+(`RIVALS=1 DIFF=1 MODE=reasonable SEEDS=10`, `SIMSEED=11` and `29`):
+
+| | Rival development in 1750 | Companies | Top 3 (bot) |
+|---|---|---|---|
+| Dice (before) | about 7,520 | about 1,555 | 34/60 (57%) |
+| Budget, every realm at the same pace | 7,604 | 1,592 | 39/60 (65%) |
+| Budget, each realm at its own pace (**kept**) | 7,643 | 1,580 | 33/60 (55%) |
+
+Steady growth with one pace for all made the game easier though the rivals' total was the same: with dice, a few
+realms were lucky for three centuries and stood high in the ranking; with none, nobody pulled ahead and the bot's
+place rose. `DILIGENCE_SPREAD` 0.17 gives each realm a fixed pace from 0.83 to 1.17 (`diligence(id)`), about the
+spread luck gave, and brings the result back.
+- Levers: `AI_DEV_BASE`, `AI_DEV_SIZE` (the land), `SHIP_RATE`, `ARMS_RATE`, `FOCUS_CHANCE`, `DILIGENCE_SPREAD`.
+- A wider spread makes the top of the ranking harder to reach without making the average rival richer.
+
 ## Rivals (roadmap 4.1–4.6)
 Levers, all without dice except the requests' own events:
 - **Goals** (`src/engine/rivals.ts`): `GOAL_MIN` 5 provinces to have one, kept `GOAL_YEARS` 25, `GOAL_WEIGHT` 3 (the

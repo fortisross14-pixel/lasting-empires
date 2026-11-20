@@ -38,6 +38,7 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 - `src/engine/rivals.ts`: `goalOf` (what a realm wants), `TEMPERS` (what its personality does, in words: keep them true to `ai.ts`), `attitude` (one word and the reasons), `deed` (its record). All without dice.
 - A realm may declare war on the player only through `mayStrikePlayer` (`ai.ts`): the warning goes out first and the realm waits a year. An event that makes a realm declare war on the player must be its own announcement (an ultimatum, a demand refused).
 - A reason shown in `attitude` must be something the code really applies each year; when a new yearly effect on relations is added, add its line there.
+- What a rival builds is a budget, not dice (`worksOf` in `ai.ts`): a new kind of work is a rate saved each year and done at 1, written with `deed`. Keep the rate equal to what any dice it replaces gave, and run `RIVALS=1 npm run sim` before and after: the totals must stay within 10%. Variety between realms comes from `diligence(id)`, never from luck.
 - What rivals ask of the player lives in `src/engine/requests.ts`; choose the asking realm in `setup` from the real state (relations, wars, goals), never at random among all realms.
 
 ## Battles: what the player decides
