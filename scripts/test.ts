@@ -3,7 +3,7 @@
 import { newGame, newMissionGame, endTurn, chooseEventOption, chooseHeir, migrate, adoptCore, SAVE_VERSION, OLDEST_SAVE } from '../src/engine/turn';
 import { quarterFlow, stewardBudget, tradeIncome } from '../src/engine/trade';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
-import { EVENT_SCENES, eventsWithArt } from '../src/ui/art';
+import { EVENT_SCENES, eventsWithArt, FACE_FAMILIES, faceFamily, faceOf } from '../src/ui/art';
 import { gunzipSync } from 'node:zlib';
 import { EVENT, EVENTS, rollEvents } from '../src/engine/events';
 import { HISTORY_EVENTS, CORE_EVENTS, NEWS_EVENTS, dispatch } from '../src/engine/annals';
@@ -428,6 +428,18 @@ check('text size: every font size in the stylesheet scales with --ts', () => {
   const css = readFileSync('src/styles.css', 'utf8');
   const bare = css.match(/font-size:\s*[\d.]+px/g) ?? [];
   eq(bare.length, 0, `font sizes written without calc(… * var(--ts, 1)): ${bare.slice(0, 4).join(', ')}`);
+});
+
+check('faces: sixteen for each family, kept on the person, and two generals differ', () => {
+  for (const fam of FACE_FAMILIES) for (let i = 0; i < 16; i++) ok(existsSync(`art/face_${fam}_${Math.floor(i / 4)}${i % 4}.webp`), `face ${i} of ${fam} is missing`);
+  eq(faceFamily('castilian'), 'western', 'Castile'); eq(faceFamily('turkish'), 'islamic', 'the Ottomans');
+  const s = newGame('castile', 77);
+  const court = [0, 1, 2].map(() => genCharacter(s, 'general'));
+  s.characters.push(...court);
+  const faces = court.map(c => faceOf(c, s.characters));
+  eq(new Set(faces).size, 3, `three generals wear faces ${faces.join(', ')}`);
+  eq(faceOf(court[0], s.characters), faces[0], 'the face is kept');
+  for (const c of s.characters) { const f = faceOf(c, s.characters); ok(f >= 0 && f < 16, `${c.name} has face ${f}`); }
 });
 
 check('event paintings: every one named is a file, and every event named exists', () => {

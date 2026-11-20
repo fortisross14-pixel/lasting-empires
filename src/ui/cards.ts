@@ -8,9 +8,12 @@ import { CARDS, cardType, CARD_TYPE_NAME, unitFor } from '../engine/cards';
 import { roleName, troopPower } from '../engine/core';
 import { h } from './dom';
 import { icon } from './icons';
-import { artImg } from './art';
+import { faceOf, faceImg, artImg } from './art';
 
 /** The art panel: the painting when there is one, else the line icon. */
+/** A person's portrait: their own face, in the dress of the realm's people. */
+const faceDiv = (c: Character, s: GameState, _fallback: string, ...kids: (HTMLElement | null)[]) =>
+  h('div', { class: 'c-art has-pic', html: faceImg(s.nations[s.player]?.culture ?? '', faceOf(c, s.characters)) }, ...kids);
 const artDiv = (name: string, fallback: string, ...kids: (HTMLElement | null)[]) => { const pic = artImg(name); return h('div', { class: 'c-art' + (pic ? ' has-pic' : ''), html: pic ?? fallback }, ...kids); };
 
 interface Opts { small?: boolean; selected?: boolean; dim?: boolean; onclick?: (e: Event) => void; badge?: string; cls?: string; wide?: boolean; count?: number; }
@@ -75,7 +78,7 @@ const loyalMark = (c: Character) => (!c.ruler && loyaltyOf(c) < DISLOYAL ? h('sp
 
 export function charCard(c: Character, s: GameState, o: Opts = {}) {
   if (o.wide) return shell('char', { ...o, cls: `r-${c.rarity} role-${c.role} ty-person ${o.cls ?? ''}` },
-    artDiv('role_' + c.role, icon(ROLE_ICON[c.role] ?? 'crown', 34)),
+    faceDiv(c, s, icon(ROLE_ICON[c.role] ?? 'crown', 34)),
     h('div', { class: 'c-body' },
       h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, `Person · ${c.ruler ? 'Monarch' : roleName[c.role]}`), h('span', { class: 'c-rarity' }, RARITY[c.rarity].name)),
       h('div', { class: 'c-name c-title' }, c.name),
@@ -83,12 +86,12 @@ export function charCard(c: Character, s: GameState, o: Opts = {}) {
       c.mission != null ? h('div', { class: 'c-away' }, c.mission === -1 ? 'Viceroy' : 'Away') : null, loyalMark(c)));
   if (o.small) return shell('char', { ...o, cls: `mini r-${c.rarity} role-${c.role} ${o.cls ?? ''}` },
     h('div', { class: 'm-name' }, c.name),
-    artDiv('role_' + c.role, icon(ROLE_ICON[c.role] ?? 'crown', 26), h('span', { class: 'm-rar' }, RARITY[c.rarity].name)),
+    faceDiv(c, s, icon(ROLE_ICON[c.role] ?? 'crown', 26), h('span', { class: 'm-rar' }, RARITY[c.rarity].name)),
     h('div', { class: 'm-foot' }, h('span', { class: 'm-role' }, c.ruler ? 'Monarch' : roleName[c.role]), h('b', { class: 'm-skill', title: 'Skill' }, String(c.skill))),
     h('div', { class: 'm-traits' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || '—'), loyalMark(c));
   return shell('char', { ...o, cls: `r-${c.rarity} role-${c.role} ${o.cls ?? ''}` },
     h('div', { class: 'c-top' }, h('span', { class: 'c-role' }, c.ruler ? 'Monarch' : roleName[c.role]), h('span', { class: 'c-gem', title: RARITY[c.rarity].name })),
-    artDiv('role_' + c.role, icon(ROLE_ICON[c.role] ?? 'crown', o.small ? 24 : 32)),
+    faceDiv(c, s, icon(ROLE_ICON[c.role] ?? 'crown', o.small ? 24 : 32)),
     h('div', { class: 'c-name c-person' }, c.name),
     h('div', { class: 'c-rarity' }, RARITY[c.rarity].name),
     h('div', { class: 'c-traits' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || '—'),

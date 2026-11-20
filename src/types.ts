@@ -40,6 +40,7 @@ export interface Character {
   wins?: number;
   losses?: number;
   loyalty?: number;    // 0..100: how firmly they stand by the crown (court.ts); 60 when missing
+  face?: number;       // which of the sixteen portraits of their people they wear (ui/art.ts), chosen once
   wish?: Wish;         // the one thing they want from you
   rival?: number;      // uid of a rival at court
   friend?: number;     // uid of a friend at court
