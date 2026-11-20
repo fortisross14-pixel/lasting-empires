@@ -104,6 +104,9 @@ export function renderTutorial() {
       st.next ? h('button', { class: 'btn primary small', onclick: () => { S.tutorial = i + 1; renderTutorial(); save(); } }, i === TUTORIAL.length - 1 ? 'Finish' : 'Next') : null));
 }
 
+/** Test hooks for the browser checks: the game in play, and a redraw. */
+(globalThis as { __game?: () => unknown; __refresh?: () => void }).__game = () => S;
+(globalThis as { __refresh?: () => void }).__refresh = () => refresh();
 export function refresh() {
   if (undoSnap && gameMark() !== undoMark) clearUndo(); // something else was done since: the snapshot is stale
   setCardGame(S);

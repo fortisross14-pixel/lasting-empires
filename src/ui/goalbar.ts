@@ -72,10 +72,10 @@ export function renderGoalBar() {
   const next = items.find(x => !x.v.met && x.id !== 'rank') ?? items[0];
   bar.append(h('button', { class: 'gb-main', onclick: open, 'aria-label': 'Goals' },
     h('span', { class: 'gb-i', html: icon(sc ? 'star' : 'crown', 18) }),
-    h('span', { class: 'gb-t' }, next.v.met && next.id !== 'rank' ? `${next.v.title} ✓` : short(next.v)),
+    h('span', { class: 'gb-t' }, next.id === 'rank' ? `Rank ${next.v.title}` : next.v.met ? `${next.v.title} ✓` : short(next.v)),
     items.length > 1 ? h('span', { class: 'gb-dots', 'aria-label': `${met.size} of ${items.filter(x => x.id !== 'rank').length} done` },
       items.filter(x => x.id !== 'rank').map(x => h('i', { class: x.v.met ? 'on' : '' }))) : null,
-    sc ? null : h('span', { class: 'gb-rank' }, items.find(x => x.id === 'rank')!.v.title),
+    sc || next.id === 'rank' ? null : h('span', { class: 'gb-rank' }, items.find(x => x.id === 'rank')!.v.title),
     left != null ? h('span', { class: 'gb-left' }, left > 0 ? `${left} yr` : 'last year') : null));
   if (fresh.length) {
     bar.append(h('span', { class: 'gb-stamp', 'aria-hidden': 'true' }, 'Done'));

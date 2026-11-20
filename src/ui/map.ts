@@ -99,6 +99,8 @@ const TERRAIN_MARKS: Record<string, string> = {
   mountains: 'M1 20 L9 4 L13.5 12 M11 20 L16.5 9 L23 20 M9 4 L10 11 L8 14 M16.5 9 L17.5 14',
   desert: 'M1 14 Q6.5 7 12 14 Q17.5 7 23 14 M5 19 L5.4 19 M12 18 L12.4 18 M19 19 L19.4 19',
 };
+/** A standing pawn, the army's piece on the map. */
+const PIECE_PAWN = 'M-7 2 C-7 -4 -5 -8 -3 -10 A5 5 0 1 1 3 -10 C5 -8 7 -4 7 2 Z';
 const hashStr = (t: string) => { let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 
 function coastLine(d: string): string {
@@ -139,6 +141,14 @@ export class MapView {
   /** Provinces a goal names: a flag on each, wax while still to take, green when held (goalbar.ts). */
   private goalPins: { id: string; held: boolean }[] = [];
   setGoalPins(pins: { id: string; held: boolean }[]) { this.goalPins = pins; }
+  /** Effects that play over the map for a moment: battles, conquests, numbers that float up (roadmap 5.6–5.8). */
+  private fxG!: SVGGElement;
+  /** What the provinces looked like at the last draw, to see what has changed since. */
+  private before: Map<string, { owner: string; dev: number; blds: number; settle: number }> | null = null;
+  private battlesSeen = -1;
+  private gameId = '';
+  /** Provinces taken lately, with the season their seal fades: id -> season count. */
+  private seals = new Map<string, number>();
   private landEl: Record<string, SVGPathElement> = {};
   /** Realm names written across their lands, for the far view. */
   private rlabels: SVGGElement;
@@ -273,6 +283,8 @@ export class MapView {
     this.svg.append(gl);
     this.marks = svgEl('g', { class: 'marks' }) as SVGGElement;
     this.svg.append(this.marks);
+    this.fxG = svgEl('g', { class: 'fx' }) as SVGGElement;
+    this.svg.append(this.fxG);
     host.append(this.svg);
     this.bind();
   }
@@ -460,6 +472,68 @@ export class MapView {
     const hit = document.elementFromPoint(x, y);
     const target = hit?.closest?.('[data-id]') as SVGElement | null;
     return target?.getAttribute('data-id') ?? null;
+  }
+
+  /** What changed since the last draw, shown where it happened: a battle, a province taken or lost, land improved,
+   *  a building or a town. Nothing plays on the first draw of a game. */
+  private effects(s: GameState) {
+    const id = `${s.player}|${s.startYear}|${s.seed}`;
+    if (id !== this.gameId) { this.gameId = id; this.before = null; this.battlesSeen = -1; this.seals.clear(); }
+    const season = s.year * 4 + (s.quarter ?? 0);
+    const now = new Map(Object.values(s.provinces).map(p => [p.id, { owner: p.owner, dev: p.dev, blds: p.buildings.length, settle: p.settlement ?? 0 }]));
+    const log = s.battleLog ?? [];
+    const calm = document.documentElement.dataset.motion === 'calm' || matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (this.before && !this.revealAll) {
+      let floats = 0;
+      for (const [pid, n] of now) {
+        const o = this.before.get(pid);
+        if (!o || !(provKnown(s, pid))) continue;
+        if (o.owner !== n.owner && (n.owner === s.player || o.owner === s.player)) {
+          this.seals.set(pid, season + 1);
+          if (!calm) this.cells[pid]?.classList.add('taken');
+          setTimeout(() => this.cells[pid]?.classList.remove('taken'), 900);
+          this.float(pid, n.owner === s.player ? 'Taken' : 'Lost', n.owner === s.player ? 'good' : 'bad');
+        } else if (n.owner === s.player && floats < 5) {
+          if (n.dev > o.dev) { this.float(pid, `+${n.dev - o.dev} development`, 'good'); floats++; }
+          else if (n.blds > o.blds) { this.float(pid, 'New building', 'good'); floats++; }
+          else if (n.settle > o.settle) { this.float(pid, n.settle === 1 ? 'New village' : 'The town grows', 'good'); floats++; }
+        }
+      }
+      for (const r of log.slice(this.battlesSeen < 0 ? log.length : this.battlesSeen)) this.burst(r.province, r.player === 'won' ? 'Won' : r.player === 'lost' ? 'Lost' : '', r.player === 'won' ? 'good' : 'bad');
+    }
+    this.before = now;
+    this.battlesSeen = log.length;
+    // seals on land changed hands lately
+    for (const [pid, until] of this.seals) {
+      if (until < season) { this.seals.delete(pid); continue; }
+      const c = getGeo().center[pid];
+      if (!c) continue;
+      const pin = svgEl('g', { 'data-x': c[0], 'data-y': c[1], class: 'seal-mark' });
+      pin.append(svgEl('circle', { r: 9, class: 'sm-wax' }), svgEl('path', { d: 'M-4 -1 L-1 3 L5 -4', class: 'sm-tick' }));
+      this.marks.append(pin);
+    }
+  }
+  /** A few words that rise from a province and fade. */
+  private float(pid: string, text: string, tone: string) {
+    const c = getGeo().center[pid];
+    if (!c) return;
+    const sc = (0.62 / (this.lastPx || 1)).toFixed(4);
+    const g = svgEl('g', { transform: `translate(${c[0]} ${c[1]}) scale(${sc})`, class: 'floater ' + tone });
+    const t = svgEl('text', { x: 0, y: -14 }); t.textContent = text;
+    g.append(t);
+    this.fxG.append(g);
+    setTimeout(() => g.remove(), 1700);
+  }
+  /** Crossed swords on a province where a battle was fought, then who won. */
+  private burst(pid: string, result: string, tone: string) {
+    const c = getGeo().center[pid];
+    if (!c) return;
+    const sc = (0.62 / (this.lastPx || 1)).toFixed(4);
+    const g = svgEl('g', { transform: `translate(${c[0]} ${c[1]}) scale(${sc})`, class: 'burst ' + tone });
+    g.append(svgEl('circle', { r: 20, class: 'bu-ring' }), svgEl('path', { d: 'M-12 -12 L12 12 M12 -12 L-12 12 M-12 -6 L-6 -12 M6 -12 L12 -6', class: 'bu-swords' }));
+    if (result) { const t = svgEl('text', { x: 0, y: 36, class: 'bu-t' }); t.textContent = result; g.append(t); }
+    this.fxG.append(g);
+    setTimeout(() => g.remove(), 2200);
   }
 
   /** Write each realm's name once across the largest piece of its land, along the land's longer axis. */
@@ -683,11 +757,28 @@ export class MapView {
       if (!g.center[prov]) continue;
       const [x, y] = g.center[prov];
       const pin = svgEl('g', { 'data-x': x, 'data-y': y });
-      const gEl = svgEl('g', { class: 'army' + (st.mine ? ' mine' : ' foe'), transform: `translate(${st.mine ? -16 : 16} 6)` });
-      gEl.append(svgEl('rect', { x: -11, y: -9, width: 22, height: 18, rx: 2, style: `fill:${st.color}` }));
-      const t = svgEl('text', { x: 0, y: 4, class: 'army-n' }); t.textContent = String(st.n);
+      // a standing piece: a pawn under a pennant in the realm's colour, the count on its base
+      const gEl = svgEl('g', { class: 'army piece' + (st.mine ? ' mine' : ' foe'), transform: `translate(${st.mine ? -14 : 14} 4)` });
+      gEl.append(svgEl('path', { d: PIECE_PAWN, class: 'pc-body', style: `fill:${st.color}` }),
+        svgEl('path', { d: 'M0 -22 V-36', class: 'pc-pole' }), svgEl('path', { d: 'M0 -36 H11 L8 -32 L11 -28 H0 Z', class: 'pc-flag', style: `fill:${st.color}` }),
+        svgEl('rect', { x: -9, y: 2, width: 18, height: 11, rx: 2, class: 'pc-base' }));
+      const t = svgEl('text', { x: 0, y: 11, class: 'army-n' }); t.textContent = String(st.n);
       gEl.append(t);
       pin.append(gEl);
+      this.marks.append(pin);
+    }
+    // tasks travel: a dotted road from the capital to the target, the person's piece on it
+    const home = g.center[s.nations[s.player].capital];
+    if (home && !this.revealAll) for (const m of s.missions) {
+      const prov = s.provinces[m.target] ? m.target : DIPLO_TARGET(s, m.target);
+      const to = prov ? g.center[prov] : null;
+      if (!to || prov === s.nations[s.player].capital || m.kind === 'route') continue;
+      const done = Math.max(0, Math.min(1, (m.total - m.turnsLeft) / Math.max(1, m.total)));
+      const mx = (home[0] + to[0]) / 2, my = (home[1] + to[1]) / 2 - Math.hypot(to[0] - home[0], to[1] - home[1]) * 0.18;
+      this.marks.append(svgEl('path', { d: `M${home[0]} ${home[1]} Q${mx} ${my} ${to[0]} ${to[1]}`, class: 'route k-' + MISSION_INFO[m.kind].role }));
+      const u = done, px = (1 - u) ** 2 * home[0] + 2 * (1 - u) * u * mx + u * u * to[0], py = (1 - u) ** 2 * home[1] + 2 * (1 - u) * u * my + u * u * to[1];
+      const pin = svgEl('g', { 'data-x': px.toFixed(1), 'data-y': py.toFixed(1), class: 'traveller' });
+      pin.append(svgEl('circle', { r: 7, class: 'tv-c k-' + MISSION_INFO[m.kind].role }));
       this.marks.append(pin);
     }
     const counts: Record<string, number> = {};
@@ -710,6 +801,7 @@ export class MapView {
       gEl.append(t);
       this.marks.append(pin);
     }
+    this.effects(s);
     this.apply(true);
     void provsOf;
   }

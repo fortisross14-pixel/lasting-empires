@@ -2132,3 +2132,35 @@ p.more:not([hidden]) { border-left: 2px solid var(--line); padding-left: 10px; }
 #map .goalpin .gp-flag { fill: var(--wax, #9e1f2a); stroke: #241c17; stroke-width: 1.4; }
 #map .goalpin.held .gp-flag { fill: var(--good, #3e7a3e); }
 @media (max-width: 640px) { #goalbar { left: 8px; transform: none; max-width: calc(100% - 16px); } .gb-main { font-size: calc(15px * var(--ts, 1)); gap: 8px; padding: 4px 10px; } }
+
+/* ---------- the map comes alive (roadmap 5.4–5.8) ---------- */
+#map .army.piece .pc-body { stroke: #241c17; stroke-width: 1.4; }
+#map .army.piece .pc-pole { stroke: #241c17; stroke-width: 1.4; }
+#map .army.piece .pc-flag { stroke: #241c17; stroke-width: 1; }
+#map .army.piece .pc-base { fill: #fffdf8; stroke: #241c17; stroke-width: 1.2; }
+#map .army.piece .army-n { fill: #241c17; stroke: none; font: 700 9px/1 var(--f-body); text-anchor: middle; }
+#map .army.piece.foe .pc-body { stroke-dasharray: 3 2; }
+#map .route { fill: none; stroke: #241c17; stroke-width: 1.6; stroke-dasharray: 2 5; stroke-linecap: round; vector-effect: non-scaling-stroke; opacity: .7; pointer-events: none; }
+#map .route.k-general, #map .route.k-conqueror, #map .route.k-admiral { stroke: var(--wax, #9e1f2a); }
+#map .tv-c { fill: #fffdf8; stroke: #241c17; stroke-width: 2; }
+#map .tv-c.k-general, #map .tv-c.k-conqueror { fill: var(--wax, #9e1f2a); }
+#map .tv-c.k-diplomat, #map .tv-c.k-explorer { fill: #2f5d8a; }
+#map .tv-c.k-merchant { fill: #c49b3a; }
+#map .seal-mark .sm-wax { fill: var(--wax, #9e1f2a); stroke: #241c17; stroke-width: 1.2; }
+#map .seal-mark .sm-tick { fill: none; stroke: #f6ecd6; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#map .fx { pointer-events: none; }
+#map .floater text { font: 700 26px var(--f-title); text-anchor: middle; paint-order: stroke; stroke: #f6ecd6; stroke-width: 4px; stroke-linejoin: round; animation: float-up 1.6s ease-out forwards; }
+#map .floater.good text { fill: #2d6a2d; } #map .floater.bad text { fill: var(--wax, #9e1f2a); }
+@keyframes float-up { from { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; } to { opacity: 0; transform: translateY(-26px); } }
+#map .burst .bu-ring { fill: #fffdf8; stroke: #241c17; stroke-width: 2; animation: burst-in .35s cubic-bezier(.2, 1.6, .4, 1) both; transform-box: fill-box; transform-origin: center; }
+#map .burst .bu-swords { fill: none; stroke: #241c17; stroke-width: 3; stroke-linecap: round; animation: burst-in .35s cubic-bezier(.2, 1.6, .4, 1) both; transform-box: fill-box; transform-origin: center; }
+#map .burst.good .bu-ring { stroke: #2d6a2d; } #map .burst.bad .bu-ring { stroke: var(--wax, #9e1f2a); }
+#map .burst .bu-t { font: 700 24px var(--f-title); text-anchor: middle; paint-order: stroke; stroke: #f6ecd6; stroke-width: 4px; }
+#map .burst.good .bu-t { fill: #2d6a2d; } #map .burst.bad .bu-t { fill: var(--wax, #9e1f2a); }
+#map .burst { animation: fade-late 2.2s forwards; }
+@keyframes burst-in { from { transform: scale(0); } to { transform: scale(1); } }
+@keyframes fade-late { 80% { opacity: 1; } to { opacity: 0; } }
+#map .prov.taken { animation: taken .9s ease-out; }
+@keyframes taken { 0% { fill-opacity: .2; } 60% { fill-opacity: 1; stroke-width: 3; } 100% { fill-opacity: .9; } }
+@media (prefers-reduced-motion: reduce) { #map .floater text, #map .burst, #map .burst * { animation: none; } }
+[data-motion="calm"] #map .floater text, [data-motion="calm"] #map .burst, [data-motion="calm"] #map .burst * { animation: none; }

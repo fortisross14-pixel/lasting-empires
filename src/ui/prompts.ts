@@ -21,16 +21,16 @@ import { icon } from './icons';
 import { troopCard, charCard, handCard, tacticCard, backCard, flipCard } from './cards';
 import { warScore, peaceTerms, enemyDemands, concludePeace } from '../engine/diplo';
 import { troopsNear, setDefence } from '../engine/army';
-import { S, pendingReport, modalOpen, slot, saveNow, save, clearSlot, startIn, shield } from './state';
+import { S, pendingReport, modalOpen, slot, saveNow, save, clearSlot, startIn, shield, setPendingReport } from './state';
 import { eventArt, artImg } from './art';
 import { ERAS } from '../data/eras';
 import { recordMission, doneCount, showMissions, showTitle, setMissionYear } from './title';
 import { refresh, toast } from './app';
 import { openModal, closeModal } from './modal';
-import { showTurnReport } from './endturn';
 
 export function processQueue() {
-  if (!modalOpen && !S.queue.length && pendingReport) { showTurnReport(); return; }
+  // the year's report no longer opens by itself: its changes are shown on the map, and the report waits in the menu
+  if (!modalOpen && !S.queue.length && pendingReport) setPendingReport(false);
   if (modalOpen || !S.queue.length) return;
   const p = S.queue[0];
   if (p.kind === 'reveal') showReveal(p.title, p.subtitle, p.items, () => { S.queue.shift(); afterPrompt(); }, p.alarm);
