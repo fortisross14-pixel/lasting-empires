@@ -1,4 +1,5 @@
 // Decisions the game puts to the player: reveals, events, drafts, succession, battles, attacks, peace, endings.
+import { showHistory } from './sheets';
 import { commanderOf } from '../engine/commanders';
 import { sfx, buzz, type Sfx } from './sound';
 import type { DraftOption, RevealItem, Battle, Heir } from '../types';
@@ -372,6 +373,6 @@ export function showGameOver(victory: boolean, reason: string) {
   openModal(h('div', { class: 'mbox narrow' },
     h('h2', {}, sc ? (sc.status === 'won' ? 'Mission accomplished' : 'The end of an age') : victory ? 'A lasting empire' : 'The end of an age'), h('p', {}, reason),
     h('ol', { class: 'rank' }, r.slice(0, 8).map(x => h('li', { class: x.id === S.player ? 'me' : '' }, h('span', {}, x.name), h('b', {}, String(x.score))))),
-    h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: () => { S.queue.shift(); closeModal(); refresh(); } }, 'Look at the map'),
+    h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: () => { S.queue.shift(); closeModal(); refresh(); showHistory(); } }, 'Read its history'), h('button', { class: 'btn ghost', onclick: () => { S.queue.shift(); closeModal(); refresh(); } }, 'Look at the map'),
       h('button', { class: 'btn primary', onclick: () => { S.queue.shift(); closeModal(); clearSlot(slot); showTitle(); } }, 'New campaign'))));
 }

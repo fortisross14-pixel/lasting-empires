@@ -1,10 +1,14 @@
 // Engine checks that run without a browser: `npm test`. Each check is small and names what it protects.
 // The bot simulation (`npm run sim`) stays the tool for balance; this file is for rules that must never break.
-import { newGame, newMissionGame, endTurn, chooseEventOption, chooseHeir, migrate, SAVE_VERSION, OLDEST_SAVE } from '../src/engine/turn';
+import { newGame, newMissionGame, endTurn, chooseEventOption, chooseHeir, migrate, adoptCore, SAVE_VERSION, OLDEST_SAVE } from '../src/engine/turn';
 import { quarterFlow, stewardBudget, tradeIncome } from '../src/engine/trade';
 import { readdirSync, readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
-import { EVENT, rollEvents } from '../src/engine/events';
+import { EVENT, EVENTS, rollEvents } from '../src/engine/events';
+import { HISTORY_EVENTS, CORE_EVENTS, NEWS_EVENTS, dispatch } from '../src/engine/annals';
+import { CORE } from '../src/data/core';
+import { historyOf, momentWeight, ANNALS_MAX } from '../src/engine/chronicle';
+import { CHAIN_EVENTS } from '../src/engine/chains';
 import { COURT_EVENTS, loyaltyOf, wishOf, addLoyalty, loyaltyWord, reignOf, EPITHETS } from '../src/engine/court';
 import { commanderOf, COMMANDER_MIN } from '../src/engine/commanders';
 import { autoResolve, finishBattle } from '../src/engine/battle';
@@ -232,6 +236,7 @@ check('every court event can fire, and every option of it runs', () => {
       if (!p || p.kind !== 'event') continue;
       fired = true;
       ok(def.text(s, p.vars).length > 20, `${def.id}: no text`);
+      ok(def.text(s, p.vars).trim().split(/\s+/).length <= 60, `${def.id}: ${def.text(s, p.vars).trim().split(/\s+/).length} words, the limit is 60`);
       ok(typeof def.title === 'string' ? def.title : def.title(s, p.vars), `${def.id}: no title`);
       for (let i = 0; i < def.options.length; i++) {
         const c = JSON.parse(JSON.stringify(s)) as GameState; // each option on its own copy of the game
@@ -243,6 +248,104 @@ check('every court event can fire, and every option of it runs', () => {
     }
     ok(fired, `${def.id} never found its moment in three prepared games`);
   }
+});
+
+const words = (t: string) => t.trim().split(/\s+/).length;
+/** The longest an event's text may be (docs/WRITING.md). */
+const MAX_WORDS = 60;
+
+check('every chain can be walked down every road to its end, and no step is too long', () => {
+  const firsts = CHAIN_EVENTS.filter(e => e.chance > 0).map(e => e.id).concat(['court_favourite']);
+  const seen = new Set<string>(); let ends = 0, longest = 0;
+  const walk = (s: GameState, id: string, vars: Record<string, string | number>, depth: number) => {
+    const def = EVENT[id];
+    ok(def, `unknown event ${id}`);
+    seen.add(id);
+    const text = def.text(s, vars);
+    longest = Math.max(longest, words(text));
+    ok(words(text) <= MAX_WORDS, `${id} (${String(vars.path ?? 'first step')}): ${words(text)} words, the limit is ${MAX_WORDS}`);
+    ok((typeof def.title === 'string' ? def.title : def.title(s, vars)).length > 3, `${id}: no title`);
+    const open = def.options.filter(o => !o.can?.(s, vars));
+    ok(open.length > 0, `${id} (${String(vars.path ?? '')}): no option can be chosen even with a full treasury`);
+    for (const o of def.options) {
+      if (o.can?.(s, vars)) continue;
+      const c = JSON.parse(JSON.stringify(s)) as GameState;
+      c.pending = [];
+      const items = o.run(c, vars);
+      ok(items.length > 0 && items.every(it => it.title && it.text), `${id}: "${o.label}" shows nothing`);
+      ok(c.pending!.length <= 1, `${id}: "${o.label}" set two things in motion`);
+      const nx = c.pending![0];
+      if (!nx) { ends++; continue; }
+      ok(depth < 3, `${id}: the story goes on after three steps`);
+      c.year = nx.year; c.pending = [];
+      const d2 = EVENT[nx.id];
+      ok(d2 && (!d2.cond || d2.cond(c)), `${id}: the next step ${nx.id} would be dropped`);
+      walk(c, nx.id, { ...(d2.setup ? d2.setup(c) ?? {} : {}), ...nx.vars }, depth + 1);
+    }
+  };
+  for (const id of firsts) {
+    const s = play(newGame('castile', 300 + firsts.indexOf(id)), 44); // eleven years in, so every story may begin
+    s.queue = []; s.pending = []; s.flags.court_last = 0; player(s).gold = 5000;
+    for (const c of s.characters) if (!c.ruler) { delete c.mission; c.loyalty = 70; }
+    const def = EVENT[id];
+    if (def.window) s.year = Math.max(s.year, def.window[0]);
+    if (id === 'loan_1') player(s).gold = 10;
+    ok(!def.cond || def.cond(s), `${id}: cannot begin in a plain game`);
+    const v = def.setup ? def.setup(s) : {};
+    ok(v, `${id}: found nowhere to happen`);
+    player(s).gold = 5000;
+    walk(s, id, v!, 1);
+  }
+  for (const e of CHAIN_EVENTS) ok(seen.has(e.id), `${e.id} is never reached`);
+  ok(firsts.length >= 10, `only ${firsts.length} chains`);
+  console.log(`       ${firsts.length} chains, ${seen.size} steps, ${ends} endings; the longest text is ${longest} words`);
+});
+
+check('the new history, core and news events: every option runs and no text is too long', () => {
+  const s0 = play(newGame('aragon', 401), 12);
+  s0.queue = []; player(s0).gold = 5000; s0.core = ['land', 'sea', 'expansion', 'consolidation', 'open', 'traditional', 'mercantile', 'agrarian'];
+  for (const def of [...HISTORY_EVENTS, ...CORE_EVENTS, ...NEWS_EVENTS]) {
+    const vars = def.id === 'news_abroad' ? { nation: 'france', text: 'In Paris, a king is crowned.' } : {};
+    const text = def.text(s0, vars);
+    ok(words(text) <= MAX_WORDS, `${def.id}: ${words(text)} words, the limit is ${MAX_WORDS}`);
+    ok(def.options.length >= 1 && def.options.some(o => !o.can?.(s0, vars)), `${def.id}: no option can be chosen`);
+    for (const o of def.options) {
+      const c = JSON.parse(JSON.stringify(s0)) as GameState;
+      if (o.can?.(c, vars)) continue;
+      const items = o.run(c, vars);
+      ok(items.length > 0 && items.every(it => it.title && it.text), `${def.id}: "${o.label}" shows nothing`);
+    }
+  }
+  for (const id of Object.keys(CORE)) ok(EVENT['core_' + id], `the principle ${id} has no event`);
+});
+
+check('the history deck has at least eight dated events in every half-century', () => {
+  const count: Record<number, number> = {};
+  for (const e of EVENTS) if (e.window) { const k = Math.min(1700, Math.max(1450, Math.floor(e.window[0] / 50) * 50)); count[k] = (count[k] ?? 0) + 1; }
+  for (const k of [1450, 1500, 1550, 1600, 1650, 1700]) ok((count[k] ?? 0) >= 8, `${k}–${k + 49}: only ${count[k] ?? 0} dated events`);
+  console.log(`       ${EVENTS.length} events in all; dated by half-century: ${[1450, 1500, 1550, 1600, 1650, 1700].map(k => `${k}s ${count[k]}`).join(', ')}`);
+});
+
+check('the history of the realm keeps the weighty moments and forgets the rest', () => {
+  ok(momentWeight('You declare war on Granada.') > 0 && momentWeight('Ambition fulfilled: Reconquista!') > momentWeight('Peace with Granada.'), 'weights are out of order');
+  eq(momentWeight('Hired Levy Infantry.'), 0, 'a hired company is remembered');
+  const s = play(newGame('castile', 421), 60);
+  ok((s.stats.annals ?? []).length > 0, 'fifteen years of Castile left no moment worth keeping');
+  ok((s.stats.annals ?? []).length <= ANNALS_MAX, 'the annals outgrew their limit');
+  const h = historyOf(s);
+  ok(h.length >= 1 && h.reduce((a, c) => a + c.moments.length, 0) <= 15, 'the history has no chapter, or more than fifteen moments');
+  ok(h.every(c => c.moments.every((m, i) => i === 0 || m.year >= c.moments[i - 1].year)), 'a chapter is out of order');
+});
+
+check('news from abroad: one dispatch a year, and adopting a principle sets its event in motion', () => {
+  const s = play(newGame('castile', 411), 4);
+  s.pending = []; s.flags.news_year = 0;
+  dispatch(s, 'france', 'In Paris, a king is crowned.'); dispatch(s, 'england', 'In London, a king is crowned.');
+  eq(s.pending!.filter(x => x.id === 'news_abroad').length, 1, 'dispatches in one year');
+  s.np = 50; s.core = []; s.coreChanged = -99;
+  eq(adoptCore(s, 'open'), null, 'adopting Open-minded');
+  const p = s.pending!.find(x => x.id === 'core_open');
+  ok(p && p.year > s.year && p.year <= s.year + 5, 'the clergy do not object within five years');
 });
 
 check('a choice can come back: a pending event fires in its year and not before', () => {

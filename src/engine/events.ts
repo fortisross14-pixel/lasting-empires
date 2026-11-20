@@ -1,3 +1,4 @@
+import { HISTORY_EVENTS, CORE_EVENTS, NEWS_EVENTS } from './annals';
 import { good, bad, neutral, stab, P, scaled, needs, type EventDef, type Vars } from './eventkit';
 import { COURT_EVENTS } from './court';
 import { CHAIN_EVENTS } from './chains';
@@ -1080,8 +1081,11 @@ export const EVENTS: EventDef[] = [
       { label: 'Divide the empire', hint: 'Peace, at the cost of glory', run: s => { stab(s, -1); player(s).prestige -= 20; return [neutral('Two Incas', 'Stability −1, prestige −20.', 'scroll')]; } },
     ],
   },
+  ...HISTORY_EVENTS,
   ...COURT_EVENTS,
   ...CHAIN_EVENTS,
+  ...CORE_EVENTS,
+  ...NEWS_EVENTS,
 ];
 
 export const EVENT: Record<string, EventDef> = Object.fromEntries(EVENTS.map(e => [e.id, e]));

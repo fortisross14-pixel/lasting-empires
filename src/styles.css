@@ -1914,3 +1914,17 @@ div.set-row { cursor: default; }
 .c-disloyal { position: absolute; top: 3px; left: 3px; z-index: 3; width: 18px; height: 18px; display: grid; place-items: center; background: var(--wax); color: #fffdf8; font: 700 13px/1 var(--f-body); border: 1.2px solid var(--text); }
 .inc-gen { margin: 2px 0 0; }
 .ptable td em { color: var(--muted); }
+
+/* ---- the history of the realm, and the rules page (roadmap 3.11, 3.13) ---- */
+.mbox.history { width: min(640px, 100%); }
+.mbox.history .eyebrow { margin: 0; color: var(--wax); letter-spacing: .14em; font-family: var(--f-display); }
+.hist-ch { border-top: 1px solid #1b1a1726; padding-top: 8px; }
+.hist-ch h3 { margin: 0 0 2px; }
+.hist-ch h3 em { font-style: italic; text-transform: none; letter-spacing: 0; color: var(--text); }
+.hist-ch h3 small { color: var(--muted); font-family: var(--f-body); font-size: 13px; letter-spacing: 0; font-variant-numeric: lining-nums; }
+.hist-ch p { margin: 0; }
+.hist-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 16px; line-height: 1.35; }
+.hist-list b { display: inline-block; min-width: 3.2em; font-family: var(--f-display); color: var(--wax); font-variant-numeric: lining-nums; }
+.ptable.rules td, .ptable.rules th { font-variant-numeric: lining-nums tabular-nums; white-space: nowrap; }
+.ptable.rules td:first-child { white-space: normal; }
+.sh-body > .tscroll { flex: none; } /* a scrolling table must keep its height inside the panel's column */

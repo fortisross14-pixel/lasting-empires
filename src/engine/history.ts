@@ -1,5 +1,6 @@
 // Scripted history that happens no matter who plays: the siege of Constantinople in 1453, and the rise of
 // the great conquerors of the wider world (renamed realms, fresh armies, wars on their historical foes).
+import { dispatch } from './annals';
 import type { GameState } from '../types';
 import { player, push, log, declareWar, atWar, addRel, uid, makePeace, rand, borders, inTruce, hasTreaty, provsOf } from './core';
 import { provKnown } from './overseas';
@@ -41,7 +42,7 @@ function worldMoments(s: GameState) {
     for (let i = 0; i < (m.troops ?? 0); i++) n.army.push({ uid: uid(s), type, vet: 1, str: 100 });
     const foe = m.war && s.nations[m.war];
     if (foe && foe.alive && foe.id !== s.player && !atWar(s, n.id, foe.id) && !inTruce(s, n.id, foe.id) && !hasTreaty(s, n.id, foe.id, 'alliance') && borders(s, n.id, foe.id)) declareWar(s, n.id, foe.id);
-    if (provKnown(s, n.capital)) log(s, m.text, 'neutral');
+    if (provKnown(s, n.capital)) dispatch(s, n.id, m.text);
   }
 }
 

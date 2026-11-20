@@ -110,3 +110,14 @@ Nine `reasonable` games each (SEEDS=3 SIMSEED=11): with the steward, income 37 /
 1500…1750 against 42 / 87 / 121 / 194 / 391 / 619 without; happiness 77% against 73% in 1750; median treasury lower
 until 1550 (25 against 111 in 1500), because he spends while the realm has few workshops. Top 3: 4 of 9 against 5 of 9
 (within the noise of nine games). If early treasuries prove too thin for players, lower `STEWARD_DEFAULT` to 0.10.
+
+## The court, chains and commanders (roadmap phase 3)
+Levers: `DISLOYAL` 35 and `LEAVES` 20, the yearly drift in `yearlyCourt`, and each court event's `chance` and
+`repeat` (`src/engine/court.ts`); `COMMANDER_MIN` 8 provinces, `COMMANDER_YEARS` 25, `COMMANDER_FALLS` and
+`COMMANDER_TAKEN` 12% each (`src/engine/commanders.ts`); `GREAT_POWER` 12 provinces for a war to be news
+(`src/engine/ai.ts`); each chain's first-step `chance` (`src/engine/chains.ts`).
+Nine `reasonable` games (SEEDS=3 SIMSEED=11, 1451–1750, no crash): survived 9/9, top 3 in 4, first in 3, the same
+as before the court existed; income 25 / 56 / 127 / 235 / 298 / 667 at 1500…1750 against 37 / 95 / 153 / 285 / 356 /
+662. The early game is poorer because the bot answers events at random and many of the new options cost ducats; a
+player who chooses will not pay for every one. If playtests show thin early treasuries, raise the first-step
+`chance` conditions (none of the chains begins before the fourth year) or lower the costs passed to `needs`/`pay`.

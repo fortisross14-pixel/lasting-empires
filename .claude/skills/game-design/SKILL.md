@@ -64,6 +64,15 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 - Six decks: Military, Diplomacy, Internal, Economy, Research, People (`culture`). Each draws `0.5 + bonuses` cards a year (capped at 1.4); fractions carry over (`cardAccum`). Add bonuses through `cardRates` parts (buildings, research, monarch, cities, core cards) so the breakdown stays visible to the player.
 - The hand limit (below), the yearly mission cap, army size and building slots are the limits.
 
+## Events, people and stories
+- An event is an `EventDef` (`src/engine/eventkit.ts`): text, options with `can` (why it is blocked) and `run` (returns what to reveal). Use the kit's helpers (`good`, `bad`, `neutral`, `stab`, `needs`, `pay`, `scaled`); never write a bare number of ducats. Follow `docs/WRITING.md` (60 words, speak to "you", one concrete detail, every option costs something).
+- Where it goes: history and general events in `events.ts` / `annals.ts`; events about people in `court.ts` (wrap with `courtEvent` so the court stirs at most once a year); stories in three steps in `chains.ts`.
+- A choice that comes back: `later(s, id, min, max, vars)` from an option; the later step has `chance: 0` and reads `vars.path`. Three steps at most, and every road must end. `npm test` walks every road and renders every text.
+- People: read loyalty and wishes with `loyaltyOf(c)` / `wishOf(c)` and change loyalty with `addLoyalty(c, d)` (`court.ts`); never read `c.loyalty` directly (it is unset until something changes it). A new source of loyalty gets a line in the Rules tab text if the player should know it.
+- Rival generals: `commanderOf(s, nation) ?? genericGeneral(s)` when building the enemy side of a battle against the player.
+- Lines of the log that a history should keep get a pattern and a weight in `WEIGHTS` (`chronicle.ts`).
+- Avoid dice where a hash will do (`appoint`, `loyaltyOf`): new systems should not shift the world's other rolls.
+
 ## Pace and difficulty
 - `src/engine/pace.ts` is pure (no RNG, no changes). `attention(s)` lists what is still open this turn; `stopReasons` says when skip-ahead must stop. A new thing the player should not miss gets a rule in `attention` (with an id that stays the same while the thing is open) and a check in `scripts/test.ts`; a new kind of mission card needs a case in `cardHasTarget`.
 - Never list something the player cannot act on, and never list permanent cards: a list that nags is a list that is ignored.

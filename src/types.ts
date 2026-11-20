@@ -317,6 +317,7 @@ export interface Stats {
   kings: { name: string; arch: string; from: number; to: number; prestige: number; epithet?: string }[];
   fallen: { name: string; role: Role; skill: number; wins: number; losses: number; until: number }[];
   wars: { won: number; lost: number };
+  annals?: { year: number; text: string; w: number }[]; // the weighty moments of the campaign (chronicle.ts)
 }
 
 /** A goal of a mission. Lands are named by their owner in 1451 ("the lands of Granada"), or by province. */

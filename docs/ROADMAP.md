@@ -43,10 +43,10 @@ Reference games, and what we take from each:
 | Turns in a 1451–1750 campaign | 1,200 (one turn is a quarter) | `endTurn` in `src/engine/turn.ts` |
 | Turns that bring no card and no prompt | 33–43% (Portugal 33%, Venice 43%), up to 5 in a row | scripted run, seed 4242 |
 | Cards drawn | about 0.73 a turn | same run |
-| Events | 77, of which 53 dated: 20 before 1500, 7 in 1500–49, 4 in 1550–99, 6 in 1600–49, 6 in 1650–99, 10 after 1700 | `src/engine/events.ts` |
-| Event chains (a choice that comes back) | 0 | same |
+| Events (before Phase 3; now 139 with 62 dated, at least 8 in every half-century) | 77, of which 53 dated: 20 before 1500, 7 in 1500–49, 4 in 1550–99, 6 in 1600–49, 6 in 1650–99, 10 after 1700 | `src/engine/events.ts` |
+| Event chains (a choice that comes back) | 0 (now 10) | same |
 | Realms with historical rulers | 30 of 216 | `RULERS` in `src/data/nations.ts` |
-| Character events | 0: people have rarity, traits and a hidden year of death, nothing else | `Character` in `src/types.ts` |
+| Character events | 0 (now 12): people have rarity, traits and a hidden year of death, nothing else | `Character` in `src/types.ts` |
 | Battle decisions | 1 a round (a tactic), 3 rounds, 6 land tactics, 4 at sea | `src/engine/battle.ts` |
 | AI | 396 lines; no cards, people or buildings; develops on a dice roll; declares war on the player at most once every 30 years | `src/engine/ai.ts` |
 | Difficulty levels | none before this roadmap | — |
@@ -170,34 +170,36 @@ first minute.
 
 ## Phase 3 — Story
 
+Status: **in progress**. ☑ done, ◐ partly done. Open: the older events' rewrite (3.10) and sharing the history as an image (3.12).
+
 Crusader Kings makes stories from people. Lasting Empires already has the people: they only need lives.
 
 ### People
 
 | Id | Action | Where | Done when |
 |---|---|---|---|
-| 3.1 | **Three new facts about each person**: loyalty (0–100), one wish (a title, gold, glory, the faith, family, or rest) and, sometimes, a rival or a friend at court. Loyalty moves with tasks given, results, pay and events. | `Character` in `src/types.ts`, `genCharacter`, `migrate` | Shown on the person's card |
-| 3.2 | **Twelve court events**, at most one a year, each with a choice that changes loyalty or the court: the general asks for a title after three victories; a foreign bribe reaches a disloyal diplomat; two rivals demand you choose; the scholar asks leave to travel (gone 2 years, returns better or not at all); the merchant is caught skimming; deathbed advice (the dying pass one trait to a colleague you choose); a marriage for your general; the artist wants freedom from commissions; a preacher denounces the court; the favourite (one rises, the others resent it); a deserter (a disloyal general joins your enemy and meets you in battle by name); the hero's return (a triumph costs ducats, lifts happiness). | new `src/engine/court.ts`, fired from `rollEvents` | Each fires in a scripted test |
-| 3.3 | **Enemy commanders with names.** Every rival of 8+ provinces keeps one named general with a trait, who is the one you meet (today every enemy leader is the same unnamed figure). He can be killed, or captured and ransomed. | `Nation.general`, `genericGeneral` in `src/engine/battle.ts` | The attack warning names him |
-| 3.4 | **Reigns have an epitaph.** When a ruler dies, before the heirs: one page with the years, lands won and lost, battles, works, buildings, and a by-name earned from them (the Conqueror for 5+ provinces won, the Builder for 6+ buildings, the Wise for 4+ technologies, the Pious, the Unlucky, the Brief). | `setRuler`, `stats.kings`, `showSuccession` | The by-name appears in the Chronicle |
+| 3.1 ☑ | **Three new facts about each person**: loyalty (0–100: Devoted from 80, Loyal from 60, Wavering from 35, Disloyal below), one wish (a title, gold, glory, the faith, family, or rest) and, once a quarrel has made one, a rival. Until something changes them they follow from who the person is, with no dice, so old saves need nothing. Loyalty rises with tasks done (+3), victories (+3, +6 for one who wants glory) and favours; it falls with idleness, slights, an unsteady realm and a new monarch (−6). Below 20 a servant may leave. | `loyaltyOf`, `wishOf`, `addLoyalty`, `yearlyCourt` in `src/engine/court.ts`; `charDetail` in `src/ui/modal.ts` | Done: shown on the person's page, with a mark on the card of the disloyal |
+| 3.2 ☑ | **Twelve court events**, at most one a year and none in the first three: the general asks for a title after three victories; a purse from abroad reaches a wavering servant; two who cannot share a room; the scholar asks leave to travel (and returns wiser, or takes a chair in Padua); the accounts do not add up; a deathbed, where a trait can be passed on; a match for your general; the artist asks to be free; a sermon against the court; the favourite; a general changes sides in wartime and becomes the enemy's commander; the victor comes home. | `COURT_EVENTS` in `src/engine/court.ts` | Done: `npm test` fires each one and runs every option |
+| 3.3 ☑ | **Enemy commanders with names.** Every rival of 8 provinces or more keeps one named general with a trait, appointed without dice from the realm and the year, serving up to 25 years. He leads the armies you meet; the attack warning and the realm's page name him. When you beat him he may fall (12%) or be taken (12%): a prisoner can be ransomed, kept, or freed as a gesture. | `commanderOf`, `commanderFate` in `src/engine/commanders.ts`; `captive_general` in `court.ts` | Done: the attack warning names him |
+| 3.4 ☑ | **Reigns have an epitaph.** When a ruler dies, before the heirs: the years, lands won and lost, battles, buildings, new arts and works, and a by-name earned from them (the Brief, the Conqueror, the Unlucky, the Victorious, the Builder, the Wise, the Magnificent, the Pious, the Beloved, the Steadfast, the Troubled). | `reignOf`, `EPITHETS` in `src/engine/court.ts`; `successionCheck` in `turn.ts` | Done: the by-name appears in the Chronicle's Monarchs |
 
 ### Events
 
 | Id | Action | Where | Done when |
 |---|---|---|---|
-| 3.5 | **Events can return.** An event option may schedule a named follow-up in a window of years (`then: { id, in: [2, 6] }`), stored in the save. | `EventDef` and `rollEvents` in `src/engine/events.ts` | A test plays a chain end to end |
-| 3.6 | **Ten chains of three steps**, each second step depending on the first choice: the printing house; the pretender; the heretic preacher; the great famine; the bankers' loan; the royal favourite; the plague ship; the guild revolt; the border lord; the lost heir. | `src/engine/events.ts` | 30 new events; each chain reachable from any realm |
-| 3.7 | **Fill the thin half-centuries** to 8 dated events each: 1 more for 1500–49, 4 for 1550–99, 2 for 1600–49, 2 for 1650–99. Candidates not yet in the game: the Sack of Rome (1527), the Council of Trent (1545), the Dutch Revolt (1568), St Bartholomew (1572), the Armada (1588), the Imjin War (1592), the Time of Troubles (1598), the tulip mania (1637), the Fronde (1648), the Glorious Revolution (1688), the Great Northern War (1700). | same | Counts checked in `npm test` |
-| 3.8 | **Each core card answers back.** Adopting any of the eight principles brings one event within five years (the merchants ask for a navy after Mercantile; the clergy object after Open-minded). | `adoptCore`, 8 events | Old audit item 15 closed |
-| 3.9 | **News from abroad.** The 14 scripted turning points of the AI world and every war between great powers reach the player as one short dispatch a year at most, with the option to send an envoy. | `worldMoments` in `src/engine/history.ts` | The world is seen to move |
-| 3.10 | **One voice.** A pass over all event text: addressed to "you", 60 words or fewer, one concrete detail, no modern words. A page of rules for writers. | `docs/WRITING.md`, `src/engine/events.ts` | All events pass the word count in `npm test` |
-| 3.13 | **The rules, in the game.** A Rules page in the Chronicle, written from the same tables the engine uses (outcome odds by rarity, card rates, hand limits, difficulty, how the ranking is scored), so it can never disagree with the game. | `chronicleSheet` in `src/ui/sheets.ts` | Old audit item 22 closed |
+| 3.5 ☑ | **Events can return.** An option may set a later event in motion with `later(s, id, min, max, vars)`: it comes due in that window of years carrying what was chosen, fires before any chance event, and is dropped if its condition no longer holds. Stored in the save (`pending`; saves are now version 4). | `later` in `src/engine/eventkit.ts`; `rollEvents` in `src/engine/events.ts` | Done: a check fires one in its year and not before |
+| 3.6 ☑ | **Ten chains of three steps**, each later step different for each road taken: the printing house; the pretender; the heretic preacher; the great famine; the bankers' loan; the royal favourite (it begins in the court event); the plague ship; the guild revolt; the border lord; the lost heir. | `CHAIN_EVENTS` in `src/engine/chains.ts` | Done: 30 steps and 128 endings; `npm test` walks every road |
+| 3.7 ☑ | **The thin half-centuries filled** to 8 dated events each: the Sack of Rome (1527), the Dutch Revolt (1566, with a debt repaid years later), St Bartholomew (1572), the Armada (1588), the Imjin War (1592, for East Asian realms), the tulip mania (1636), the Fronde (1648), the Royal Society (1660), the Glorious Revolution (1688). | `HISTORY_EVENTS` in `src/engine/annals.ts` | Done: counts are checked in `npm test` (21, 8, 8, 8, 8, 10) |
+| 3.8 ☑ | **Each core card answers back.** Adopting any of the eight principles brings its event within five years, once: the captains' petition, the shipwrights, the neighbours' envoys, the great survey, the clergy's objection, the young men who leave, the merchants' convoys, the commons. | `CORE_EVENTS` in `src/engine/annals.ts`; `adoptCore` in `turn.ts` | Done: old audit item 15 closed |
+| 3.9 ☑ | **News from abroad.** The 14 scripted turning points of the AI world, and every war declared between realms of 12 provinces or more, reach the court as a dispatch, one a year at most (the rest go only into the annals), with the choice to send an envoy: relations +8 and their armies known for two years. | `dispatch`, `NEWS_EVENTS` in `src/engine/annals.ts`; `worldMoments` in `history.ts`; `aiDiplomacy` in `ai.ts` | Done |
+| 3.10 ◐ | **One voice.** The rules for writers are written (`docs/WRITING.md`: speak to "you", 60 words or fewer, one concrete detail, no modern words, every option costs something), and all 62 new events follow them; `npm test` checks the length of every text it can render. Still to do: rewrite the 77 older events in the same voice (they are short enough, but many read as news, not as counsel). | `docs/WRITING.md`; `src/engine/events.ts` | The older events rewritten |
+| 3.13 ☑ | **The rules, in the game.** A Rules tab in the Chronicle, written from the same tables the engine uses (outcome odds by rarity, card rates and hand limits by rank, the difficulty levers, loyalty levels, the steward, the ranking, skip and undo), so it cannot disagree with the game. | `rulesTab` in `src/ui/sheets.ts` | Done: old audit item 22 closed |
 
 ### The chronicle
 
 | Id | Action | Where | Done when |
 |---|---|---|---|
-| 3.11 | **The history of your realm.** At the end of a game, 10–15 moments chosen from the log by weight (wars won, rulers, masterpieces, ages opened, disasters), written as a scroll. | `showGameOver`, `chronicleSheet` | Reads as a story, not a log |
+| 3.11 ☑ | **The history of your realm.** The weighty lines of the log (wars, peaces, unions, ages opened, masterpieces, civil wars, ambitions) are kept apart from the log, which forgets after 120 lines; the 15 heaviest are told reign by reign, each chapter under its ruler and by-name. Shown from the end screen and from the Chronicle's Annals at any time. | `remember`, `historyOf` in `src/engine/chronicle.ts`; `showHistory` in `src/ui/sheets.ts` | Done |
 | 3.12 | **Share it.** The scroll and the final map render to one image through the device's share sheet. | canvas in `src/ui/` | Works on iOS and Android |
 
 ## Phase 4 — Opponents and battles

@@ -213,7 +213,7 @@ export const COURT_EVENTS: EventDef[] = [
     find: s => { const c = court(s).filter(x => loyaltyOf(x) >= 60).sort((a, b) => b.skill - a.skill)[0]; return c && court(s).length >= 3 ? { c: c.uid } : null; },
     text: (s, v) => { const c = who(s, v)!; return `You find you ask ${c.name} before you ask anyone. The others have seen it. Some now bring their petitions to ${first(c)} first, and some have stopped speaking at council.`; },
     options: [
-      { label: 'Raise them above the rest', run: (s, v) => { const c = who(s, v); if (!c) return [neutral('Too late', 'They are gone.')]; c.skill = Math.min(6, c.skill + 1); addLoyalty(c, 15); for (const x of court(s)) if (x !== c) addLoyalty(x, -8); return [neutral('A first minister', `${c.name} grows in office (skill +1) and in devotion. Everyone else: loyalty −8.`, 'crown')]; } },
+      { label: 'Raise them above the rest', run: (s, v) => { const c = who(s, v); if (!c) return [neutral('Too late', 'They are gone.')]; c.skill = Math.min(6, c.skill + 1); addLoyalty(c, 15); for (const x of court(s)) if (x !== c) addLoyalty(x, -8); later(s, 'favourite_2', 3, 6, { c: c.uid }); return [neutral('A first minister', `${c.name} grows in office (skill +1) and in devotion. Everyone else: loyalty −8.`, 'crown')]; } },
       { label: 'Keep all at the same distance', run: (s, v) => { const c = who(s, v); if (c) addLoyalty(c, -10); for (const x of court(s)) if (x !== c) addLoyalty(x, 3); return [neutral('No favourites', `${c ? first(c) : 'Your favourite'} is hurt; the council breathes again (loyalty +3 for the others).`, 'scales')]; } },
     ],
   }),

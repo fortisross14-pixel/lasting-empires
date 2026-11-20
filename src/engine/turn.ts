@@ -1,3 +1,4 @@
+import { later } from './eventkit';
 import { yearlyCourt, courtAtSuccession, reignOf, reignMark } from './court';
 import { maxFort } from './core';
 // New game setup, the yearly turn, and player actions that touch several systems.
@@ -529,6 +530,7 @@ export function adoptCore(s: GameState, id: string): string | null {
   s.np -= coreCost(s);
   s.core.push(id);
   s.coreChanged = s.year;
+  if (EVENT['core_' + id] && !s.firedEvents.includes('core_' + id)) later(s, 'core_' + id, 1, 5); // every principle answers back, once
   if (id === 'traditional') { player(s).stability = clamp(player(s).stability + 1, -3, 3); addRel(s, s.player, 'papacy', 20); }
   log(s, `The crown adopts a new principle: ${CORE[id].name}.`, 'good');
   return null;

@@ -1,3 +1,4 @@
+import { remember } from './chronicle';
 import { DIFFICULTY, STANDARD, type DifficultyDef } from '../data/difficulty';
 // Shared helpers: RNG, lookups, relations, treaties, wars, logging.
 import { poolFor } from '../data/names';
@@ -114,6 +115,7 @@ export const nationName = (s: GameState, n: string) => s.nations[n]?.name ?? n;
 export function log(s: GameState, text: string, tone: LogEntry['tone'] = 'neutral') {
   s.log.unshift({ year: s.year, text, tone });
   if (s.log.length > 120) s.log.length = 120;
+  remember(s, text);
 }
 export const push = (s: GameState, p: Prompt) => { s.queue.push(p); };
 

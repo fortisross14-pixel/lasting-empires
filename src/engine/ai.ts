@@ -1,3 +1,4 @@
+import { dispatch } from './annals';
 import { inflation, ageIndex, diff } from './core';
 import { commandOf, GENERIC_COMMAND } from '../data/characters';
 // AI nations: economy, recruiting, upgrades, war and peace.
@@ -70,6 +71,8 @@ export const playerPower = (s: GameState) =>
 const powerOf = (s: GameState, n: string) => (n === s.player ? playerPower(s) : nationPower(s, n));
 
 /** Balance levers: AI development a year (chance of +1) and how fast every crown's prestige fades. */
+/** Provinces a realm needs for its wars to be news at the player's court. */
+export const GREAT_POWER = 12;
 export const AI_DEV_BASE = 0.14, AI_DEV_SIZE = 0.025, PRESTIGE_FADE = 0.03;
 
 function aiEconomy(s: GameState, n: Nation) {
@@ -261,6 +264,7 @@ function aiDiplomacy(s: GameState, n: Nation) {
   if (!options.length) return;
   const t = pick(s, options);
   declareWar(s, n.id, t);
+  if (t !== s.player && size >= GREAT_POWER && provsOf(s, t).length >= GREAT_POWER) dispatch(s, n.id, `${n.name} has declared war on ${nationName(s, t)}.`);
   if (t === s.player) {
     s.flags.ai_war_on_player = s.year;
     log(s, `${n.name} declares war on you!`, 'bad');

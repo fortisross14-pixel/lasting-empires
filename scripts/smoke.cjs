@@ -43,6 +43,10 @@ async function run(browser, name, opts) {
     for (let t = 0; t < tabs; t++) { await tap(`#win .win-tab >> nth=${t}`, `deck ${d} tab ${t}`); await check(`deck ${d} tab ${t}`); if (t === 0 && d === 0) await shot('cards'); if (d === 3 && t === 1) await shot('goods'); if (d === 4 && t === 1) await shot('research'); }
     await closeWin();
   }
+  // a person of the court: loyalty and wish
+  await tap('#tabs .tab >> nth=1', 'Diplomacy deck');
+  if (await p.locator('#win .win-body .k-char').count()) { await tap('#win .win-body .k-char >> nth=0', 'a person'); if (!(await p.locator('.loyal').count())) problems.push(`${name}: a person's page shows no loyalty`); await shot('person'); await p.evaluate(() => document.querySelector('#modal .btn.ghost')?.click()); await wait(); }
+  await closeWin();
   // a card: where it can go, then back out
   await tap('#tabs .tab >> nth=2', 'Internal deck');
   if (await p.locator('#win .win-body .card').count()) { await tap('#win .win-body .card >> nth=0', 'a card'); await shot('card'); await p.keyboard.press('Escape'); await wait(); }
@@ -56,7 +60,8 @@ async function run(browser, name, opts) {
   const rows = ['Tasks under way', 'Realm and ruler', 'Chronicle', 'Settings'];
   for (const r of rows) {
     await tap('.menu-b', 'Menu'); if (r === rows[0]) await shot('menu');
-    await tap(`.gm-row >> text=${r}`, r); if (r === 'Chronicle') await shot('chronicle'); if (r === 'Settings') await shot('settings');
+    await tap(`.gm-row >> text=${r}`, r); if (r === 'Settings') await shot('settings');
+    if (r === 'Chronicle') { await shot('chronicle'); await tap('#sheet .seg-b >> text=Rules', 'the Rules page'); await shot('rules'); await tap('#sheet .seg-b >> text=Annals', 'the Annals'); await tap('#sheet .btn.wide', 'the history of the realm'); await shot('history'); }
     await p.evaluate(() => { const m = document.querySelector('#modal'); if (m && !m.hidden) m.querySelector('.btn.primary, .iconbtn')?.click(); document.querySelector('#sheet:not([hidden]) .iconbtn')?.click(); }); await wait();
   }
   // turns: the list of things to do, then six turns and three skips

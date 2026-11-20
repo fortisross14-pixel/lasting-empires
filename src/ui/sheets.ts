@@ -1,4 +1,12 @@
 // Side panels: province, realm, goals, tasks, overseas, chronicle, and the rows they share.
+import { HAND_LIMITS, RATE_CAP, CARD_BASE } from '../engine/cards';
+import { DIFFICULTY } from '../data/difficulty';
+import { LOYALTY_LEVELS, DISLOYAL, LEAVES } from '../engine/court';
+import { COMMANDER_MIN } from '../engine/commanders';
+import { STEWARD_PRICE, STEWARD_SHARES } from '../engine/trade';
+import { SKIP_MAX } from '../engine/pace';
+import { RANKS } from '../engine/realm';
+import { historyOf } from '../engine/chronicle';
 import { commanderOf } from '../engine/commanders';
 import { sfx } from './sound';
 import type { MissionKind, Character, Cat } from '../types';
@@ -33,10 +41,10 @@ import { warScore } from '../engine/diplo';
 import { happinessOf, moodName, CULTURE_NAMES, RELIGION_NAMES, isAccepted } from '../engine/society';
 import { troopsNear, nearestGarrison, baseFor } from '../engine/army';
 import { S, map, sheet, win, chronTab, shield, setShownRealm, setSheet, setPick, setWin, setForge, setChronTab } from './state';
-import { refresh, toast, act, missionTitle, qText } from './app';
+import { refresh, toast, act, missionTitle, qText, UNDO_SECONDS } from './app';
 import { stacks } from './windows/cards';
 import { f1, workshopRow } from './windows/economy';
-import { armBack, sheetFrom, confirmBox, charDetail, setSheetFrom } from './modal';
+import { armBack, sheetFrom, confirmBox, charDetail, setSheetFrom, openModal, closeModal } from './modal';
 import { openCardModal, openPlanner } from './planner';
 
 export function toggleSheet(kind: string, arg?: string) {
@@ -415,8 +423,55 @@ export function overseasSheet(body: HTMLElement) {
   return [sheetHead('Overseas', 'The wider world'), body];
 }
 
+/** The campaign told as a short history: a chapter a reign, with the moments that mattered. */
+export function showHistory() {
+  const me = player(S), chapters = historyOf(S);
+  // the log speaks to the player; a history speaks of the realm
+  const said = (x: string) => x.replace(/^You declare war on /, 'War is declared on ').replace(/^You open the /, `${me.name} opens the `).replace(/ declares war on you!$/, ` declares war on ${me.name}.`).replace(/!$/, '.');
+  openModal(h('div', { class: 'mbox history' },
+    h('p', { class: 'eyebrow' }, `${S.startYear} – ${S.year}`),
+    h('h2', {}, `The History of ${me.name}`),
+    chapters.length ? null : h('p', { class: 'muted' }, 'Nothing is written yet. Wars, treaties, great works and new ages will be set down here as they happen.'),
+    ...chapters.map(c => h('section', { class: 'hist-ch' },
+      h('h3', {}, c.ruler, c.epithet ? h('em', {}, ` ${c.epithet}`) : null, h('small', {}, ` ${c.from} – ${c.to}`)),
+      c.moments.length
+        ? h('ul', { class: 'hist-list' }, c.moments.map(m => h('li', {}, h('b', {}, String(m.year)), ' ', said(m.text))))
+        : h('p', { class: 'muted' }, 'A quiet reign, of which the chroniclers say little.'))),
+    h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: closeModal }, 'Close'))));
+}
+
+/** The rules, written from the same tables the engine uses, so this page cannot disagree with the game. */
+function rulesTab(body: HTMLElement) {
+  const table = (head: string[], rows: (string | number)[][]) => h('div', { class: 'tscroll' }, h('table', { class: 'ptable rules' }, h('thead', {}, h('tr', {}, head.map(x => h('th', {}, x)))), h('tbody', {}, rows.map(r => h('tr', {}, r.map(c => h('td', {}, String(c))))))));
+  const pct = (v: number) => `${Math.round(v)}%`;
+  body.append(
+    h('h3', {}, 'Outcomes'),
+    h('p', { class: 'muted' }, 'Every task rolls one of five outcomes. The rarity of the person you send sets the odds; some principles and traits roll twice and keep the better.'),
+    table(['Sent', ...OUTCOMES.map(o => `${o.name} ×${o.mult}`)], (Object.keys(OUTCOME_ODDS) as (keyof typeof OUTCOME_ODDS)[]).map(r => [RARITY[r].name, ...OUTCOME_ODDS[r].map(pct)])),
+    h('h3', {}, 'Cards'),
+    h('p', {}, `Each of the six decks draws ${CARD_BASE} cards a year before bonuses, and never more than ${RATE_CAP}. Buildings, research, your monarch, cities and principles add to it: tap a deck's rate to see how. Buying a card costs 3 nation points, and 2 more for each one already bought in that deck this year.`),
+    table(['Rank', 'Provinces', 'Cards in a deck', 'Cards in all', 'Tasks a year'], RANKS.map((r, i) => [r.name, `${r.min}+`, HAND_LIMITS[i][0], HAND_LIMITS[i][1], r.missions])),
+    h('h3', {}, 'Difficulty'),
+    table(['', ...DIFFICULTY.map(d => d.name)], [
+      ['A rival declares war on you when stronger by', ...DIFFICULTY.map(d => `×${d.warEdge}`)],
+      ['Years between such wars', ...DIFFICULTY.map(d => d.warGap)],
+      ['Years of peace at the start', ...DIFFICULTY.map(d => d.grace)],
+      ['Starting treasure', ...DIFFICULTY.map(d => `×${d.gold}`)],
+      ['Rivals grow', ...DIFFICULTY.map(d => `×${d.aiGrowth}`)],
+      ['The steward starts', ...DIFFICULTY.map(d => (d.steward ? 'in office' : 'out of office'))],
+    ]),
+    h('h3', {}, 'The court'),
+    h('p', {}, `A servant's loyalty runs from 0 to 100: ${LOYALTY_LEVELS.map(([min, word]) => `${word} from ${min}`).join(', ')}. Below ${DISLOYAL} they listen to other offers; below ${LEAVES} they may leave. A rival realm of ${COMMANDER_MIN} provinces or more is led by a named general, who may fall or be taken when you beat him.`),
+    h('h3', {}, 'Goods'),
+    h('p', {}, `The steward buys what a need lacks at ${STEWARD_PRICE}× the market price, up to ${STEWARD_SHARES.map(v => pct(v * 100)).join(', ')} of what the provinces pay. Warehouses hold two years of use; the rest sells at home for half the price.`),
+    h('h3', {}, 'The ranking'),
+    h('p', {}, 'A realm\'s score is half its prestige, plus its development, plus five for every point of development gained since the start, plus two for every point held by its subjects. An open game is won in the top three; a shortened one also by ending higher than it began.'),
+    h('h3', {}, 'Turns'),
+    h('p', {}, `One turn is a season. Skip plays up to ${SKIP_MAX} quiet seasons and stops when something needs you. A task can be taken back for ${UNDO_SECONDS} seconds after it is started.`));
+}
+
 export function chronicleSheet(body: HTMLElement) {
-  const tabs = h('div', { class: 'seg' }, ...[['powers', 'Powers'], ['generals', 'Generals'], ['kings', 'Monarchs'], ['log', 'Annals']].map(([k, l]) =>
+  const tabs = h('div', { class: 'seg' }, ...[['powers', 'Powers'], ['generals', 'Generals'], ['kings', 'Monarchs'], ['log', 'Annals'], ['rules', 'Rules']].map(([k, l]) =>
     h('button', { class: 'seg-b' + (chronTab === k ? ' on' : ''), onclick: () => { setChronTab(k); renderSheet(); } }, l)));
   body.append(tabs);
   if (chronTab === 'powers') {
@@ -444,6 +499,8 @@ export function chronicleSheet(body: HTMLElement) {
     t.append(h('tbody', {}, gens.map(g => h('tr', {}, h('td', {}, g.name, g.rarity ? h('small', { class: 'muted' }, ' ' + RARITY[g.rarity as Character['rarity']].name) : null), h('td', {}, String(g.wins)), h('td', {}, String(g.losses)),
       h('td', {}, g.wins + g.losses ? `${Math.round((g.wins / (g.wins + g.losses)) * 100)}%` : '—'), h('td', { class: 'muted' }, g.note)))));
     body.append(h('div', { class: 'tscroll' }, t));
+  } else if (chronTab === 'rules') {
+    rulesTab(body);
   } else if (chronTab === 'kings') {
     const me = player(S);
     const kings = [...S.stats.kings, { name: me.ruler.name, arch: me.ruler.arch, from: me.ruler.from, to: S.year, prestige: Math.round(me.prestige - (me.ruler.prestigeAtStart ?? 0)) }];
@@ -453,6 +510,7 @@ export function chronicleSheet(body: HTMLElement) {
       h('td', {}, ...byName(k)), h('td', {}, RULER_ARCHS[k.arch]?.name ?? k.arch), h('td', {}, `${k.from}–${k.to}`), h('td', {}, String(k.prestige))))));
     body.append(h('div', { class: 'tscroll' }, t));
   } else {
+    body.append(h('button', { class: 'btn wide', onclick: () => showHistory() }, 'The history of your realm'));
     body.append(h('ul', { class: 'log' }, S.log.slice(0, 80).map(l => h('li', { class: 't-' + l.tone }, h('span', { class: 'ly' }, String(l.year)), l.text))));
   }
   return [sheetHead('Chronicle', 'Rankings, records and history'), body];

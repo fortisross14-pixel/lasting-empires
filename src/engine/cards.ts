@@ -107,6 +107,8 @@ export function trimHand(s: GameState) {
   }
 }
 export const RATE_CAP = 1.4;
+/** Cards a year every deck draws before any bonus. */
+export const CARD_BASE = 0.5;
 export const CAT_INFO: Record<Cat, { name: string; icon: string; role: Role; color: string }> = {
   military: { name: 'Military', icon: 'sword', role: 'general', color: '#6e2b2b' },
   diplomacy: { name: 'Diplomacy', icon: 'hands', role: 'diplomat', color: '#2f4f6b' },
@@ -330,7 +332,7 @@ export function cardRates(s: GameState): Record<Cat, { rate: number; parts: Rate
   const out = {} as Record<Cat, { rate: number; parts: RatePart[] }>;
   const arch = RULER_ARCHS[player(s).ruler.arch];
   for (const c of CATS) {
-    const parts: RatePart[] = [{ label: 'Base', v: 0.5 }];
+    const parts: RatePart[] = [{ label: 'Base', v: CARD_BASE }];
     let b = 0;
     // temples, libraries and universities work at half pace without books and art
     const arts = 1 - 0.5 * (s.short?.arts ?? 0);
