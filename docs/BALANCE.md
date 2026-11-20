@@ -175,7 +175,7 @@ spread luck gave, and brings the result back.
 
 Hard is over its band, and rival growth between ×1.6 and ×1.8 does not move it: 82 of 180 games, about 45%.
 The 37% recorded when Hard was first tuned (22 of 60) was at the kind end of what 60 games can show: single runs
-of 30 range from 10 to 18. Left at ×1.6. What to try next is in roadmap 5.7: a wider spread of rival pace on Hard.
+of 30 range from 10 to 18. Left at ×1.6. What to try next is in roadmap 6.7: a wider spread of rival pace on Hard.
 
 ## Rivals (roadmap 4.1–4.6)
 Levers, all without dice except the requests' own events:

@@ -111,7 +111,7 @@ Every action, with its place in the code and its test, is in [ROADMAP.md](ROADMA
 > an installable offline app, and checks on every push (roadmap 1.7–1.8).
 > Carried into the roadmap: AI on the player's rules (3 → 4.1–4.5), character life (8 → 3.1–3.4), more events and
 > chains (9 → 3.5–3.7), battle decisions (11 → 4.7–4.11), AI requests (13 → 4.6), core cards with a story (15 → 3.8),
-> rules in the game (22 → Phase 3 writing pass), undo (23 → 2.19), save export (24 → 5.4), sound (25 → 2.7–2.10),
+> rules in the game (22 → Phase 3 writing pass), undo (23 → 2.19), save export (24 → 6.4), sound (25 → 2.7–2.10),
 > versioned saves (→ 1.14). Population stays a derived number by design.
 
 
