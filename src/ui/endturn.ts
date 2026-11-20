@@ -1,4 +1,5 @@
 // Ending a turn: what must be settled first, skip ahead, settings, and the year's report.
+import { sfx } from './sound';
 import type { GameState, MissionKind, Cat, BattleRecord } from '../types';
 import { CATS } from '../types';
 import { ageOf } from '../engine/ages';
@@ -12,7 +13,7 @@ import { markTurn, stopReasons, SKIP_MAX } from '../engine/pace';
 import { DIFFICULTY, LENGTHS, STANDARD } from '../data/difficulty';
 import { settings, setSetting, type Settings } from './settings';
 import { S, sheet, modalOpen, todo, seenTodo, saveNow, setCv, setWin, setPendingReport } from './state';
-import { TUTORIAL, refresh, toast, SEASONS } from './app';
+import { TUTORIAL, refresh, toast, SEASONS, clearUndo } from './app';
 import { openWin } from './windows/frame';
 import { missionRow } from './windows/cards';
 import { closeSheet } from './sheets';
@@ -58,6 +59,8 @@ export const cardsLine = (cards: Record<string, number>) => (CATS.some(c => card
 
 export async function onEndTurn() {
   if (!readyToEnd(onEndTurn)) return;
+  clearUndo();
+  sfx('seal');
   const rep = endTurn(S);
   saveNow();
   if (sheet?.kind === 'province' && !S.provinces[sheet.arg!]) closeSheet();
@@ -66,6 +69,7 @@ export async function onEndTurn() {
     lastReport = rep;
     if ((S.quarter ?? 0) === 0) { setPendingReport(true); yearReport = S.turnLog ?? null; await yearFlash(S.year, ageOf(S).name); }
     else toast(`${SEASONS[S.quarter ?? 0]} ${S.year} · ${signed(Math.round(rep.gold))} ducats${cardsLine(rep.cards)}`);
+    if (CATS.some(c => rep.cards[c])) sfx('draw', 0.25);
   }
   processQueue();
 }
@@ -74,6 +78,8 @@ export async function onEndTurn() {
  *  (a decision, a new card, a finished task, a war, something new to do), after SKIP_MAX seasons at most. */
 export function onSkipAhead() {
   if (!readyToEnd(onSkipAhead)) return;
+  clearUndo();
+  sfx('seal');
   let n = 0, gold = 0, yearEnd = false;
   const cards: Record<string, number> = {};
   for (;;) {
@@ -91,6 +97,7 @@ export function onSkipAhead() {
   saveNow();
   if (sheet?.kind === 'province' && !S.provinces[sheet.arg!]) closeSheet();
   refresh();
+  if (CATS.some(c => cards[c])) sfx('draw', 0.25);
   if (n) toast(`${n} season${n > 1 ? 's' : ''} passed: now ${SEASONS[S.quarter ?? 0]} ${S.year} · ${signed(Math.round(gold))} ducats${cardsLine(cards)}`);
   processQueue();
 }
@@ -98,7 +105,7 @@ export function onSkipAhead() {
 /** Settings of this device, and the choices this campaign was started with. */
 export function showSettings() {
   const st = settings();
-  const toggle = (k: 'warn' | 'skip' | 'calm', label: string, sub: string) => h('label', { class: 'set-row' },
+  const toggle = (k: 'warn' | 'skip' | 'calm' | 'haptics', label: string, sub: string) => h('label', { class: 'set-row' },
     h('span', { class: 'gm-t' }, h('b', {}, label), h('small', {}, sub)),
     h('input', { type: 'checkbox', class: 'set-sw', role: 'switch', checked: st[k] ? true : undefined, onchange: (e: Event) => { setSetting(k, (e.target as HTMLInputElement).checked as Settings[typeof k]); refresh(); } }));
   const d = DIFFICULTY[S.difficulty ?? STANDARD] ?? DIFFICULTY[STANDARD];
@@ -108,7 +115,11 @@ export function showSettings() {
     h('div', { class: 'gm-list' },
       toggle('warn', 'Things to do', 'Before a turn ends, list the cards and people still waiting.'),
       toggle('skip', 'Skip ahead button', `Plays up to ${SKIP_MAX} quiet seasons in one tap and stops when something happens.`),
-      toggle('calm', 'Less motion', 'No sliding or turning cards. Always on when your device asks for reduced motion.')),
+      toggle('calm', 'Less motion', 'No sliding or turning cards. Always on when your device asks for reduced motion.'),
+      h('div', { class: 'set-row' }, h('span', { class: 'gm-t' }, h('b', {}, 'Sound'), h('small', {}, 'Paper, wax, coin and drum, made on the device.')),
+        h('div', { class: 'seg set-seg', role: 'radiogroup', 'aria-label': 'Sound' }, ([['Off', 0], ['Soft', 0.5], ['Full', 1]] as [string, number][]).map(([label, v]) =>
+          h('button', { class: 'seg-b' + (st.sfx === v ? ' on' : ''), role: 'radio', 'aria-checked': String(st.sfx === v), onclick: () => { setSetting('sfx', v); closeModal(); showSettings(); sfx('coin'); } }, label)))),
+      toggle('haptics', 'Touch feedback', 'A short buzz when a card is played or turned, on phones that can.')),
     h('h3', {}, 'This campaign'),
     h('p', { class: 'set-note' }, h('b', {}, d.name), ` · ${d.text}`),
     h('p', { class: 'set-note' }, S.scenario ? `Mission: ${S.scenario.name}, to ${S.scenario.deadline}.` : `${len ? len.name : 'The whole age'}: the game ends after ${S.endYear}.`),
@@ -117,6 +128,7 @@ export function showSettings() {
 }
 
 export async function yearFlash(year: number, line: string) {
+  sfx('bell', 0.15);
   if (reduced()) { toast(`${year}: ${line}`); return; }
   const f = h('div', { class: 'yearflash' }, h('span', {}, String(year)), h('small', {}, line));
   document.body.append(f);

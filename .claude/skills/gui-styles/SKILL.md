@@ -22,10 +22,19 @@ description: Interface rules for Lasting Empires — layout, touch targets, the 
 ## Style: Ink & Cartography (style B)
 One style, `data-style="chancery"` on `<html>`; its rules are the override block at the end of `src/styles.css` ("Style B").
 - **Tokens**: `--ink` #f6f1e6 (paper), `--panel` #fbf8f1, `--card` #fffdf8, `--text` #1b1a17 (ink), `--wax`/`--gold` #b3261e (the one accent), `--sea` #dfe7e3. All colours come from tokens; never add a literal surface colour.
-- **Fonts**: Cormorant SC for titles (`--f-display`, `--f-title`), EB Garamond for body (`--f-body`). New fonts go in the Google Fonts link in `scripts/build.mjs` with a fallback stack.
+- **Fonts**: Cormorant SC for titles (`--f-display`, `--f-title`), EB Garamond for body (`--f-body`), shipped as `woff2` in `fonts/` and declared by `fonts/fonts.css` (inlined by `scripts/build.mjs`). No third family: a new one must be added to `fonts/` with its licence, to the Google link for the artifact page, and to the service worker list, so think twice.
 - **Shades**: no blurred shadows. Depth is a hard ink offset: `--shadow` (3px 3px 0) for buttons and cards, `--shadow-lg` (5px) for windows and modals. Frames are 1.2–1.5px ink lines. Active tab = ink background, paper text. The crimson accent is for the one main action (End Turn, primary buttons, progress), never decoration.
 - **Map**: realm colours are washed toward the paper with `wash(hex, k)` in `map.ts` (0.42 for others, 0.12 for the player and the picked realm) so the player's land reads first.
 - **Coats of arms**: `armsSvg(id, color)` in `src/ui/banners.ts`; use the `shield(id, color, small)` helper in `src/ui/state.ts`. Great realms have hand-made arms in `ARMS`; every other realm gets arms built from its id hash and colour (always the same). Add arms for a new major realm to `ARMS` rather than drawing letters.
+
+## Sound
+- `sfx(name)` from `src/ui/sound.ts` plays one of the effects in `RECIPES`; `buzz()` is the matching touch of haptics. Call them where the thing happens (a card played, a card turned, End Turn), never from the engine.
+- Effects are synthesized (noise and tones), under a second, and never loop. A new moment gets a new recipe only if no existing one fits; the palette is paper, wax, quill, coin, drum, bell, lute.
+- Sound never carries information alone: whatever it marks is also shown.
+
+## Map
+- Province shapes come from `scripts/gen-world.ts` (`npm run gen-world` after editing provinces); never edit `src/data/world.json` by hand. Realm borders (`.realm-edge`) and realm names (`.rlabel`) are drawn by `map.ts` from ownership; `.prov` strokes are hairlines.
+- A new map view is an entry in `MAP_MODES`, a case in `fill` and one in `legendFor`.
 
 ## Motion
 - Windows and pop-ups rise 8px and fade in (`@keyframes rise`, ~180ms). Animate the `translate` property, never `transform`: `#win` is centred with `transform`, and a transform keyframe would knock it off centre.

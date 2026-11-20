@@ -8,13 +8,17 @@ export interface Settings {
   skip: boolean;
   /** Less motion, even when the device does not ask for it. */
   calm: boolean;
+  /** Volume of sound effects: 0 off, 0.5 soft, 1 full. */
+  sfx: number;
+  /** A short buzz when a card is played or turned, where the device can. */
+  haptics: boolean;
   /** The difficulty and open-game length chosen last, offered again next time. */
   difficulty: number;
   length: string;
 }
 
 const KEY = 'lasting-empires.settings';
-const DEFAULTS: Settings = { warn: true, skip: true, calm: false, difficulty: STANDARD, length: 'age' };
+const DEFAULTS: Settings = { warn: true, skip: true, calm: false, sfx: 1, haptics: true, difficulty: STANDARD, length: 'age' };
 
 let cache: Settings | null = null;
 export function settings(): Settings {

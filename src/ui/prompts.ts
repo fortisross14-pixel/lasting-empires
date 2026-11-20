@@ -1,4 +1,5 @@
 // Decisions the game puts to the player: reveals, events, drafts, succession, battles, attacks, peace, endings.
+import { sfx, buzz, type Sfx } from './sound';
 import type { DraftOption, RevealItem, Battle, Heir } from '../types';
 import { RULER_ARCHS } from '../data/nations';
 import { TROOPS, EQUIPMENT } from '../data/troops';
@@ -46,14 +47,26 @@ export function infoCard(it: RevealItem) {
 }
 
 export async function flipAll(flips: { flip: () => void }[], delay = 380) {
-  for (const f of flips) { await sleep(reduced() ? 0 : delay); f.flip(); }
+  for (const f of flips) { await sleep(reduced() ? 0 : delay); f.flip(); sfx('flip'); buzz(); }
 }
 
 export function showReveal(title: string, subtitle: string | undefined, items: RevealItem[], done: () => void, alarm = false) {
   const row = h('div', { class: 'reveal-row' });
   const flips = items.map(it => { const f = flipCard(infoCard(it), ''); row.append(f.el); return f; });
   openModal(h('div', { class: 'mbox reveal' + (alarm ? ' alarm' : '') }, alarm ? h('div', { class: 'alarm-band', html: icon('sword', 28) }) : null, h('h2', {}, title), subtitle ? h('p', { class: 'muted' }, subtitle) : null, row, h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: done }, 'Continue'))));
-  flipAll(flips);
+  if (alarm) sfx('drum');
+  void flipAll(flips).then(() => { const s = stingFor(items, alarm); if (s) sfx(s, 0.12); });
+}
+
+/** The note a reveal ends on: by the outcome when there is one, otherwise by the news itself. */
+function stingFor(items: RevealItem[], alarm: boolean): Sfx | null {
+  if (alarm || !items.length) return null;
+  const out = items.find(it => / outcome$/.test(it.title));
+  if (out) return /^(Great|Exceptional)/.test(out.title) ? 'great' : /^Poor/.test(out.title) ? 'bad' : 'plain';
+  const first = items[0];
+  if (first.tone === 'bad') return 'bad';
+  if (first.tone === 'good') return ['hands', 'ring', 'dove', 'scroll'].includes(first.kind ?? '') ? 'quill' : 'plain';
+  return null;
 }
 
 export function showEvent() {
@@ -201,6 +214,7 @@ export function showBattle(b: Battle) {
     if (b.done || !document.body.contains(box)) return;
     const beforeMe = hp(me), beforeFoe = hp(foe);
     const lg = playRound(S, b, null);
+    sfx(b.round % 2 ? 'clash' : 'clash2'); buzz(15);
     const att = b.playerSide === 'att';
     draw({ mine: att ? lg.attTactic : lg.defTactic, theirs: att ? lg.defTactic : lg.attTactic, myC: att ? lg.attCountered : lg.defCountered, theirC: att ? lg.defCountered : lg.attCountered, dmgMe: Math.round(beforeMe - hp(me)), dmgThem: Math.round(beforeFoe - hp(foe)) });
     box.querySelectorAll('.slot .card').forEach(c => c.classList.add('slam'));

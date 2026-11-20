@@ -1,4 +1,5 @@
 // Economy window: the six needs and the steward, goods, trade routes and posts, the ledger.
+import { sfx } from '../sound';
 import type { GameState, Province } from '../../types';
 import { TECH } from '../../data/techs';
 import { GOODS, FOOD, RAW, MADE } from '../../data/goods';
@@ -41,7 +42,7 @@ export function ledgerTab(body: HTMLElement) {
     body.append(h('div', { class: 'ctl' }, h('span', {}, p.name), h('span', { class: 'ctl-bar' }, h('i', { style: `width:${p.control}%`, class: p.control < 30 ? 'low' : '' })), h('b', {}, `${Math.round(p.control)}%`)));
   }
   body.append(h('p', { class: 'muted' }, 'Low control cuts income and can spark revolts. Temples, courthouses, stability and Royal Progress raise it. Newly conquered lands start low.'));
-  body.append(actionRow('scales', 'Sell offices', `${officeCost(S)} ducats for 2 nation points · the price doubles, triples… each time this year`, player(S).gold < officeCost(S) ? `Needs ${officeCost(S)} ducats` : null, () => act(() => sellOffices(S), '+2 nation points')));
+  body.append(actionRow('scales', 'Sell offices', `${officeCost(S)} ducats for 2 nation points · the price doubles, triples… each time this year`, player(S).gold < officeCost(S) ? `Needs ${officeCost(S)} ducats` : null, () => { sfx('coin'); act(() => sellOffices(S), '+2 nation points'); }));
 }
 
 export const DIST_NAME = ['next door', 'near', 'far', 'overseas'];

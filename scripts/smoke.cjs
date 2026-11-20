@@ -64,6 +64,10 @@ async function run(browser, name, opts) {
   for (let i = 0; i < 6; i++) { await p.evaluate(() => document.querySelector('#endturn').click()); await wait(1300); await answer(); }
   for (let i = 0; i < 3; i++) { await p.evaluate(() => document.querySelector('.skip-b')?.click()); await wait(700); await answer(); }
   await shot('later');
+  const sounds = await p.evaluate(() => (window.__sounds || []).join(' '));
+  for (const s of ['seal', 'flip']) if (!sounds.includes(s)) problems.push(`${name}: the '${s}' sound was never asked for (${sounds})`);
+  // the relations view of the map
+  await tap('#modebtn', 'Map view'); await tap('.mode-b >> text=Relations', 'Relations view'); await shot('relations'); await tap('.lg-x', 'back to realms');
   // back to the title, then the battle test
   await tap('.menu-b', 'Menu'); await tap('#modal .btn.ghost', 'Save and exit');
   await tap('summary >> text=Test scenarios'); await tap('.howto .btn.wide', 'the battle test'); await wait(700); await answer();

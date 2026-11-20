@@ -1,4 +1,5 @@
 // Using a card: where it can go, picking a target on the map, and the planner that sends a person out.
+import { sfx, buzz } from './sound';
 import type { MissionKind, Character } from '../types';
 import { TROOPS } from '../data/troops';
 import { TECHS, TECH, BUILDINGS } from '../data/techs';
@@ -29,7 +30,7 @@ import { happinessOf, CULTURE_NAMES, RELIGION_NAMES } from '../engine/society';
 import { troopsNear, travel, locOf, nearestGarrison, baseFor, READY_STR } from '../engine/army';
 import { missionsLeft } from '../engine/realm';
 import { S, map, win, preferChar, RARITY_ORDER_I, setPreferChar } from './state';
-import { refresh, toast, act, missionTitle, placeName, qLabel, qText } from './app';
+import { refresh, toast, act, missionTitle, placeName, qLabel, qText, offerUndo } from './app';
 import { openWin, closeWin } from './windows/frame';
 import { closeSheet, oddsLine, costBenefit } from './sheets';
 import { goodsNote, openPostPicker } from './windows/economy';
@@ -133,7 +134,7 @@ export function openCardModal(handUid: number) {
   const def = CARDS[hc.card];
   const blocked = cardBlocked(S, def);
   const body = h('div', { class: 'targets-wrap' });
-  const done = (msg: string) => { closeModal(); if (msg.startsWith('!')) toast(msg.slice(1), 'bad'); else toast(msg, 'good'); refresh(); processQueue(); };
+  const done = (msg: string) => { closeModal(); if (msg.startsWith('!')) toast(msg.slice(1), 'bad'); else { sfx('play'); buzz(); toast(msg, 'good'); } refresh(); processQueue(); };
   const footer = h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: closeModal }, 'Keep it'),
     !def.burden ? h('button', { class: 'btn ghost', onclick: () => { closeModal(); act(() => discardCard(S, handUid), 'Discarded: +0.5 nation points'); } }, 'Discard (+0.5 NP)') : null);
 
@@ -424,10 +425,13 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
       h('button', { class: 'btn ghost', onclick: back }, '‹ Back'),
       h('button', { class: 'btn primary' + (why ? ' blocked' : ''), onclick: () => {
         if (why) return toast(why, 'bad');
+        const before = JSON.stringify(S), asked = S.queue.length;
         const r = launchMission(S, kind, ch.uid, target, picked, building, cardUid, good, ships, trade ? { dir: trade.dir, amount: trade.amount } : undefined);
         if (r) return toast(r, 'bad');
         closeModal();
-        toast(`${ch.name} sets out`, 'good');
+        sfx('play'); buzz();
+        // sending someone out shows nothing new, so it can be taken back; not if the game answered at once
+        if (S.queue.length === asked) offerUndo(before, `${ch.name} sets out`); else toast(`${ch.name} sets out`, 'good');
         refresh();
       } }, 'Send them')));
   };

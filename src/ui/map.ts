@@ -1,14 +1,14 @@
 // SVG map with pan, pinch-zoom and tap-to-select.
 import type { GameState } from '../types';
 import { getGeo } from '../engine/map';
-import { atWar, provsOf, population } from '../engine/core';
+import { atWar, provsOf, population, getRel, hasTreaty } from '../engine/core';
 import { provKnown } from '../engine/overseas';
 import { happinessOf } from '../engine/society';
 import { NO_STATE } from '../data/nations';
 
-export type MapMode = 'political' | 'culture' | 'religion' | 'goods' | 'happiness' | 'population';
+export type MapMode = 'political' | 'relations' | 'culture' | 'religion' | 'goods' | 'happiness' | 'population';
 export const MAP_MODES: { id: MapMode; name: string; icon: string }[] = [
-  { id: 'political', name: 'Realms', icon: 'crown' }, { id: 'culture', name: 'Culture', icon: 'scroll' },
+  { id: 'political', name: 'Realms', icon: 'crown' }, { id: 'relations', name: 'Relations', icon: 'hands' }, { id: 'culture', name: 'Culture', icon: 'scroll' },
   { id: 'religion', name: 'Religion', icon: 'church' }, { id: 'goods', name: 'Raw materials', icon: 'anvil' },
   { id: 'happiness', name: 'Happiness', icon: 'mood' }, { id: 'population', name: 'Population', icon: 'people' },
 ];
@@ -16,6 +16,22 @@ export const RELIGION_COLORS: Record<string, string> = {
   catholic: '#d9c27a', protestant: '#5b8fc9', orthodox: '#9a6ac0', coptic: '#b07a4a', muslim: '#3f9a5a', hindu: '#e08a3a',
   buddhist: '#e0c040', confucian: '#c05050', shinto: '#e06a8a', animist: '#8a7a5a', nahuatl: '#3aa0a0', inti: '#e0a020',
 };
+/** How a realm stands towards the player, for the relations view: the same words the diplomacy screens use. */
+export type Stance = 'mine' | 'subject' | 'ally' | 'friendly' | 'neutral' | 'hostile' | 'war' | 'none';
+export const STANCE: Record<Stance, { name: string; color: string }> = {
+  mine: { name: 'your realm', color: '#3f5f8f' }, subject: { name: 'your subject', color: '#8fa8cf' }, ally: { name: 'ally', color: '#2e6b34' },
+  friendly: { name: 'friendly (30 or more)', color: '#9cc09a' }, neutral: { name: 'neutral', color: '#ddd5c0' },
+  hostile: { name: 'hostile (−30 or less)', color: '#e0a070' }, war: { name: 'at war', color: '#b3261e' }, none: { name: 'no state', color: '#cfc6ad' },
+};
+export function stanceOf(s: GameState, n: string): Stance {
+  if (n === s.player) return 'mine';
+  if (n === NO_STATE || !s.nations[n]?.alive) return 'none';
+  if (atWar(s, s.player, n)) return 'war';
+  if (s.nations[n].overlord === s.player) return 'subject';
+  if (hasTreaty(s, s.player, n, 'alliance')) return 'ally';
+  const rel = getRel(s, s.player, n);
+  return rel >= 30 ? 'friendly' : rel <= -30 ? 'hostile' : 'neutral';
+}
 const hue = (k: string) => { let x = 7; for (const c of k) x = (x * 31 + c.charCodeAt(0)) % 997; return `hsl(${(x * 47) % 360} 42% ${48 + (x % 3) * 8}%)`; };
 const ramp = (t: number) => `hsl(${Math.round(4 + t * 116)} 55% ${44 + Math.round(t * 6)}%)`; // red → green
 import { MISSION_INFO } from '../engine/missions';
@@ -430,6 +446,7 @@ export class MapView {
 
   private fill(s: GameState, p: GameState['provinces'][string], maxPop: number): string | null {
     switch (this.mode) {
+      case 'relations': return STANCE[stanceOf(s, p.owner)].color;
       case 'culture': return hue(p.culture);
       case 'religion': return RELIGION_COLORS[p.religion] ?? hue(p.religion);
       case 'goods': return GOODS[p.good]?.color ?? hue(p.good);
@@ -559,6 +576,7 @@ export function legendFor(s: GameState, mode: MapMode): LegendItem[] {
     for (const p of Object.values(s.provinces)) if (provKnown(s, p.id)) c[f(p)] = (c[f(p)] ?? 0) + 1;
     return Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k]) => k);
   };
+  if (mode === 'relations') return (Object.keys(STANCE) as Stance[]).filter(k => k !== 'none').map(k => ({ color: STANCE[k].color, label: STANCE[k].name }));
   if (mode === 'religion') return count(p => p.religion).map(k => ({ color: RELIGION_COLORS[k] ?? hue(k), label: k }));
   if (mode === 'goods') return RAW.map(k => ({ color: GOODS[k].color, label: k, icon: GOODS[k].icon }));
   if (mode === 'happiness') return [{ color: ramp(0), label: 'angry' }, { color: ramp(0.5), label: 'restless' }, { color: ramp(1), label: 'joyful' }, { color: '#8a8478', label: 'not yours' }];

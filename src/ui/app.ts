@@ -1,4 +1,5 @@
 // The game screen: top bar, map, deck tabs, the strip of wars and tasks, the tutorial, and refresh().
+import { sfx } from './sound';
 import type { GameState, RevealItem } from '../types';
 import { CATS } from '../types';
 import { TECH, BUILDINGS } from '../data/techs';
@@ -106,6 +107,7 @@ export function renderTutorial() {
 }
 
 export function refresh() {
+  if (undoSnap && gameMark() !== undoMark) clearUndo(); // something else was done since: the snapshot is stale
   setCardGame(S);
   recordMission();
   map.realm = sheet?.kind === 'nation' ? sheet.arg ?? null : shownRealm;
@@ -122,9 +124,38 @@ export function toast(msg: string, tone: 'good' | 'bad' | 'neutral' = 'neutral')
   const t = $('#toast');
   const el = h('div', { class: 'toast-msg t-' + tone }, msg);
   t.append(el);
+  if (tone === 'bad') sfx('knock');
   setTimeout(() => el.classList.add('out'), 2600);
   setTimeout(() => el.remove(), 3100);
 }
+
+/** The game as it was before the last task was started, kept until the turn ends or something new is shown. */
+let undoSnap: string | null = null;
+let undoEl: HTMLElement | null = null;
+let undoMark = '';
+/** A cheap fingerprint of the game: if it moves, something else was done and the old snapshot must not be offered. */
+const gameMark = () => `${S.hand.length}|${S.missions.length}|${S.troops.length}|${S.characters.length}|${S.queue.length}|${Math.round(player(S).gold)}|${S.np}|${S.year}|${S.quarter}`;
+export const UNDO_SECONDS = 6;
+/** Offer to take back what was just done: a strip with an Undo button for a few seconds. `before` is the saved game
+ *  from just before the action. Only for actions that showed the player nothing new (no outcome, no cards revealed). */
+export function offerUndo(before: string, what: string) {
+  clearUndo();
+  undoSnap = before;
+  undoMark = gameMark();
+  const el = undoEl = h('div', { class: 'toast-msg t-good undo' }, h('span', {}, what),
+    h('button', { class: 'btn small', onclick: () => {
+      if (!undoSnap) return;
+      const s = JSON.parse(undoSnap) as GameState;
+      clearUndo();
+      setS(s);
+      sfx('flip');
+      refresh();
+      toast('Taken back');
+    } }, 'Undo'));
+  $('#toast').append(el);
+  setTimeout(() => { if (undoEl === el) clearUndo(); }, UNDO_SECONDS * 1000);
+}
+export function clearUndo() { undoSnap = null; undoEl?.remove(); undoEl = null; }
 
 export function act(fn: () => string | null | void, okMsg?: string) {
   const r = fn();

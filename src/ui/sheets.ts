@@ -1,4 +1,5 @@
 // Side panels: province, realm, goals, tasks, overseas, chronicle, and the rows they share.
+import { sfx } from './sound';
 import type { MissionKind, Character, Cat } from '../types';
 import { CATS } from '../types';
 import { RULER_ARCHS } from '../data/nations';
@@ -296,7 +297,7 @@ export function declareWarRow(n: string) {
   const truce = inTruce(S, S.player, n);
   const cost = warCost(S, n);
   return actionRow('sword', `Declare war on ${nationName(S, n)}`, cost ? `Stability −${cost}${cost > 1 ? ' (breaks your treaty)' : ''}` : 'You hold a claim: no stability loss', truce ? 'A truce is in force' : null,
-    () => confirmBox(`Declare war on ${nationName(S, n)}?`, cost ? `Stability falls by ${cost}. Their allies may join them.` : 'Your claim justifies the war.', 'Declare war', () => act(() => playerDeclareWar(S, n), 'War declared')), 'danger');
+    () => confirmBox(`Declare war on ${nationName(S, n)}?`, cost ? `Stability falls by ${cost}. Their allies may join them.` : 'Your claim justifies the war.', 'Declare war', () => { sfx('drum'); act(() => playerDeclareWar(S, n), 'War declared'); }), 'danger');
 }
 
 export function nationSheet(id: string, body: HTMLElement) {

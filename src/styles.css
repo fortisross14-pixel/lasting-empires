@@ -171,9 +171,9 @@ p.center { display: block; }
 .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--muted); font-size: 12px; }
 .tab { position: relative; padding: 4px 2px; box-shadow: inset 0 3px 0 var(--cc, transparent); }
 .tab-i { color: var(--text); opacity: .8; }
-.tab-n { font-size: 13px; font-weight: 600; color: var(--text); font-family: Alegreya, Georgia, serif; font-variant-numeric: lining-nums tabular-nums; }
+.tab-n { font-size: 13px; font-weight: 600; color: var(--text); font-family: 'EB Garamond', Georgia, serif; font-variant-numeric: lining-nums tabular-nums; }
 .tab-i { position: relative; }
-.tab-c { position: absolute; top: -5px; right: -13px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--cc, var(--gold)); color: #fff; font: 700 11px/17px Alegreya, Georgia, serif; font-variant-numeric: lining-nums; text-align: center; }
+.tab-c { position: absolute; top: -5px; right: -13px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--cc, var(--gold)); color: #fff; font: 700 11px/17px 'EB Garamond', Georgia, serif; font-variant-numeric: lining-nums; text-align: center; }
 .tab.on { color: var(--gold-2); background: #ffffff0c; box-shadow: inset 0 3px 0 var(--gold); }
 .tab.on .tab-i { color: var(--gold-2); opacity: 1; }
 @media (max-width: 400px) { .tab-l { font-size: 10px; } }
@@ -1066,7 +1066,7 @@ ul.traits { margin: 0; padding-left: 18px; }
 .tcard.tr-economy { --band: #8a6a1f; }
 .tcard.tr-state { --band: #3d4f80; }
 .tc-side { flex: none; width: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-right: 1px solid #0002; padding-right: 8px; color: var(--band); }
-.tc-pts { font: 700 22px/1 Alegreya, Georgia, serif; font-variant-numeric: lining-nums; color: var(--vellum-ink); }
+.tc-pts { font: 700 22px/1 'EB Garamond', Georgia, serif; font-variant-numeric: lining-nums; color: var(--vellum-ink); }
 .tc-side small { font-size: 11px; color: var(--vellum-muted); }
 .tc-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .tc-name { font-size: 16px; }
@@ -1134,7 +1134,7 @@ ul.traits { margin: 0; padding-left: 18px; }
 .card.ty-burden { --band: #2b2b2b; }
 .card.wide { height: 140px; min-height: 140px; }
 .card.wide .c-art { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
-.card.wide .c-ty { font: 700 10px/1 Alegreya, Georgia, serif; text-transform: uppercase; letter-spacing: .08em; color: #f8f0dc; opacity: .9; }
+.card.wide .c-ty { font: 700 10px/1 'EB Garamond', Georgia, serif; text-transform: uppercase; letter-spacing: .08em; color: #f8f0dc; opacity: .9; }
 .card.wide .c-cat { color: var(--band) !important; font-weight: 700; }
 .card.wide .c-text { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .card.wide .c-rarity { font-size: 11px; font-weight: 700; }
@@ -1225,7 +1225,7 @@ ul.traits { margin: 0; padding-left: 18px; }
 .pick-era b { color: var(--text); }
 @media (max-width: 640px) { .pick-top { flex-wrap: wrap; } .pick-hint { display: none; } }
 .mcard.wild { border-style: dashed; border-color: var(--gold-2); }
-.mc-wild { margin-left: auto; align-self: flex-start; font: 700 11px/1 Alegreya, Georgia, serif; text-transform: uppercase; letter-spacing: .08em; padding: 4px 8px; border-radius: 999px; background: var(--gold-2); color: #fff; }
+.mc-wild { margin-left: auto; align-self: flex-start; font: 700 11px/1 'EB Garamond', Georgia, serif; text-transform: uppercase; letter-spacing: .08em; padding: 4px 8px; border-radius: 999px; background: var(--gold-2); color: #fff; }
 [data-style="chancery"] .mc-wild { background: var(--wax); }
 
 /* ---------- mission progress ---------- */
@@ -1824,3 +1824,8 @@ details[open] > summary .br-chev { rotate: 180deg; }
 #map .rlabel.off { display: none; }
 #map.moving .rlabels { visibility: hidden; }
 #map.picking .rlabels { display: none; }
+.set-seg { flex: none; }
+.set-seg .seg-b { min-height: 40px; padding: 6px 12px; }
+div.set-row { cursor: default; }
+.toast-msg.undo { display: flex; align-items: center; gap: 12px; pointer-events: auto; }
+.toast-msg.undo .btn { min-height: 36px; padding: 4px 14px; }

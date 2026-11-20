@@ -1,4 +1,5 @@
 // The Cards tab of every deck: buying, the hand, selling, the forge, and tasks under way.
+import { sfx } from '../sound';
 import type { GameState, Character, Cat } from '../../types';
 import { RULER_ARCHS } from '../../data/nations';
 import { TROOPS } from '../../data/troops';
@@ -37,7 +38,7 @@ export function cardsTab(cat: Cat, body: HTMLElement) {
     const why = buyBlocked(S, cat, ty);
     const pool = poolOf(S, cat, ty);
     const sub = pool.length === 1 ? pool[0].name : 'pick 1 of 3';
-    shop.append(h('button', { class: 'shop-b' + (why ? ' blocked' : ''), title: why ?? `${BUY[ty].label} card: ${sub}`, onclick: () => { if (why) return toast(why, 'bad'); const n = S.hand.length; act(() => buyCard(S, cat, ty)); if (S.hand.length > n) toast(`${CARDS[S.hand[S.hand.length - 1].card].name} added to your hand`, 'good'); } },
+    shop.append(h('button', { class: 'shop-b' + (why ? ' blocked' : ''), title: why ?? `${BUY[ty].label} card: ${sub}`, onclick: () => { if (why) return toast(why, 'bad'); const n = S.hand.length; act(() => buyCard(S, cat, ty)); if (S.hand.length > n) { sfx('draw'); toast(`${CARDS[S.hand[S.hand.length - 1].card].name} added to your hand`, 'good'); } } },
       h('span', { class: 'shop-i', html: icon(BUY[ty].icon, 18) }), h('span', { class: 'shop-t' }, h('b', {}, BUY[ty].label), h('small', {}, sub)), h('span', { class: 'shop-c' }, `${buyCost(S, cat)}★`)));
   }
   // tasks of this menu that are under way: always first, so you see who is busy
@@ -64,7 +65,7 @@ export function cardsTab(cat: Cat, body: HTMLElement) {
   body.append(h('div', { class: 'seg cfilter' }, filters.map(([id, label, n]) => h('button', { class: 'seg-b' + (cv.filter === id ? ' on' : ''), onclick: () => { setCv({ ...cv, filter: id }); renderWin(); } }, label, n ? h('small', {}, ` ${n}`) : null))));
   if (cv.mode === 'select') {
     body.append(h('div', { class: 'mcap' }, h('b', {}, `Tap cards to sell (${cv.sel.length} chosen · +${(cv.sel.length / 2).toFixed(1)} nation points)`), h('span', {},
-      h('button', { class: 'btn small primary' + (cv.sel.length ? '' : ' blocked'), onclick: () => { if (!cv.sel.length) return; const n = cv.sel.length; act(() => sellCards(S, cv.sel), `${n} card${n > 1 ? 's' : ''} sold: +${(n / 2).toFixed(1)} nation points`); setCv({ ...cv, mode: handExcess(S).total > 0 ? 'select' : 'browse', sel: [] }); renderWin(); } }, 'Sell'),
+      h('button', { class: 'btn small primary' + (cv.sel.length ? '' : ' blocked'), onclick: () => { if (!cv.sel.length) return; const n = cv.sel.length; sfx('coin'); act(() => sellCards(S, cv.sel), `${n} card${n > 1 ? 's' : ''} sold: +${(n / 2).toFixed(1)} nation points`); setCv({ ...cv, mode: handExcess(S).total > 0 ? 'select' : 'browse', sel: [] }); renderWin(); } }, 'Sell'),
       h('button', { class: 'btn small ghost', onclick: () => setMode('select') }, 'Cancel'))));
   }
   const f = cv.filter;

@@ -16,6 +16,8 @@ Open `dist/index.html` in any browser. The core menus (Military, Diplomacy, Inte
 ## How it plays
 
 - **Pace.** *Skip* (beside End Turn) plays up to 8 quiet seasons in one tap and stops as soon as something needs you: a decision, a new card, a finished task, a war. End Turn shows how many things are still open (a card a free person could carry, someone with no task, a shortage, a province close to revolt) and lists them once before the turn ends; a dot on a deck means a card there can be played now. Both can be switched off in Menu → Settings.
+- **The map.** Province borders are gently bent, never straight; realm borders are a heavy ink line and the borders inside a realm a hairline, so a realm reads as one shape. Zoomed out, each realm's name is written across its land; zoomed in, province names return. *Map: Relations* tints every realm by how it stands to you.
+- **Sound and undo.** Paper, wax, coin, quill, drum and bell are made on the device (Menu → Settings: Off, Soft, Full). Sending someone on a task can be taken back for six seconds with Undo.
 - **Difficulty and length.** Gentle, Standard or Hard, chosen when a game or a historic mission starts: it changes how readily rivals attack you, how fast they grow and your starting treasure (`src/data/difficulty.ts`). An open game can last a reign (40 years), a century, or the whole age.
 
 - **Everything is a card.** Five kinds: Military, Diplomacy, Internal, Economy, Research. You draw each at a yearly rate (1.0 base, fractions carry over), raised by buildings, research, cities and your monarch. Spend **nation points** to buy more: three are revealed, you keep one.
@@ -77,6 +79,7 @@ Open `dist/index.html` in any browser. The core menus (Military, Diplomacy, Inte
 - `src/ui`: the screens, in modules: `state.ts` (shared state and saving), `title.ts` (title, missions, picker), `app.ts` (the game screen), `windows/` (one file per deck), `sheets.ts`, `planner.ts`, `endturn.ts`, `prompts.ts`, `modal.ts`, plus `map.ts`, `cards.ts`, `settings.ts`. `npm run smoke` drives the built game through all of them in a headless browser.
 - `scripts/sim.ts`: headless bot that plays full campaigns, for balance and crash testing.
 - `scripts/test.ts`: engine checks that must never break (`npm test`): same seed same game, saves load, every mission starts, pace and difficulty rules. GitHub Actions runs the typecheck, these checks, the build and one short bot campaign on every push (`.github/workflows/ci.yml`).
+- `src/ui/sound.ts`: the sound effects, each a short Web Audio recipe (no audio files). `fonts/`: the two typefaces, shipped with the game.
 - `src/engine/pace.ts`: what still needs the player this turn, and when skipping ahead must stop.
 
 ## GitHub Pages
