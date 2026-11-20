@@ -11,10 +11,10 @@ import { icon } from './icons';
 import { charCard } from './cards';
 import { DIFFICULTY, STANDARD } from '../data/difficulty';
 import { settings } from './settings';
-import { S, sheet, win, modalOpen, slot, saveNow, setModalOpen } from './state';
+import { S, sheet, win, modalOpen, winPage, slot, saveNow, setModalOpen, setWinPage } from './state';
 import { showTitle } from './title';
 import { toast, act, showEra, missionTitle } from './app';
-import { closeWin } from './windows/frame';
+import { closeWin, renderWin } from './windows/frame';
 import { openSheet, closeSheet } from './sheets';
 import { pickHand, stopMapPick } from './planner';
 import { showSettings } from './endturn';
@@ -28,6 +28,32 @@ export function openModal(content: HTMLElement) {
   setModalOpen(true);
   armBack();
 }
+/** Show something the player is looking through (a card, a task, a person). With a deck window open it becomes a
+ *  page inside that window, with a Back button, so there is never a window on top of a window; with none open it
+ *  is a dialog. What the game asks (events, battles, choices) always uses openModal and may lie over either. */
+export function openPage(content: HTMLElement) {
+  if (!win || $('#win').hidden || modalOpen) return openModal(content);
+  setWinPage(content);
+  pageFresh = true;
+  renderWin();
+  armBack();
+}
+/** The page has just been opened: it slides in once. */
+export let pageFresh = false;
+export const pageShown = () => { pageFresh = false; };
+export function closePage() {
+  if (!winPage) return;
+  setWinPage(null);
+  if (win && !$('#win').hidden) renderWin();
+}
+/** Leave the page the way its own Back or Keep it button would, so whatever that button does still happens. */
+export function dismissPage() {
+  const btn = winPage ? cancelIn(winPage) : null;
+  if (btn) btn.click(); else closePage();
+}
+const cancelIn = (root: HTMLElement) => (root.querySelector('.iconbtn[aria-label="Close"]') as HTMLElement | null)
+  ?? Array.from(root.querySelectorAll<HTMLElement>('button')).find(b => /^(‹ ?)?(Keep it|Cancel|Close|Back|Back to map|Continue|Not now|Later)$/i.test((b.textContent ?? '').trim()) && !b.classList.contains('blocked')) ?? null;
+
 /** Close the dialog the way its own cancel button would. Decisions without one stay open. */
 export function dismissModal(): boolean {
   const m = $('#modal');
@@ -45,6 +71,7 @@ export function goBack(): boolean {
   if (modalOpen) { if (!dismissModal()) toast('Choose an option first'); return true; }
   if (!document.getElementById('top')) { if (screenBack) { const f = screenBack; screenBack = null; f(); return true; } return false; }
   if (pickHand != null) { stopMapPick(); return true; }
+  if (winPage) { dismissPage(); return true; }
   if (sheet?.kind === 'nation' && sheetFrom) { const f = sheetFrom; sheetFrom = null; openSheet('province', f); return true; }
   if (sheet) { closeSheet(); return true; }
   if (win) { closeWin(); return true; }
@@ -58,6 +85,8 @@ addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault();
 /** The province a realm sheet was opened from, so back returns to it. */
 export let sheetFrom: string | null = null;
 export function closeModal() {
+  // a page inside the window is closed by the same call its buttons always made
+  if (!modalOpen && winPage) { closePage(); return; }
   const m = $('#modal');
   m.hidden = true; clear(m);
   setModalOpen(false);
@@ -65,6 +94,7 @@ export function closeModal() {
 /** The in-game menu: everything that is not a daily action lives here. */
 export function showGameMenu() {
   if (modalOpen) return;
+  closePage();
   const go = (f: () => void) => () => { closeModal(); f(); };
   const row = (ic: string, label: string, sub: string, f: () => void, badge = '') => h('button', { class: 'gm-row', onclick: go(f) },
     h('span', { class: 'gm-i', html: icon(ic, 20) }), h('span', { class: 'gm-t' }, h('b', {}, label), h('small', {}, sub)), badge ? h('span', { class: 'gm-badge' }, badge) : h('span', { class: 'a-go', html: icon('next', 14) }));
@@ -93,7 +123,7 @@ const rivalOf = (c: Character) => (c.rival != null ? S.characters.find(x => x.ui
 export function charDetail(c: Character) {
   const m = c.mission != null ? S.missions.find(x => x.id === c.mission) : null;
   const to = PROMOTION[c.role];
-  openModal(h('div', { class: 'mbox narrow' },
+  openPage(h('div', { class: 'mbox narrow' },
     charCard(c, S, { wide: true }),
     h('h2', {}, c.name),
     h('p', { class: 'muted' }, `${c.ruler ? 'Monarch acting as ' : ''}${roleName[c.role]} · ${RARITY[c.rarity].name} (traits ×${RARITY[c.rarity].mult}) · experience ${c.xp}/3 · age ${S.year - c.born}`),

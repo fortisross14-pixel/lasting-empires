@@ -2006,3 +2006,21 @@ p.bad::before { content: '! '; font-weight: 700; }
 .log .tm { font-weight: 700; margin-right: 5px; }
 .k-info { position: relative; }
 .k-info .tone-mark { position: absolute; top: 5px; right: 8px; font-size: calc(15px * var(--ts, 1)); line-height: 1; color: var(--band); }
+
+/* ---------- a page inside the deck window (roadmap 2.18): no window on top of a window ---------- */
+.win-page { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 16px 20px; display: flex; flex-direction: column; align-items: center; gap: 8px; border-top: 1.5px solid var(--text); }
+.win-page.in { animation: page-in .22s var(--ease, ease-out) both; }
+@keyframes page-in { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+.win-page .page-back { align-self: flex-start; flex: none; }
+/* the box that would have been a dialog lies flat on the window's own paper */
+.win-page > .mbox, [data-style="chancery"] .win-page > .mbox { position: static; flex: none; width: min(640px, 100%); max-height: none; overflow: visible; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; animation: none; }
+.win-page > .mbox.narrow { width: min(560px, 100%); }
+[data-motion="calm"] .win-page.in { animation: none; }
+@media (prefers-reduced-motion: reduce) { .win-page.in { animation: none; } }
+
+/* ---------- swipe between tabs and decks (roadmap 2.20) ---------- */
+.win-body.from-right { animation: tab-right .2s var(--ease, ease-out) both; }
+.win-body.from-left { animation: tab-left .2s var(--ease, ease-out) both; }
+@keyframes tab-right { from { opacity: .2; transform: translateX(36px); } to { opacity: 1; transform: none; } }
+@keyframes tab-left { from { opacity: .2; transform: translateX(-36px); } to { opacity: 1; transform: none; } }
+@media (max-width: 480px) { [data-style="chancery"] .tab-c { right: -24px; } } /* the count beside the deck's icon, not over it */

@@ -17,7 +17,7 @@ import { TUTORIAL, refresh, toast, SEASONS, clearUndo } from './app';
 import { openWin } from './windows/frame';
 import { missionRow } from './windows/cards';
 import { closeSheet } from './sheets';
-import { openModal, closeModal } from './modal';
+import { closePage, openModal, closeModal } from './modal';
 import { pickHand, stopMapPick } from './planner';
 import { processQueue, QUICK_ODDS } from './prompts';
 
@@ -58,6 +58,7 @@ export function showAttention(again: () => void) {
 export const cardsLine = (cards: Record<string, number>) => (CATS.some(c => cards[c]) ? ' · cards: ' + CATS.filter(c => cards[c]).map(c => `${cards[c]} ${CAT_INFO[c].name}`).join(', ') : '');
 
 export async function onEndTurn() {
+  closePage(); // a card or task left open is put away: the turn must not end under it
   if (!readyToEnd(onEndTurn)) return;
   clearUndo();
   sfx('seal');
@@ -77,6 +78,7 @@ export async function onEndTurn() {
 /** Skip ahead: play quiet seasons one after another and stop as soon as something needs the player
  *  (a decision, a new card, a finished task, a war, something new to do), after SKIP_MAX seasons at most. */
 export function onSkipAhead() {
+  closePage();
   if (!readyToEnd(onSkipAhead)) return;
   clearUndo();
   sfx('seal');

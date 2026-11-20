@@ -21,6 +21,8 @@ export let preferChar: number | null = null;              // person chosen first
 export let pendingReport = false;
 export let cv: { filter: string; mode: 'browse' | 'select' | 'archive' | 'forge' | 'recipes'; sel: number[] } = { filter: 'all', mode: 'browse', sel: [] }; // the Cards tab                          // show the turn report when the queue is empty
 export let modalOpen = false;
+/** A card, a task or a person shown as a page inside the deck window, in place of a dialog over it. */
+export let winPage: HTMLElement | null = null;
 export let forge: number[] = [];
 export let chronTab = 'powers';
 /** What is still open this turn (worked out once per refresh), and what the player has already been told about. */
@@ -128,4 +130,5 @@ export const setForge = (v: number[]) => (forge = v);
 export const setPreferChar = (v: number | null) => (preferChar = v);
 export const setChronTab = (v: string) => (chronTab = v);
 export const setModalOpen = (v: boolean) => (modalOpen = v);
+export const setWinPage = (v: HTMLElement | null) => (winPage = v);
 export const setPendingReport = (v: boolean) => (pendingReport = v);

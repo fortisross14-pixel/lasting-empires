@@ -38,7 +38,7 @@ import { openWin, closeWin } from './windows/frame';
 import { closeSheet, oddsLine, costBenefit } from './sheets';
 import { goodsNote, openPostPicker } from './windows/economy';
 import { techYears } from './windows/research';
-import { openModal, closeModal } from './modal';
+import { openModal, openPage, closeModal } from './modal';
 import { processQueue } from './prompts';
 
 export interface TargetRow { label: string; sub: string; color?: string; acts: { label: string; kind: MissionKind; target: string; building?: string; why: string | null }[]; }
@@ -238,7 +238,7 @@ export function openCardModal(handUid: number) {
     body.append(targets);
     footer.append(playBtn);
   }
-  openModal(h('div', { class: 'mbox narrow' }, handCard(hc.card, { wide: true, cls: 'modal-card' }), body, footer));
+  openPage(h('div', { class: 'mbox narrow' }, handCard(hc.card, { wide: true, cls: 'modal-card' }), body, footer));
 }
 
 // ---------- choosing a target on the map ----------
@@ -443,5 +443,5 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
       } }, 'Send them')));
   };
   draw();
-  openModal(box);
+  openPage(box);
 }

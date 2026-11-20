@@ -20,7 +20,7 @@ import { refresh, toast, act, qText } from '../app';
 import { renderWin } from './frame';
 import { missionRow } from './cards';
 import { stat, actionRow } from '../sheets';
-import { openModal, closeModal, confirmBox } from '../modal';
+import { openModal, openPage, closeModal, confirmBox } from '../modal';
 import { openPlanner } from '../planner';
 
 export function ledgerTab(body: HTMLElement) {
@@ -221,7 +221,7 @@ export function openRouteDialog(g: string, dir: 'buy' | 'sell') {
     box.append(list, h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: closeModal }, 'Close')));
   };
   draw();
-  openModal(box);
+  openPage(box);
 }
 
 /** Pick where to found a trade post. */
@@ -239,7 +239,7 @@ export function openPostPicker() {
       h('div', { class: 'a-t' }, h('b', {}, r.n.name), h('small', {}, `${DIST_NAME[r.dist]} · ${qText(postTurns(S, r.n.id))} · ${postCost(S, r.n.id)} ducats${r.routes ? ` · ${r.routes} route${r.routes > 1 ? 's' : ''} already` : ''}${r.has.length ? ` · sells you ${r.has.map(g => GOODS[g].name.toLowerCase()).join(', ')}` : ''}`)),
       h('div', { class: 'r-acts' }, h('button', { class: 'btn small' + (why ? ' blocked' : ''), title: why ?? '', onclick: () => { if (why) return toast(why, 'bad'); closeModal(); openPlanner('post', r.n.id, undefined, card.uid); } }, 'Found'))));
   }
-  openModal(h('div', { class: 'mbox narrow' }, h('h2', { html: icon('anchor', 22) + ' Found a trade post' }),
+  openPage(h('div', { class: 'mbox narrow' }, h('h2', { html: icon('anchor', 22) + ' Found a trade post' }),
     h('p', { class: 'muted' }, 'A merchant travels there and sets up: 2 quarters next door, 3 near, 4 far, 6 overseas. Then every route with that realm buys at 90% of the market price and sells 20% above it, and you can keep one more route.'),
     list, h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: closeModal }, 'Close'))));
 }
