@@ -2,7 +2,7 @@ import { maxFort } from './core';
 // New game setup, the yearly turn, and player actions that touch several systems.
 import { GOODS, OLD_GOODS } from '../data/goods';
 import { yearlyChurch } from './culture';
-import { settleGoods, checkTrade, startStock, GUN_TROOPS } from './trade';
+import { settleGoods, checkTrade, startStock, GUN_TROOPS, STEWARD_DEFAULT } from './trade';
 import { initKnownWorld } from './overseas';
 import { poolFor } from '../data/names';
 import { yearlyAges } from './ages';
@@ -38,7 +38,12 @@ import { START_FLEETS, yearlyFleet } from './navy';
 import { initSociety, yearlySociety } from './society';
 import { yearlySubjects, unionClaim, autoSurrender } from './diplo';
 
-export const SAVE_VERSION = 2;
+/** The version new games are saved with. Raise it when the shape of a save changes, add the step to MIGRATIONS,
+ *  and first run `npm run make-save` so the old version keeps a test save (scripts/saves/). */
+export const SAVE_VERSION = 3;
+/** The oldest save that can still be loaded. */
+export const OLDEST_SAVE = 2;
+export const canLoad = (version: number) => version >= OLDEST_SAVE && version <= SAVE_VERSION;
 
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 
@@ -236,6 +241,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   if (diff(s).gold !== 1) me.gold = Math.round(me.gold * diff(s).gold);
   const len = LENGTHS.find(l => l.id === opts.length);
   if (len?.years && s.startYear + len.years < s.endYear) { s.endYear = s.startYear + len.years; s.length = len.id; }
+  s.steward = { on: diff(s).steward, share: STEWARD_DEFAULT };
   s.flags.rank0 = ranking(s).findIndex(x => x.id === nationId) + 1;
   settleArmies(s);
   s.stock = startStock(s);
@@ -551,8 +557,9 @@ function addNewProvinces(s: GameState) {
   log(s, `The map grows: ${missing.length} new provinces.`, 'neutral');
 }
 
-/** Fill in fields added after a save was made. */
-export function migrate(s: GameState): GameState {
+/** Version 2 saves were patched field by field as the game grew, so a save of that version can be of any vintage:
+ *  this step fills in everything added up to November 2026. */
+function fromV2(s: GameState) {
   s.core ??= []; s.coreChanged ??= -99; s.overseas ??= {}; s.imports ??= [];
   s.fleet ??= []; s.accepted ??= []; s.gov ??= 'feudal';
   // older games gave every crown the Catholic faith: give it back its own, unless it converted
@@ -582,6 +589,26 @@ export function migrate(s: GameState): GameState {
   // the People menu arrived: a sixth kind of card and a courtier to start with
   s.cardAccum.culture ??= 0; s.bought.culture ??= 0; s.works ??= [];
   if (!s.characters.some(c => ['courtier', 'priest', 'artist', 'leader'].includes(c.role))) s.characters.push(genCharacter(s, 'courtier', player(s).culture, 1));
+  // the goods steward arrived: a running game keeps its economy as it was, the player may switch him on
+  s.steward ??= { on: false, share: STEWARD_DEFAULT };
+}
+
+/** One step per version: MIGRATIONS[n] turns a save of version n into version n + 1. Never edit a step once
+ *  it has shipped; add the next one. */
+const MIGRATIONS: Record<number, (s: GameState) => void> = { 2: fromV2 };
+
+/** After any load, whatever the version: the map may have grown since the save was made. */
+function reconcile(s: GameState) {
+  addNewProvinces(s);
+  settleArmies(s);
+  initSociety(s);
+}
+
+/** Bring a save up to the current version, one numbered step at a time. */
+export function migrate(s: GameState): GameState {
+  if (!canLoad(s.version)) throw new Error(`A save of version ${s.version} cannot be loaded (this game reads ${OLDEST_SAVE} to ${SAVE_VERSION}).`);
+  while (s.version < SAVE_VERSION) { MIGRATIONS[s.version](s); s.version++; }
+  reconcile(s);
   return s;
 }
 

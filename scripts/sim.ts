@@ -200,6 +200,7 @@ for (const n of (MODE === 'big' ? ['castile'] : PICK)) for (let seed = 1; seed <
   const DIFF = process.env.DIFF != null ? Number(process.env.DIFF) : undefined; // 0 gentle, 1 standard, 2 hard (data/difficulty.ts)
   const s = process.env.MISSION ? newMissionGame(n, process.env.MISSION, START, { difficulty: DIFF }) : newGame(n, seed * 7919 + (MODE === 'passive' ? 1 : MODE === 'greedy' ? 2 : 0), START, { difficulty: DIFF });
   if (MODE === 'big') { for (const id of ['granada', 'malaga', 'almeria', 'porto', 'lisbon', 'evora', 'faro', 'coimbra', 'pamplona', 'zaragoza', 'barcelona', 'valencia', 'tangier', 'fez', 'oran', 'tlemcen']) { const prov = s.provinces[id]; const from = prov.owner; prov.owner = n; if (!Object.values(s.provinces).some(x => x.owner === from)) s.nations[from].alive = false; } s.wars = s.wars.filter(w => s.nations[w.a].alive && s.nations[w.b].alive); for (let i = 0; i < 8; i++) s.troops.push({ uid: 50000 + i, type: 'pikemen', vet: 1, str: 100 }); }
+  if (process.env.NOSTEWARD && s.steward) s.steward.on = false; // compare the goods economy with and without him
   resolveQueue(s);
   let turns = 0;
   try {

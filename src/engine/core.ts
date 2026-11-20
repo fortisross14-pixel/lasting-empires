@@ -311,7 +311,7 @@ export function incomeOf(s: GameState, n: string): IncomeBreakdown {
     const ag = artGold(s); other += ag.fees + ag.visitors;
     const t = tradeIncome(s);
     goods += t.sold + t.local;
-    imp = t.bought + t.posts;
+    imp = t.bought + t.posts + t.steward;
     sal = salaries(s, n);
     adm = administration(s, n);
   } else {

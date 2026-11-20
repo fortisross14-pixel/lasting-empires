@@ -101,3 +101,12 @@ ahead (`stopReasons` in `src/engine/pace.ts`, at most 8 quarters a press) the sa
 presses (Portugal 263, Venice 257, Ming 337), and no card, prompt or finished task is ever skipped past.
 An open game can end after a reign (40 years, 160 turns) or a century; a short game counts as won in the top three
 or when the realm finishes higher in the ranking than it began (`flags.rank0`).
+
+## The goods steward (roadmap 1.10)
+`STEWARD_PRICE` 1.5, `STEWARD_SHARES` 5 / 15 / 30% of province income, `STEWARD_ORDER` (what he buys first) in
+`src/engine/trade.ts`; on by default except on Hard (`steward` in `src/data/difficulty.ts`). His spending is part of
+"Goods bought" in the ledger. `NOSTEWARD=1 npm run sim` plays without him.
+Nine `reasonable` games each (SEEDS=3 SIMSEED=11): with the steward, income 37 / 95 / 153 / 285 / 356 / 662 at
+1500…1750 against 42 / 87 / 121 / 194 / 391 / 619 without; happiness 77% against 73% in 1750; median treasury lower
+until 1550 (25 against 111 in 1500), because he spends while the realm has few workshops. Top 3: 4 of 9 against 5 of 9
+(within the noise of nine games). If early treasuries prove too thin for players, lower `STEWARD_DEFAULT` to 0.10.

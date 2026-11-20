@@ -294,6 +294,7 @@ export interface GameState {
   ambitionDone: boolean;
   over: boolean;
   difficulty?: number;              // index into DIFFICULTY (data/difficulty.ts); Standard when missing
+  steward?: { on: boolean; share: number }; // the goods steward buys what a need lacks, up to this share of province income
   length?: string;                  // open game only: a LENGTHS id when the game ends before the age does
   savedAt?: number; // when the game was last written, to offer Continue on the title screen
 }

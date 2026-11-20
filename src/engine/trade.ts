@@ -3,7 +3,7 @@
 import type { GameState, Province, TradeRoute } from '../types';
 import { GOODS, RAW, MADE, FOOD } from '../data/goods';
 import { BUILDINGS } from '../data/techs';
-import { player, provsOf, inflation, controlMult, grade, hasTech, hasCore, atWar, hasTreaty, log, nationName, techFx, govOf, ownGoods } from './core';
+import { player, provsOf, inflation, controlMult, grade, hasTech, hasCore, atWar, hasTreaty, log, nationName, techFx, govOf, ownGoods, provinceIncome } from './core';
 import { NO_STATE } from '../data/nations';
 import { travel } from './army';
 import { rankOf, RANKS } from './realm';
@@ -150,6 +150,7 @@ export interface Flow {
   missing: Record<string, number>; need: Record<string, number>;
   stock: Record<string, number>;
   buyCost: number; sellGain: number; localGain: number;
+  steward: Record<string, number>; stewardCost: number; // loads the steward bought for each need this quarter, and what he paid
   factories: { prov: string; good: string; cap: number; made: number }[];
 }
 
@@ -159,7 +160,7 @@ const add = (r: Record<string, number>, k: string, v: number) => { r[k] = (r[k] 
 export function quarterFlow(s: GameState): Flow {
   const q = 0.25;
   const st: Record<string, number> = { ...(s.stock ?? {}) };
-  const f: Flow = { made: {}, bought: {}, sold: {}, used: {}, input: {}, overflow: {}, missing: {}, need: {}, stock: st, buyCost: 0, sellGain: 0, localGain: 0, factories: [] };
+  const f: Flow = { made: {}, bought: {}, sold: {}, used: {}, input: {}, overflow: {}, missing: {}, need: {}, stock: st, buyCost: 0, sellGain: 0, localGain: 0, factories: [], steward: {}, stewardCost: 0 };
   const ps = provsOf(s, s.player);
   // 1. the provinces
   for (const p of ps) {
@@ -197,6 +198,16 @@ export function quarterFlow(s: GameState): Flow {
       if (take < want) f.missing[g] = want - take;
     }
   }
+  // 4b. the steward buys what is still missing on the open market, most pressing need first, as far as his purse goes
+  let purse = stewardBudget(s) * q;
+  if (purse > 0) for (const g of STEWARD_ORDER) {
+    const miss = f.missing[g] ?? 0;
+    if (miss <= 0 || purse <= 0) continue;
+    const unit = stewardPrice(s, g);
+    const buy = Math.min(miss, purse / unit);
+    f.steward[g] = buy; f.stewardCost += buy * unit; purse -= buy * unit;
+    if (miss - buy < 1e-6) delete f.missing[g]; else f.missing[g] = miss - buy;
+  }
   // 5. what the routes carry out, from what is left
   for (const r of s.routes) if (r.dir === 'sell') {
     const v = Math.min(r.amount * q, Math.max(0, st[r.good] ?? 0));
@@ -212,15 +223,31 @@ export function quarterFlow(s: GameState): Flow {
   return f;
 }
 
+// ---------- the steward ----------
+/** The steward pays this much over the market price: dearer than a route, far cheaper than a shortage. */
+export const STEWARD_PRICE = 1.5;
+/** The purses a player can give him, as a share of what the provinces pay a year. */
+export const STEWARD_SHARES = [0.05, 0.15, 0.3];
+export const STEWARD_DEFAULT = 0.15;
+/** What he buys first when the purse is short: hunger and bare backs before the court's jewels. */
+export const STEWARD_ORDER = ['food', 'cloth', 'tools', 'weapons', 'gunpowder', 'materials', 'stores', 'arts', 'luxuries'];
+/** Ducats a year the steward may spend (0 when he is not in office). */
+export function stewardBudget(s: GameState): number {
+  if (!s.steward?.on) return 0;
+  return s.steward.share * provsOf(s, s.player).reduce((a, p) => a + provinceIncome(s, p.id), 0);
+}
+/** What he pays for a load of a need (food is bought as grain). */
+export const stewardPrice = (s: GameState, need: string) => price(s, need === 'food' ? 'grain' : need) * STEWARD_PRICE;
+
 /** Warehouses hold about two years of use, and never less than a few loads. */
 export const stockCap = (yearlyUse: number) => Math.max(4, 2 * yearlyUse);
 /** Surplus sold at home fetches little. */
 export const LOCAL_PRICE = 0.5;
 
 /** Trade income and costs a year, for the ledger. */
-export function tradeIncome(s: GameState): { sold: number; local: number; bought: number; posts: number } {
+export function tradeIncome(s: GameState): { sold: number; local: number; bought: number; posts: number; steward: number } {
   const f = quarterFlow(s);
-  return { sold: f.sellGain * 4, local: f.localGain * 4, bought: f.buyCost * 4, posts: s.posts.length * POST_UPKEEP * inflation(s) };
+  return { sold: f.sellGain * 4, local: f.localGain * 4, bought: f.buyCost * 4, posts: s.posts.length * POST_UPKEEP * inflation(s), steward: f.stewardCost * 4 };
 }
 
 /** Each quarter: fill and empty the warehouses, and remember what ran short. */
@@ -233,7 +260,7 @@ export function settleGoods(s: GameState) {
     s.short[g] = Math.round((0.5 * (s.short[g] ?? 0) + 0.5 * now) * 100) / 100;
   }
   const y = s.tradeYear ?? { bought: 0, sold: 0, local: 0, market: 0 };
-  s.tradeYear = { bought: y.bought * 0.75 + f.buyCost, sold: y.sold * 0.75 + f.sellGain, local: y.local * 0.75 + f.localGain, market: y.market * 0.75 };
+  s.tradeYear = { bought: y.bought * 0.75 + f.buyCost, sold: y.sold * 0.75 + f.sellGain, local: y.local * 0.75 + f.localGain, market: y.market * 0.75 + f.stewardCost };
 }
 
 /** Each quarter: routes and posts in a realm at war with you, or gone, are lost. */

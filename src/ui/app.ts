@@ -13,6 +13,8 @@ import { TRAITS, RARITY, OUTCOME_ODDS, OUTCOMES, commandOf, GENERIC_COMMAND } fr
 import { GOODS, FOOD, RAW, MADE } from '../data/goods';
 import { GENRES, QUALITY } from '../data/culture';
 import { churchHead, churchRel, churchMood, giftCost, giftBlocked, artHappy, artGold, displayed, displaySlots, museumsOpen, artCost, acceptBlocked, acceptCap, cultureRows, religionRows, cultureName } from '../engine/culture';
+import { stewardBudget, stewardPrice, STEWARD_PRICE, STEWARD_SHARES, STEWARD_DEFAULT } from '../engine/trade';
+import { NEED_GROUPS } from '../data/goods';
 import { hireNeeds, quarterFlow, needs, partners, routeBlocked, postBlocked, routeCap, postCap, postTurns, postCost, distanceTo, price, canMake, workshopCap, provinceOutput, sideOutput, dealFor, merchantFactor, POST_UPKEEP, MAX_ROUTE, materialsFor, stockCap } from '../engine/trade';
 import { AGE_TECH, ERA, PIONEER_YEARS } from '../data/eras';
 import { ageOf, nextAge } from '../engine/ages';
@@ -23,7 +25,7 @@ import {
   armyCap, courtCap, courtCount, provinceIncome, buildingAllowed, buildingCost, roleName, nationName, inTruce,
   tierOf, TIERS, population, townSlots, ruralSlots, builtAt, ownGoods, colonyGoods, coreSlots, techFx, ageIndex,
 } from '../engine/core';
-import { newGame, newMissionGame, endTurn, chooseEventOption, playerDeclareWar, warCost, ranking, powerTable, dismissCharacter, disbandTroop, chooseHeir, SAVE_VERSION, coreBlocked, coreCost, adoptCore, dropCore, migrate } from '../engine/turn';
+import { newGame, newMissionGame, endTurn, chooseEventOption, playerDeclareWar, warCost, ranking, powerTable, dismissCharacter, disbandTroop, chooseHeir, canLoad, coreBlocked, coreCost, adoptCore, dropCore, migrate } from '../engine/turn';
 import { EVENT, eventTitle, upcomingHistory } from '../engine/events';
 import { typesFor, poolOf, cardType, cardTroop, unitFor, UNIT_LINES, CLASS_NAME, type CardType, type UnitClass } from '../engine/cards';
 import { CARDS, CAT_INFO, handOf, cardRates, npRate, buyCost, playCard, cardBlocked, troopHireCost, discardCard, handLimit, handTotalLimit, heldOf, heldTotal, handExcess, sellCards, cardFor } from '../engine/cards';
@@ -117,7 +119,7 @@ function loadSlot(n: number): GameState | null {
     const raw = localStorage.getItem(slotKey(n));
     if (!raw) return null;
     const s = JSON.parse(raw) as GameState;
-    return s.version === SAVE_VERSION ? migrate(s) : null;
+    return canLoad(s.version) ? migrate(s) : null;
   } catch { return null; }
 }
 function clearSlot(n: number) { try { localStorage.removeItem(slotKey(n)); } catch { /* */ } }
@@ -162,7 +164,7 @@ export function boot(data: { save?: string; slot?: number }) {
   clear($('#app'));
   let restored: GameState | null = null;
   if (data?.save) { try { restored = JSON.parse(data.save); } catch { /* ignore */ } }
-  if (restored && !restored.over && restored.version === SAVE_VERSION) { slot = data.slot ?? 1; start(migrate(restored)); return; }
+  if (restored && !restored.over && canLoad(restored.version)) { slot = data.slot ?? 1; start(migrate(restored)); return; }
   showTitle();
 }
 
@@ -399,7 +401,7 @@ function optSeg(label: string, options: { id: string; name: string; text: string
     for (const b of Array.from(seg.children)) { const on = b.textContent === o.name; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }
     hint.textContent = o.text;
   } }, o.name));
-  return h('div', { class: 'opt' }, h('span', { class: 'opt-l' }, label), seg, hint);
+  return h('div', { class: 'sopt' }, h('span', { class: 'opt-l' }, label), seg, hint);
 }
 const difficultySeg = () => optSeg('Difficulty', DIFFICULTY.map(d => ({ id: String(d.id), name: d.name, text: d.text })), String(settings().difficulty), id => setSetting('difficulty', Number(id)));
 const lengthSeg = () => optSeg('Length', LENGTHS.map(l => ({ id: l.id, name: l.name, text: l.text })), settings().length, id => setSetting('length', id));
@@ -1568,7 +1570,7 @@ function ledgerTab(body: HTMLElement) {
     h('tr', {}, h('td', {}, `Stability ×${inc.stabMult.toFixed(2)}`), h('td', {}, '')),
     h('tr', {}, h('td', {}, 'Troop upkeep'), h('td', { class: 'bad' }, '−' + inc.upkeep.toFixed(1))),
     h('tr', {}, h('td', {}, 'Building salaries'), h('td', { class: 'bad' }, '−' + inc.salaries.toFixed(1))),
-    h('tr', {}, h('td', {}, 'Goods bought and trade posts'), h('td', { class: 'bad' }, '−' + inc.imports.toFixed(1))),
+    h('tr', {}, h('td', {}, `Goods bought and trade posts${stewardBudget(S) > 0 ? ` (the steward: ${(quarterFlow(S).stewardCost * 4).toFixed(1)})` : ''}`), h('td', { class: 'bad' }, '−' + inc.imports.toFixed(1))),
     h('tr', {}, h('td', {}, 'Administration (grows with the realm)'), h('td', { class: 'bad' }, '−' + inc.admin.toFixed(1))),
     h('tr', { class: 'total' }, h('td', {}, 'Each year'), h('td', {}, signed(inc.total))))));
   body.append(h('h3', {}, 'Control and unrest'));
@@ -1592,15 +1594,29 @@ function goodsNote(need: Record<string, number>) {
 const f1 = (v: number) => (Math.abs(v) < 0.05 ? '0' : v.toFixed(1));
 
 /** The goods ledger: what you make, use and have in store, good by good. */
+/** Which of the six needs is opened to show its goods. */
+let needOpen: string | null = null;
+const STEWARD_NAMES = ['Thrifty', 'Prudent', 'Generous'];
+
+/** Goods: the six needs of the realm first, each with a bar and one sentence; the 21 goods are one tap deeper. */
 function goodsTab(body: HTMLElement) {
   const f = quarterFlow(S);
   const need = needs(S);
   const yr = (r: Record<string, number>, g: string) => (r[g] ?? 0) * 4;
-  const hunger = S.short.food ?? 0;
-  const foodIn = FOOD.reduce((a, g) => a + yr(f.made, g) + yr(f.bought, g), 0);
-  body.append(h('p', { class: hunger >= 0.05 ? 'bad small' : 'muted small' }, `Food: the people eat ${f1(need.food)} a year and your lands and routes bring ${f1(foodIn)}. ` + (hunger >= 0.05 ? `Hunger, ${Math.round(hunger * 100)}% short: unhappy people, fewer recruits.` : 'Three or more kinds of food in store make people happier.')));
+  // the steward: one switch and three purses
+  const st = S.steward ?? { on: false, share: STEWARD_DEFAULT };
+  const purse = Math.round(stewardBudget(S)), spent = Math.round(f.stewardCost * 4);
+  const setSteward = (v: { on: boolean; share: number }) => { S.steward = v; refresh(); };
+  body.append(h('div', { class: 'steward' + (st.on ? ' on' : '') },
+    h('label', { class: 'set-row' },
+      h('span', { class: 'gm-i', html: icon('scales', 20) }),
+      h('span', { class: 'gm-t' }, h('b', {}, 'Royal steward'), h('small', {}, st.on
+        ? `Buys what the realm lacks at ${STEWARD_PRICE}× the price. Up to ${purse} ducats a year; now ${spent}.`
+        : 'Switched off: a need you do not meet yourself goes unmet.')),
+      h('input', { type: 'checkbox', class: 'set-sw', role: 'switch', 'aria-label': 'Royal steward', checked: st.on ? true : undefined, onchange: (e: Event) => setSteward({ ...st, on: (e.target as HTMLInputElement).checked }) })),
+    st.on ? h('div', { class: 'seg steward-seg', role: 'radiogroup', 'aria-label': 'The steward\'s purse' }, STEWARD_SHARES.map((v, i) =>
+      h('button', { class: 'seg-b' + (Math.abs(st.share - v) < 1e-9 ? ' on' : ''), role: 'radio', 'aria-checked': String(Math.abs(st.share - v) < 1e-9), onclick: () => setSteward({ ...st, share: v }) }, STEWARD_NAMES[i], h('small', {}, ` ${Math.round(v * 100)}%`)))) : null));
   const canBuy = !!tradeCard('buy'), canSell = !!tradeCard('sell');
-  body.append(h('p', { class: 'muted small' }, `Buying and selling abroad takes a card: Import Contracts ${countCards('import_contract')}, Export Contracts ${countCards('export_contract')}, Trade Post Charters ${countCards('trading_post')}. Draw them in the Economy deck or buy a pack.`));
   const row = (g: string) => {
     const d = GOODS[g];
     const inflow = yr(f.made, g) + yr(f.bought, g);
@@ -1622,16 +1638,50 @@ function goodsTab(body: HTMLElement) {
         h('button', { class: 'btn small ghost' + (canBuy ? '' : ' blocked'), title: canBuy ? '' : 'Needs an Import Contract card', onclick: () => openRouteDialog(g, 'buy') }, 'Buy'),
         h('button', { class: 'btn small ghost' + (canSell ? '' : ' blocked'), title: canSell ? '' : 'Needs an Export Contract card', onclick: () => openRouteDialog(g, 'sell') }, 'Sell')));
   };
-  const table = (title: string, list: string[]) => {
-    body.append(h('h3', {}, title));
-    body.append(h('table', { class: 'gtable' },
+  const table = (title: string, list: string[], into: HTMLElement = body) => {
+    if (title) into.append(h('h3', {}, title));
+    into.append(h('table', { class: 'gtable' },
       h('thead', {}, h('tr', {}, h('th', {}, 'Good'), h('th', { class: 'num' }, 'Stock'), h('th', { class: 'num' }, '± a year'), h('th', {}, ''), h('th', {}, ''))),
       h('tbody', {}, list.map(row))));
   };
-  table('Food', FOOD);
-  table('Raw materials', RAW.filter(g => !GOODS[g].food));
-  table('Made goods', MADE);
-  body.append(h('p', { class: 'muted small' }, 'Tap a good for what it does and what it is made from. Price is per load. Full warehouses sell the rest at home for half the price.'));
+  // the six needs
+  const list = h('div', { class: 'needs' });
+  for (const grp of NEED_GROUPS) {
+    const want = grp.needs.reduce((a, n) => a + (f.need[n] ?? 0), 0);
+    const miss = grp.needs.reduce((a, n) => a + (f.missing[n] ?? 0), 0);
+    const bought = grp.needs.reduce((a, n) => a + (f.steward[n] ?? 0), 0);
+    const cost = grp.needs.reduce((a, n) => a + (f.steward[n] ?? 0) * stewardPrice(S, n), 0) * 4;
+    const met = want > 0 ? Math.max(0, 1 - miss / want) : 1, own = want > 0 ? Math.max(0, 1 - (miss + bought) / want) : 1;
+    // a need met only by emptying the warehouses is about to stop being met
+    const lasts = Math.min(99, ...grp.needs.flatMap(n => (n === 'food' ? [FOOD] : [[n]])).map(gs => {
+      const net = gs.reduce((a, g) => a + yr(f.made, g) + yr(f.bought, g) - yr(f.used, g) - yr(f.input, g) - yr(f.sold, g), 0);
+      return net < -0.05 ? Math.floor(gs.reduce((a, g) => a + (S.stock[g] ?? 0), 0) / (-net / 4)) : 99;
+    }));
+    const short = miss > want * 0.02, helped = bought > want * 0.02, draining = !short && !helped && want > 0 && lasts < 8;
+    const text = want <= 0 ? grp.idle
+      : short ? `${Math.round((1 - met) * 100)}% missing: ${grp.lack}.${st.on ? ' The steward\'s purse is spent.' : ''}`
+      : helped ? `The steward buys ${Math.round((bought / want) * 100)}% of it for ${f1(cost)} ducats a year: a route or a workshop would be cheaper.`
+      : draining ? `Met from the warehouses, which last ${lasts <= 0 ? 'no longer' : `${lasts} more season${lasts > 1 ? 's' : ''}`}. ${st.on ? 'Then the steward buys it.' : 'Then it runs short.'}`
+      : '';
+    const word = want <= 0 ? '' : short ? 'Short' : helped ? 'Bought' : draining ? 'Running down' : 'Met';
+    const open = needOpen === grp.id;
+    const row = h('button', { class: 'need-row' + (short ? ' short' : draining || helped ? ' warn' : '') + (open ? ' open' : ''), 'aria-expanded': String(open), onclick: () => { needOpen = open ? null : grp.id; renderWin(); } },
+      h('span', { class: 'gm-i', html: icon(grp.icon, 20) }),
+      h('span', { class: 'need-t' }, h('span', { class: 'need-h' }, h('b', {}, grp.name), word ? h('em', {}, word) : null), text ? h('small', {}, text) : null,
+        want > 0 ? h('span', { class: 'need-bar', role: 'img', 'aria-label': `${Math.round(met * 100)}% met` }, h('i', { class: 'own', style: `width:${own * 100}%` }), h('i', { class: 'stew', style: `width:${(met - own) * 100}%` })) : null),
+      h('span', { class: 'br-chev', html: icon('next', 14) }));
+    list.append(row);
+    if (open) { const box = h('div', { class: 'need-goods' }); table('', grp.goods, box); list.append(box); }
+  }
+  body.append(list);
+  body.append(h('p', { class: 'muted small' }, `Buying and selling abroad takes a card: Import Contracts ${countCards('import_contract')}, Export Contracts ${countCards('export_contract')}, Trade Post Charters ${countCards('trading_post')}.`));
+  // everything, for those who want the whole ledger
+  const all = h('details', { class: 'msec allgoods' }, h('summary', {}, `All ${Object.keys(GOODS).length} goods`));
+  table('Food', FOOD, all);
+  table('Raw materials', RAW.filter(g => !GOODS[g].food), all);
+  table('Made goods', MADE, all);
+  all.append(h('p', { class: 'muted small' }, 'Tap a good for what it does and what it is made from. Price is per load. Full warehouses sell the rest at home for half the price.'));
+  body.append(all);
   body.append(h('h3', {}, 'Workshops'));
   const shops = provsOf(S, S.player).filter(p => workshopCap(S, p) > 0);
   if (!shops.length) body.append(h('p', { class: 'muted' }, 'No workshops yet. Build one with a Guild Charter (Economy) in any town: it makes 2 loads a year of the good you choose.'));

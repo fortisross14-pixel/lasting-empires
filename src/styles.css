@@ -1754,14 +1754,14 @@ details[open] > summary .br-chev { rotate: 180deg; }
 .set-sw:focus-visible { outline: 2px solid var(--lapis, #2f5d8a); outline-offset: 2px; }
 .set-note { margin: 4px 0 0; font-size: 14.5px; }
 .pick-opts { display: flex; flex-wrap: wrap; gap: 6px 18px; flex: 1 1 100%; }
-.opt { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 0 10px; min-width: 0; flex: 1 1 300px; }
+.sopt { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 0 10px; min-width: 0; flex: 1 1 300px; }
 .opt-l { font-family: var(--f-display); font-size: 15px; letter-spacing: .06em; }
 .opt-seg .seg-b { min-height: 40px; padding: 6px 10px; white-space: nowrap; }
 .opt-hint { grid-column: 1 / -1; color: var(--muted); font-size: 13px; line-height: 1.25; min-height: 2.5em; }
 .md-opts { margin: 10px 0 2px; }
 @media (max-width: 640px) {
   .tbtn.skip-b { min-width: 38px; min-height: 38px; }
-  .opt { grid-template-columns: 1fr; }
+  .sopt { grid-template-columns: 1fr; }
   .opt-hint { min-height: 0; }
 }
 /* less motion, chosen in the game's settings (the device's own request is handled by the media queries above) */
@@ -1777,4 +1777,41 @@ details[open] > summary .br-chev { rotate: 180deg; }
   /* four buttons leave little room: a shorter realm name, and in a mission (a fifth, Goals) the shield alone */
   [data-style="chancery"] .crest-t b { max-width: 20vw; }
   [data-style="chancery"] #top:has(.goals-b) .crest-t { display: none; }
+}
+
+/* ---- goods: the steward and the six needs (roadmap 1.10, 1.11) ---- */
+.steward { border: 1.2px solid var(--text); background: var(--card, #fffdf8); padding: 0 10px; margin-bottom: 10px; }
+.steward .set-row { border-bottom: 0; min-height: 56px; }
+.steward-seg { margin: 0 0 8px; }
+.steward-seg .seg-b small { opacity: .7; font-variant-numeric: lining-nums; }
+.needs { display: flex; flex-direction: column; border-top: 1px solid #1b1a1726; margin-bottom: 8px; }
+.need-row { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 7px 4px; width: 100%; text-align: left; font: inherit; color: inherit; background: none; border: 0; border-bottom: 1px solid #1b1a1726; cursor: pointer; }
+.need-row:active { background: #1b1a170d; }
+.need-t { flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr; gap: 1px; }
+.need-t b { font-family: var(--f-display); font-size: 18px; letter-spacing: .03em; line-height: 1.1; }
+.need-t small { color: var(--muted); font-size: 13px; line-height: 1.25; }
+.need-row.short .need-t small { color: var(--wax); }
+.need-bar { display: flex; height: 6px; margin-top: 4px; border: 1px solid var(--text); background: var(--card, #fffdf8); }
+.need-bar i { display: block; height: 100%; }
+.need-bar .own { background: var(--text); }
+.need-bar .stew { background: repeating-linear-gradient(135deg, var(--wax) 0 3px, transparent 3px 6px); }
+.need-row .br-chev { color: var(--muted); transition: rotate .15s ease; }
+.need-row.open .br-chev { rotate: 90deg; }
+.need-goods { padding: 4px 0 8px; border-bottom: 1px solid #1b1a1726; overflow-x: auto; }
+.allgoods { margin: 6px 0; }
+@media (prefers-reduced-motion: reduce) { .need-row .br-chev { transition: none; } }
+.need-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.need-h em { font-style: normal; font-size: 12.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.need-row.short .need-h em, .need-row.warn .need-h em { color: var(--wax); font-weight: 700; }
+.need-row { min-height: 52px; }
+@media (max-width: 640px) {
+  .steward .gm-i, .need-row .gm-i { width: 30px; height: 30px; }
+  .steward .gm-i svg, .need-row .gm-i svg { width: 16px; height: 16px; }
+  .steward .set-row { min-height: 48px; gap: 10px; }
+  .steward-seg .seg-b { min-height: 40px; padding: 4px 6px; }
+  .steward-seg { margin-bottom: 4px; }
+  .need-row { min-height: 44px; padding: 4px 2px; gap: 10px; }
+  .need-t b { font-size: 16px; }
+  .needs { margin-bottom: 4px; }
+  .steward { margin-bottom: 6px; }
 }

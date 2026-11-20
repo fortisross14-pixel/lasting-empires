@@ -1,6 +1,9 @@
 // Engine checks that run without a browser: `npm test`. Each check is small and names what it protects.
 // The bot simulation (`npm run sim`) stays the tool for balance; this file is for rules that must never break.
-import { newGame, newMissionGame, endTurn, chooseEventOption, chooseHeir, migrate } from '../src/engine/turn';
+import { newGame, newMissionGame, endTurn, chooseEventOption, chooseHeir, migrate, SAVE_VERSION, OLDEST_SAVE } from '../src/engine/turn';
+import { quarterFlow, stewardBudget, tradeIncome } from '../src/engine/trade';
+import { readdirSync, readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { EVENT } from '../src/engine/events';
 import { autoResolve, finishBattle } from '../src/engine/battle';
 import { takeDraftOption } from '../src/engine/drafts';
@@ -50,6 +53,44 @@ check('a save survives JSON and migrate, and plays on', () => {
   eq(b.year, a.year, 'year after loading');
   play(b, 20);
   ok(b.year > a.year || b.over, 'the loaded game did not advance');
+});
+
+check('every stored save loads through the migrations and plays on', () => {
+  const dir = 'scripts/saves';
+  const files = readdirSync(dir).filter(f => /^v\d+\.json\.gz$/.test(f));
+  ok(files.length >= SAVE_VERSION - OLDEST_SAVE, `expected a stored save for each version from ${OLDEST_SAVE} to ${SAVE_VERSION - 1} (npm run make-save before raising SAVE_VERSION)`);
+  for (const f of files) {
+    const s = JSON.parse(gunzipSync(readFileSync(`${dir}/${f}`)).toString()) as GameState;
+    const year = s.year, provinces = Object.keys(s.provinces).length;
+    migrate(s);
+    eq(s.version, SAVE_VERSION, `${f}: version after migrating`);
+    ok(Object.keys(s.provinces).length >= provinces, `${f}: provinces were lost`);
+    ok(s.steward && s.steward.on === false, `${f}: an old save must keep its economy (steward off)`);
+    play(s, 12);
+    ok(s.year >= year + 3 || s.over, `${f}: did not play on after loading`);
+  }
+  let refused = false;
+  try { migrate({ version: SAVE_VERSION + 1 } as GameState); } catch { refused = true; }
+  ok(refused, 'a save from a newer game was not refused');
+});
+
+check('the steward buys what is missing, within his purse, and only when in office', () => {
+  const s = newGame('castile', 44); answer(s);
+  s.stock.cloth = 0; s.stock.weapons = 0; for (const p of provsOf(s, s.player)) delete p.make;
+  s.steward = { on: false, share: 0.15 };
+  const off = quarterFlow(s);
+  ok((off.missing.cloth ?? 0) > 0 && (off.missing.weapons ?? 0) > 0, 'the test realm should lack cloth and weapons');
+  eq(off.stewardCost, 0, 'spending out of office');
+  s.steward = { on: true, share: 0.3 };
+  const on = quarterFlow(s);
+  ok(on.stewardCost > 0, 'the steward bought nothing');
+  ok(on.stewardCost <= stewardBudget(s) / 4 + 1e-9, 'the steward overspent his purse');
+  ok((on.missing.cloth ?? 0) < off.missing.cloth, 'cloth is as short as before');
+  eq(Math.round(tradeIncome(s).steward * 100), Math.round(on.stewardCost * 400), 'the ledger and the flow disagree');
+  s.steward = { on: true, share: 0.0001 };
+  const poor = quarterFlow(s);
+  ok(Object.keys(poor.missing).length > 0, 'a nearly empty purse covered every need');
+  ok(poor.stewardCost <= stewardBudget(s) / 4 + 1e-9, 'a nearly empty purse was overspent');
 });
 
 check('twelve realms on three start dates play 40 turns', () => {

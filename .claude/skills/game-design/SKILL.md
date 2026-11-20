@@ -20,7 +20,7 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 - Data only: `src/data/*` (no logic beyond small pure helpers).
 - Rules: `src/engine/*` — pure functions on `GameState`, seeded RNG via `rand(s)`. Never use `Math.random` in the engine (except picking a seed in `newGame`).
 - UI: `src/ui/*` — reads state, calls engine functions, never mutates state directly except through engine calls.
-- New saved fields must be added to `GameState` in `src/types.ts`, initialised in `newGame`, and filled in by `migrate()` in `src/engine/turn.ts` so old saves keep working.
+- New saved fields must be added to `GameState` in `src/types.ts` and initialised in `newGame`. Old saves get them through a numbered step: run `npm run make-save` (it stores a save of the current version in `scripts/saves/`), raise `SAVE_VERSION` in `src/engine/turn.ts`, and add `MIGRATIONS[oldVersion]`. Never edit a step that has shipped. `npm test` loads every stored save.
 
 ## Systems map
 - Navy: `src/engine/navy.ts` (ships live in `s.fleet` / `nation.fleet`; ship cards have kind `ship`; hiring with a general makes an admiral). Sea battles reuse `battle.ts` with `naval: true` and a `follow` step (land attack or land defence).
@@ -82,7 +82,7 @@ See `docs/BALANCE.md` for targets, current results and every lever. Run `MODE=re
 - `web-games`: browser constraints (pause when the tab is hidden, audio after the first tap, small startup payload).
 
 ## Checklist for a new mechanic
-1. Data in `src/data`, rules in `src/engine`, typed in `src/types.ts`, migration in `migrate()`.
+1. Data in `src/data`, rules in `src/engine`, typed in `src/types.ts`, a numbered step in `MIGRATIONS`.
 2. A card (or a reason it is not card-driven).
 3. Outcome roll scaled by rarity, shown in a reveal.
 4. Visible in the right panel (Military, Diplomacy, Internal, Economy, Research) with the reason when blocked.

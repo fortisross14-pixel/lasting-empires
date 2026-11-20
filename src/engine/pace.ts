@@ -104,7 +104,7 @@ export function attention(s: GameState): Attention[] {
   for (const [g, v] of Object.entries(s.short ?? {})) {
     if (v <= SHORT_ALERT) continue;
     const name = NEED_NAMES[g] ?? GOODS[g]?.name ?? g;
-    out.push({ id: 'short:' + g, title: `${name} runs short`, text: `${Math.round(v * 100)}% of what the realm needs is missing. Open a route or build for it.`, cat: 'economy', tab: 'goods', icon: 'coin' });
+    out.push({ id: 'short:' + g, title: `${name} runs short`, text: `${Math.round(v * 100)}% of what the realm needs is missing. ${s.steward?.on ? 'The steward\'s purse does not cover it: open a route, build for it, or give him more.' : 'Open a route or build for it, or put the steward in office.'}`, cat: 'economy', tab: 'goods', icon: 'coin' });
   }
   const restless = provsOf(s, s.player).filter(p => happinessOf(s, p).value < UNREST_ALERT);
   if (restless.length) out.push({ id: 'unrest', title: `${restless.length} province${restless.length > 1 ? 's' : ''} close to revolt`, text: `${restless.slice(0, 3).map(p => p.name).join(', ')}${restless.length > 3 ? '…' : ''}: happiness below ${UNREST_ALERT}%.`, cat: 'culture', tab: 'cultures', icon: 'mood' });
