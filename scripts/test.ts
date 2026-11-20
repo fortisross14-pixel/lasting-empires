@@ -25,6 +25,7 @@ import { REQUEST_EVENTS } from '../src/engine/requests';
 import { NATIONS } from '../src/data/nations';
 import { LATER_DEFS } from '../src/engine/starts';
 import { takeDraftOption } from '../src/engine/drafts';
+import { choosePicks } from '../src/engine/cards';
 import { CARDS } from '../src/engine/cards';
 import { MISSIONS } from '../src/data/missions';
 import { DIFFICULTY, LENGTHS, STANDARD } from '../src/data/difficulty';
@@ -50,6 +51,7 @@ function answer(s: GameState) {
     const p = s.queue[0];
     if (p.kind === 'event') { const i = EVENT[p.eventId].options.findIndex(o => !o.can?.(s, p.vars)); if (i < 0 || typeof chooseEventOption(s, i) === 'string') s.queue.shift(); }
     else if (p.kind === 'battle') { autoResolve(s, p.battle); finishBattle(s, p.battle); s.queue.shift(); }
+    else if (p.kind === 'picks') choosePicks(s, p.picks.map(pk => Math.floor(0 * pk.options.length)));
     else if (p.kind === 'draft') { takeDraftOption(s, p.options[0]); s.queue.shift(); }
     else if (p.kind === 'succession') chooseHeir(s, 0);
     else s.queue.shift();

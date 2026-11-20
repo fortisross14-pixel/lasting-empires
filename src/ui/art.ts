@@ -7,7 +7,7 @@ const ART = new Set('card_alliance_pact card_ambush card_assimilation card_break
 
 /** Extra cards that share another subject's painting. */
 const ALIAS: Record<string, string> = {
-  card_treasure_fleet: 'unit_galleon', card_greek_scholars: 'card_collaboration', card_census: 'card_study_state',
+  card_treasure_fleet: 'unit_galleon', card_greek_scholars: 'card_collaboration', card_census: 'card_study_state', card_study: 'card_study_state',
   card_pacify: 'card_charter', card_tolerance: 'card_charter', card_sermon: 'card_religious_mission', card_holy_see: 'card_religious_mission',
   card_relic: 'card_religious_mission', card_unrest: 'unit_rebels', card_patronage: 'role_artist', card_royal_grace: 'role_leader',
   card_embrace_culture: 'role_leader', card_festival: 'card_royal_feast',

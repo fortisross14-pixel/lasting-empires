@@ -8,6 +8,7 @@ import { openModal, closeModal } from './modal';
 import { CARDS, CAT_INFO, handOf } from '../engine/cards';
 import { CATS } from '../types';
 import { missionTargets, startMapPick, openCardModal } from './planner';
+import { readyByDeck } from '../engine/pace';
 
 /** Does this card go somewhere on the map? Then it is played by choosing the place. */
 function playsOnMap(uid: number): boolean {
@@ -20,7 +21,11 @@ function playsOnMap(uid: number): boolean {
 export function renderHandBtn() {
   const b = document.getElementById('handbtn');
   if (!b) return;
-  clear(b).append(h('span', { class: 'hb-i', html: icon('cards', 24) }), h('span', { class: 'hb-l' }, 'Cards'), h('b', { class: 'hb-n' }, String(S.hand.length)));
+  // the button glows while a card in hand could be played now, and says how many (roadmap 5.13)
+  const ready = Object.values(readyByDeck(S)).reduce((a, r) => a + (r?.count ?? 0), 0);
+  b.classList.toggle('ready', ready > 0);
+  b.setAttribute('aria-label', ready ? `Your cards: ${ready} ready to play` : 'Your cards');
+  clear(b).append(h('span', { class: 'hb-i', html: icon('cards', 24) }), h('span', { class: 'hb-l' }, 'Cards'), h('b', { class: 'hb-n' }, ready ? `${ready} ready` : String(S.hand.length)));
 }
 export function showHand() {
   const box = h('div', { class: 'mbox hand-tray' });
