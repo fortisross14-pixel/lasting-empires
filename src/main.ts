@@ -1,4 +1,5 @@
-import { boot, snapshot } from './ui/app';
+import { boot } from './ui/title';
+import { snapshot } from './ui/state';
 
 declare global {
   interface Window {

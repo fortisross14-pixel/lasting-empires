@@ -54,7 +54,7 @@ Reference games, and what we take from each:
 | Painted art | 96 tiles (58 cards, 13 roles, 25 units); events and people use line icons or one face per role | `art/`, `src/ui/art.ts` |
 | Map | 1,038 straight-edged Voronoi cells with flat fills | `scripts/gen-world.ts`, `src/ui/map.ts` |
 | Fonts | 10 families fetched from Google at start; the one remaining style uses 3 | `scripts/build.mjs`, `src/styles.css` |
-| UI code | one file of 2,857 lines and 232 KB with shared module state | `src/ui/app.ts` |
+| UI code | one file of 2,857 lines and 232 KB with shared module state (split into 16 modules in Phase 1) | `src/ui/` |
 | Automated checks | none before this roadmap (the bot simulation was run by hand) | — |
 | Idle reminders, undo, settings, save export | none before this roadmap | — |
 
@@ -88,34 +88,35 @@ Phase 2 comes before content because sound and the map change how every event an
 
 ## Phase 1 — Pace and foundations
 
-Status: **in progress**.
+Status: **done** (November 2026).
 
 | Id | Action | Where | Done when | Status |
 |---|---|---|---|---|
-| 1.1 | **Skip ahead.** A second button beside End Turn plays quarters until something needs the player, at most 8 at a time. It stops when: a prompt is waiting (event, battle, attack, peace, succession); a card was drawn; a task finished; a war started; the hand is over its limit; the year turned in a year with battles. One line then says what passed ("3 seasons · +62 ducats · 1 Economy card"). | `src/engine/pace.ts` (`stopReasons`), `onSkipAhead` in `src/ui/app.ts` | With skip-ahead the scripted run never ends a turn with nothing new; the button is 44 px on a phone | ☑ |
-| 1.2 | **Things to do.** Before the turn ends the game lists what is still open, each row opening the right screen: a card in hand that a free person could carry out now (one line per deck; Embassy and Peace Envoy never count, they are always there); a free administrator, merchant, scholar or courtier with nothing to carry while a new card is affordable; a need more than 20% unmet; provinces under 25% happiness. End Turn shows the count. The list appears only for things not shown before, never blocks a second press, and stays silent during the tutorial and guided missions. | `attention()` and `cardHasTarget()` in `src/engine/pace.ts`; `readyToEnd`, `showAttention` in `src/ui/app.ts` | Each rule has a check in `npm test`; a setting turns the list off; computing it takes about 2 ms on the largest realms | ☑ |
+| 1.1 | **Skip ahead.** A second button beside End Turn plays quarters until something needs the player, at most 8 at a time. It stops when: a prompt is waiting (event, battle, attack, peace, succession); a card was drawn; a task finished; a war started; the hand is over its limit; the year turned in a year with battles. One line then says what passed ("3 seasons · +62 ducats · 1 Economy card"). | `src/engine/pace.ts` (`stopReasons`), `onSkipAhead` in `src/ui/endturn.ts` | With skip-ahead the scripted run never ends a turn with nothing new; the button is 44 px on a phone | ☑ |
+| 1.2 | **Things to do.** Before the turn ends the game lists what is still open, each row opening the right screen: a card in hand that a free person could carry out now (one line per deck; Embassy and Peace Envoy never count, they are always there); a free administrator, merchant, scholar or courtier with nothing to carry while a new card is affordable; a need more than 20% unmet; provinces under 25% happiness. End Turn shows the count. The list appears only for things not shown before, never blocks a second press, and stays silent during the tutorial and guided missions. | `attention()` and `cardHasTarget()` in `src/engine/pace.ts`; `readyToEnd`, `showAttention` in `src/ui/endturn.ts` | Each rule has a check in `npm test`; a setting turns the list off; computing it takes about 2 ms on the largest realms | ☑ |
 | 1.3 | **Deck dots.** A bottom tab shows a dot when that deck holds a card that a free person could carry now. | `renderTabs` | Dot appears and clears as people leave and return | ☑ |
 | 1.4 | **Three difficulties**: Gentle, Standard, Hard, chosen when a game or mission starts and shown in the Menu. Levers, all in one table: how much stronger a rival must be to declare war on you (×1.6 / ×1.25 / ×1.0), years between such wars (45 / 30 / 12), years of peace at the start (15 / 10 / 5), mercy for a crown of three provinces or fewer (90% / 70% / 30%), starting treasure (×1.5 / ×1 / ×0.8), rival growth (×0.8 / ×1 / ×1.3), rival army size (−1 / 0 / +2). | `src/data/difficulty.ts`, `diff()` in `src/engine/core.ts`, read in `src/engine/ai.ts` and `newGame` | `DIFF=0|1|2 npm run sim` runs; Standard gives the same results as before | ☑ |
-| 1.5 | **Game length for the open game**: A reign (40 years, about 160 turns), A century (100 years), The whole age (to the end date). Missions keep their own deadline. | realm picker in `src/ui/app.ts`; `newGame(..., opts)` | The end screen arrives in the chosen year | ☑ |
+| 1.5 | **Game length for the open game**: A reign (40 years, about 160 turns), A century (100 years), The whole age (to the end date). Missions keep their own deadline. | realm picker in `src/ui/title.ts`; `newGame(..., opts)` | The end screen arrives in the chosen year | ☑ |
 | 1.6 | **Settings** in the Menu: warn before ending a turn with things to do (on), show the skip-ahead button (on), reduced motion (follows the device, can be forced). Stored per device. Sound and text size join in Phase 2. | `src/ui/settings.ts` | Each setting survives a reload | ☑ |
 | 1.7 | **Tests.** `npm test` runs the engine without a browser: same seed gives the same game; a save survives `JSON` and `migrate`; 12 realms × 3 start dates play 40 turns with no error; every beginner mission's cards exist; pace and difficulty rules. | `scripts/test.ts` | Runs in under a minute | ☑ |
 | 1.8 | **Checks on every push**: typecheck, tests, build, and one short simulation. | `.github/workflows/ci.yml` | A red cross on a broken push | ☑ |
 | 1.9 | **Rules text that contradicts the game.** The tutorial says five kinds of card (there are six). README and the `game-design` skill say both "no hand limit" and describe the hand limit. | `TUTORIAL` in `src/ui/app.ts`, `README.md`, `.claude/skills/game-design/SKILL.md` | One statement of each rule | ☑ |
 | 1.10 | **Royal steward for goods.** A switch in Economy → Goods, on by default on Gentle and Standard (off on Hard and in games saved before he existed). Each quarter the steward buys what a need still lacks on the open market at 1.5× the price (before, a shortage only punished), most pressing need first (food, cloth, tools, weapons, gunpowder, materials, naval stores, books, luxuries), up to a purse of 5%, 15% or 30% of what the provinces pay. A shortage reaches the player only when the purse is spent, as one line in Things to do. New workshops already choose the worst shortage (`defaultMake`). | `stewardBudget`, step 4b of `quarterFlow` in `src/engine/trade.ts`; `goodsTab` | A check covers the purse; 9 bot games with him: late income +7%, happiness 77% against 73%, early treasury lower | ☑ |
-| 1.11 | **Six needs before 21 goods.** The Goods tab opens on six rows (Food, Clothing, Building, Arms, The fleet, The court), each with a bar (own supply solid, the steward's share hatched), one word (Met, Bought, Running down, Short) and a sentence only when something is wrong; a tap opens that need's goods, and all 21 are one fold further down. | `NEED_GROUPS` in `src/data/goods.ts`; `goodsTab` in `src/ui/app.ts` | Fits a 390×844 screen without scrolling | ☑ |
-| 1.12 | **Split `src/ui/app.ts`** in this order, one commit each, with no change in behaviour: `ui/state.ts` (the shared `S`, `win`, `sheet`, `refresh` hooks), `ui/title.ts` (title, slots, missions, builder, picker), `ui/prompts.ts` (reveal, event, draft, succession, battle, incoming, peace, end screens), `ui/windows/` (one file per bottom tab), `ui/sheets.ts` (province, realm, chronicle). | `src/ui/` | No file over 800 lines; Playwright pass at both sizes | ☐ |
-| 1.13 | **Screens folder.** The 18 screenshots in the folder named `undefined/` move to `docs/screens/`, and the script that wrote them gets a real path. | repo root | No `undefined/` folder | ☐ |
+| 1.11 | **Six needs before 21 goods.** The Goods tab opens on six rows (Food, Clothing, Building, Arms, The fleet, The court), each with a bar (own supply solid, the steward's share hatched), one word (Met, Bought, Running down, Short) and a sentence only when something is wrong; a tap opens that need's goods, and all 21 are one fold further down. | `NEED_GROUPS` in `src/data/goods.ts`; `goodsTab` in `src/ui/windows/economy.ts` | Fits a 390×844 screen without scrolling | ☑ |
+| 1.12 | **Split `src/ui/app.ts`**, with no change in behaviour, into 16 modules: `ui/state.ts` (the shared state, saving, small helpers), `ui/title.ts` (title, slots, missions, builder, picker), `ui/app.ts` (the game screen and `refresh`), `ui/windows/` (`frame`, `cards` and one file per deck), `ui/sheets.ts`, `ui/modal.ts`, `ui/planner.ts`, `ui/endturn.ts`, `ui/prompts.ts`. Shared state is imported read-only and changed through setters in `state.ts`. Done by a script on the syntax tree, not by hand. | `src/ui/` | No file over 800 lines (the largest is 475); `npm run smoke` passes at both sizes | ☑ |
+| 1.13 | **A smoke test with a real path.** `npm run smoke` drives the built game at 1180×820 and 390×844 through every deck window and tab, the side panels, the menu, a card, turns, skip-ahead, the missions screens and the battle test; it fails on any page error or sideways scroll and writes its screenshots to `docs/screens/` (not kept in git). The 18 stale screenshots in the folder named `undefined/` are removed. | `scripts/smoke.cjs` | No `undefined/` folder; the smoke test passes | ☑ |
 | 1.14 | **Saves that can be trusted.** A numbered list replaces field-by-field patching: `MIGRATIONS[n]` moves a save from version n to n+1, `migrate` runs the steps in order and refuses a save from a newer game. `npm run make-save` stores a compressed save of the current version before the version is raised; `npm test` loads every stored save through all later steps and plays it on. | `MIGRATIONS`, `migrate`, `canLoad` in `src/engine/turn.ts`; `scripts/saves/`, `scripts/make-save.ts` | Every stored save loads in `npm test` | ☑ |
 
-### Phase 1 results so far
+### Phase 1 results
 
 - **Pace:** in scripted runs of 400 turns, skip ahead cuts End Turn presses by 16–36% and never passes a card, a
   prompt or a finished task. An open game can now be 160 turns instead of 1,200.
 - **Difficulty:** 12 bot games a level finish in the top three 8, 6 and 5 times (Gentle, Standard, Hard). The order
   is right, the spread narrower than the targets of section 3; tuning is action 4.13.
 - **Checks:** 10 engine checks in about 20 seconds; typecheck, checks, build and a short bot campaign on every push.
-- **Still open:** the goods steward and the six-needs view (1.10, 1.11), the split of `app.ts` (1.12), the screens
-  folder (1.13) and numbered save migrations (1.14).
+- **Goods:** the steward and the six-needs view replace 21 rows of bookkeeping as the first thing the player sees.
+- **Code:** the interface is 16 modules, none over 475 lines; saves migrate by numbered steps; a browser smoke test
+  visits every screen at both sizes.
 
 ## Phase 2 — Feel
 
@@ -146,7 +147,7 @@ first minute.
 
 | Id | Action | Where | Done when |
 |---|---|---|---|
-| 2.11 | **A played card travels**: from the hand to the province or realm it targets, 250 ms, then the task appears in the strip over the map. | `openPlanner` launch in `src/ui/app.ts`, `src/styles.css` | Off under reduced motion |
+| 2.11 | **A played card travels**: from the hand to the province or realm it targets, 250 ms, then the task appears in the strip over the map. | `openPlanner` in `src/ui/planner.ts`, `src/styles.css` | Off under reduced motion |
 | 2.12 | **Outcomes have weight.** The five outcome levels get five treatments on the turned card: a gold sweep and sting for the best, plain ink for the middle, a torn corner and low note for the worst. | `showReveal`, `outcomeItem` | The level can be told without reading |
 | 2.13 | **Battles show the armies.** Two facing rows of painted unit tiles (the 25 in `art/unit_*.webp`), strength bars that fall as damage lands, both tactic cards slammed down and turned together. | `showBattle` | No line icons left on the battle screen |
 | 2.14 | **Twenty event paintings** for the events every campaign meets: Constantinople, the printing press, Columbus, the Cape route, Tordesillas, the Italian Wars, the Reformation, Potosí, Lepanto, the Thirty Years' War, Westphalia, Versailles, the plague, a bad harvest, a revolt, a court visitor, a great artist, tax riots, a golden age, a call to arms. Same brief as the cards (`docs/art-brief.md`). | `art/event_*.webp`, `art` field of `EventDef` | Those events open with a painting |
@@ -159,7 +160,7 @@ first minute.
 | Id | Action | Where | Done when |
 |---|---|---|---|
 | 2.18 | **No window on top of a window.** The task planner becomes a page inside the menu window with a Back button, not a dialog over it. | `openPlanner`, `renderWin` | At most one layer above the map, plus decisions |
-| 2.19 | **Undo.** Playing a card or starting a task can be taken back until End Turn, from a 6-second "Undo" strip. Not offered after anything that showed new information (buying a pack, a draft). | snapshot of `S` in `act()` | Undo restores the exact save |
+| 2.19 | **Undo.** Playing a card or starting a task can be taken back until End Turn, from a 6-second "Undo" strip. Not offered after anything that showed new information (buying a pack, a draft). | snapshot of `S` in `act()` (`src/ui/app.ts`) | Undo restores the exact save |
 | 2.20 | **Swipe between the tabs of a window** and between the six decks. | `renderWin` | Works with one thumb at 390 px |
 | 2.21 | **Fonts in the game, not from the network.** Ship Cormorant SC and EB Garamond as `woff2` in `fonts/`, drop the seven families no style uses, and cache them with the page. | `scripts/build.mjs`, `src/styles.css` | First launch offline shows the right type |
 | 2.22 | **Text size**: 100%, 115%, 130% in Settings; card names never under 13 px on a phone (12 px today). | `--k` scale in `src/styles.css` | No clipped text at 130% on 390 px |
@@ -188,7 +189,7 @@ Crusader Kings makes stories from people. Lasting Empires already has the people
 | 3.8 | **Each core card answers back.** Adopting any of the eight principles brings one event within five years (the merchants ask for a navy after Mercantile; the clergy object after Open-minded). | `adoptCore`, 8 events | Old audit item 15 closed |
 | 3.9 | **News from abroad.** The 14 scripted turning points of the AI world and every war between great powers reach the player as one short dispatch a year at most, with the option to send an envoy. | `worldMoments` in `src/engine/history.ts` | The world is seen to move |
 | 3.10 | **One voice.** A pass over all event text: addressed to "you", 60 words or fewer, one concrete detail, no modern words. A page of rules for writers. | `docs/WRITING.md`, `src/engine/events.ts` | All events pass the word count in `npm test` |
-| 3.13 | **The rules, in the game.** A Rules page in the Chronicle, written from the same tables the engine uses (outcome odds by rarity, card rates, hand limits, difficulty, how the ranking is scored), so it can never disagree with the game. | `chronicleSheet` in `src/ui/app.ts` | Old audit item 22 closed |
+| 3.13 | **The rules, in the game.** A Rules page in the Chronicle, written from the same tables the engine uses (outcome odds by rarity, card rates, hand limits, difficulty, how the ranking is scored), so it can never disagree with the game. | `chronicleSheet` in `src/ui/sheets.ts` | Old audit item 22 closed |
 
 ### The chronicle
 

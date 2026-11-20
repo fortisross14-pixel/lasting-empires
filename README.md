@@ -74,7 +74,7 @@ Open `dist/index.html` in any browser. The core menus (Military, Diplomacy, Inte
 - `src/data`: provinces (`provinces.ts`), generated map (`world.json`), nations, eras, troops and recipes, research, characters.
 - `scripts/gen-world.ts`: builds `world.json` from Natural Earth coastlines (`npm run gen-world`) after editing provinces.
 - `src/engine`: pure game rules (seeded RNG, no DOM). `turn.ts` runs a year; `ai.ts` runs rival nations.
-- `src/ui`: map, cards, panels and modals.
+- `src/ui`: the screens, in modules: `state.ts` (shared state and saving), `title.ts` (title, missions, picker), `app.ts` (the game screen), `windows/` (one file per deck), `sheets.ts`, `planner.ts`, `endturn.ts`, `prompts.ts`, `modal.ts`, plus `map.ts`, `cards.ts`, `settings.ts`. `npm run smoke` drives the built game through all of them in a headless browser.
 - `scripts/sim.ts`: headless bot that plays full campaigns, for balance and crash testing.
 - `scripts/test.ts`: engine checks that must never break (`npm test`): same seed same game, saves load, every mission starts, pace and difficulty rules. GitHub Actions runs the typecheck, these checks, the build and one short bot campaign on every push (`.github/workflows/ci.yml`).
 - `src/engine/pace.ts`: what still needs the player this turn, and when skipping ahead must stop.
