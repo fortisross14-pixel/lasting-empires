@@ -1,4 +1,5 @@
 // Side panels: province, realm, goals, tasks, overseas, chronicle, and the rows they share.
+import { commanderOf } from '../engine/commanders';
 import { sfx } from './sound';
 import type { MissionKind, Character, Cat } from '../types';
 import { CATS } from '../types';
@@ -7,7 +8,7 @@ import { BUILDINGS } from '../data/techs';
 import { STARTS } from '../data/starts';
 import { goalView, type GoalView } from '../engine/goals';
 import { moveCapital, moveCapitalBlocked, capitalMoveCost } from '../engine/government';
-import { RARITY, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
+import { RARITY, OUTCOME_ODDS, OUTCOMES, TRAITS } from '../data/characters';
 import { GOODS } from '../data/goods';
 import { workshopCap, provinceOutput, sideOutput } from '../engine/trade';
 import { REGIONS, HOME_REGIONS, NATIVE_EMPIRES } from '../data/overseas';
@@ -289,8 +290,9 @@ export function armyIntel(n: string) {
   if ((nat.spiedUntil ?? 0) > S.year) {
     return h('div', { class: 'intel' }, h('h3', {}, `${nat.adj} army (spies)`), h('div', { class: 'cards-row wrap' }, nat.army.slice(0, 12).map(t => troopCard(t, { small: true }))));
   }
-  const n2 = nat.army.length;
-  return h('div', { class: 'intel' }, h('h3', {}, `${nat.adj} army`), h('p', { class: 'muted' }, `Scouts count about ${Math.max(0, n2 - 1)}–${n2 + 2} companies. A Spy Network card reveals them.`));
+  const n2 = nat.army.length, g = commanderOf(S, n);
+  return h('div', { class: 'intel' }, h('h3', {}, `${nat.adj} army`), h('p', { class: 'muted' }, `Scouts count about ${Math.max(0, n2 - 1)}–${n2 + 2} companies. A Spy Network card reveals them.`),
+    g ? h('p', {}, h('b', {}, g.name), ` commands them: ${g.traits.map(t => `${TRAITS[t]?.name ?? t} (${TRAITS[t]?.desc ?? ''})`).join(', ') || 'a plain soldier'}.`) : nat.general?.captive ? h('p', {}, `Their general, ${nat.general.name}, is your prisoner.`) : null);
 }
 
 export function declareWarRow(n: string) {
@@ -446,8 +448,9 @@ export function chronicleSheet(body: HTMLElement) {
     const me = player(S);
     const kings = [...S.stats.kings, { name: me.ruler.name, arch: me.ruler.arch, from: me.ruler.from, to: S.year, prestige: Math.round(me.prestige - (me.ruler.prestigeAtStart ?? 0)) }];
     const t = h('table', { class: 'ptable' }, h('thead', {}, h('tr', {}, ...['Monarch', 'Kind', 'Reign', 'Prestige won'].map(x => h('th', {}, x)))));
+    const byName = (k: { name: string; epithet?: string }) => (k.epithet ? [k.name, ' ', h('em', {}, k.epithet)] : [k.name]);
     t.append(h('tbody', {}, [...kings].sort((a, b) => b.prestige - a.prestige).map(k => h('tr', { class: k.name === me.ruler.name ? 'me' : '' },
-      h('td', {}, k.name), h('td', {}, RULER_ARCHS[k.arch]?.name ?? k.arch), h('td', {}, `${k.from}–${k.to}`), h('td', {}, String(k.prestige))))));
+      h('td', {}, ...byName(k)), h('td', {}, RULER_ARCHS[k.arch]?.name ?? k.arch), h('td', {}, `${k.from}–${k.to}`), h('td', {}, String(k.prestige))))));
     body.append(h('div', { class: 'tscroll' }, t));
   } else {
     body.append(h('ul', { class: 'log' }, S.log.slice(0, 80).map(l => h('li', { class: 't-' + l.tone }, h('span', { class: 'ly' }, String(l.year)), l.text))));

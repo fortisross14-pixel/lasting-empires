@@ -1,3 +1,4 @@
+import { yearlyCourt, courtAtSuccession, reignOf, reignMark } from './court';
 import { maxFort } from './core';
 // New game setup, the yearly turn, and player actions that touch several systems.
 import { GOODS, OLD_GOODS } from '../data/goods';
@@ -40,7 +41,7 @@ import { yearlySubjects, unionClaim, autoSurrender } from './diplo';
 
 /** The version new games are saved with. Raise it when the shape of a save changes, add the step to MIGRATIONS,
  *  and first run `npm run make-save` so the old version keeps a test save (scripts/saves/). */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 /** The oldest save that can still be loaded. */
 export const OLDEST_SAVE = 2;
 export const canLoad = (version: number) => version >= OLDEST_SAVE && version <= SAVE_VERSION;
@@ -93,7 +94,7 @@ export function makeHeirs(s: GameState): Heir[] {
 
 function setRuler(s: GameState, heir: Heir) {
   const me = player(s);
-  if (me.ruler.name) s.stats.kings.push({ name: me.ruler.name, arch: me.ruler.arch, from: me.ruler.from, to: s.year, prestige: Math.round(me.prestige - (me.ruler.prestigeAtStart ?? 0)) });
+  if (me.ruler.name) { s.stats.kings.push({ name: me.ruler.name, arch: me.ruler.arch, from: me.ruler.from, to: s.year, prestige: Math.round(me.prestige - (me.ruler.prestigeAtStart ?? 0)), epithet: reignOf(s).epithet || undefined }); courtAtSuccession(s); }
   // remove the old monarch from the court
   const old = s.characters.find(c => c.ruler);
   if (old) {
@@ -104,7 +105,7 @@ function setRuler(s: GameState, heir: Heir) {
     s.characters = s.characters.filter(c => !c.ruler);
   }
   const name = heir.name.replace(/^Infant[ae] /, '') + (heir.historical || /\s[IVX]+$/.test(heir.name) ? '' : ' ' + ROMAN[Math.min(11, ((s.flags['regnal_' + s.player + heir.name.replace(/^Infant[ae] /, '')] = (s.flags['regnal_' + s.player + heir.name.replace(/^Infant[ae] /, '')] ?? 0) + 1)) - 1)]);
-  me.ruler = { name, traits: heir.traits, arch: heir.arch, skill: heir.skill, from: s.year, to: s.year + heir.reign, prestigeAtStart: me.prestige };
+  me.ruler = { name, traits: heir.traits, arch: heir.arch, skill: heir.skill, from: s.year, to: s.year + heir.reign, prestigeAtStart: me.prestige, start: reignMark(s) };
   const a = RULER_ARCHS[heir.arch];
   if (a.stab) me.stability = clamp(me.stability + a.stab, -3, 3);
   if (a.startCards) grantRandomCards(s, a.startCards);
@@ -159,7 +160,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
     cardAccum: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0, culture: 0 },
     bought: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0, culture: 0 },
     np: 3, imports: [], stock: {}, short: {}, routes: [], posts: [], overseas: {}, core: [], coreChanged: -99, fleet: [], art: 5, taxBurden: 0, accepted: [], stateReligion: 'catholic', happiness: 55, stats: { battles: {}, kings: [], fallen: [], wars: { won: 0, lost: 0 } },
-    troops: [], equipment: [], characters: [], missions: [], techs: [], gov: 'feudal', firedEvents: [], usedLegends: [], queue: [],
+    troops: [], equipment: [], characters: [], missions: [], techs: [], gov: 'feudal', firedEvents: [], usedLegends: [], queue: [], pending: [],
     log: [], flags: {}, ambition: null, ambitionDone: false, over: false,
   };
   for (const d of NATIONS) {
@@ -257,6 +258,10 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
 function successionCheck(s: GameState) {
   const me = player(s);
   if (s.year < me.ruler.to) return;
+  // the reign that ends, summed up before the heirs step forward
+  const r = reignOf(s), plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  const deeds = [r.provs > 0 ? `won ${plural(r.provs, 'province')}` : r.provs < 0 ? `lost ${plural(-r.provs, 'province')}` : '', r.won + r.lost ? `fought ${plural(r.won + r.lost, 'battle')} and won ${r.won}` : '', r.built > 0 ? `raised ${plural(r.built, 'building')}` : '', r.techs > 0 ? `saw ${plural(r.techs, 'new art')} learned` : '', r.works > 0 ? `left ${plural(r.works, 'work')} of art` : ''].filter(Boolean);
+  push(s, { kind: 'reveal', title: `${me.ruler.name}${r.epithet ? ' ' + r.epithet : ''}`, subtitle: `${me.ruler.from} – ${s.year} · a reign of ${plural(r.years, 'year')}`, items: [{ title: 'The reign', text: deeds.length ? `${me.ruler.name} ${deeds.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` : `${me.ruler.name} kept what was inherited, and little more is written.`, tone: 'neutral', kind: 'crown' }, ...(r.epithet ? [{ title: `Remembered as ${r.epithet}`, text: 'So the chroniclers will write it.', tone: 'good' as const, kind: 'quill' }] : [])] });
   push(s, { kind: 'succession', heirs: makeHeirs(s), old: me.ruler.name });
   me.ruler.to = 9999; // until the heir is chosen
   for (const n of Object.values(s.nations)) {
@@ -444,6 +449,7 @@ export function endTurn(s: GameState): YearReport | null {
     yearlyFleet(s);
     yearlySociety(s);
     yearlyChurch(s);
+    yearlyCourt(s);
     s.year++;
     yearlyAges(s);
     characterAging(s);
@@ -595,7 +601,12 @@ function fromV2(s: GameState) {
 
 /** One step per version: MIGRATIONS[n] turns a save of version n into version n + 1. Never edit a step once
  *  it has shipped; add the next one. */
-const MIGRATIONS: Record<number, (s: GameState) => void> = { 2: fromV2 };
+/** Phase 3 of the roadmap: events that come back later. People's loyalty and wishes, and rival commanders,
+ *  need nothing here: they are worked out from who the person is until something changes them. */
+function fromV3(s: GameState) {
+  s.pending ??= [];
+}
+const MIGRATIONS: Record<number, (s: GameState) => void> = { 2: fromV2, 3: fromV3 };
 
 /** After any load, whatever the version: the map may have grown since the save was made. */
 function reconcile(s: GameState) {

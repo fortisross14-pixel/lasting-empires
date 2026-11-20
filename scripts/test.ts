@@ -4,7 +4,9 @@ import { newGame, newMissionGame, endTurn, chooseEventOption, chooseHeir, migrat
 import { quarterFlow, stewardBudget, tradeIncome } from '../src/engine/trade';
 import { readdirSync, readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
-import { EVENT } from '../src/engine/events';
+import { EVENT, rollEvents } from '../src/engine/events';
+import { COURT_EVENTS, loyaltyOf, wishOf, addLoyalty, loyaltyWord, reignOf, EPITHETS } from '../src/engine/court';
+import { commanderOf, COMMANDER_MIN } from '../src/engine/commanders';
 import { autoResolve, finishBattle } from '../src/engine/battle';
 import { takeDraftOption } from '../src/engine/drafts';
 import { CARDS } from '../src/engine/cards';
@@ -61,11 +63,12 @@ check('every stored save loads through the migrations and plays on', () => {
   ok(files.length >= SAVE_VERSION - OLDEST_SAVE, `expected a stored save for each version from ${OLDEST_SAVE} to ${SAVE_VERSION - 1} (npm run make-save before raising SAVE_VERSION)`);
   for (const f of files) {
     const s = JSON.parse(gunzipSync(readFileSync(`${dir}/${f}`)).toString()) as GameState;
-    const year = s.year, provinces = Object.keys(s.provinces).length;
+    const year = s.year, provinces = Object.keys(s.provinces).length, was = s.version, steward = s.steward?.on;
     migrate(s);
     eq(s.version, SAVE_VERSION, `${f}: version after migrating`);
     ok(Object.keys(s.provinces).length >= provinces, `${f}: provinces were lost`);
-    ok(s.steward && s.steward.on === false, `${f}: an old save must keep its economy (steward off)`);
+    ok(s.steward && s.steward.on === (was < 3 ? false : steward), `${f}: a save must keep its economy (the steward as he was, off before he existed)`);
+    ok(Array.isArray(s.pending), `${f}: no list of pending events after migrating`);
     play(s, 12);
     ok(s.year >= year + 3 || s.over, `${f}: did not play on after loading`);
   }
@@ -190,6 +193,93 @@ check('skip ahead never passes a card, a prompt or a finished task', () => {
     ok(presses < turns, `${n}: skip ahead saved no presses (${presses} for ${turns} turns)`);
     console.log(`       ${n}: ${turns} turns in ${presses} presses (${Math.round((1 - presses / turns) * 100)}% fewer), longest run ${longest}`);
   }
+});
+
+check('people: loyalty and wishes follow from the person, and move only when something happens', () => {
+  const a = newGame('castile', 61), b = newGame('castile', 61);
+  for (let i = 0; i < a.characters.length; i++) { eq(loyaltyOf(a.characters[i]), loyaltyOf(b.characters[i]), 'loyalty of the same person in the same game'); eq(wishOf(a.characters[i]), wishOf(b.characters[i]), 'wish'); }
+  const c = a.characters.find(x => !x.ruler)!;
+  ok(loyaltyOf(c) >= 50 && loyaltyOf(c) <= 70, `a new servant starts between 50 and 70, not ${loyaltyOf(c)}`);
+  ok(c.loyalty === undefined, 'loyalty was stored before anything changed it');
+  addLoyalty(c, 500); eq(loyaltyOf(c), 100, 'loyalty is capped'); eq(loyaltyWord(c), 'Devoted', 'word at 100');
+  addLoyalty(c, -500); eq(loyaltyOf(c), 0, 'loyalty has a floor'); eq(loyaltyWord(c), 'Disloyal', 'word at 0');
+});
+
+check('every court event can fire, and every option of it runs', () => {
+  for (const def of COURT_EVENTS) {
+    let fired = false;
+    for (const seed of [71, 72, 73]) {
+      const s = play(newGame('castile', seed), 16); // four years in: the court may stir
+      s.queue = []; s.flags.court_last = 0;
+      // a court where every event has its person: battle-tried, disloyal, dying, an artist, a churchman, a war
+      const cs = s.characters.filter(c => !c.ruler);
+      for (const c of cs) { delete c.mission; c.loyalty = 30; }
+      const gen = cs.find(c => c.role === 'general'); if (gen) { gen.wins = 4; delete gen.honours; }
+      const old = cs.find(c => c.role === 'admin'); if (old) { old.dies = s.year; if (!old.traits.length) old.traits = ['x']; }
+      cs.find(c => c.role === 'courtier' || c.role === 'leader')!.role = 'artist';
+      if (def.id === 'court_favourite') for (const c of cs) c.loyalty = 70;
+      if (def.id === 'court_preacher') cs.find(c => c.role === 'diplomat')!.role = 'priest';
+      player(s).gold = 500;
+      if (def.id === 'court_travel_back') { const sc = cs.find(c => c.role === 'researcher')!; s.pending = [{ id: def.id, year: s.year, vars: { c: sc.uid, purse: 1 } }]; rollEvents(s); }
+      else if (def.id === 'captive_general') { s.pending = [{ id: def.id, year: s.year, vars: { nation: 'france', name: 'Jean de Test' } }]; rollEvents(s); }
+      else {
+        if (def.cond && !def.cond(s)) continue;
+        const v = def.setup ? def.setup(s) : {};
+        if (!v) continue;
+        s.queue.push({ kind: 'event', eventId: def.id, vars: v });
+      }
+      const p = s.queue.find(q => q.kind === 'event' && q.eventId === def.id);
+      if (!p || p.kind !== 'event') continue;
+      fired = true;
+      ok(def.text(s, p.vars).length > 20, `${def.id}: no text`);
+      ok(typeof def.title === 'string' ? def.title : def.title(s, p.vars), `${def.id}: no title`);
+      for (let i = 0; i < def.options.length; i++) {
+        const c = JSON.parse(JSON.stringify(s)) as GameState; // each option on its own copy of the game
+        if (def.options[i].can?.(c, p.vars)) continue;
+        const items = def.options[i].run(c, p.vars);
+        ok(items.length > 0 && items.every(it => it.title && it.text), `${def.id} option ${i}: nothing to show`);
+      }
+      break;
+    }
+    ok(fired, `${def.id} never found its moment in three prepared games`);
+  }
+});
+
+check('a choice can come back: a pending event fires in its year and not before', () => {
+  const s = play(newGame('portugal', 81), 8);
+  s.queue = []; s.pending = [{ id: 'captive_general', year: s.year + 2, vars: { nation: 'castile', name: 'Diego de Prueba' } }];
+  rollEvents(s);
+  ok(!s.queue.some(q => q.kind === 'event' && q.eventId === 'captive_general'), 'it fired two years early');
+  s.year += 2; s.queue = [];
+  rollEvents(s);
+  const p = s.queue.find(q => q.kind === 'event' && q.eventId === 'captive_general');
+  ok(p && p.kind === 'event' && p.vars.name === 'Diego de Prueba', 'it did not fire when due, or lost what was chosen');
+  eq(s.pending!.length, 0, 'pending events left over');
+});
+
+check('rival commanders have names, keep them, and small realms have none', () => {
+  const s = newGame('castile', 91);
+  const big = Object.values(s.nations).find(n => n.alive && n.id !== s.player && provsOf(s, n.id).length >= COMMANDER_MIN)!;
+  const small = Object.values(s.nations).find(n => n.alive && n.id !== s.player && provsOf(s, n.id).length > 0 && provsOf(s, n.id).length < COMMANDER_MIN)!;
+  const rng = s.rng;
+  const g1 = commanderOf(s, big.id), g2 = commanderOf(s, big.id);
+  ok(g1 && g2 && g1.name === g2.name && g1.name.includes(' '), 'a large realm has no lasting named commander');
+  eq(s.rng, rng, 'appointing a commander rolled the dice');
+  eq(commanderOf(s, small.id), null, 'a small realm has a named commander');
+  big.general!.captive = true;
+  eq(commanderOf(s, big.id), null, 'a captive commander still leads');
+});
+
+check('a reign is summed up with a by-name earned by its deeds', () => {
+  const s = newGame('castile', 95);
+  ok(player(s).ruler.start, 'the start of the reign was not recorded');
+  player(s).ruler.from = s.year;
+  eq(reignOf(s).epithet, 'the Brief', 'a reign of no years');
+  player(s).ruler.from = s.year - 20; player(s).ruler.start!.provs -= 6;
+  eq(reignOf(s).epithet, 'the Conqueror', 'six provinces won in twenty years');
+  player(s).ruler.start!.provs += 6; player(s).ruler.start!.built -= 7;
+  eq(reignOf(s).epithet, 'the Builder', 'seven buildings raised');
+  ok(new Set(EPITHETS.map(e => e[0])).size === EPITHETS.length, 'two by-names are the same');
 });
 
 console.log(`${passed} passed, ${failed} failed`);

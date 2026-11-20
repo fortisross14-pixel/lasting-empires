@@ -1,3 +1,6 @@
+import { good, bad, neutral, stab, P, scaled, needs, type EventDef, type Vars } from './eventkit';
+import { COURT_EVENTS } from './court';
+import { CHAIN_EVENTS } from './chains';
 import { provKnown } from './overseas';
 import { ageIndex } from './core';
 import { troopsNear } from './army';
@@ -23,36 +26,9 @@ import { createBattle, makeSide, genericGeneral, transferProvince } from './batt
 import { cityFalls } from './history';
 import { courtOptions } from './drafts';
 
-type Vars = Record<string, string | number>;
-
-export interface EventOption {
-  label: string;
-  hint?: string;
-  can?: (s: GameState, v: Vars) => string | null;
-  run: (s: GameState, v: Vars) => RevealItem[];
-}
-
-export interface EventDef {
-  id: string;
-  title: string | ((s: GameState, v: Vars) => string);
-  text: (s: GameState, v: Vars) => string;
-  art: string;
-  window?: [number, number];
-  chance: number;           // per year while eligible
-  repeat?: number;          // minimum years between repeats; omitted = once only
-  cond?: (s: GameState) => boolean;
-  setup?: (s: GameState) => Vars | null;
-  options: EventOption[];
-  history?: boolean;        // shown on the history timeline
-  anywhere?: boolean;       // a history card for realms outside Europe and its neighbours too (cond says whose)
-}
+export type { EventDef, EventOption, Vars } from './eventkit';
 
 const addCards = (s: GameState, id: string, n: number) => { for (let i = 0; i < n; i++) addCard(s, id); };
-const stab = (s: GameState, d: number) => { const p = player(s); p.stability = clamp(p.stability + d, -3, 3); };
-const good = (title: string, text: string, kind = 'star'): RevealItem => ({ title, text, tone: 'good', kind });
-const bad = (title: string, text: string, kind = 'twist'): RevealItem => ({ title, text, tone: 'bad', kind });
-const neutral = (title: string, text: string, kind = 'scroll'): RevealItem => ({ title, text, tone: 'neutral', kind });
-const P = (s: GameState) => s.player;
 const alive = (s: GameState, n: string) => !!s.nations[n]?.alive;
 let REGION: Record<string, string> | null = null;
 const regionOf = (id: string) => (REGION ??= Object.fromEntries(getGeo().seeds.map(x => [x.id, x.region])))[id] ?? '';
@@ -85,9 +61,6 @@ function annexNation(s: GameState, other: string) {
 
 
 // ---------- helpers for the history of the wider world ----------
-/** Ducats in the money of the day. */
-const scaled = (s: GameState, n: number) => Math.round(n * inflation(s));
-const needs = (s: GameState, n: number) => (player(s).gold < scaled(s, n) ? `Needs ${scaled(s, n)} ducats` : null);
 const BEST: Record<'inf' | 'cav', string[]> = { inf: ['line_infantry', 'musketeers', 'arquebusiers', 'pikemen', 'men_at_arms'], cav: ['dragoons', 'cuirassiers', 'reiters', 'knights', 'jinetes'] };
 /** Companies of the best kind the player can field today; returns the troop name. */
 function addTroops(s: GameState, kind: 'inf' | 'cav', n: number) {
@@ -1107,6 +1080,8 @@ export const EVENTS: EventDef[] = [
       { label: 'Divide the empire', hint: 'Peace, at the cost of glory', run: s => { stab(s, -1); player(s).prestige -= 20; return [neutral('Two Incas', 'Stability −1, prestige −20.', 'scroll')]; } },
     ],
   },
+  ...COURT_EVENTS,
+  ...CHAIN_EVENTS,
 ];
 
 export const EVENT: Record<string, EventDef> = Object.fromEntries(EVENTS.map(e => [e.id, e]));
@@ -1114,6 +1089,21 @@ export const EVENT: Record<string, EventDef> = Object.fromEntries(EVENTS.map(e =
 /** Roll the history deck and random events for this year. */
 export function rollEvents(s: GameState) {
   let fired = 0;
+  // what an earlier choice set in motion comes first: the oldest step now due
+  const due = (s.pending ?? []).filter(x => x.year <= s.year).sort((a, b) => a.year - b.year)[0];
+  if (due) {
+    s.pending = s.pending!.filter(x => x !== due);
+    const e = EVENT[due.id];
+    if (e && (!e.cond || e.cond(s))) {
+      const vars = e.setup ? e.setup(s) : {};
+      if (vars) {
+        if (!s.firedEvents.includes(e.id)) s.firedEvents.push(e.id);
+        s.flags['ev_' + e.id] = s.year;
+        push(s, { kind: 'event', eventId: e.id, vars: { ...vars, ...due.vars } });
+        fired++;
+      }
+    }
+  }
   for (const e of EVENTS) {
     if (fired >= 1 || e.chance <= 0) continue; // one event a quarter at most
     if (e.window && (s.year < e.window[0] || s.year > e.window[1])) continue;

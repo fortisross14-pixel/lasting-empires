@@ -1899,3 +1899,18 @@ div.set-row { cursor: default; }
 .utile.dead::after { content: '✗'; position: absolute; top: 0; left: 0; right: 0; aspect-ratio: 1; display: grid; place-items: center; font-size: 34px; line-height: 1; color: var(--wax); pointer-events: none; }
 .utile.dead .ut-dmg { top: 62%; font-size: 13px; }
 @media (max-width: 640px) { .utile.dead::after { font-size: 24px; } }
+
+/* ---- the court: loyalty on a person's page and card (roadmap 3.1) ---- */
+.loyal { margin: 4px 0 2px; padding: 8px 10px; border: 1.2px solid var(--text); background: var(--card, #fffdf8); display: grid; gap: 5px; }
+.loyal-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.loyal-h b { font-family: var(--f-display); font-size: 17px; letter-spacing: .04em; }
+.loyal-h span { color: var(--muted); font-size: 13px; font-variant-numeric: lining-nums; }
+.loyal-bar { position: relative; display: block; height: 8px; border: 1px solid var(--text); background: var(--panel); }
+.loyal-bar i { display: block; height: 100%; background: var(--text); }
+.loyal-bar em { position: absolute; top: -3px; bottom: -3px; width: 0; border-left: 2px dashed var(--wax); }
+.loyal.l-disloyal .loyal-h b, .loyal.l-wavering .loyal-h b { color: var(--wax); }
+.loyal.l-disloyal .loyal-bar i { background: var(--wax); }
+.loyal p { margin: 0; font-size: 14px; }
+.c-disloyal { position: absolute; top: 3px; left: 3px; z-index: 3; width: 18px; height: 18px; display: grid; place-items: center; background: var(--wax); color: #fffdf8; font: 700 13px/1 var(--f-body); border: 1.2px solid var(--text); }
+.inc-gen { margin: 2px 0 0; }
+.ptable td em { color: var(--muted); }

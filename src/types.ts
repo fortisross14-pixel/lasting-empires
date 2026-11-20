@@ -39,7 +39,16 @@ export interface Character {
   back?: number;       // quarters until back at court after a mission abroad
   wins?: number;
   losses?: number;
+  loyalty?: number;    // 0..100: how firmly they stand by the crown (court.ts); 60 when missing
+  wish?: Wish;         // the one thing they want from you
+  rival?: number;      // uid of a rival at court
+  friend?: number;     // uid of a friend at court
+  honours?: number;    // titles and matches already granted, so the same favour is not asked twice
 }
+/** What a person at court hopes for. */
+export type Wish = 'title' | 'gold' | 'glory' | 'faith' | 'family' | 'rest';
+/** A rival realm's commander, met by name on the battlefield. */
+export interface Commander { name: string; skill: number; traits: string[]; since: number; captive?: boolean; }
 
 export interface HandCard {
   uid: number;
@@ -53,6 +62,8 @@ export interface Ruler {
   skill: number;
   from: number;
   to: number;
+  /** The realm as this reign began, to sum it up when it ends. */
+  start?: { provs: number; won: number; lost: number; works: number; built: number; techs: number };
   prestigeAtStart?: number;
 }
 
@@ -78,6 +89,7 @@ export interface Nation {
   alive: boolean;
   ruler: Ruler;
   spiedUntil?: number;
+  general?: Commander;  // rivals of some size keep one named general (court.ts)
 }
 
 export interface Province {
@@ -294,6 +306,7 @@ export interface GameState {
   ambitionDone: boolean;
   over: boolean;
   difficulty?: number;              // index into DIFFICULTY (data/difficulty.ts); Standard when missing
+  pending?: { id: string; year: number; vars: Record<string, string | number> }[]; // events an earlier choice set in motion
   steward?: { on: boolean; share: number }; // the goods steward buys what a need lacks, up to this share of province income
   length?: string;                  // open game only: a LENGTHS id when the game ends before the age does
   savedAt?: number; // when the game was last written, to offer Continue on the title screen
@@ -301,7 +314,7 @@ export interface GameState {
 
 export interface Stats {
   battles: Record<string, { won: number; lost: number }>;
-  kings: { name: string; arch: string; from: number; to: number; prestige: number }[];
+  kings: { name: string; arch: string; from: number; to: number; prestige: number; epithet?: string }[];
   fallen: { name: string; role: Role; skill: number; wins: number; losses: number; until: number }[];
   wars: { won: number; lost: number };
 }

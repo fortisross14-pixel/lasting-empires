@@ -1,4 +1,6 @@
 // Battles: three rounds, each side commits a face-down tactic, then both flip.
+import { commanderFate } from './commanders';
+import { addLoyalty, wishOf } from './court';
 import { rebelsTake } from './realm';
 import { siegeAftermath } from './history';
 import { campLost, turnNo } from './army';
@@ -317,6 +319,9 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
 
   const gen = pSide.general?.uid != null ? s.characters.find(c => c.uid === pSide.general!.uid) : undefined;
   if (gen) { if (playerWon) gen.wins = (gen.wins ?? 0) + 1; else gen.losses = (gen.losses ?? 0) + 1; }
+  if (gen && playerWon && !gen.ruler) addLoyalty(gen, wishOf(gen) === 'glory' ? 6 : 3); // victory binds a general to the crown
+  const fate = commanderFate(s, eSide, playerWon);
+  if (fate) lines.push(fate);
   if (gen && playerWon) { gen.xp++; if (gen.xp >= 3) { gen.xp = 0; if (promoteRarity(s, gen)) lines.push(`${gen.name} rises to ${gen.rarity}.`); } }
 
   const me = player(s);

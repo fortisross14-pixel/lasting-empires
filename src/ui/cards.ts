@@ -1,4 +1,5 @@
 // Card faces for every kind of card in the game.
+import { loyaltyOf, DISLOYAL } from '../engine/court';
 import type { TroopCard, EquipCard, Character, GameState } from '../types';
 import { TROOPS, EQUIPMENT, TACTICS } from '../data/troops';
 import { TRAITS, RARITY } from '../data/characters';
@@ -69,6 +70,9 @@ export function equipCard(e: Pick<EquipCard, 'type'>, o: Opts = {}) {
 
 export const ROLE_ICON: Record<string, string> = { general: 'helm', diplomat: 'scroll', admin: 'quill', merchant: 'coin', researcher: 'book', explorer: 'anchor', conqueror: 'lance', colonist: 'tower', admiral: 'ship', courtier: 'people', priest: 'church', artist: 'quill', leader: 'laurel' };
 
+/** A mark on the card of someone whose loyalty is in doubt, so the player sees it before sending them anywhere. */
+const loyalMark = (c: Character) => (!c.ruler && loyaltyOf(c) < DISLOYAL ? h('span', { class: 'c-disloyal', title: `Disloyal: loyalty ${loyaltyOf(c)}`, 'aria-label': 'Disloyal' }, '!') : null);
+
 export function charCard(c: Character, s: GameState, o: Opts = {}) {
   if (o.wide) return shell('char', { ...o, cls: `r-${c.rarity} role-${c.role} ty-person ${o.cls ?? ''}` },
     artDiv('role_' + c.role, icon(ROLE_ICON[c.role] ?? 'crown', 34)),
@@ -76,12 +80,12 @@ export function charCard(c: Character, s: GameState, o: Opts = {}) {
       h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, `Person · ${c.ruler ? 'Monarch' : roleName[c.role]}`), h('span', { class: 'c-rarity' }, RARITY[c.rarity].name)),
       h('div', { class: 'c-name c-title' }, c.name),
       h('div', { class: 'c-text' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || 'No traits', ` · age ${s.year - c.born}`),
-      c.mission != null ? h('div', { class: 'c-away' }, c.mission === -1 ? 'Viceroy' : 'Away') : null));
+      c.mission != null ? h('div', { class: 'c-away' }, c.mission === -1 ? 'Viceroy' : 'Away') : null, loyalMark(c)));
   if (o.small) return shell('char', { ...o, cls: `mini r-${c.rarity} role-${c.role} ${o.cls ?? ''}` },
     h('div', { class: 'm-name' }, c.name),
     artDiv('role_' + c.role, icon(ROLE_ICON[c.role] ?? 'crown', 26), h('span', { class: 'm-rar' }, RARITY[c.rarity].name)),
     h('div', { class: 'm-foot' }, h('span', { class: 'm-role' }, c.ruler ? 'Monarch' : roleName[c.role]), h('b', { class: 'm-skill', title: 'Skill' }, String(c.skill))),
-    h('div', { class: 'm-traits' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || '—'));
+    h('div', { class: 'm-traits' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || '—'), loyalMark(c));
   return shell('char', { ...o, cls: `r-${c.rarity} role-${c.role} ${o.cls ?? ''}` },
     h('div', { class: 'c-top' }, h('span', { class: 'c-role' }, c.ruler ? 'Monarch' : roleName[c.role]), h('span', { class: 'c-gem', title: RARITY[c.rarity].name })),
     artDiv('role_' + c.role, icon(ROLE_ICON[c.role] ?? 'crown', o.small ? 24 : 32)),
@@ -89,7 +93,7 @@ export function charCard(c: Character, s: GameState, o: Opts = {}) {
     h('div', { class: 'c-rarity' }, RARITY[c.rarity].name),
     h('div', { class: 'c-traits' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || '—'),
     o.small ? null : h('div', { class: 'c-age' }, `Age ${s.year - c.born}`),
-    c.mission != null ? h('div', { class: 'c-away' }, 'Away') : null,
+    c.mission != null ? h('div', { class: 'c-away' }, 'Away') : null, loyalMark(c),
   );
 }
 

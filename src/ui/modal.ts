@@ -1,4 +1,5 @@
 // Dialogs and the back button, the game menu, and a person's details.
+import { loyaltyOf, loyaltyWord, wishOf, WISHES, DISLOYAL } from '../engine/court';
 import type { Character } from '../types';
 import { TRAITS, RARITY } from '../data/characters';
 import { ageOf } from '../engine/ages';
@@ -87,6 +88,8 @@ export function confirmBox(title: string, text: string, okLabel: string, ok: () 
     h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: closeModal }, 'Cancel'), h('button', { class: 'btn primary', onclick: () => { closeModal(); ok(); } }, okLabel))));
 }
 
+const rivalOf = (c: Character) => (c.rival != null ? S.characters.find(x => x.uid === c.rival) : undefined);
+
 export function charDetail(c: Character) {
   const m = c.mission != null ? S.missions.find(x => x.id === c.mission) : null;
   const to = PROMOTION[c.role];
@@ -95,6 +98,11 @@ export function charDetail(c: Character) {
     h('h2', {}, c.name),
     h('p', { class: 'muted' }, `${c.ruler ? 'Monarch acting as ' : ''}${roleName[c.role]} · ${RARITY[c.rarity].name} (traits ×${RARITY[c.rarity].mult}) · experience ${c.xp}/3 · age ${S.year - c.born}`),
     h('ul', { class: 'traits' }, c.traits.map(t => h('li', {}, h('b', {}, TRAITS[t]?.name ?? t), ' ', TRAITS[t]?.desc ?? ''))),
+    c.ruler ? null : h('div', { class: 'loyal l-' + loyaltyWord(c).toLowerCase() },
+      h('div', { class: 'loyal-h' }, h('b', {}, loyaltyWord(c)), h('span', {}, `loyalty ${loyaltyOf(c)} of 100`)),
+      h('span', { class: 'loyal-bar', role: 'img', 'aria-label': `Loyalty ${loyaltyOf(c)} of 100` }, h('i', { style: `width:${loyaltyOf(c)}%` }), h('em', { style: `left:${DISLOYAL}%`, title: 'Below this they listen to other offers' })),
+      h('p', {}, `${c.name.split(' ')[0]} ${WISHES[wishOf(c)].text}.`, rivalOf(c) ? ` A rival of ${rivalOf(c)!.name}.` : ''),
+      h('p', { class: 'muted small' }, 'Loyalty grows with tasks given and done, with victories and with favours; it falls with idleness, slights and an unsteady realm.')),
     (c.wins ?? 0) + (c.losses ?? 0) ? h('p', {}, `Battles: ${c.wins ?? 0} won, ${c.losses ?? 0} lost.`) : null,
     m ? h('p', {}, `On a mission: ${missionTitle(m)}, ${m.turnsLeft} year(s) left.`) : null,
     to ? h('p', { class: 'muted promo' }, ({ diplomat: `Send ${c.name.split(' ')[0]} on a Voyage of Discovery and they become an explorer for good.`, general: `Lead an attack with ships to become an admiral, or a conquista to become a conqueror. Both are for good.`, admin: `Send ${c.name.split(' ')[0]} to found a colony and they become a colonist for good.`, courtier: `The first mission decides: a Religious Mission or Mission to the Church makes a churchman, a Work of Art an artist, Royal Grace, Integration or Embrace a Culture a cultural leader. For good.` } as Record<string, string>)[c.role]) : null,

@@ -1,3 +1,5 @@
+import { addLoyalty } from './court';
+import { commanderOf } from './commanders';
 import { maxFort } from './core';
 // Missions: characters (and troops) sent to do things over several years.
 import { onTech } from './ages';
@@ -476,6 +478,7 @@ export function outcomeItem(o: number, text: string): RevealItem {
 
 function gainXp(s: GameState, ch: Character | undefined, items: RevealItem[]) {
   if (!ch) return;
+  if (!ch.ruler) addLoyalty(ch, 3); // work given and done binds a servant to the crown
   ch.xp++;
   if (ch.xp >= 3) { ch.xp = 0; if (promoteRarity(s, ch)) items.push({ title: `${ch.name} rises`, text: `Now ${ch.rarity[0].toUpperCase() + ch.rarity.slice(1)}: stronger traits.`, tone: 'good', kind: 'star' }); }
 }
@@ -620,7 +623,7 @@ export function landPhase(s: GameState, missionId: number) {
       push(s, { kind: 'reveal', title: MISSION_INFO[m.kind].name, items });
       finish(s, m); return;
     }
-    const def = makeSide(enemy.id, toBattleUnits(defUnits), genericGeneral(s), fort, false);
+    const def = makeSide(enemy.id, toBattleUnits(defUnits), commanderOf(s, enemy.id) ?? genericGeneral(s), fort, false);
     const b = createBattle(s, att, def, prov.id, m.kind as 'conquer' | 'raid', m.id);
     push(s, { kind: 'battle', battle: b });
     return;

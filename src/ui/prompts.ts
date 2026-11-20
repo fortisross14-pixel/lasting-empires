@@ -1,11 +1,12 @@
 // Decisions the game puts to the player: reveals, events, drafts, succession, battles, attacks, peace, endings.
+import { commanderOf } from '../engine/commanders';
 import { sfx, buzz, type Sfx } from './sound';
 import type { DraftOption, RevealItem, Battle, Heir } from '../types';
 import { RULER_ARCHS } from '../data/nations';
 import { TROOPS, EQUIPMENT } from '../data/troops';
 import { MISSIONS } from '../data/missions';
 import { goalView } from '../engine/goals';
-import { commandOf, GENERIC_COMMAND, OUTCOMES } from '../data/characters';
+import { commandOf, GENERIC_COMMAND, OUTCOMES, TRAITS } from '../data/characters';
 import { player, provsOf, atWar, armyPower, nationName } from '../engine/core';
 import { newMissionGame, chooseEventOption, ranking, chooseHeir } from '../engine/turn';
 import { EVENT, eventTitle } from '../engine/events';
@@ -271,7 +272,8 @@ export function showIncoming(id: number) {
   const draw = () => {
     clear(box);
     const mine = armyPower(S.troops.filter(t => picked.includes(t.uid))), theirs = armyPower(force);
-    box.append(h('h2', {}, `${n.name} marches on ${prov.name}`), h('p', { class: 'muted' }, `They arrive when you end this turn, with ${spied ? force.length : `about ${Math.max(1, force.length - 1)}–${force.length + 2}`} companies. Choose who stands to meet them; the battle then plays itself.`));
+    box.append(h('h2', {}, `${n.name} marches on ${prov.name}`), h('p', { class: 'muted' }, `They arrive when you end this turn, with ${spied ? force.length : `about ${Math.max(1, force.length - 1)}–${force.length + 2}`} companies. Choose who stands to meet them; the battle then plays itself.`),
+      (() => { const g = commanderOf(S, n.id); return g ? h('p', { class: 'inc-gen' }, h('b', {}, g.name), ` leads them${g.traits.length ? `: ${g.traits.map(x => TRAITS[x]?.name ?? x).join(', ').toLowerCase()}` : ''}.`) : ''; })());
     if (spied) box.append(h('div', { class: 'cards-row wrap' }, force.map(t => troopCard(t, { small: true }))));
     box.append(h('h3', {}, 'General'));
     const gr = h('div', { class: 'cards-row wrap' });
