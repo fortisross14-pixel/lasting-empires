@@ -2,7 +2,8 @@
 // The bot simulation (`npm run sim`) stays the tool for balance; this file is for rules that must never break.
 import { newGame, newMissionGame, endTurn, chooseEventOption, chooseHeir, migrate, adoptCore, SAVE_VERSION, OLDEST_SAVE } from '../src/engine/turn';
 import { quarterFlow, stewardBudget, tradeIncome } from '../src/engine/trade';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { EVENT_SCENES, eventsWithArt } from '../src/ui/art';
 import { gunzipSync } from 'node:zlib';
 import { EVENT, EVENTS, rollEvents } from '../src/engine/events';
 import { HISTORY_EVENTS, CORE_EVENTS, NEWS_EVENTS, dispatch } from '../src/engine/annals';
@@ -422,6 +423,12 @@ function field(seed: number, terrain: string, mine: string[], theirs: string[], 
   b.terrain = terrain;
   return { s, b };
 }
+
+check('event paintings: every one named is a file, and every event named exists', () => {
+  for (const scene of EVENT_SCENES) ok(existsSync(`art/event_${scene}.webp`), `art/event_${scene}.webp is missing`);
+  for (const id of eventsWithArt()) ok(EVENT[id], `a painting is set for ${id}, which is not an event`);
+  ok(EVENT_SCENES.length >= 27, `only ${EVENT_SCENES.length} event paintings`);
+});
 
 check('ground: every province has one, and hills blunt a cavalry attack', () => {
   const s = newGame('castile', 501);

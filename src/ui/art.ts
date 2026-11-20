@@ -22,3 +22,26 @@ export function artImg(name: string): string | null {
   const n = artName(name);
   return n ? `<img class="c-pic" src="art/${n}.webp" alt="" loading="lazy" decoding="async" width="256" height="256">` : null;
 }
+
+/** Paintings that open an event: the event's id and the scene in art/ (event_<scene>.webp, 480 × 320).
+ *  The steps of a chain share the painting of the chain; an event not listed keeps its line icon. */
+const EVENT_ART: Record<string, string> = {
+  constantinople: 'constantinople', siege_attack: 'constantinople',
+  printer_1: 'printer', printer_2: 'printer', printer_3: 'printer',
+  columbus: 'columbus', cape_route: 'cape_route', tordesillas: 'tordesillas', italian_wars: 'italian_wars',
+  reformation: 'reformation', protestant_minority: 'reformation', potosi: 'potosi', lepanto: 'lepanto',
+  thirty_years: 'thirty_years', westphalia: 'westphalia', versailles: 'versailles',
+  plague: 'plague', plague_1: 'plague', plague_2: 'plague', plague_3: 'plague',
+  bad_harvest: 'bad_harvest', famine_1: 'bad_harvest', famine_2: 'bad_harvest', famine_3: 'bad_harvest',
+  revolt: 'revolt', court_visitor: 'court_visitor', great_artist: 'great_artist', tax_riots: 'tax_riots',
+  golden_age: 'golden_age', call_to_arms: 'call_to_arms', armada: 'armada', sack_of_rome: 'sack_of_rome',
+  french_revolution: 'estates_general', vienna_ottoman: 'vienna', vienna_austria: 'vienna', seven_years_war: 'seven_years_war',
+  war_warning: 'war_warning', ultimatum: 'ultimatum', ultimatum_due: 'ultimatum', tribute_demand: 'ultimatum',
+};
+export const EVENT_SCENES = [...new Set(Object.values(EVENT_ART))];
+export const eventsWithArt = () => Object.keys(EVENT_ART);
+/** The painting for an event, as an <img>, or null when it has none. */
+export function eventArt(id: string): string | null {
+  const n = EVENT_ART[id];
+  return n ? `<img class="ev-pic" src="art/event_${n}.webp" alt="" decoding="async" width="480" height="320">` : null;
+}

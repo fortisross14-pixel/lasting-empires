@@ -22,7 +22,7 @@ import { troopCard, charCard, handCard, tacticCard, backCard, flipCard } from '.
 import { warScore, peaceTerms, enemyDemands, concludePeace } from '../engine/diplo';
 import { troopsNear, setDefence } from '../engine/army';
 import { S, pendingReport, modalOpen, slot, saveNow, save, clearSlot, startIn, shield } from './state';
-import { artImg } from './art';
+import { eventArt, artImg } from './art';
 import { recordMission, doneCount, showMissions, showTitle, setMissionYear } from './title';
 import { refresh, toast } from './app';
 import { openModal, closeModal } from './modal';
@@ -86,9 +86,10 @@ export function showEvent() {
   const p = S.queue[0];
   if (p.kind !== 'event') return;
   const e = EVENT[p.eventId];
-  const front = h('div', { class: 'card k-event' },
+  const pic = eventArt(p.eventId);
+  const front = h('div', { class: 'card k-event' + (pic ? ' has-pic' : '') },
     h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, e.history ? 'History' : 'Event')),
-    h('div', { class: 'c-art', html: icon(e.art, 40) }),
+    h('div', { class: 'c-art' + (pic ? ' ev-art' : ''), html: pic ?? icon(e.art, 40) }),
     h('div', { class: 'c-name c-title' }, eventTitle(S, p.eventId, p.vars)),
     h('div', { class: 'c-text' }, e.text(S, p.vars)));
   const f = flipCard(front, e.history ? 'History' : 'Event', true);
