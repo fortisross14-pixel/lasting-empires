@@ -136,6 +136,9 @@ export class MapView {
   private terrainG: SVGGElement;
   private ter: Record<string, SVGPathElement> = {};
   private terBuilt = false;
+  /** Provinces a goal names: a flag on each, wax while still to take, green when held (goalbar.ts). */
+  private goalPins: { id: string; held: boolean }[] = [];
+  setGoalPins(pins: { id: string; held: boolean }[]) { this.goalPins = pins; }
   private landEl: Record<string, SVGPathElement> = {};
   /** Realm names written across their lands, for the far view. */
   private rlabels: SVGGElement;
@@ -650,6 +653,14 @@ export class MapView {
       const [x, y] = g.center[n.capital];
       const pin = svgEl('g', { 'data-x': x, 'data-y': y });
       pin.append(svgEl('path', { d: `M0 -21 l2.4 4.8 5.2 .7 -3.8 3.6 .9 5.2 -4.7 -2.5 -4.7 2.5 .9 -5.2 -3.8 -3.6 5.2 -.7 Z`, class: 'capmark' + (n.id === s.player && !this.revealAll ? ' mine' : '') }));
+      this.marks.append(pin);
+    }
+    // the goal: a flag on each province it names
+    for (const gp of this.goalPins) {
+      const c = g.center[gp.id];
+      if (!c) continue;
+      const pin = svgEl('g', { 'data-x': c[0], 'data-y': c[1], class: 'goalpin' + (gp.held ? ' held' : '') });
+      pin.append(svgEl('path', { d: 'M-1 4 V-26', class: 'gp-pole' }), svgEl('path', { d: 'M0 -26 H15 L11 -20.5 L15 -15 H0 Z', class: 'gp-flag' }));
       this.marks.append(pin);
     }
     // your settlements: a small house, bigger for towns and cities, so you can spread them out
