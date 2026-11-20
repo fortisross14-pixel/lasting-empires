@@ -81,7 +81,7 @@ function startPlaying() {
 async function load(name: string) {
   const path = `sound/music-${name}.${state.format = format()}`;
   let from = path;
-  try { const r = await fetch(path); if (r.ok) from = URL.createObjectURL(await r.blob()); } catch { /* from disk */ }
+  if (location.protocol !== 'file:') try { const r = await fetch(path); if (r.ok) from = URL.createObjectURL(await r.blob()); } catch { /* played by its path */ }
   if (wanted !== name) { if (from.startsWith('blob:')) URL.revokeObjectURL(from); return; }
   if (src.startsWith('blob:')) URL.revokeObjectURL(src);
   if (!voices.length) voices = [voice(), voice()];
