@@ -177,6 +177,24 @@ Hard is over its band, and rival growth between ×1.6 and ×1.8 does not move it
 The 37% recorded when Hard was first tuned (22 of 60) was at the kind end of what 60 games can show: single runs
 of 30 range from 10 to 18. Left at ×1.6. What to try next is in roadmap 6.7: a wider spread of rival pace on Hard.
 
+## Phase 5: picks and a smaller hand (roadmap 5.10–5.14)
+Top 3 for the bot, `DIFF=0|1|2 MODE=reasonable SEEDS=10`, `SIMSEED=11` and `29` (60 games a level):
+
+| Version | Gentle | Standard | Hard |
+|---|---|---|---|
+| Before phase 5 | 77% | 55% | 43% |
+| Picks, hand 5–8, bot picks at random | 53% | 27% | 22% |
+| Hand 6–10, the bot picks what it can use | 48% | 40% | 20% |
+| The same, rivals growing slower (Gentle ×0.6, Standard ×0.8, Hard ×1.3) | 60% | 40% | 20% |
+
+Kept: hand 6–10, the bot's sensible picks, Gentle at ×0.6. Standard and Hard went back to ×1 and ×1.6: slower
+rivals did not move them. Single changes on 30 Standard games (`SIMSEED=29`): picks alone 16, the smaller hand alone
+15, both 10 (before phase 5: about 15). Each alone is within noise; together the year's cards come in one batch and
+the bot sells more of them at the limit. Cards 20% more often (`CARD_BASE` 0.6) did not help (32%).
+
+Open, and a design choice: keep the picks and the small hand and find another lever (war margins, starting cards),
+or give back one of the two. The bot cannot judge what a person gains from choosing; play it first.
+
 ## Rivals (roadmap 4.1–4.6)
 Levers, all without dice except the requests' own events:
 - **Goals** (`src/engine/rivals.ts`): `GOAL_MIN` 5 provinces to have one, kept `GOAL_YEARS` 25, `GOAL_WEIGHT` 3 (the
