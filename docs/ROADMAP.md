@@ -120,7 +120,7 @@ Status: **done** (November 2026).
 
 ## Phase 2 — Feel
 
-Status: **done but for the music** (2.9, waiting for four loops). Actions marked ☑ beside their id are done.
+Status: **done**. Actions marked ☑ beside their id are done.
 
 The map is on screen 80% of the time and the game is silent. These two facts decide how the game is judged in its
 first minute.
@@ -142,7 +142,7 @@ first minute.
 |---|---|---|---|
 | 2.7 ☑ | **A sound module** on Web Audio, unlocked by the first tap, silent when the page is hidden, with a volume in Settings (Off, Soft, Full). The music volume joins with 2.9. | `src/ui/sound.ts`, `sfx` in `Settings` | Done: no audio context exists before the first tap; switched off, a turn creates no audio nodes |
 | 2.8 ☑ | **Fourteen effects**, made on the device from noise and tones, so there are no files to load or cache: a card drawn; a card played (paper slide); a card turned over; three outcome stings (great, plain, bad); the wax seal on End Turn; coins; a quill for a treaty; a drum for war; two battle clashes; the year bell; a soft knock for a blocked action. Recorded samples can replace any recipe later without touching the callers. | `RECIPES` in `src/ui/sound.ts`; calls to `sfx(...)` in `endturn.ts`, `prompts.ts`, `planner.ts`, `app.ts`, `sheets.ts`, `windows/` | Done: every one is wired to its moment; the smoke test checks the seal and the card turn are asked for |
-| 2.9 | **Four pieces of music**, 60–90 seconds each, looping, chosen by the capital's part of the world: lute and viol (Europe), oud (North Africa and the Middle East), guzheng (East Asia), drums and kora (elsewhere). Loaded after the game starts; under 1.5 MB together; kept by the service worker. | `sound/`, `sw.js` list in `scripts/build.mjs` | Music changes when the capital's region differs |
+| 2.9 ☑ | **Four pieces of music**, 80 seconds each, looping: lute and viol (Western realms), oud (Islamic), guzheng (East Asian), drums and kora (African and American), chosen by the dress of the player's people, the same families as the faces. A piece is fetched only once a game is under way (370–620 KB as Ogg), kept by the service worker and so played offline; where a browser cannot play Ogg (Safari before 18.4) it takes an AAC copy (about 670 KB). As a piece ends it begins again under its own last note (0.35 s overlap). Silent on the title screen, before the first tap and while the page is hidden. Settings: Off, Soft (the default), Full. | `sound/music-*.ogg` and `.m4a`; `src/ui/music.ts` (`syncMusic`, `MUSIC_TRACKS`, `MUSIC_LEVEL`, `MUSIC_OVERLAP`); `music` in `Settings` | Done: a browser check hears Castile's piece start, loop, stop with the setting, change for the Ottomans and play offline. The four Ogg files are 1.78 MB together, over the 1.5 MB first planned; only one is ever fetched by a game |
 | 2.10 ☑ | **A touch of haptics** (10 ms) on a card played or turned and on each battle round, where the device allows, with a switch in Settings. | `buzz` in `src/ui/sound.ts` | Done (Android browsers; iOS has no vibration API on the web, so there it waits for the store build of 5.1) |
 
 ### Motion and art

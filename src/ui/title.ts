@@ -1,4 +1,5 @@
 // Before a game: the title screen, campaign slots, missions and their builder, and the realm picker.
+import { stopMusic } from './music';
 import type { GameState } from '../types';
 import { NATIONS } from '../data/nations';
 import { GOVS, GOV_ORDER } from '../data/governments';
@@ -331,6 +332,7 @@ export function showPicker(initial?: string) {
 }
 
 export function showTitle() {
+  stopMusic();
   setScreenBack(null);
   migrateOldSave();
   const root = clear($('#app'));

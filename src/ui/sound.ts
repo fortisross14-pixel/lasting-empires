@@ -8,6 +8,8 @@ export type Sfx = 'draw' | 'play' | 'flip' | 'great' | 'plain' | 'bad' | 'seal' 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let noiseBuf: AudioBuffer | null = null;
+/** The audio context, once the first tap has made one: the music sets its volume through it. */
+export const audioCtx = () => ctx;
 /** The last effects asked for, newest last: for the smoke test and for debugging. */
 export const soundLog: string[] = [];
 (globalThis as { __sounds?: string[] }).__sounds = soundLog;

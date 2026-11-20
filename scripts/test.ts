@@ -4,6 +4,7 @@ import { newGame, newMissionGame, endTurn, chooseEventOption, chooseHeir, migrat
 import { quarterFlow, stewardBudget, tradeIncome } from '../src/engine/trade';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { ERAS } from '../src/data/eras';
+import { MUSIC_TRACKS, trackFor } from '../src/ui/music';
 import { EVENT_SCENES, eventsWithArt, FACE_FAMILIES, faceFamily, faceOf } from '../src/ui/art';
 import { gunzipSync } from 'node:zlib';
 import { EVENT, EVENTS, rollEvents } from '../src/engine/events';
@@ -446,6 +447,11 @@ check('faces: sixteen for each family, kept on the person, and two generals diff
 check('age plates and title scenes: one plate for each age, two scenes for the title', () => {
   for (const e of ERAS) ok(existsSync(`art/age_${e.id}.webp`), `the plate of the ${e.name} is missing`);
   for (const n of ['wide', 'tall']) ok(existsSync(`art/title_${n}.webp`), `art/title_${n}.webp is missing`);
+});
+
+check('music: a piece for every family of dress, in both formats', () => {
+  for (const fam of FACE_FAMILIES) { const n = MUSIC_TRACKS[fam]; ok(n, `no music for ${fam}`); for (const ext of ['ogg', 'm4a']) ok(existsSync(`sound/music-${n}.${ext}`), `sound/music-${n}.${ext} is missing`); }
+  eq(trackFor('castilian'), 'europe', 'Castile'); eq(trackFor('turkish'), 'levant', 'the Ottomans');
 });
 
 check('event paintings: every one named is a file, and every event named exists', () => {

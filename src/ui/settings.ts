@@ -10,6 +10,8 @@ export interface Settings {
   calm: boolean;
   /** Volume of sound effects: 0 off, 0.5 soft, 1 full. */
   sfx: number;
+  /** Volume of the music: 0 off, 0.5 soft, 1 full. */
+  music: number;
   /** A short buzz when a card is played or turned, where the device can. */
   haptics: boolean;
   /** Fight battles that are hardly in doubt without stopping the game. */
@@ -22,7 +24,7 @@ export interface Settings {
 }
 
 const KEY = 'lasting-empires.settings';
-const DEFAULTS: Settings = { warn: true, skip: true, calm: false, sfx: 1, haptics: true, quickBattles: false, text: 1, difficulty: STANDARD, length: 'age' };
+const DEFAULTS: Settings = { warn: true, skip: true, calm: false, sfx: 1, music: 0.5, haptics: true, quickBattles: false, text: 1, difficulty: STANDARD, length: 'age' };
 
 let cache: Settings | null = null;
 export function settings(): Settings {

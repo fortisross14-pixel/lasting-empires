@@ -5,7 +5,7 @@ You make them in ChatGPT; I slice the sheets, compress the tiles and wire them i
 
 ## Received
 All sixteen images are in the game: the three event sheets (2.14), the five face sheets (2.15), the six age
-plates (2.16) and the two title scenes (2.17). Only the music remains, if you supply it.
+plates (2.16) and the two title scenes (2.17). The four pieces of music are in too (2.9).
 
 ## How to use this file
 

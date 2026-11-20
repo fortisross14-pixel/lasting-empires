@@ -43,6 +43,7 @@ writeFileSync('dist/lasting-empires.html', artifact);
 writeFileSync('dist/index.html', standalone);
 cpSync('art', 'dist/art', { recursive: true }); // card paintings, fetched on demand
 cpSync('fonts', 'dist/fonts', { recursive: true });
+cpSync('sound', 'dist/sound', { recursive: true }); // music, fetched once a game is under way
 writeFileSync('index.html', standalone); // served by GitHub Pages from the repo root
 writeFileSync('sw.js', sw);
 console.log('built', (artifact.length / 1024).toFixed(0) + ' KB');

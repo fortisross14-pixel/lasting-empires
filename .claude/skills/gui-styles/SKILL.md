@@ -38,6 +38,7 @@ One style, `data-style="chancery"` on `<html>`; its rules are the override block
 - `src/ui/share.ts` draws on a canvas with the same two fonts and the tokens' colours written out (a canvas cannot read CSS variables): keep `INK`, `PAPER`, `WAX` there in step with the style tokens.
 
 ## Sound
+- Music is `src/ui/music.ts`: `syncMusic(culture)` is called on every refresh and acts only on a change; `stopMusic()` on the title. A piece is fetched whole with `fetch` and played from a blob, so the service worker can keep it (a media element's own ranged requests are not cacheable). Volume goes through a Web Audio gain, because iOS ignores an element's `volume`. A new piece is two files, `sound/music-<name>.ogg` and `.m4a`, and a line in `MUSIC_TRACKS`.
 - `sfx(name)` from `src/ui/sound.ts` plays one of the effects in `RECIPES`; `buzz()` is the matching touch of haptics. Call them where the thing happens (a card played, a card turned, End Turn), never from the engine.
 - Effects are synthesized (noise and tones), under a second, and never loop. A new moment gets a new recipe only if no existing one fits; the palette is paper, wax, quill, coin, drum, bell, lute.
 - Sound never carries information alone: whatever it marks is also shown.

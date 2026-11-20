@@ -122,6 +122,9 @@ export function showSettings() {
       h('div', { class: 'set-row' }, h('span', { class: 'gm-t' }, h('b', {}, 'Sound'), h('small', {}, 'Paper, wax, coin and drum, made on the device.')),
         h('div', { class: 'seg set-seg', role: 'radiogroup', 'aria-label': 'Sound' }, ([['Off', 0], ['Soft', 0.5], ['Full', 1]] as [string, number][]).map(([label, v]) =>
           h('button', { class: 'seg-b' + (st.sfx === v ? ' on' : ''), role: 'radio', 'aria-checked': String(st.sfx === v), onclick: () => { setSetting('sfx', v); closeModal(); showSettings(); sfx('coin'); } }, label)))),
+      h('div', { class: 'set-row' }, h('span', { class: 'gm-t' }, h('b', {}, 'Music'), h('small', {}, 'Lute, oud, guzheng or drums, by the people you rule.')),
+        h('div', { class: 'seg set-seg', role: 'radiogroup', 'aria-label': 'Music' }, ([['Off', 0], ['Soft', 0.5], ['Full', 1]] as [string, number][]).map(([label, v]) =>
+          h('button', { class: 'seg-b' + (st.music === v ? ' on' : ''), role: 'radio', 'aria-checked': String(st.music === v), onclick: () => { setSetting('music', v); closeModal(); showSettings(); refresh(); } }, label)))),
       toggle('haptics', 'Touch feedback', 'A short buzz when a card is played or turned, on phones that can.'),
       h('div', { class: 'set-row' }, h('span', { class: 'gm-t' }, h('b', {}, 'Text size'), h('small', {}, 'Larger text in cards, windows and messages.')),
         h('div', { class: 'seg set-seg', role: 'radiogroup', 'aria-label': 'Text size' }, TEXT_SIZES.map(v =>

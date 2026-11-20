@@ -1,4 +1,5 @@
 // The game screen: top bar, map, deck tabs, the strip of wars and tasks, the tutorial, and refresh().
+import { syncMusic } from './music';
 import { sfx } from './sound';
 import type { GameState, RevealItem } from '../types';
 import { CATS } from '../types';
@@ -114,6 +115,7 @@ export function refresh() {
   setTodo(attention(S));
   for (const id of [...seenTodo]) if (!todo.some(a => a.id === id)) seenTodo.delete(id); // gone and back again is news
   renderTop(); renderTabs(); map.render(S); renderTimeline(); renderTracker(); renderLegend();
+  syncMusic(player(S).culture);
   if (sheet) renderSheet();
   if (win) renderWin();
   renderTutorial();

@@ -69,6 +69,8 @@ async function run(browser, name, opts) {
   for (let i = 0; i < 6; i++) { await p.evaluate(() => document.querySelector('#endturn').click()); await wait(1300); await answer(); }
   for (let i = 0; i < 3; i++) { await p.evaluate(() => document.querySelector('.skip-b')?.click()); await wait(700); await answer(); }
   await shot('later');
+  const music = await p.evaluate(() => (window.__music || {}).track);
+  if (music !== 'europe') problems.push(`${name}: the music for a European realm was not asked for (${music})`);
   const sounds = await p.evaluate(() => (window.__sounds || []).join(' '));
   for (const s of ['seal', 'flip']) if (!sounds.includes(s)) problems.push(`${name}: the '${s}' sound was never asked for (${sounds})`);
   // the relations view of the map
