@@ -1829,3 +1829,73 @@ details[open] > summary .br-chev { rotate: 180deg; }
 div.set-row { cursor: default; }
 .toast-msg.undo { display: flex; align-items: center; gap: 12px; pointer-events: auto; }
 .toast-msg.undo .btn { min-height: 36px; padding: 4px 14px; }
+
+/* ---- battles show the armies (roadmap 2.13) ---- */
+[data-style="chancery"] .mbox.battle { gap: 8px; }
+[data-style="chancery"] .b-side { padding: 8px 10px 10px; gap: 8px; border: 1.2px solid var(--text); background: var(--card, #fffdf8); }
+.b-side.foe, .b-side.mine { border-top-width: 1.2px; border-bottom-width: 1.2px; }
+.b-label { grid-template-columns: auto minmax(0, auto) 1fr; gap: 0 10px; }
+.b-label .np-shield { grid-row: auto; }
+.b-rebel { width: 30px; height: 34px; display: grid; place-items: center; color: var(--wax); }
+.b-who { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; }
+.b-who b { font-family: var(--f-display); font-size: 17px; letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-style="chancery"] .hpbar { grid-column: auto; margin: 0; height: 16px; border: 1.2px solid var(--text); background: var(--card, #fffdf8); }
+[data-style="chancery"] .hpbar i { background: var(--text); }
+.b-side.foe .hpbar i { background: var(--wax); }
+[data-style="chancery"] .hpbar em { width: 0; border-left: 2px dashed var(--panel); opacity: 1; background: none; mix-blend-mode: difference; }
+[data-style="chancery"] .hpbar span { right: 5px; top: 0; line-height: 14px; font-size: 11.5px; color: #fff; mix-blend-mode: difference; font-variant-numeric: lining-nums; }
+.utiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 8px 6px; }
+.utile { position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 0; background: none; border: 0; font: inherit; color: inherit; text-align: center; cursor: pointer; min-width: 0; }
+.ut-pic { display: grid; place-items: center; aspect-ratio: 1; border: 1.2px solid var(--text); background: #f1ead8; overflow: hidden; color: var(--text); box-shadow: 2px 2px 0 var(--text); }
+.ut-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.b-side.foe .ut-pic img { transform: scaleX(-1); } /* the two lines face each other */
+.utile .u-bar { height: 4px; min-width: 0; margin-top: 2px; border: 1px solid var(--text); background: var(--card, #fffdf8); border-radius: 0; }
+.utile .u-bar i { background: var(--text); border-radius: 0; }
+.b-side.foe .utile .u-bar i { background: var(--wax); }
+.ut-n { font-size: 11px; line-height: 1.1; color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.ut-vet { position: absolute; top: 1px; left: 3px; font-size: 10px; line-height: 1; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; letter-spacing: -1px; }
+.ut-dmg { position: absolute; top: 28%; left: 0; right: 0; font: 700 17px/1 var(--f-body); color: #fff; text-shadow: 0 0 3px var(--wax), 0 0 3px var(--wax), 0 1px 0 #000; font-variant-numeric: lining-nums; animation: ut-dmg 1.5s ease-out both; pointer-events: none; }
+.utile.hit .ut-pic { animation: ut-hit .4s ease-out; }
+.utile.dead .ut-pic { filter: grayscale(1) contrast(.7); opacity: .45; box-shadow: none; }
+.utile.dead .ut-pic::after { content: '✗'; position: absolute; inset: 0 0 auto 0; aspect-ratio: 1; display: grid; place-items: center; font-size: 30px; color: var(--wax); }
+.utile.dead .ut-n { text-decoration: line-through; }
+@keyframes ut-dmg { from { translate: 0 8px; opacity: 0; } 15% { translate: 0 0; opacity: 1; } 75% { opacity: 1; } to { translate: 0 -10px; opacity: 0; } }
+@keyframes ut-hit { 20% { translate: -3px 0; } 40% { translate: 3px 0; } 60% { translate: -2px 0; } 80% { translate: 1px 0; } }
+[data-style="chancery"] .b-result { border-radius: 0; }
+@media (max-width: 640px) {
+  .utiles { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px 5px; }
+  .ut-n { display: none; }
+  .ut-dmg { font-size: 14px; }
+  .utile.dead .ut-pic::after { font-size: 22px; }
+  [data-style="chancery"] .b-side { padding: 6px 8px 8px; }
+}
+@media (prefers-reduced-motion: reduce) { .ut-dmg { animation: none; } .utile.hit .ut-pic { animation: none; } }
+
+/* ---- outcomes have weight (roadmap 2.12): five levels, each with its own mark, frame and entrance ---- */
+.o-mark { text-align: center; font-size: 15px; line-height: 1; letter-spacing: 2px; margin: -1px 0 3px; color: var(--muted); }
+.k-info.o-0 .o-mark { color: var(--wax); font-size: 17px; }
+.k-info.o-2 .o-mark { color: var(--good); }
+.k-info.o-3 .o-mark, .k-info.o-4 .o-mark { color: var(--leaf); }
+[data-style="chancery"] .k-info.o-3, [data-style="chancery"] .k-info.o-4 { --frame: var(--leaf); --band: var(--leaf); }
+[data-style="chancery"] .k-info.o-3 .c-art, [data-style="chancery"] .k-info.o-4 .c-art { border-color: var(--leaf); color: var(--leaf); }
+[data-style="chancery"] .k-info.o-4::before { border-width: 3px; border-style: double; }
+[data-style="chancery"] .k-info.o-1 .c-art { border-color: var(--muted); color: var(--muted); }
+/* the best: a band of gold leaf passes over the card once it has turned */
+.k-info.o-3::after, .k-info.o-4::after { content: ''; position: absolute; inset: 0 4px 4px 0; pointer-events: none; z-index: 2; background: linear-gradient(105deg, transparent 35%, #f4dc9a99 48%, #fff7d6cc 52%, transparent 65%) no-repeat; background-size: 250% 100%; background-position: 130% 0; }
+.flip.flipped .k-info.o-3::after { animation: leaf 1s .75s ease-out both; }
+.flip.flipped .k-info.o-4::after { animation: leaf 1s .75s ease-out 2 both; }
+@keyframes leaf { from { background-position: 130% 0; } to { background-position: -60% 0; } }
+/* the worst: a torn corner, and the card hangs crooked */
+[data-style="chancery"] .k-info.o-0 { clip-path: polygon(0 0, 100% 0, 100% 78%, 95% 80%, 97% 84%, 90% 86%, 92% 91%, 85% 92%, 86% 97%, 79% 100%, 0 100%); }
+.flip.flipped .k-info.o-0 { rotate: 2deg; }
+.k-info.o-0 .c-title { color: var(--wax); }
+@media (prefers-reduced-motion: reduce) { .flip.flipped .k-info.o-3::after, .flip.flipped .k-info.o-4::after { animation: none; } }
+[data-motion="calm"] .k-info.o-3::after, [data-motion="calm"] .k-info.o-4::after { display: none; }
+.utile .u-bar i { display: block; height: 100%; transition: width .6s; }
+[data-style="chancery"] .hpbar em { mix-blend-mode: normal; border-left: 2px dashed var(--wax); }
+.b-side.foe .hpbar em { border-left-color: var(--text); }
+[data-style="chancery"] .hpbar span { mix-blend-mode: normal; color: var(--text); text-shadow: 0 0 2px var(--card, #fffdf8), 0 0 2px var(--card, #fffdf8), 0 0 3px var(--card, #fffdf8), 0 0 3px var(--card, #fffdf8); font-weight: 700; }
+.utile.dead .ut-pic::after { content: none; }
+.utile.dead::after { content: '✗'; position: absolute; top: 0; left: 0; right: 0; aspect-ratio: 1; display: grid; place-items: center; font-size: 34px; line-height: 1; color: var(--wax); pointer-events: none; }
+.utile.dead .ut-dmg { top: 62%; font-size: 13px; }
+@media (max-width: 640px) { .utile.dead::after { font-size: 24px; } }

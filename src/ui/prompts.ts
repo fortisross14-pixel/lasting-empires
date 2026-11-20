@@ -5,7 +5,7 @@ import { RULER_ARCHS } from '../data/nations';
 import { TROOPS, EQUIPMENT } from '../data/troops';
 import { MISSIONS } from '../data/missions';
 import { goalView } from '../engine/goals';
-import { commandOf, GENERIC_COMMAND } from '../data/characters';
+import { commandOf, GENERIC_COMMAND, OUTCOMES } from '../data/characters';
 import { player, provsOf, atWar, armyPower, nationName } from '../engine/core';
 import { newMissionGame, chooseEventOption, ranking, chooseHeir } from '../engine/turn';
 import { EVENT, eventTitle } from '../engine/events';
@@ -17,7 +17,8 @@ import { icon } from './icons';
 import { troopCard, charCard, handCard, tacticCard, backCard, flipCard } from './cards';
 import { warScore, peaceTerms, enemyDemands, concludePeace } from '../engine/diplo';
 import { troopsNear, setDefence } from '../engine/army';
-import { S, pendingReport, modalOpen, slot, saveNow, save, clearSlot, startIn } from './state';
+import { S, pendingReport, modalOpen, slot, saveNow, save, clearSlot, startIn, shield } from './state';
+import { artImg } from './art';
 import { recordMission, doneCount, showMissions, showTitle, setMissionYear } from './title';
 import { refresh, toast } from './app';
 import { openModal, closeModal } from './modal';
@@ -39,10 +40,16 @@ export function processQueue() {
 }
 export function afterPrompt() { closeModal(); refresh(); setTimeout(processQueue, 60); }
 
+/** The five outcomes, told apart at a glance by a mark as well as by colour: a cross, a dot, one to three stars. */
+const OUTCOME_MARKS = ['✗', '·', '★', '★★', '★★★'];
+export const outcomeLevel = (title: string) => (/ outcome$/.test(title) ? OUTCOMES.findIndex(o => title.startsWith(o.name)) : -1);
+
 export function infoCard(it: RevealItem) {
-  return h('div', { class: `card k-info tone-${it.tone}${/ outcome$/.test(it.title) ? ' is-outcome' : ''}` },
-    h('div', { class: 'c-art', html: icon(it.kind ?? 'star', 30) }),
+  const lvl = outcomeLevel(it.title);
+  return h('div', { class: `card k-info tone-${it.tone}${lvl >= 0 ? ` is-outcome o-${lvl}` : ''}` },
+    h('div', { class: 'c-art', html: icon(lvl === 4 ? 'laurel' : it.kind ?? 'star', 30) }),
     h('div', { class: 'c-name c-title' }, it.title),
+    lvl >= 0 ? h('div', { class: 'o-mark', 'aria-hidden': 'true' }, OUTCOME_MARKS[lvl]) : null,
     h('div', { class: 'c-text' }, it.text));
 }
 
@@ -62,7 +69,7 @@ export function showReveal(title: string, subtitle: string | undefined, items: R
 function stingFor(items: RevealItem[], alarm: boolean): Sfx | null {
   if (alarm || !items.length) return null;
   const out = items.find(it => / outcome$/.test(it.title));
-  if (out) return /^(Great|Exceptional)/.test(out.title) ? 'great' : /^Poor/.test(out.title) ? 'bad' : 'plain';
+  if (out) { const lvl = outcomeLevel(out.title); return lvl >= 3 ? 'great' : lvl === 0 ? 'bad' : 'plain'; }
   const first = items[0];
   if (first.tone === 'bad') return 'bad';
   if (first.tone === 'good') return ['hands', 'ring', 'dove', 'scroll'].includes(first.kind ?? '') ? 'quill' : 'plain';
@@ -168,21 +175,42 @@ export function unitChip(u: { type: string; vet: number; str: number; start: num
     h('span', { class: 'u-bar' }, h('i', { style: `width:${Math.max(0, u.str)}%` })));
 }
 
+/** A company on the battlefield: its painting, its strength, its stars, and what it lost this round. */
+export function unitTile(u: { type: string; vet: number; str: number; garrison?: boolean }, lost = 0) {
+  const d = TROOPS[u.type];
+  const pic = artImg(u.garrison ? 'unit_garrison' : 'unit_' + u.type);
+  const name = d.name + (u.vet ? ' ' + '★'.repeat(u.vet) : '');
+  const gone = u.str <= 0;
+  return h('button', { type: 'button', class: 'utile' + (gone ? ' dead' : '') + (lost > 0 ? ' hit' : ''), 'aria-label': `${name}, ${gone ? 'destroyed' : `strength ${Math.round(u.str)}%`}`,
+    onclick: () => toast(`${name}: ${gone ? 'destroyed' : `strength ${Math.round(u.str)}%`} · melee ${d.melee}, fire ${d.fire}, defence ${d.def}`) },
+    h('span', { class: 'ut-pic', html: pic ?? icon(d.icon, 22) }),
+    u.vet ? h('span', { class: 'ut-vet' }, '★'.repeat(u.vet)) : null,
+    lost > 0 ? h('span', { class: 'ut-dmg' }, `−${Math.round(lost)}`) : null,
+    h('span', { class: 'u-bar' }, h('i', { style: `width:${Math.max(0, Math.min(100, u.str))}%` })),
+    h('span', { class: 'ut-n' }, d.name));
+}
+
 export function showBattle(b: Battle) {
   const me = b.playerSide === 'att' ? b.att : b.def;
   const foe = b.playerSide === 'att' ? b.def : b.att;
   const prov = S.provinces[b.province];
   const box = h('div', { class: 'mbox battle' });
-  const draw = (last?: { mine: string; theirs: string; myC: boolean; theirC: boolean; dmgMe: number; dmgThem: number }) => {
+  type Round = { mine: string; theirs: string; myC: boolean; theirC: boolean; dmgMe: number; dmgThem: number; lost: Map<number, number> };
+  const draw = (last?: Round) => {
     clear(box);
+    const foeNat = S.nations[foe.nation];
     const foeName = foe.nation === 'rebels' ? 'Rebels' : nationName(S, foe.nation);
     const ctx = { conquer: 'Siege of', defend: 'Defence of', raid: 'Raid on', rebels: 'Fighting at', sea: 'Sea battle off' }[b.context];
-    box.append(h('div', { class: 'b-head' }, h('h2', {}, `${ctx} ${prov.name}`), h('p', { class: 'muted' }, `Round ${Math.min(3, b.round + (b.done ? 0 : 1))} of 3 · ${foeName}${foe.fort ? ` · fort ${foe.fort}` : me.fort ? ` · your fort ${me.fort}` : ''}`)));
-    const side = (sd: typeof me, label: string, cls: string) => h('div', { class: 'b-side ' + cls },
-      h('div', { class: 'b-label' }, h('b', {}, label), h('small', {}, sd.general ? `${sd.general.name}` : 'No general'),
-        h('span', { class: 'hpbar' }, h('i', { style: `width:${Math.round(ratio(sd) * 100)}%` }), h('em', { style: `left:${breakLevel(sd) * 100}%`, title: 'Breaking point' }), h('span', {}, `${Math.round(ratio(sd) * 100)}%`))),
-      h('div', { class: 'uchips' }, sd.units.map(unitChip)));
-    box.append(side(foe, foeName, 'foe'));
+    box.append(h('div', { class: 'b-head' }, h('h2', {}, `${ctx} ${prov.name}`), h('p', { class: 'muted' }, `Round ${Math.min(3, b.round + (b.done ? 0 : 1))} of 3${foe.fort ? ` · their walls: level ${foe.fort}` : me.fort ? ` · your walls: level ${me.fort}` : ''}`)));
+    const side = (sd: typeof me, label: string, cls: string, nat?: { id: string; color: string }) => {
+      const pct = Math.round(ratio(sd) * 100), brk = Math.round(breakLevel(sd) * 100);
+      return h('div', { class: 'b-side ' + cls },
+        h('div', { class: 'b-label' }, nat ? shield(nat.id, nat.color, true) : h('span', { class: 'b-rebel', html: icon('torch', 20) }),
+          h('span', { class: 'b-who' }, h('b', {}, label), h('small', {}, sd.general ? sd.general.name : 'No general')),
+          h('span', { class: 'hpbar', role: 'img', 'aria-label': `${label}: ${pct}% of its strength left; it breaks at ${brk}%` }, h('i', { style: `width:${pct}%` }), h('em', { style: `left:${brk}%` }), h('span', {}, `${pct}%`))),
+        h('div', { class: 'utiles' }, sd.units.map(u => unitTile(u, last?.lost.get(u.uid) ?? 0))));
+    };
+    box.append(side(foe, foeName, 'foe', foeNat ? { id: foeNat.id, color: foeNat.color } : undefined));
     const slotFoe = h('div', { class: 'slot' }), slotMe = h('div', { class: 'slot' });
     if (last) {
       slotFoe.append(tacticCard(last.theirs, { small: true, cls: last.theirC ? 'countered' : '' }));
@@ -194,12 +222,13 @@ export function showBattle(b: Battle) {
     box.append(h('div', { class: 'b-mid' }, slotFoe, h('div', { class: 'vs' }, last ? h('div', { class: 'dmg' },
       h('span', { class: 'good' }, `You deal ${last.dmgThem}`), h('span', { class: 'bad' }, `You take ${last.dmgMe}`),
       last.theirC ? h('span', { class: 'good' }, 'Their tactic was countered!') : null, last.myC ? h('span', { class: 'bad' }, 'Your tactic was countered!') : null) : 'vs'), slotMe));
-    box.append(side(me, 'Your army', 'mine'));
+    box.append(side(me, 'Your army', 'mine', { id: S.player, color: player(S).color }));
     if (b.done) {
       const out = b.result ?? (b.result = finishBattle(S, b));
       save();
       box.append(h('div', { class: 'b-result ' + (out.good ? 'win' : 'loss') }, h('h3', {}, out.title), ...out.lines.map(l => h('p', {}, l))),
         h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: () => { S.queue.shift(); afterPrompt(); } }, 'Continue')));
+      if (!resultPlayed) { resultPlayed = true; sfx(out.good ? 'great' : 'bad', 0.35); }
       return;
     }
     // the generals fight it out: you watch
@@ -207,16 +236,18 @@ export function showBattle(b: Battle) {
     box.append(h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: () => { stop = true; autoResolve(S, b); draw(); } }, 'Skip to the result')));
     if (!stop) timer = setTimeout(() => commit(), reduced() ? 300 : 1700);
   };
-  let stop = false;
+  let stop = false, resultPlayed = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
   void timer;
   const commit = () => {
     if (b.done || !document.body.contains(box)) return;
     const beforeMe = hp(me), beforeFoe = hp(foe);
+    const was = new Map([...me.units, ...foe.units].map(u => [u.uid, u.str] as [number, number]));
     const lg = playRound(S, b, null);
     sfx(b.round % 2 ? 'clash' : 'clash2'); buzz(15);
+    const lost = new Map([...me.units, ...foe.units].map(u => [u.uid, Math.max(0, (was.get(u.uid) ?? u.str) - u.str)] as [number, number]));
     const att = b.playerSide === 'att';
-    draw({ mine: att ? lg.attTactic : lg.defTactic, theirs: att ? lg.defTactic : lg.attTactic, myC: att ? lg.attCountered : lg.defCountered, theirC: att ? lg.defCountered : lg.attCountered, dmgMe: Math.round(beforeMe - hp(me)), dmgThem: Math.round(beforeFoe - hp(foe)) });
+    draw({ mine: att ? lg.attTactic : lg.defTactic, theirs: att ? lg.defTactic : lg.attTactic, myC: att ? lg.attCountered : lg.defCountered, theirC: att ? lg.defCountered : lg.attCountered, dmgMe: Math.round(beforeMe - hp(me)), dmgThem: Math.round(beforeFoe - hp(foe)), lost });
     box.querySelectorAll('.slot .card').forEach(c => c.classList.add('slam'));
   };
   draw();
