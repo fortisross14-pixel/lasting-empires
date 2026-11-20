@@ -54,6 +54,8 @@ export function infoCard(it: RevealItem) {
     h('div', { class: 'c-art', html: icon(lvl === 4 ? 'laurel' : it.kind ?? 'star', 30) }),
     h('div', { class: 'c-name c-title' }, it.title),
     lvl >= 0 ? h('div', { class: 'o-mark', 'aria-hidden': 'true' }, OUTCOME_MARKS[lvl]) : null,
+    // colour is never the only signal: news that is not an outcome carries a small mark for good or bad
+    lvl < 0 && it.tone !== 'neutral' ? h('span', { class: 'tone-mark', 'aria-hidden': 'true' }, it.tone === 'good' ? '▴' : '▾') : null,
     h('div', { class: 'c-text' }, it.text));
 }
 

@@ -535,7 +535,7 @@ export function chronicleSheet(body: HTMLElement) {
     body.append(h('div', { class: 'tscroll' }, t));
   } else {
     body.append(h('button', { class: 'btn wide', onclick: () => showHistory() }, 'The history of your realm'));
-    body.append(h('ul', { class: 'log' }, S.log.slice(0, 80).map(l => h('li', { class: 't-' + l.tone }, h('span', { class: 'ly' }, String(l.year)), l.text))));
+    body.append(h('ul', { class: 'log' }, S.log.slice(0, 80).map(l => h('li', { class: 't-' + l.tone }, h('span', { class: 'ly' }, String(l.year)), h('span', {}, l.tone === 'neutral' ? null : h('span', { class: 'tm', 'aria-hidden': 'true' }, l.tone === 'good' ? '▴' : '▾'), l.text)))));
   }
   return [sheetHead('Chronicle', 'Rankings, records and history'), body];
 }

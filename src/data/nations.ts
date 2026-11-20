@@ -33,7 +33,7 @@ bavaria;Bavaria;Bavarian;#5b9bd5;german;catholic;munich;balanced;40;M
 austria;Austria;Austrian;#e8e2d0;austrian;catholic;vienna;expansionist;60;L
 swiss;Swiss Confederacy;Swiss;#b7322c;swiss;catholic;bern;cautious;30;swiss,levy,crossbow
 bohemia;Bohemia;Bohemian;#c9a227;czech;catholic;prague;balanced;45;M
-savoy;Savoy;Savoyard;#9b7bb8;italian;catholic;turin;cautious;25;levy,men_at_arms
+savoy;Savoy;Savoyard;#d2b4e2;italian;catholic;turin;cautious;25;levy,men_at_arms
 milan;Milan;Milanese;#4e95b5;italian;catholic;milan;expansionist;50;levy,crossbow,men_at_arms,knights
 genoa;Genoa;Genoese;#a9b4bb;italian;catholic;genoa;merchant;50;levy,crossbow,crossbow
 venice;Venice;Venetian;#c8603e;italian;catholic;venice;merchant;80;levy,crossbow,crossbow,men_at_arms,bombard
@@ -42,24 +42,24 @@ papacy;Papal States;Papal;#e3d6a4;italian;catholic;rome;cautious;60;levy,levy,me
 naples;Naples;Neapolitan;#7c55a8;italian;catholic;naples;balanced;50;levy,levy,crossbow,men_at_arms,knights
 poland;Poland;Polish;#d4566a;polish;catholic;krakow;balanced;50;L
 lithuania;Lithuania;Lithuanian;#8fae4a;lithuanian;catholic;vilnius;expansionist;40;L
-teutonic;Teutonic Order;Teutonic;#4a4a4a;german;catholic;konigsberg;zealot;35;knights,men_at_arms,crossbow
+teutonic;Teutonic Order;Teutonic;#c9c3b4;german;catholic;konigsberg;zealot;35;knights,men_at_arms,crossbow
 hungary;Hungary;Hungarian;#6f6f96;hungarian;catholic;buda;balanced;50;L
 muscovy;Muscovy;Muscovite;#4f8b3e;russian;orthodox;moscow;expansionist;40;L
-novgorod;Novgorod;Novgorodian;#8a6f3e;russian;orthodox;novgorod;merchant;50;M
+novgorod;Novgorod;Novgorodian;#634021;russian;orthodox;novgorod;merchant;50;M
 kazan;Kazan;Kazani;#5e8f8f;tatar;muslim;kazan;cautious;25;H
-horde;Great Horde;Horde;#a07a40;tatar;muslim;astrakhan;expansionist;20;H
+horde;Great Horde;Horde;#78613f;tatar;muslim;astrakhan;expansionist;20;H
 crimea;Crimea;Crimean;#7aa65a;tatar;muslim;crimea;expansionist;30;H
-moldavia;Moldavia;Moldavian;#b88a3a;romanian;orthodox;suceava;cautious;20;S
+moldavia;Moldavia;Moldavian;#c7c62b;romanian;orthodox;suceava;cautious;20;S
 wallachia;Wallachia;Wallachian;#9c4a3a;romanian;orthodox;tirgoviste;cautious;20;S
-bosnia;Bosnia;Bosnian;#6a7fa0;serbian;catholic;bosnia;cautious;15;S
-serbia;Serbia;Serbian;#a35a5a;serbian;orthodox;belgrade;cautious;20;S
+bosnia;Bosnia;Bosnian;#9fb2d0;serbian;catholic;bosnia;cautious;15;S
+serbia;Serbia;Serbian;#c1a2a2;serbian;orthodox;belgrade;cautious;20;S
 albania;Albania;Albanian;#7a2f2f;albanian;catholic;kruja;cautious;15;S
 byzantium;Byzantium;Byzantine;#8e44ad;greek;orthodox;constantinople;cautious;90;levy,levy,crossbow,men_at_arms,men_at_arms
 ottomans;Ottoman Empire;Ottoman;#3c8f5a;turkish;muslim;edirne;expansionist;90;levy,levy,levy,levy,crossbow,crossbow,crossbow,men_at_arms,men_at_arms,men_at_arms,jinetes,jinetes,jinetes,bombard,bombard
-karaman;Karaman;Karamanid;#b5895a;turkish;muslim;konya;balanced;30;H
+karaman;Karaman;Karamanid;#9d7e34;turkish;muslim;konya;balanced;30;H
 trebizond;Trebizond;Trapezuntine;#c070a0;greek;orthodox;trebizond;cautious;15;S
 georgia;Georgia;Georgian;#c05050;georgian;orthodox;tbilisi;cautious;20;S
-cyprus;Cyprus;Cypriot;#d8b04a;greek;catholic;cyprus;merchant;25;S
+cyprus;Cyprus;Cypriot;#e6cc8a;greek;catholic;cyprus;merchant;25;S
 mamluks;Mamluk Sultanate;Mamluk;#d0a040;arab;muslim;cairo;balanced;90;levy,levy,crossbow,jinetes,jinetes,knights,knights
 aqqoyunlu;Aq Qoyunlu;Aq Qoyunlu;#d8d0b0;turkish;muslim;diyarbakir;expansionist;30;H
 qaraqoyunlu;Qara Qoyunlu;Qara Qoyunlu;#3a3a5a;persian;muslim;tabriz;balanced;40;H
@@ -87,11 +87,11 @@ adal;Adal;Adali;#a0703a;somali;muslim;harar;zealot;20;H
 delhi;Delhi;Delhite;#2a8a4a;hindustani;muslim;delhi;expansionist;70;L
 jaunpur;Jaunpur;Jaunpuri;#6aa07a;hindustani;muslim;jaunpur;balanced;40;M
 bengal;Bengal;Bengali;#3a7a6a;bengali;muslim;gaur;merchant;60;M
-gujarat;Gujarat;Gujarati;#c07a3a;gujarati;muslim;ahmedabad;merchant;60;M
+gujarat;Gujarat;Gujarati;#cf972b;gujarati;muslim;ahmedabad;merchant;60;M
 malwa;Malwa;Malwi;#a05a7a;hindustani;muslim;mandu;balanced;30;S
 mewar;Mewar;Rajput;#d0703a;rajput;hindu;chittor;zealot;30;M
 sindh;Sindh;Sindhi;#7a9a5a;sindhi;muslim;thatta;cautious;25;S
-kashmir;Kashmir;Kashmiri;#9a7ab0;kashmiri;muslim;srinagar;cautious;20;S
+kashmir;Kashmir;Kashmiri;#5c3d87;kashmiri;muslim;srinagar;cautious;20;S
 bahmani;Bahmani;Deccani;#3a5a8a;deccani;muslim;bidar;expansionist;50;L
 vijayanagara;Vijayanagara;Vijayanagari;#c0402a;kannada;hindu;hampi;expansionist;70;L
 calicut;Calicut;Malayali;#d8a03a;malayali;hindu;calicut;merchant;50;S
@@ -119,7 +119,7 @@ inca;Inca Empire;Inca;#d8b02a;quechua;inti;cusco;expansionist;80;E
 chimor;Chimor;Chimú;#a06a5a;chimu;inti;chanchan;cautious;25;N
 mossi;Mossi States;Mossi;#b06a4a;mossi;animist;ouagadougou;expansionist;20;levy,levy,jinetes,jinetes
 oyo;Oyo;Oyo;#c4a24a;yoruba;animist;oyo;expansionist;25;levy,levy,levy,jinetes
-ajuran;Ajuran;Ajuran;#4a8ab0;somali;muslim;mogadishu;merchant;30;S
+ajuran;Ajuran;Ajuran;#90b8d0;somali;muslim;mogadishu;merchant;30;S
 tlaxcala;Tlaxcala;Tlaxcaltec;#b04a4a;nahua;nahuatl;tlaxcala;cautious;20;N
 mixtec;Mixtec Kingdoms;Mixtec;#7a4ab0;mixtec;nahuatl;mixteca;cautious;25;N
 muisca;Muisca Confederation;Muisca;#4ab07a;muisca;animist;muisca;cautious;30;N
@@ -132,7 +132,7 @@ hatakeyama;Hatakeyama;Hatakeyama;#c05a8a;japanese;shinto;kawachi;balanced;30;S
 shiba;Shiba;Shiba;#9ab04a;japanese;shinto;echizen;cautious;30;S
 uesugi;Uesugi;Uesugi;#3a5a9a;japanese;shinto;edo;balanced;35;M
 takeda;Takeda;Takeda;#8a1f1f;japanese;shinto;kai;expansionist;25;S
-imagawa;Imagawa;Imagawa;#d8a84a;japanese;shinto;suruga;balanced;25;S
+imagawa;Imagawa;Imagawa;#e3c93f;japanese;shinto;suruga;balanced;25;S
 date;Date;Date;#4a4a6a;japanese;shinto;mutsu;expansionist;20;S
 otomo;Ōtomo;Ōtomo;#6aa0d0;japanese;shinto;bungo;balanced;30;S
 shimazu;Shimazu;Shimazu;#2f6f5f;japanese;shinto;satsuma;expansionist;30;S
@@ -140,7 +140,7 @@ ryukyu;Ryukyu;Ryukyuan;#3ab0b0;ryukyuan;buddhist;ryukyu;merchant;40;S
 oirats;Oirats;Oirat;#b89a6a;oirat;buddhist;khovd;expansionist;30;levy,jinetes,jinetes,jinetes,jinetes,jinetes
 lanna;Lan Na;Lanna;#b07aa0;thai;buddhist;chiangmai;balanced;25;S
 lanxang;Lan Xang;Lao;#6aa05a;lao;buddhist;luangprabang;cautious;25;S
-hanthawaddy;Hanthawaddy;Mon;#4a8a9a;mon;buddhist;pegu;merchant;35;S
+hanthawaddy;Hanthawaddy;Mon;#38535a;mon;buddhist;pegu;merchant;35;S
 arakan;Arakan;Arakanese;#9a6a4a;rakhine;buddhist;mraukoo;cautious;20;S
 pasai;Samudera Pasai;Pasai;#2f7f4f;malay;muslim;pasai;merchant;25;S
 sunda;Sunda;Sundanese;#a0a03a;sundanese;hindu;sunda;cautious;25;S
@@ -151,8 +151,8 @@ dulkadir;Dulkadir;Dulkadirid;#5f9fa8;turkish;muslim;elbistan;balanced;20;H
 ramadanids;Ramadanids;Ramadanid;#a85a4a;turkish;muslim;adana;cautious;20;H
 hospitallers;Knights Hospitaller;Hospitaller;#9a2a3a;french;catholic;rhodes;zealot;40;knights,knights,men_at_arms,crossbow
 shirvan;Shirvan;Shirvani;#5aa7a0;azeri;muslim;shamakhi;merchant;40;M
-circassia;Circassia;Circassian;#a8784e;circassian;orthodox;circassia;cautious;10;N
-dagestan;Shamkhalate;Dagestani;#6a7a4a;dagestani;muslim;dagestan;cautious;10;N
+circassia;Circassia;Circassian;#baa28d;circassian;orthodox;circassia;cautious;10;N
+dagestan;Shamkhalate;Dagestani;#a2bc6e;dagestani;muslim;dagestan;cautious;10;N
 kurds;Kurdish Emirates;Kurdish;#6a9a6a;kurdish;muslim;bitlis;cautious;15;H
 gilan;Gilan;Gilaki;#8ab050;persian;muslim;gilan;cautious;20;S
 hadramawt;Hadramawt;Hadrami;#7a5aa0;arab;muslim;hadramawt;merchant;20;S

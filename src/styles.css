@@ -1997,3 +1997,12 @@ div.set-row { cursor: default; }
 @media (max-width: 640px) { :root[data-text] .shop-row .shop { grid-template-columns: minmax(0, 1fr); } }
 /* A card's name is never under 13 px on a phone, whatever the size of the card. */
 @media (max-width: 640px) { .card.small .c-name.c-title, .card .c-name.c-title { font-size: max(calc(13px * var(--ts, 1)), 1em); } }
+
+/* ---------- colour is never the only signal (roadmap 2.23) ---------- */
+/* Wherever good and bad were told apart by colour alone, a mark says it too. */
+.toast-msg.t-bad::before { content: '✕'; margin-right: 7px; font-weight: 700; }
+.toast-msg.t-good::before { content: '✓'; margin-right: 7px; font-weight: 700; }
+p.bad::before { content: '! '; font-weight: 700; }
+.log .tm { font-weight: 700; margin-right: 5px; }
+.k-info { position: relative; }
+.k-info .tone-mark { position: absolute; top: 5px; right: 8px; font-size: calc(15px * var(--ts, 1)); line-height: 1; color: var(--band); }
