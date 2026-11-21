@@ -1,3 +1,5 @@
+import { groupOf, groupDef, localUnit } from './techgroups';
+import { TECH_GROUPS } from '../data/techgroups';
 import { goalOf, yearlyGoals, deed, warned, warnedNow, markWarned, GOAL_WEIGHT } from './rivals';
 import { later } from './eventkit';
 import { maxFort } from './core';
@@ -27,7 +29,11 @@ const AI_UPGRADES: [string, string, number][] = [
   ['reiters', 'dragoons', 1615], ['musketeers', 'line_infantry', 1685], ['old_tercio', 'line_infantry', 1695],
 ];
 
-function aiRecruitPool(year: number): [string, number][] {
+function aiRecruitPool(s: GameState, n: Nation): [string, number][] {
+  const year = s.year, g = groupOf(s, n.id), closed = TECH_GROUPS[g].closed;
+  return aiRecruitPoolEuro(year).map(([t, w]) => [TROOPS[t].tech && closed.includes(TROOPS[t].tech!) ? null : localUnit(g, t), w] as [string | null, number]).filter((x): x is [string, number] => !!x[0]);
+}
+function aiRecruitPoolEuro(year: number): [string, number][] {
   const pool: [string, number][] = [['levy', 3], ['crossbow', 2], ['jinetes', 1.5], ['men_at_arms', 1.5], ['knights', 0.7], ['bombard', 0.4]];
   if (year >= 1465) pool.push(['pikemen', 2]);
   if (year >= 1478) pool.push(['arquebusiers', 2]);
@@ -127,7 +133,9 @@ export function aiEconomy(s: GameState, n: Nation) {
   const cap = aiArmyCap(s, n);
   let tries = 2;
   while (tries-- > 0 && n.army.length < cap) {
-    const type = weightedPick(s, aiRecruitPool(s.year));
+    const pool = aiRecruitPool(s, n);
+    if (!pool.length) break;
+    const type = weightedPick(s, pool);
     const cost = 12 + 9 * TROOPS[type].tier;
     if (n.gold < cost + 10 || n.manpower < 2) break;
     n.gold -= cost; n.manpower -= 2;
@@ -148,7 +156,8 @@ export function aiEconomy(s: GameState, n: Nation) {
   }
   for (const t of n.fleet) t.str = Math.min(100, t.str + 20);
   // upgrade old units
-  const upgradeOf = (type: string) => AI_UPGRADES.find(([from, , y]) => from === type && s.year >= y);
+  const own = Object.values(groupDef(s, n.id).lines).flat();
+  const upgradeOf = (type: string) => AI_UPGRADES.find(([from, to, y]) => from === type && s.year >= y && own.includes(to));
   const old = n.army.filter(t => upgradeOf(t.type));
   w.arms = old.length ? w.arms + ARMS_RATE * old.length : Math.min(w.arms, 1);
   for (const t of old) {

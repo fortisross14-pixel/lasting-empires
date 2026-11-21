@@ -1,3 +1,4 @@
+import { groupDef, closedBecause } from './techgroups';
 import { learnGoal, goalOf } from './rivals';
 import { addLoyalty } from './court';
 import { commanderOf } from './commanders';
@@ -137,7 +138,8 @@ export const DIPLO: MissionKind[] = ['relations', 'trade', 'alliance', 'marriage
 
 export function techCost(s: GameState, techId: string): number {
   const t = TECH[techId];
-  return Math.round(t.cost * (1 + Math.max(0, t.year - s.year) / 20)); // ideas ahead of their time are dear
+  // ideas ahead of their time are dear, and dearer far from the centres of the age (data/techgroups.ts)
+  return Math.round(t.cost * (1 + Math.max(0, t.year - s.year) / 20) * groupDef(s).cost);
 }
 
 export function researchRate(s: GameState, ch: Character, track?: string): number {
@@ -316,6 +318,8 @@ export function missionBlocked(s: GameState, kind: MissionKind, target: string, 
     if (t.age > ageIndex(s)) return `Belongs to the Age of ${AGE_NAMES[t.age]}`;
     if (t.req?.some(r => !s.techs.includes(r))) return 'Needs ' + t.req!.filter(r => !s.techs.includes(r)).map(r => TECH[r].name).join(', ');
     if (s.missions.some(m => m.kind === 'research' && m.target === target)) return 'Already being studied';
+    const closed = closedBecause(s, target);
+    if (closed) return closed;
     return null;
   }
   if (kind === 'build') {

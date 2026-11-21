@@ -1,9 +1,10 @@
 // Military window: army, navy, wars and battles, forge recipes.
+import { groupDef } from '../../engine/techgroups';
 import { TROOPS } from '../../data/troops';
 import { TECH } from '../../data/techs';
 import { player, provsOf, incomeOf, armyPower, armyCap, nationName } from '../../engine/core';
 import { disbandTroop } from '../../engine/turn';
-import { unitFor, UNIT_LINES, CLASS_NAME, type UnitClass } from '../../engine/cards';
+import { classOpen, unitFor, UNIT_LINES, CLASS_NAME, type UnitClass } from '../../engine/cards';
 import { h, signed } from '../dom';
 import { icon } from '../icons';
 import { troopCard, troopDetails } from '../cards';
@@ -21,8 +22,9 @@ import { confirmBox } from '../modal';
 export function unitsPanel() {
   const box = h('div', { class: 'units' });
   for (const cls of ['levy', 'inf', 'shot', 'cav', 'art'] as UnitClass[]) {
+    if (!classOpen(S, cls)) continue; // a kind your people cannot raise (no horses in the Americas)
     const now = unitFor(S, cls);
-    const line = UNIT_LINES[cls];
+    const line = groupDef(S).lines[cls] ?? UNIT_LINES[cls];
     const next = line.slice(line.indexOf(now) + 1)[0];
     const d = TROOPS[now];
     box.append(h('div', { class: 'unit-row' },
