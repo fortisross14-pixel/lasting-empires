@@ -2202,3 +2202,7 @@ body:has(#pickbar) #timeline, body:has(#pickbar) #goalbar, body:has(#pickbar) #m
 .crown-links { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin-bottom: 6px; }
 .crown-link { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 6px 10px; background: var(--card, #fffdf8); color: var(--text); border: 1.5px solid var(--text); box-shadow: 2px 2px 0 var(--text); font-family: var(--f-title); font-size: calc(15px * var(--ts, 1)); text-align: left; cursor: pointer; }
 .crown-link span { color: var(--wax); display: grid; }
+
+/* fog of war: what you have not discovered is blank parchment, shapes and all */
+#map .fogcover { fill: #e7dfcb; pointer-events: all; }
+[data-style="portolan"] #map .fogcover, [data-style="heraldic"] #map .fogcover { fill: #1d2a2e; }

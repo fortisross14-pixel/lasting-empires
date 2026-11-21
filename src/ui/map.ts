@@ -142,6 +142,9 @@ export class MapView {
   private terrainG: SVGGElement;
   private ter: Record<string, SVGPathElement> = {};
   private terBuilt = false;
+  private fogHoles!: SVGPathElement;
+  private fogEl!: SVGRectElement;
+  private fogKey = '';
   /** Provinces a goal names: a flag on each, wax while still to take, green when held (goalbar.ts). */
   private goalPins: { id: string; held: boolean }[] = [];
   setGoalPins(pins: { id: string; held: boolean }[]) { this.goalPins = pins; }
@@ -256,6 +259,15 @@ export class MapView {
       this.svg.append(grp);
     }
     for (const d of Object.values(g.landPaths)) this.svg.append(svgEl('path', { d: coastLine(d), class: 'coast', 'fill-rule': 'evenodd' }));
+    // fog of war: unexplored land and sea lie under blank parchment; the provinces you know (and the sea around
+    // them) are cut out of it, so the shape of the unknown world is not given away
+    const fogMask = svgEl('mask', { id: 'fogmask', maskUnits: 'userSpaceOnUse', x: -4000, y: -4000, width: g.W + 8000, height: g.H + 8000 });
+    fogMask.append(svgEl('rect', { x: -4000, y: -4000, width: g.W + 8000, height: g.H + 8000, fill: 'white' }));
+    this.fogHoles = svgEl('path', { fill: 'black', stroke: 'black', 'stroke-width': 24, 'stroke-linejoin': 'round' }) as SVGPathElement;
+    fogMask.append(this.fogHoles);
+    defs.append(fogMask);
+    this.fogEl = svgEl('rect', { x: -4000, y: -4000, width: g.W + 8000, height: g.H + 8000, class: 'fogcover', mask: 'url(#fogmask)' }) as SVGRectElement;
+    this.svg.append(this.fogEl);
     // the ground: one small path of ink marks for each province that is not open country (see buildTerrain)
     this.terrainG = svgEl('g', { class: 'terrain' }) as SVGGElement;
     this.svg.append(this.terrainG);
@@ -730,6 +742,13 @@ export class MapView {
       lbl.classList.toggle('cap', nat?.capital === id);
     }
     const seen = (id: string) => this.revealAll || provKnown(s, id);
+    // the fog is redrawn only when what is known changes
+    const fogKey = this.revealAll ? 'all' : Object.keys(s.provinces).filter(seen).join(',');
+    if (fogKey !== this.fogKey) {
+      this.fogKey = fogKey;
+      this.fogEl.style.display = this.revealAll ? 'none' : '';
+      this.fogHoles.setAttribute('d', this.revealAll ? '' : Object.keys(s.provinces).filter(seen).map(id => g.cells[id] ?? '').join(''));
+    }
     // realm borders, for the lands where something changed
     for (const lid of dirty) {
       const el = this.edgeEls[lid];
