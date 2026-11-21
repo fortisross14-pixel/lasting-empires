@@ -107,6 +107,7 @@ export function renderTutorial() {
 /** Test hooks for the browser checks: the game in play, and a redraw. */
 (globalThis as { __game?: () => unknown; __refresh?: () => void }).__game = () => S;
 (globalThis as { __refresh?: () => void }).__refresh = () => refresh();
+(globalThis as { __map?: () => unknown }).__map = () => map;
 export function refresh() {
   if (undoSnap && gameMark() !== undoMark) clearUndo(); // something else was done since: the snapshot is stale
   setCardGame(S);

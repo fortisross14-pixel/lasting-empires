@@ -20,10 +20,15 @@ import { pickHand, stopMapPick } from './planner';
 import { showSettings, showTurnReport, yearReport } from './endturn';
 
 // ---------- modals ----------
+/** For this long after a dialog opens, a tap on the dark around it does not close it. */
+export const SCRIM_GRACE_MS = 450;
 export function openModal(content: HTMLElement) {
   const m = clear($('#modal'));
   content.prepend(h('div', { class: 'seal', 'aria-hidden': 'true' }, h('i'), h('i'), h('b')));
-  m.append(h('div', { class: 'scrim', onclick: () => { dismissModal(); } }), content);
+  // a dialog opened by a tap must not close on that same tap: phones send a click after the finger lifts, and
+  // where the dialog does not cover that spot the click lands on the scrim around it
+  const opened = performance.now();
+  m.append(h('div', { class: 'scrim', onclick: () => { if (performance.now() - opened > SCRIM_GRACE_MS) dismissModal(); } }), content);
   m.hidden = false;
   setModalOpen(true);
   armBack();

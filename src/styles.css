@@ -2178,3 +2178,8 @@ p.more:not([hidden]) { border-left: 2px solid var(--line); padding-left: 10px; }
 .pk-row .card.chosen { outline: 3px solid var(--wax, #9e1f2a); outline-offset: 3px; }
 .pk-what { min-height: 2.6em; margin: 6px 2px 0; font-size: calc(14px * var(--ts, 1)); text-align: center; }
 @media (max-width: 640px) { .pk-row { gap: 6px; } .pk-row .card { width: calc((100vw - 64px) / 3); height: auto; min-height: 150px; } }
+
+/* taps go through everything drawn over the provinces to the province underneath */
+#map .marks, #map .marks *, #map .fx, #map .labels, #map .rlabels, #map .terrain, #map .goods-icons, #map .mine-bands, #map .grain, #map .edges, #map .coast { pointer-events: none; }
+/* while a card is being placed, nothing lies over the map but the bar that says what to do */
+body:has(#pickbar) #timeline, body:has(#pickbar) #goalbar, body:has(#pickbar) #modebtn, body:has(#pickbar) #legend, body:has(#pickbar) #tracker { display: none !important; }
