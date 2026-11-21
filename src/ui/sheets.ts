@@ -1,4 +1,7 @@
 // Side panels: province, realm, goals, tasks, overseas, chronicle, and the rows they share.
+import { ageOf } from '../engine/ages';
+import { yearReport, showTurnReport } from './endturn';
+import { showEra } from './app';
 import { attitude, goalOf, goalKnown, deedsKnown, TEMPERS, GOAL_MIN, GOAL_YEARS, GOAL_DRIFT, WARNING_VALID } from '../engine/rivals';
 import { threatOf, yearsToLand, FOCUS_WORK, diligence } from '../engine/ai';
 import { TERRAINS, type Terrain } from '../data/terrain';
@@ -594,6 +597,13 @@ export function chronicleSheet(body: HTMLElement) {
 export function realmSheet(body: HTMLElement) {
   const me = player(S);
   const arch = RULER_ARCHS[me.ruler.arch];
+  // everything about the realm as a whole starts here, from the coat of arms
+  const link = (ic: string, label: string, f: () => void) => h('button', { class: 'crown-link', onclick: f }, h('span', { html: icon(ic, 20) }), h('b', {}, label));
+  body.append(h('div', { class: 'crown-links' },
+    S.scenario ? link('star', 'Mission goals', () => openSheet('goals')) : null,
+    link('laurel', 'Chronicle', () => openSheet('chronicle')),
+    link('book', ageOf(S).name.replace('Age of ', 'The age: '), () => showEra()),
+    yearReport ? link('scroll', `The year ${yearReport.year}`, () => showTurnReport()) : null));
   body.append(h('div', { class: 'ruler' },
     shield(S.player, me.color),
     h('div', {}, h('b', {}, me.ruler.name), h('p', { class: 'muted' }, `${arch?.name ?? ''} monarch · reigns since ${me.ruler.from}`), h('p', {}, arch?.desc ?? ''))));

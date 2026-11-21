@@ -16,7 +16,8 @@ function playsOnMap(uid: number): boolean {
   const d = hc && CARDS[hc.card];
   if (!d?.missions?.length) return false;
   if (['conquer', 'raid', 'conquista'].includes(d.missions[0])) return true;
-  return missionTargets(uid, true).some(r => r.acts.some(a => !a.why && S.provinces[a.target]));
+  // a province, or a realm whose lands can be tapped
+  return missionTargets(uid, true).some(r => r.acts.some(a => !a.why && (S.provinces[a.target] || S.nations[a.target]?.alive)));
 }
 export function renderHandBtn() {
   const b = document.getElementById('handbtn');

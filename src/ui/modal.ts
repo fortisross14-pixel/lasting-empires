@@ -20,10 +20,15 @@ import { pickHand, stopMapPick } from './planner';
 import { showSettings, showTurnReport, yearReport } from './endturn';
 
 // ---------- modals ----------
+/** For this long after a dialog opens, a tap on the dark around it does not close it. */
+export const SCRIM_GRACE_MS = 450;
 export function openModal(content: HTMLElement) {
   const m = clear($('#modal'));
   content.prepend(h('div', { class: 'seal', 'aria-hidden': 'true' }, h('i'), h('i'), h('b')));
-  m.append(h('div', { class: 'scrim', onclick: () => { dismissModal(); } }), content);
+  // a dialog opened by a tap must not close on that same tap: phones send a click after the finger lifts, and
+  // where the dialog does not cover that spot the click lands on the scrim around it
+  const opened = performance.now();
+  m.append(h('div', { class: 'scrim', onclick: () => { if (performance.now() - opened > SCRIM_GRACE_MS) dismissModal(); } }), content);
   m.hidden = false;
   setModalOpen(true);
   armBack();
@@ -102,13 +107,7 @@ export function showGameMenu() {
   openModal(h('div', { class: 'mbox narrow gmenu' },
     h('div', { class: 'gm-head' }, h('h2', {}, 'Menu'), h('button', { class: 'iconbtn', 'aria-label': 'Close', onclick: closeModal, html: icon('close', 18) })),
     h('div', { class: 'gm-list' },
-      sc ? row('star', 'Mission goals', sc.name, () => openSheet('goals')) : null,
       row('hourglass', 'Tasks under way', S.missions.length ? 'Your people at work, and when they finish' : 'Nobody is at work right now', () => openSheet('missions'), S.missions.length ? String(S.missions.length) : ''),
-      row('crown', 'Realm and ruler', `${player(S).ruler.name} · cards and nation points each year`, () => openSheet('realm')),
-      row('anchor', 'Overseas', 'Lands beyond the sea: discovered, settled, still unknown', () => openSheet('overseas')),
-      yearReport ? row('scroll', `The year ${yearReport.year}`, 'Battles, tasks finished, ducats and cards of the last year', () => showTurnReport()) : null,
-      row('laurel', 'Chronicle', 'Rankings of the powers, records and history', () => openSheet('chronicle')),
-      row('book', ageOf(S).name, 'The age you live in and the next one', () => showEra()),
       row('gear', 'Settings', `${(DIFFICULTY[S.difficulty ?? STANDARD] ?? DIFFICULTY[STANDARD]).name} · reminders ${settings().warn ? 'on' : 'off'}`, () => showSettings())),
     h('p', { class: 'muted small gm-save' }, `Saved in slot ${slot} every season.`),
     h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: () => { saveNow(); closeModal(); showTitle(); } }, 'Save and exit to title'), h('button', { class: 'btn primary', onclick: closeModal }, 'Continue'))));

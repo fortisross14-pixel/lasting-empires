@@ -62,8 +62,10 @@ async function run(browser, name, opts) {
   // the menu and everything in it
   const rows = ['Tasks under way', 'Realm and ruler', 'Chronicle', 'Settings'];
   for (const r of rows) {
-    await tap('.menu-b', 'Menu'); if (r === rows[0]) await shot('menu');
-    await tap(`.gm-row >> text=${r}`, r); if (r === 'Settings') await shot('settings');
+    // the realm and its records open from the coat of arms; tasks and settings from the menu
+    if (r === 'Realm and ruler' || r === 'Chronicle') { await tap('#top .crest', 'the coat of arms'); if (r === 'Chronicle') await tap('#sheet .crown-link >> text=Chronicle', 'Chronicle'); }
+    else { await tap('.menu-b', 'Menu'); if (r === rows[0]) await shot('menu'); await tap(`.gm-row >> text=${r}`, r); }
+    if (r === 'Settings') await shot('settings');
     if (r === 'Chronicle') { await shot('chronicle'); await tap('#sheet .seg-b >> text=Rules', 'the Rules page'); await shot('rules'); await tap('#sheet .seg-b >> text=Annals', 'the Annals'); await tap('#sheet .btn.wide', 'the history of the realm'); await shot('history'); }
     await p.evaluate(() => { const m = document.querySelector('#modal'); if (m && !m.hidden) m.querySelector('.btn.primary, .iconbtn')?.click(); document.querySelector('#sheet:not([hidden]) .iconbtn')?.click(); }); await wait();
   }

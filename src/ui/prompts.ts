@@ -162,7 +162,7 @@ export function showPicks(year: number, picks: { cat: Cat; options: string[] }[]
     afterPrompt();
   } }, `Take ${picks.length === 1 ? 'it' : 'them'}`);
   const rows = picks.map((pk, i) => {
-    const what = h('p', { class: 'pk-what muted' }, 'Tap a card to see what it does.');
+    const what = h('p', { class: 'pk-what muted' }, 'Tap to choose · hold to read');
     const row = h('div', { class: 'pk-row' }, pk.options.map((id, j) => {
       const el = handCard(id);
       el.addEventListener('click', () => {
@@ -202,7 +202,7 @@ export function showDraft(kind: string, options: DraftOption[]) {
   });
   const hint = h('p', { class: 'muted center' }, 'Revealing…');
   openModal(h('div', { class: 'mbox reveal' }, h('h2', {}, t), h('p', { class: 'muted' }, sub), row, hint));
-  flipAll(flips, 450).then(() => { ready = true; hint.textContent = 'Tap a card to keep it.'; });
+  flipAll(flips, 450).then(() => { ready = true; hint.textContent = 'Tap a card to keep it · hold it to read it'; });
 }
 
 export function heirCard(hr: Heir) {
@@ -227,7 +227,7 @@ export function showSuccession(heirs: Heir[], old: string) {
     return f;
   });
   const hint = h('p', { class: 'muted center' }, 'Revealing the heirs…');
-  openModal(h('div', { class: 'mbox reveal' }, h('h2', {}, `${old} is dead`), h('p', { class: 'muted' }, 'Choose who takes the crown. Their talents shape the cards you draw.'), row, hint));
+  openModal(h('div', { class: 'mbox reveal' }, h('h2', {}, 'A new reign begins'), h('p', { class: 'muted' }, `${old} is dead; the game goes on with the heir you crown. Each heir brings more of some kinds of card.`), row, hint));
   flipAll(flips, 450).then(() => { ready = true; hint.textContent = 'Tap an heir to crown them.'; });
 }
 

@@ -2178,3 +2178,31 @@ p.more:not([hidden]) { border-left: 2px solid var(--line); padding-left: 10px; }
 .pk-row .card.chosen { outline: 3px solid var(--wax, #9e1f2a); outline-offset: 3px; }
 .pk-what { min-height: 2.6em; margin: 6px 2px 0; font-size: calc(14px * var(--ts, 1)); text-align: center; }
 @media (max-width: 640px) { .pk-row { gap: 6px; } .pk-row .card { width: calc((100vw - 64px) / 3); height: auto; min-height: 150px; } }
+
+/* taps go through everything drawn over the provinces to the province underneath */
+#map .marks, #map .marks *, #map .fx, #map .labels, #map .rlabels, #map .terrain, #map .goods-icons, #map .mine-bands, #map .grain, #map .edges, #map .coast { pointer-events: none; }
+/* while a card is being placed, nothing lies over the map but the bar that says what to do */
+body:has(#pickbar) #timeline, body:has(#pickbar) #goalbar, body:has(#pickbar) #modebtn, body:has(#pickbar) #legend, body:has(#pickbar) #tracker { display: none !important; }
+
+/* ---------- hold a card to read it (longpress.ts) ---------- */
+#lp { position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; padding: 16px; background: rgba(20, 16, 12, .55); }
+#lp .lp-box { width: min(440px, 100%); max-height: calc(100% - 24px); overflow-y: auto; padding: 16px; background: var(--panel, #fbf8f1); border: 1.5px solid var(--text); box-shadow: 4px 4px 0 var(--text); display: grid; gap: 10px; }
+#lp .lp-card { width: 100%; pointer-events: none; }
+#lp .lp-card .c-text { display: block !important; }
+#lp .lp-text { margin: 0; font-size: calc(16px * var(--ts, 1)); line-height: 1.4; }
+#lp .lp-hint { color: var(--muted); text-align: center; }
+.card { -webkit-touch-callout: none; user-select: none; }
+/* cards being chosen show their picture and name; hold one to read it */
+.reveal-row .card[data-card] .c-text, .reveal-row .card[data-troop] .c-text { display: none; }
+.reveal-row .card[data-card] .c-art, .reveal-row .card[data-troop] .c-art { flex: 1 1 auto; min-height: 0; }
+.reveal-row .card[data-card] .c-art .c-pic, .reveal-row .card[data-troop] .c-art .c-pic { width: 100%; height: 100%; object-fit: cover; }
+.hold-hint { margin: 2px 0 0; text-align: center; color: var(--muted); font-size: calc(14px * var(--ts, 1)); }
+
+/* the crown panel: the realm's records, one tap from the coat of arms */
+.crown-links { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin-bottom: 6px; }
+.crown-link { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 6px 10px; background: var(--card, #fffdf8); color: var(--text); border: 1.5px solid var(--text); box-shadow: 2px 2px 0 var(--text); font-family: var(--f-title); font-size: calc(15px * var(--ts, 1)); text-align: left; cursor: pointer; }
+.crown-link span { color: var(--wax); display: grid; }
+
+/* fog of war: what you have not discovered is blank parchment, shapes and all */
+#map .fogcover { fill: #e7dfcb; pointer-events: all; }
+[data-style="portolan"] #map .fogcover, [data-style="heraldic"] #map .fogcover { fill: #1d2a2e; }

@@ -99,6 +99,10 @@ const TERRAIN_MARKS: Record<string, string> = {
   mountains: 'M1 20 L9 4 L13.5 12 M11 20 L16.5 9 L23 20 M9 4 L10 11 L8 14 M16.5 9 L17.5 14',
   desert: 'M1 14 Q6.5 7 12 14 Q17.5 7 23 14 M5 19 L5.4 19 M12 18 L12.4 18 M19 19 L19.4 19',
 };
+/** How far a finger may wander and still be a tap, in screen pixels (all the moves added up). */
+const TAP_SLOP = 14;
+/** While placing a card: how near a lit province's centre a tap beside it may land, in screen pixels. */
+const TAP_REACH = 44;
 /** A standing pawn, the army's piece on the map. */
 const PIECE_PAWN = 'M-7 2 C-7 -4 -5 -8 -3 -10 A5 5 0 1 1 3 -10 C5 -8 7 -4 7 2 Z';
 const hashStr = (t: string) => { let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
@@ -138,6 +142,9 @@ export class MapView {
   private terrainG: SVGGElement;
   private ter: Record<string, SVGPathElement> = {};
   private terBuilt = false;
+  private fogHoles!: SVGPathElement;
+  private fogEl!: SVGRectElement;
+  private fogKey = '';
   /** Provinces a goal names: a flag on each, wax while still to take, green when held (goalbar.ts). */
   private goalPins: { id: string; held: boolean }[] = [];
   setGoalPins(pins: { id: string; held: boolean }[]) { this.goalPins = pins; }
@@ -172,6 +179,8 @@ export class MapView {
   private held = false;
   private pointers = new Map<number, { x: number; y: number }>();
   private moved = 0;
+  /** Where the finger first touched: a tap means the province under it there, not where it lifted. */
+  private downAt = { x: 0, y: 0 };
   private pinchStart: { d: number; vb: { x: number; y: number; w: number; h: number }; cx: number; cy: number } | null = null;
 
   constructor(host: HTMLElement) {
@@ -250,6 +259,15 @@ export class MapView {
       this.svg.append(grp);
     }
     for (const d of Object.values(g.landPaths)) this.svg.append(svgEl('path', { d: coastLine(d), class: 'coast', 'fill-rule': 'evenodd' }));
+    // fog of war: unexplored land and sea lie under blank parchment; the provinces you know (and the sea around
+    // them) are cut out of it, so the shape of the unknown world is not given away
+    const fogMask = svgEl('mask', { id: 'fogmask', maskUnits: 'userSpaceOnUse', x: -4000, y: -4000, width: g.W + 8000, height: g.H + 8000 });
+    fogMask.append(svgEl('rect', { x: -4000, y: -4000, width: g.W + 8000, height: g.H + 8000, fill: 'white' }));
+    this.fogHoles = svgEl('path', { fill: 'black', stroke: 'black', 'stroke-width': 24, 'stroke-linejoin': 'round' }) as SVGPathElement;
+    fogMask.append(this.fogHoles);
+    defs.append(fogMask);
+    this.fogEl = svgEl('rect', { x: -4000, y: -4000, width: g.W + 8000, height: g.H + 8000, class: 'fogcover', mask: 'url(#fogmask)' }) as SVGRectElement;
+    this.svg.append(this.fogEl);
     // the ground: one small path of ink marks for each province that is not open country (see buildTerrain)
     this.terrainG = svgEl('g', { class: 'terrain' }) as SVGGElement;
     this.svg.append(this.terrainG);
@@ -385,13 +403,14 @@ export class MapView {
     svg.addEventListener('pointerdown', e => {
       svg.setPointerCapture(e.pointerId);
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      this.downAt = { x: e.clientX, y: e.clientY };
       this.moved = 0;
       this.held = false;
       clearTimeout(this.holdTimer);
       if (this.pickMode && e.pointerType === 'touch' && this.pointers.size === 1) {
         const x = e.clientX, y = e.clientY;
         this.holdTimer = window.setTimeout(() => {
-          if (this.moved > 6 || this.pointers.size !== 1) return;
+          if (this.moved > TAP_SLOP || this.pointers.size !== 1) return;
           const id = this.idAt(x, y);
           if (id) { this.held = true; navigator.vibrate?.(30); this.onPick(id); }
         }, 450);
@@ -411,8 +430,8 @@ export class MapView {
         const { scale } = this.toMap(0, 0);
         const dx = cur.x - prev.x, dy = cur.y - prev.y;
         this.moved += Math.abs(dx) + Math.abs(dy);
-        if (this.moved > 6) clearTimeout(this.holdTimer);
-        if (this.moved > 6) { this.vb.x -= dx * scale; this.vb.y -= dy * scale; this.clampVb(); this.apply(); }
+        if (this.moved > TAP_SLOP) clearTimeout(this.holdTimer);
+        if (this.moved > TAP_SLOP) { this.vb.x -= dx * scale; this.vb.y -= dy * scale; this.clampVb(); this.apply(); }
       } else if (this.pointers.size === 2 && this.pinchStart) {
         this.moved = 99;
         const [a, b] = [...this.pointers.values()];
@@ -430,8 +449,8 @@ export class MapView {
       if (this.pointers.size < 2) this.pinchStart = null;
       clearTimeout(this.holdTimer);
       if (this.held) { this.held = false; return; }
-      if (was === 1 && this.moved <= 6 && e.type === 'pointerup') {
-        const id = this.idAt(e.clientX, e.clientY);
+      if (was === 1 && this.moved <= TAP_SLOP && e.type === 'pointerup') {
+        const id = this.idAt(this.downAt.x, this.downAt.y);
         if (this.pickMode) { if (id) this.onPick(id); return; } // choosing where a card goes: a tap is enough
         this.select(id);
         this.onSelect(id);
@@ -468,10 +487,27 @@ export class MapView {
     return id;
   }
 
+  /** The province under a finger: the first one under the point, whatever lies on top of it (a piece, a flag,
+   *  a name). While a card is being placed, a tap that lands on no province at all (the sea at a coast) takes the
+   *  nearest lit one within reach. */
   private idAt(x: number, y: number): string | null {
-    const hit = document.elementFromPoint(x, y);
-    const target = hit?.closest?.('[data-id]') as SVGElement | null;
-    return target?.getAttribute('data-id') ?? null;
+    for (const e of document.elementsFromPoint(x, y)) {
+      if (!this.svg.contains(e)) continue;
+      const id = (e as Element).closest?.('[data-id]')?.getAttribute('data-id');
+      if (id) return id; // a province under the finger is the one meant, lit or not (an unlit one says why)
+    }
+    return this.pickMode ? this.nearestTarget(x, y) : null;
+  }
+  private nearestTarget(x: number, y: number): string | null {
+    const m = this.svg.getScreenCTM(), g = getGeo();
+    if (!m) return null;
+    let best: string | null = null, bd = TAP_REACH;
+    for (const id of this.targets) {
+      const c = g.center[id]; if (!c) continue;
+      const d = Math.hypot(m.a * c[0] + m.c * c[1] + m.e - x, m.b * c[0] + m.d * c[1] + m.f - y);
+      if (d < bd) { bd = d; best = id; }
+    }
+    return best;
   }
 
   /** What changed since the last draw, shown where it happened: a battle, a province taken or lost, land improved,
@@ -706,6 +742,13 @@ export class MapView {
       lbl.classList.toggle('cap', nat?.capital === id);
     }
     const seen = (id: string) => this.revealAll || provKnown(s, id);
+    // the fog is redrawn only when what is known changes
+    const fogKey = this.revealAll ? 'all' : Object.keys(s.provinces).filter(seen).join(',');
+    if (fogKey !== this.fogKey) {
+      this.fogKey = fogKey;
+      this.fogEl.style.display = this.revealAll ? 'none' : '';
+      this.fogHoles.setAttribute('d', this.revealAll ? '' : Object.keys(s.provinces).filter(seen).map(id => g.cells[id] ?? '').join(''));
+    }
     // realm borders, for the lands where something changed
     for (const lid of dirty) {
       const el = this.edgeEls[lid];

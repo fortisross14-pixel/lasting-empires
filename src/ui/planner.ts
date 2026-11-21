@@ -249,14 +249,16 @@ export let pickHand: number | null = null;
 export function startMapPick(handUid: number) {
   const rows = missionTargets(handUid, true);
   const attack = ['conquer', 'raid', 'conquista'].includes(CARDS[S.hand.find(x => x.uid === handUid)?.card ?? '']?.missions?.[0] ?? '');
-  const ids = rows.flatMap(r => r.acts.filter(a => attack || !a.why).map(a => a.target));
+  // a card aimed at a realm lights every known province of it: tap any of them to choose the realm
+  const lands = (t: string) => (S.provinces[t] ? [t] : S.nations[t] ? provsOf(S, t).filter(p => provKnown(S, p.id)).map(p => p.id) : []);
+  const ids = rows.flatMap(r => r.acts.filter(a => attack || !a.why).flatMap(a => lands(a.target)));
   if (!attack && !ids.length) { toast('Nowhere to play this card right now', 'bad'); return; }
   pickHand = handUid;
   if (win) closeWin();
   closeSheet();
   map.setPick(true, ids);
   // frame the targets that can be reached now (the far ones are a base away) together with home
-  const near = rows.filter(r => r.acts.some(a => a.kind !== 'base')).flatMap(r => r.acts.map(a => a.target)).filter(id => S.provinces[id]);
+  const near = rows.filter(r => r.acts.some(a => a.kind !== 'base')).flatMap(r => r.acts.flatMap(a => (S.provinces[a.target] ? [a.target] : S.nations[a.target] && S.provinces[S.nations[a.target].capital]?.owner === a.target ? [S.nations[a.target].capital] : [])));
   const valid = ids.filter(id => S.provinces[id]);
   map.focus([...new Set(near.length ? near : valid)].concat(provsOf(S, S.player).map(p => p.id)), 60);
   document.getElementById('pickbar')?.remove();
@@ -277,14 +279,16 @@ export function onMapPick(id: string) {
   const handUid = pickHand;
   if (!S.hand.some(x => x.uid === handUid)) { stopMapPick(); return; }
   const p = S.provinces[id];
-  const row = missionTargets(handUid, true).find(r => r.acts.some(a => a.target === id));
+  // a province, or the realm it belongs to when the card is aimed at realms
+  const owner = p?.owner;
+  const row = missionTargets(handUid, true).find(r => r.acts.some(a => a.target === id)) ?? missionTargets(handUid, true).find(r => r.acts.some(a => a.target === owner && !!S.nations[a.target]));
   if (!row) {
     const attack = ['conquer', 'raid', 'conquista'].includes(CARDS[S.hand.find(x => x.uid === handUid)!.card].missions?.[0] ?? '');
     const why = !p ? 'Not a province' : !attack ? `${p.name} is not a choice for this card` : p.owner === S.player ? `${p.name} is already yours` : !provKnown(S, id) ? 'You have not mapped that land' : !atWar(S, S.player, p.owner) ? `You are not at war with ${nationName(S, p.owner)}` : `${p.name} is out of reach`;
     toast(why, 'bad');
     return;
   }
-  const acts = row.acts.filter(a => a.target === id);
+  const acts = row.acts.filter(a => a.target === id || a.target === owner);
   openModal(h('div', { class: 'mbox narrow' },
     h('h2', {}, row.label), h('p', { class: 'muted' }, row.sub),
     h('div', { class: 'mrow' },
