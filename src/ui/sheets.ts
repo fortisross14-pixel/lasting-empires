@@ -31,7 +31,7 @@ import { GOODS } from '../data/goods';
 import { workshopCap, provinceOutput, sideOutput } from '../engine/trade';
 import { REGIONS, HOME_REGIONS, NATIVE_EMPIRES } from '../data/overseas';
 import { NO_STATE } from '../data/nations';
-import {
+import { colonialYield,
   player, provsOf, playerManpower, getRel, atWar, hasTreaty, enemiesOf, alliesOf, courtCap, courtCount, provinceIncome, buildingAllowed, buildingCost, nationName,
   inTruce, tierOf, TIERS, population, townSlots, ruralSlots, builtAt, ownGoods,
 } from '../engine/core';
@@ -319,7 +319,7 @@ export function provinceSheet(id: string, body0: HTMLElement) {
     const cc = cardFor(S, 'colonize');
     body.append(h('h3', {}, 'Unclaimed land'));
     body.append(h('p', { class: 'muted' }, `No state rules here. The ${CULTURE_NAMES[p.culture] ?? p.culture} people live by their own ways.`));
-    body.append(actionRow('tower', `Colonise ${p.name}`, `${Math.round(colonyCost(S))} ducats and 1 manpower · a colonist settles it`, !cc ? 'Needs a Colonial Charter card (Internal)' : missionBlocked(S, 'colonize', id), () => openPlanner('colonize', id, undefined, cc!.uid)));
+    body.append(actionRow('tower', `Colonise ${p.name}`, `${Math.round(colonyCost(S))} ducats and 1 manpower · then pays about ${(provinceIncome(S, id) + colonialYield(S, id, S.player)).toFixed(1)} a year${colonialYield(S, id, S.player) >= 1.5 ? ` (${GOODS[p.good]?.name.toLowerCase()})` : ''}`, !cc ? 'Needs a Colonial Charter card (Internal)' : missionBlocked(S, 'colonize', id), () => openPlanner('colonize', id, undefined, cc!.uid)));
     return [sheetHead(p.name, 'Unclaimed land', '#b9ad8e'), body];
   } else {
     const war = atWar(S, S.player, p.owner);

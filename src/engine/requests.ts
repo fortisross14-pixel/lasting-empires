@@ -33,7 +33,18 @@ const defy = (s: GameState, v: Vars) => {
   return [bad('War', `${n.name} declares war on you. You answered as a monarch should: prestige +2.`, 'sword')];
 };
 
+const OPENS = 'From now on your scholars can study Strangers\' Arms and Strangers\' Ships (Research deck): the road to their guns and ships.';
 export const REQUEST_EVENTS: EventDef[] = [
+  // ---------- first contact: the strangers come (techgroups.ts checkFirstContact) ----------
+  {
+    id: 'first_contact', title: 'Strangers from the Sea', art: 'ship', chance: 0, repeat: 0, cond: () => true,
+    text: (s, v) => `Ships with white wings have come to ${s.provinces[String(v.prov)]?.name ?? 'our coasts'}. The men of ${nm(s, v)} wear iron, ride great beasts and carry weapons that speak with thunder. They have built a fort. More ships will follow.`,
+    options: [
+      { label: 'Receive them, and learn what we can', run: (s, v) => { addRel(s, P(s), String(v.nation), 25); return [good('Gifts are exchanged', `Relations with ${nm(s, v)} +25. ${OPENS}`, 'hands')]; } },
+      { label: 'Watch them, and keep our counsel', run: s => { stab(s, 1); return [neutral('Watchers on the hills', `Stability +1. ${OPENS}`, 'eye')]; } },
+      { label: 'Drive them back into the sea', run: (s, v) => { if (!atWar(s, P(s), String(v.nation))) declareWar(s, P(s), String(v.nation)); return [bad('War with the strangers', `You are at war with ${nm(s, v)}. ${OPENS}`, 'sword')]; } },
+    ],
+  },
   // ---------- the warning before the blow ----------
   {
     id: 'war_warning', title: (s, v) => `${nm(s, v)} Gathers on Your Border`, art: 'banner', chance: 0, repeat: 0, cond: () => true,

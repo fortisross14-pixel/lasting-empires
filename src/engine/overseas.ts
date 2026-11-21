@@ -200,13 +200,15 @@ export function resolveConquista(s: GameState, id: string, ch: Character, troopU
 }
 
 /** AI crowns also settle the world: overseas for the colonial powers, over land for their neighbours. */
+/** Each year, the chance that a colonial power plants a new colony (was 0.05: too slow for the Americas). */
+export const AI_COLONY_CHANCE = 0.12;
 export function aiOverseas(s: GameState) {
   const free = Object.values(s.provinces).filter(p => p.owner === NO_STATE);
   if (!free.length) return;
   for (const [id, from] of Object.entries(COLONIAL_AI)) {
     const n = s.nations[id];
     if (id === s.player || !n?.alive || n.overlord || s.year < from || !hasCoast(s, id)) continue;
-    if (rand(s) > 0.05) continue;
+    if (rand(s) > AI_COLONY_CHANCE) continue;
     const age = s.year - from;
     const open = ageId(s) !== 'reconquest' ? s.year - (s.age?.since ?? s.year) : -1;
     const reach = (r: string) => { const d = REGIONS[r]?.dist ?? 1; return d === 1 || (open >= 0 && ((d === 2 && open > 3) || (d === 3 && open > 20))); };

@@ -7,7 +7,8 @@ import { ERAS } from '../src/data/eras';
 import { MUSIC_TRACKS, trackFor } from '../src/ui/music';
 import { aiEconomy, worksOf, landRate, yearsToLand, diligence, DILIGENCE_SPREAD } from '../src/engine/ai';
 import { cardHasTarget } from '../src/engine/pace';
-import { closedBecause, groupOf } from '../src/engine/techgroups';
+import { closedBecause, groupOf, checkFirstContact } from '../src/engine/techgroups';
+import { provRegion } from '../src/engine/overseas';
 import { techCost } from '../src/engine/missions';
 import { unitFor, classOpen } from '../src/engine/cards';
 import { RETIRED, cardFor, addCard as addCardT } from '../src/engine/cards';
@@ -507,6 +508,11 @@ check('regions: the Inca cannot study gunpowder or raise horse, Castile is as it
   ok(!Object.values(inca.nations).filter(n => groupOf(inca, n.id) === 'american').some(n => n.army.some(t => ['crossbow', 'jinetes', 'knights', 'arquebusiers'].includes(t.type))), 'European troops in an American army');
   eq(groupOf(cas, 'ottomans'), 'islamic', 'Ottomans');
   eq(CARDS.condottieri.weight(inca), 0, 'Swiss mercenaries for the Inca');
+  // first contact: a colony of a realm that knows gunpowder, in a region where the Inca hold land
+  inca.techs = inca.techs.filter(x => x !== 'foreign_arms');
+  const own = provsOf(inca, 'inca').map(p => p.id);
+  const near = Object.values(inca.provinces).find(p => p.owner === 'natives' && own.some(o => provRegion(o) === provRegion(p.id)));
+  if (near) { near.owner = 'castile'; checkFirstContact(inca); ok(inca.flags.first_contact, 'no first contact when Castile lands in the Inca region'); ok(inca.pending?.some(x => x.id === 'first_contact'), 'no First Contact event'); ok(!/Needs contact/.test(closedBecause(inca, 'foreign_arms') ?? ''), "Strangers' Arms still closed after first contact"); }
 });
 
 check('event paintings: every one named is a file, and every event named exists', () => {
@@ -642,7 +648,7 @@ check('rivals ask: a warning, an ultimatum, silver, a joint war, a friend given 
     if (!atWar(s, 'england', 'france')) declareWar(s, 'england', 'france');
     addRel(s, 'france', 'england', -60 - getRel(s, 'france', 'england'));
     s.nations.england.goal = { target: 'castile', since: s.year };
-    const fixed: Record<string, Record<string, string | number>> = { war_warning: { nation: 'castile' }, ultimatum_due: { nation: 'castile', prov: provsOf(s, 'portugal').find(p => p.id !== player(s).capital)!.id } };
+    const fixed: Record<string, Record<string, string | number>> = { first_contact: { nation: 'castile', prov: provsOf(s, 'castile')[0].id }, war_warning: { nation: 'castile' }, ultimatum_due: { nation: 'castile', prov: provsOf(s, 'portugal').find(p => p.id !== player(s).capital)!.id } };
     ok(!def.cond || def.cond(s), `${def.id}: its condition fails in a game made for it`);
     const v = fixed[def.id] ?? (def.setup ? def.setup(s) : {});
     ok(v, `${def.id}: found no realm to ask`);
