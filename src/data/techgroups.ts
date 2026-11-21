@@ -47,5 +47,11 @@ const POOL_GROUP: Record<string, TechGroup> = {
   indian: 'indian', chinese: 'eastasian', korean: 'eastasian', japanese: 'eastasian', seasian: 'eastasian',
   african: 'african', american: 'american',
 };
+/** The study that opens each closed technology. */
+export const BRIDGE_FOR: Record<string, string> = {
+  firearms: 'foreign_arms', bronze_cannon: 'foreign_arms', wheellock: 'foreign_arms', musket: 'foreign_arms', flintlock: 'foreign_arms',
+  bayonet: 'foreign_arms', standard_artillery: 'foreign_arms', horse_artillery: 'foreign_arms', pike_square: 'foreign_arms',
+  navigation: 'foreign_ships', cartography: 'foreign_ships', naval_gunnery: 'foreign_ships', ship_of_line: 'foreign_ships',
+};
 /** The group of a people; any people not listed is Western. */
 export const groupOfCulture = (culture: string): TechGroup => POOL_GROUP[CULTURE_POOL[culture] ?? ''] ?? 'western';

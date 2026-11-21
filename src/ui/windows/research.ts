@@ -1,4 +1,5 @@
 // Research window: technologies by age and field.
+import { needsBridge } from '../../engine/techgroups';
 import { infoToggle } from '../simplify';
 import { TROOPS, EQUIPMENT } from '../../data/troops';
 import { TECHS, TECH, BUILDINGS, AGE_NAMES, type TechTrack } from '../../data/techs';
@@ -79,7 +80,7 @@ export function techTab(body: HTMLElement) {
   const tracks = h('div', { class: 'seg tfilter' }, (['all', 'military', 'economy', 'state'] as const).map(tr =>
     h('button', { class: 'seg-b' + (techTrack === tr ? ' on' : ''), onclick: () => { techTrack = tr; renderWin(); } }, tr === 'all' ? 'All fields' : TRACK_NAME[tr])));
   body.append(ages, tracks);
-  const list = TECHS.filter(t => t.age <= now && (techAge === 'all' || t.age === techAge) && (techTrack === 'all' || t.track === techTrack));
+  const list = TECHS.filter(t => t.age <= now && (!t.bridge || needsBridge(S, t.id)) && (techAge === 'all' || t.age === techAge) && (techTrack === 'all' || t.track === techTrack));
   // studies under way first, then what you can start, then the rest, then what you know
   const rank = (t: (typeof TECHS)[number]) => S.techs.includes(t.id) ? 3 : S.missions.some(x => x.kind === 'research' && x.target === t.id) ? 0 : missionBlocked(S, 'research', t.id) ? 2 : 1;
   list.sort((a, b) => rank(a) - rank(b) || a.age - b.age || a.cost - b.cost);
