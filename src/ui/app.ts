@@ -1,5 +1,6 @@
 // The game screen: top bar, map, deck tabs, the strip of wars and tasks, the tutorial, and refresh().
 import { syncMusic } from './music';
+import './longpress';
 import { showHand, renderHandBtn } from './hand';
 import { renderGoalBar } from './goalbar';
 import { sfx } from './sound';

@@ -47,7 +47,7 @@ function miniTroop(t: Pick<TroopCard, 'type' | 'vet' | 'str'> & { mission?: numb
   );
 }
 
-export function troopCard(t: Pick<TroopCard, 'type' | 'vet' | 'str'> & { mission?: number; might?: number }, o: Opts = {}) {
+function troopCard0(t: Pick<TroopCard, 'type' | 'vet' | 'str'> & { mission?: number; might?: number }, o: Opts = {}) {
   if (o.small) return miniTroop(t, o);
   const d = TROOPS[t.type];
   return shell('troop', { ...o, cls: `tier${d.tier} ${o.cls ?? ''}` },
@@ -76,7 +76,7 @@ export const ROLE_ICON: Record<string, string> = { general: 'helm', diplomat: 's
 /** A mark on the card of someone whose loyalty is in doubt, so the player sees it before sending them anywhere. */
 const loyalMark = (c: Character) => (!c.ruler && loyaltyOf(c) < DISLOYAL ? h('span', { class: 'c-disloyal', title: `Disloyal: loyalty ${loyaltyOf(c)}`, 'aria-label': 'Disloyal' }, '!') : null);
 
-export function charCard(c: Character, s: GameState, o: Opts = {}) {
+function charCard0(c: Character, s: GameState, o: Opts = {}) {
   if (o.wide) return shell('char', { ...o, cls: `r-${c.rarity} role-${c.role} ty-person ${o.cls ?? ''}` },
     faceDiv(c, s, icon(ROLE_ICON[c.role] ?? 'crown', 34)),
     h('div', { class: 'c-body' },
@@ -106,7 +106,7 @@ const KIND_LABEL: Record<string, string> = { ship: 'Ship', troop: 'Troop', equip
 let current: GameState | null = null;
 export const setCardGame = (s: GameState) => { current = s; };
 
-export function handCard(id: string, o: Opts = {}) {
+function handCard0(id: string, o: Opts = {}) {
   const d = CARDS[id];
   const unit = d.cls && current ? unitFor(current, d.cls) : d.troop;
   const t = unit ? TROOPS[unit] : null;
@@ -189,3 +189,12 @@ export function troopDetails(type: string, t?: Pick<TroopCard, 'vet' | 'str'>) {
       t ? row('Veterancy', VET_NAME[Math.min(3, t.vet)], '+15% defence per star') : null),
     d.pike ? h('p', { class: 'muted small' }, 'Pikes: allows the Pike Wall tactic.') : null);
 }
+
+/** Every card carries what it shows, so a long press can open its detail (longpress.ts). */
+export function handCard(id: string, o: Opts = {}) { const el = handCard0(id, o); el.dataset.card = id; return el; }
+
+/** Every card carries what it shows, so a long press can open its detail (longpress.ts). */
+export function troopCard(t: Pick<TroopCard, 'type' | 'vet' | 'str'> & { mission?: number; might?: number }, o: Opts = {}) { const el = troopCard0(t, o); el.dataset.troop = t.type; return el; }
+
+/** Every card carries what it shows, so a long press can open its detail (longpress.ts). */
+export function charCard(c: Character, s: GameState, o: Opts = {}) { const el = charCard0(c, s, o); el.dataset.char = String(c.uid); return el; }
