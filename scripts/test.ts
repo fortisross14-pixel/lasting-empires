@@ -494,6 +494,11 @@ check('merged cards: the Treatise studies any field, and retired cards come as t
 check('regions: the Inca cannot study gunpowder or raise horse, Castile is as it was', () => {
   const inca = newGame('inca', 71), cas = newGame('castile', 71);
   ok(closedBecause(inca, 'firearms'), 'the Inca may study firearms in 1451');
+  ok(/Needs contact/.test(closedBecause(inca, 'foreign_arms') ?? ''), "the Inca may begin Strangers' Arms without contact");
+  ok(/Not needed/.test(closedBecause(cas, 'foreign_arms') ?? ''), "Castile is offered Strangers' Arms");
+  inca.techs.push('foreign_arms');
+  ok(!closedBecause(inca, 'firearms'), "firearms still closed after Strangers' Arms");
+  ok(closedBecause(inca, 'navigation'), "Strangers' Arms opened the ocean too");
   ok(!closedBecause(cas, 'firearms'), 'Castile may not study firearms');
   ok(techCost(inca, 'guilds') > techCost(cas, 'guilds'), 'research costs the same in Cuzco as in Toledo');
   eq(unitFor(inca, 'inf'), 'elite_warriors', 'Inca infantry'); eq(unitFor(cas, 'inf'), 'men_at_arms', 'Castilian infantry');
