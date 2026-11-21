@@ -1,3 +1,5 @@
+import { localUnit } from './techgroups';
+import { groupOfCulture } from '../data/techgroups';
 import { later } from './eventkit';
 import { yearlyCourt, courtAtSuccession, reignOf, reignMark } from './court';
 import { maxFort } from './core';
@@ -168,7 +170,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
     const n: Nation = {
       id: d.id, name: d.name, adj: d.adj, color: d.color, culture: d.culture, capital: d.capital, gold: d.gold,
       manpower: 10, stability: 1, prestige: 0, personality: d.personality, alive: true,
-      army: d.id === nationId ? [] : d.army.map(type => ({ uid: s.nextUid++, type, vet: 0, str: 100 })),
+      army: d.id === nationId ? [] : d.army.map(type => localUnit(groupOfCulture(d.culture), type)).filter((x): x is string => !!x).map(type => ({ uid: s.nextUid++, type, vet: 0, str: 100 })),
       fleet: d.id === nationId ? [] : (START_FLEETS[d.id] ?? []).map(type => ({ uid: s.nextUid++, type, vet: 0, str: 100 })),
       ruler: { name: '', traits: [], arch: 'balanced', skill: 2, from: START_YEAR, to: START_YEAR },
     };
@@ -210,7 +212,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   const me = player(s);
   const def = NATIONS.find(d => d.id === nationId) ?? { army: laterNation(LATER_DEFS.find(d => d.id === nationId)!, ARMIES, startYear).army.map(t => t.type) };
   me.manpower = 5;
-  s.troops = def.army.map(type => ({ uid: uid(s), type, vet: 0, str: 100 }));
+  s.troops = def.army.map(type => localUnit(groupOfCulture(me.culture), type)).filter((x): x is string => !!x).map(type => ({ uid: uid(s), type, vet: 0, str: 100 }));
   s.fleet = (START_FLEETS[nationId] ?? []).map(type => ({ uid: uid(s), type, vet: 0, str: 100 }));
   if (!later) initSociety(s);
   s.stateReligion = LATER_DEFS.find(d => d.id === nationId)?.religion ?? s.provinces[me.capital]?.religion ?? 'catholic'; // the crown shares the faith of its capital

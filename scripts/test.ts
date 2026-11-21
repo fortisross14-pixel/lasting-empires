@@ -7,6 +7,9 @@ import { ERAS } from '../src/data/eras';
 import { MUSIC_TRACKS, trackFor } from '../src/ui/music';
 import { aiEconomy, worksOf, landRate, yearsToLand, diligence, DILIGENCE_SPREAD } from '../src/engine/ai';
 import { cardHasTarget } from '../src/engine/pace';
+import { closedBecause, groupOf } from '../src/engine/techgroups';
+import { techCost } from '../src/engine/missions';
+import { unitFor, classOpen } from '../src/engine/cards';
 import { RETIRED, cardFor, addCard as addCardT } from '../src/engine/cards';
 import { EVENT_SCENES, eventsWithArt, FACE_FAMILIES, faceFamily, faceOf } from '../src/ui/art';
 import { gunzipSync } from 'node:zlib';
@@ -486,6 +489,19 @@ check('merged cards: the Treatise studies any field, and retired cards come as t
   s.hand.push({ uid: 99901, card: 'study' });
   ok(cardFor(s, 'research', { track: 'economy' })?.card === 'study', 'a Treatise is not offered for an economic study');
   for (const [old, now] of Object.entries(RETIRED)) { ok(CARDS[now], `${old} retires to ${now}, which is not a card`); const n = s.hand.length; addCardT(s, old); eq(s.hand[s.hand.length - 1].card, now, `${old} given as`); ok(s.hand.length === n + 1, 'one card added'); }
+});
+
+check('regions: the Inca cannot study gunpowder or raise horse, Castile is as it was', () => {
+  const inca = newGame('inca', 71), cas = newGame('castile', 71);
+  ok(closedBecause(inca, 'firearms'), 'the Inca may study firearms in 1451');
+  ok(!closedBecause(cas, 'firearms'), 'Castile may not study firearms');
+  ok(techCost(inca, 'guilds') > techCost(cas, 'guilds'), 'research costs the same in Cuzco as in Toledo');
+  eq(unitFor(inca, 'inf'), 'elite_warriors', 'Inca infantry'); eq(unitFor(cas, 'inf'), 'men_at_arms', 'Castilian infantry');
+  ok(!classOpen(inca, 'cav') && classOpen(cas, 'cav'), 'Inca horse');
+  ok(!inca.troops.some(t => ['crossbow', 'jinetes', 'men_at_arms', 'knights', 'levy', 'bombard'].includes(t.type)), `European troops in the Inca army: ${inca.troops.map(t => t.type).join(', ')}`);
+  ok(!Object.values(inca.nations).filter(n => groupOf(inca, n.id) === 'american').some(n => n.army.some(t => ['crossbow', 'jinetes', 'knights', 'arquebusiers'].includes(t.type))), 'European troops in an American army');
+  eq(groupOf(cas, 'ottomans'), 'islamic', 'Ottomans');
+  eq(CARDS.condottieri.weight(inca), 0, 'Swiss mercenaries for the Inca');
 });
 
 check('event paintings: every one named is a file, and every event named exists', () => {

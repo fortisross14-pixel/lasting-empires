@@ -1,3 +1,4 @@
+import { groupDef } from './techgroups';
 import { setRetired } from './culture';
 import { maxFort } from './core';
 // Cards are the actions of the game. Five kinds, each drawn at its own yearly rate.
@@ -140,17 +141,20 @@ export const UNIT_LINES: Record<UnitClass, string[]> = {
 };
 export const CLASS_NAME: Record<UnitClass, string> = { levy: 'Levy Infantry', inf: 'Infantry', shot: 'Ranged', cav: 'Cavalry', art: 'Artillery' };
 /** The unit a class card hires now. */
-export const unitFor = (s: GameState, cls: UnitClass) => [...UNIT_LINES[cls]].reverse().find(t => techOk(s, TROOPS[t].tech)) ?? UNIT_LINES[cls][0];
+/** The unit a class card hires now: the last of the realm's own line that its research allows (techgroups.ts). */
+export const unitFor = (s: GameState, cls: UnitClass) => { const line = groupDef(s).lines[cls] ?? UNIT_LINES[cls]; return [...line].reverse().find(t => techOk(s, TROOPS[t].tech)) ?? line[0]; };
+/** Can this realm raise this kind of troop at all? (No horses or guns in the Americas.) */
+export const classOpen = (s: GameState, cls: UnitClass) => !!groupDef(s).lines[cls]?.length;
 /** The unit a troop card hires. */
 export const cardTroop = (s: GameState, d: HandCardDef) => (d.cls ? unitFor(s, d.cls) : d.troop!);
 const CLASS_CARDS: [string, UnitClass, string, number, string][] = [
   ['hire_levy', 'levy', 'Levy Infantry', 3, 'Peasants with spears: cheap, and the base for many recipes.'],
-  ['hire_infantry', 'inf', 'Hire Infantry', 2.5, 'Your best foot soldiers: Men-at-Arms, then Pikemen with Pike Square.'],
-  ['hire_ranged', 'shot', 'Hire Ranged', 2.5, 'Your best missile troops: Crossbowmen, then Arquebusiers, Musketeers and Line Infantry as you research them.'],
-  ['hire_cavalry', 'cav', 'Hire Cavalry', 1.8, 'Your best horsemen: Jinetes, then Reiters and Dragoons as you research them. Heavy horse comes from recipes.'],
+  ['hire_infantry', 'inf', 'Hire Infantry', 2.5, 'Your best foot soldiers, of the kind your people raise.'],
+  ['hire_ranged', 'shot', 'Hire Ranged', 2.5, 'Your best missile troops: bows, slings or crossbows, then guns once you know them.'],
+  ['hire_cavalry', 'cav', 'Hire Cavalry', 1.8, 'Your best horsemen, of the kind your people raise.'],
   ['hire_artillery', 'art', 'Hire Artillery', 1, 'Your best guns: Bombards, then Field Cannon with Bronze Cannon.'],
 ];
-for (const [id, cls, name, w, text] of CLASS_CARDS) add({ id, name, cat: 'military', kind: 'troop', cls, troop: UNIT_LINES[cls][0], icon: TROOPS[UNIT_LINES[cls][0]].icon, text, weight: s => (cls === 'levy' && !govOf(s).levies ? 0 : w) });
+for (const [id, cls, name, w, text] of CLASS_CARDS) add({ id, name, cat: 'military', kind: 'troop', cls, troop: UNIT_LINES[cls][0], icon: TROOPS[UNIT_LINES[cls][0]].icon, text, weight: s => (!classOpen(s, cls) || (cls === 'levy' && !govOf(s).levies) ? 0 : w) });
 // old single-unit cards stay playable in saved games, but are no longer drawn
 for (const t of Object.values(TROOPS).filter(t => t.draftable && t.kind !== 'ship' && t.id !== 'levy')) {
   add({ id: 'hire_' + t.id, name: t.name, cat: 'military', kind: 'troop', troop: t.id, icon: t.icon, text: t.desc, weight: never });
@@ -162,7 +166,8 @@ for (const t of Object.values(TROOPS).filter(t => t.draftable && t.kind === 'shi
 }
 for (const e of Object.values(EQUIPMENT)) {
   add({ id: 'eq_' + e.id, name: e.name, cat: 'military', kind: 'equip', equip: e.id, icon: e.icon, text: e.desc,
-    weight: s => (techOk(s, e.tech) ? (e.id === 'banner' ? 0.6 : e.tech ? 1.8 : 1.2) : 0) });
+    // plate and warhorses are European kit: the merge recipes make European troops (knights, men-at-arms)
+    weight: s => (techOk(s, e.tech) && (e.id === 'banner' || groupDef(s).mercenaries) ? (e.id === 'banner' ? 0.6 : e.tech ? 1.8 : 1.2) : 0) });
 }
 add({ id: 'hire_general', name: 'Recruit a General', cat: 'military', kind: 'hire', role: 'general', icon: 'helm', text: 'Meet three captains, keep one. Costs 1 manpower.', weight: () => 1.1 });
 add({ id: 'march_orders', name: 'March Orders', cat: 'military', kind: 'mission', missions: ['conquer', 'raid', 'base'], icon: 'sword', text: 'Send a general and troops to conquer or raid an enemy province within a quarter\'s march, or to set up an invasion base near a far one.', weight: s => (s.wars.some(w => w.a === s.player || w.b === s.player) ? 0.6 : 0.2) });
@@ -176,7 +181,7 @@ add({ id: 'fresh_recruits', name: 'Fresh Recruits', cat: 'military', kind: 'inst
   play: s => { for (const t of s.troops) if (t.mission == null) t.str = 100; return 'Ranks refilled'; } });
 add({ id: 'ambush', name: 'Ambush', cat: 'military', kind: 'instant', icon: 'eye', text: 'In your next battle you see the enemy\'s tactic every round.', weight: () => 0.8,
   play: s => { s.flags.ambush = 1; return 'Scouts are ready for the next battle'; } });
-add({ id: 'condottieri', name: 'Swiss Captain', cat: 'military', kind: 'instant', icon: 'pike', text: 'Pay 35 ducats: hire a 1-star company of Swiss Pikes (no manpower needed).', weight: () => 0.6,
+add({ id: 'condottieri', name: 'Swiss Captain', cat: 'military', kind: 'instant', icon: 'pike', text: 'Pay 35 ducats: hire a 1-star company of Swiss Pikes (no manpower needed).', weight: s => (groupDef(s).mercenaries ? 0.6 : 0),
   can: s => player(s).gold < 35 ? 'Needs 35 ducats' : s.troops.length >= armyCap(s) ? 'Army is at full size' : null,
   play: s => { player(s).gold -= 35; s.troops.push({ uid: uid(s), type: 'swiss', vet: 1, str: 100 }); return 'Swiss Pikes join your army'; } });
 add({ id: 'conquistadors', name: 'Conquistadors', cat: 'military', kind: 'instant', icon: 'gun', text: 'Veterans return from overseas: gain a 1-star troop for free.', weight: never,
