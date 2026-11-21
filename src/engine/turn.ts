@@ -1,4 +1,4 @@
-import { localUnit } from './techgroups';
+import { localUnit, checkFirstContact } from './techgroups';
 import { groupOfCulture } from '../data/techgroups';
 import { later } from './eventkit';
 import { yearlyCourt, courtAtSuccession, reignOf, reignMark } from './court';
@@ -447,6 +447,7 @@ export function endTurn(s: GameState): YearReport | null {
   if (s.quarter === 0) {
     // the year turns
     queuePicks(s);
+    checkFirstContact(s);
     yearlyPlayer(s);
     yearlyStrain(s);
     yearlySubjects(s);

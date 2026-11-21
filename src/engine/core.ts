@@ -1,3 +1,4 @@
+import { REGIONS } from '../data/overseas';
 import { remember } from './chronicle';
 import { DIFFICULTY, STANDARD, type DifficultyDef } from '../data/difficulty';
 // Shared helpers: RNG, lookups, relations, treaties, wars, logging.
@@ -258,7 +259,22 @@ export function provinceIncome(s: GameState, id: string): number {
   for (const b of p.buildings) v += (BUILDINGS[b]?.gold ?? 0) * grade(p, b) * extractMult(p, b) * (BUILDINGS[b]?.site === 'town' ? repair : 1);
   if (s.player === p.owner && hasCore(s, 'agrarian')) for (const b of ['farm', 'pasture']) if (p.buildings.includes(b)) v += (BUILDINGS[b].gold ?? 0) * 0.5 * grade(p, b);
   v += TIERS[tierOf(p)].gold;
+  v += colonialYield(s, id);
   return v * controlMult(p.control);
+}
+
+/** What lands far from home pay their masters each year, beyond ordinary taxes: gold and silver, spices, dyes, the
+ *  rest a little. The reason the crowns of Europe crossed the oceans. Ducats a year at development 1; more as the
+ *  colony grows. */
+export const COLONIAL_RICHES: Record<string, number> = { gold: 3, spices: 2, dyes: 1.5, fibres: 0.8, saltpetre: 0.8 };
+export const COLONIAL_OTHER = 0.4;
+const whereOf = (() => { let m: Record<string, string> | null = null; return (id: string) => (m ??= Object.fromEntries(getGeo().seeds.map(x => [x.id, REGIONS[x.region]?.where ?? x.region])))[id] ?? ''; })();
+/** Is this province overseas from its owner: in another part of the world than the owner's capital? */
+export const isColony = (s: GameState, id: string) => { const o = s.nations[s.provinces[id]?.owner]; return !!o?.capital && whereOf(id) !== whereOf(o.capital); };
+export function colonialYield(s: GameState, id: string, owner = s.provinces[id]?.owner): number {
+  const p = s.provinces[id], o = s.nations[owner];
+  if (!p || !o?.capital || whereOf(id) === whereOf(o.capital)) return 0;
+  return (COLONIAL_RICHES[p.good] ?? COLONIAL_OTHER) * (1 + 0.25 * (p.dev - 1));
 }
 
 /** Extraction buildings work twice as well on a matching raw material. */

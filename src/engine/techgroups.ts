@@ -4,7 +4,9 @@ import type { GameState } from '../types';
 import { TECH_GROUPS, groupOfCulture, BRIDGE_FOR, type TechGroup } from '../data/techgroups';
 import { TECH } from '../data/techs';
 import { TROOPS } from '../data/troops';
-import { borders, atWar } from './core';
+import { borders, atWar, provsOf } from './core';
+import { provRegion } from './overseas';
+import { later } from './eventkit';
 
 export const groupOf = (s: GameState, id = s.player): TechGroup => groupOfCulture(s.nations[id]?.culture ?? '');
 export const groupDef = (s: GameState, id = s.player) => TECH_GROUPS[groupOf(s, id)];
@@ -21,6 +23,7 @@ export function contactGroups(s: GameState, id = s.player): Set<TechGroup> {
 }
 /** Has this realm met a people who know the things a bridge study opens? */
 function hasContactFor(s: GameState, bridge: string, id: string): boolean {
+  if (id === s.player && s.flags.first_contact) return true; // the strangers have come (checkFirstContact)
   const opened = Object.entries(BRIDGE_FOR).filter(([, b]) => b === bridge).map(([tech]) => tech);
   for (const other of contactGroups(s, id)) if (opened.some(t => !TECH_GROUPS[other].closed.includes(t))) return true;
   return false;
@@ -60,4 +63,20 @@ export function localUnit(group: TechGroup, type: string): string | null {
   const cls = kind === 'cav' ? 'cav' : kind === 'shot' ? 'shot' : kind === 'art' ? 'art' : 'inf';
   const mine = lines[cls as keyof typeof lines] ?? lines.inf;
   return mine?.length ? mine[mine.length - 1] : null;
+}
+
+/** Once a year, for a realm that must learn from strangers: has a people who know gunpowder come to its part of
+ *  the world (a colony in a region where it holds land), or met it on a border or in war? The first time, the
+ *  First Contact event tells the player, and the bridge studies open. */
+export function checkFirstContact(s: GameState) {
+  if (s.flags.first_contact || !groupDef(s).closed.length) return;
+  const mine = new Set(provsOf(s, s.player).map(p => provRegion(p.id)));
+  const knows = (owner: string) => !!s.nations[owner]?.alive && owner !== s.player && !TECH_GROUPS[groupOf(s, owner)].closed.includes('firearms');
+  const landed = Object.values(s.provinces).find(p => knows(p.owner) && mine.has(provRegion(p.id)));
+  const met = landed ? null : [...contactGroups(s)].some(g => !TECH_GROUPS[g].closed.includes('firearms')) ? Object.values(s.nations).find(n => knows(n.id) && (borders(s, s.player, n.id) || atWar(s, s.player, n.id))) : null;
+  const who = landed?.owner ?? met?.id;
+  if (!who) return;
+  s.flags.first_contact = s.year;
+  const prov = landed?.id ?? provsOf(s, who)[0]?.id ?? '';
+  later(s, 'first_contact', 0, 0, { nation: who, prov });
 }
