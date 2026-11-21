@@ -227,7 +227,7 @@ export function showSuccession(heirs: Heir[], old: string) {
     return f;
   });
   const hint = h('p', { class: 'muted center' }, 'Revealing the heirs…');
-  openModal(h('div', { class: 'mbox reveal' }, h('h2', {}, `${old} is dead`), h('p', { class: 'muted' }, 'Choose who takes the crown. Their talents shape the cards you draw.'), row, hint));
+  openModal(h('div', { class: 'mbox reveal' }, h('h2', {}, 'A new reign begins'), h('p', { class: 'muted' }, `${old} is dead; the game goes on with the heir you crown. Each heir brings more of some kinds of card.`), row, hint));
   flipAll(flips, 450).then(() => { ready = true; hint.textContent = 'Tap an heir to crown them.'; });
 }
 
