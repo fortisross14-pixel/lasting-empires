@@ -1,3 +1,4 @@
+import { commanderOf } from './commanders';
 import { GUN_TROOPS } from './trade';
 import { commandOf, GENERIC_COMMAND } from '../data/characters';
 // Where armies stand, how long they take to march, who can fight where,
@@ -5,7 +6,7 @@ import { commandOf, GENERIC_COMMAND } from '../data/characters';
 import type { GameState, TroopCard, Incoming } from '../types';
 import { player, provsOf, rand, push, log, uid, nationName, atWar, armyPower, traitMult } from './core';
 import { getGeo } from './map';
-import { makeSide, createBattle, toBattleUnits, genericGeneral } from './battle';
+import { makeSide, createBattle, toBattleUnits, genericGeneral, alliedHelp } from './battle';
 
 // ---------- distance ----------
 const baseOf = (loc: string) => (loc.startsWith('base:') ? loc.slice(5) : loc);
@@ -171,8 +172,8 @@ export function resolveIncoming(s: GameState) {
     chosen.splice(gen ? commandOf(gen.skill) : GENERIC_COMMAND);
     const last = provsOf(s, s.player).length <= 3 || prov.id === player(s).capital;
     const militia = [0, 1].slice(0, last ? 2 : 1).map(i => ({ uid: -300 - i, type: 'levy', vet: 1, str: 100, start: 100, garrison: true }));
-    const att = makeSide(n.id, toBattleUnits(force), genericGeneral(s), 0, false);
-    const def = makeSide(s.player, [...toBattleUnits(chosen), ...militia], gen ? { name: gen.name, skill: gen.skill, traits: gen.traits, uid: gen.uid, mult: traitMult(gen) } : null, prov.fort + (last ? 1 : 0), true);
+    const att = makeSide(n.id, toBattleUnits(force), commanderOf(s, n.id) ?? genericGeneral(s), 0, false);
+    const def = makeSide(s.player, [...toBattleUnits(chosen), ...alliedHelp(s, n.id, prov.id), ...militia], gen ? { name: gen.name, skill: gen.skill, traits: gen.traits, uid: gen.uid, mult: traitMult(gen) } : null, prov.fort + (last ? 1 : 0), true);
     push(s, { kind: 'battle', battle: createBattle(s, att, def, prov.id, 'defend') });
   }
 }

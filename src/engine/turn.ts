@@ -1,8 +1,12 @@
+import { localUnit, checkFirstContact } from './techgroups';
+import { groupOfCulture } from '../data/techgroups';
+import { later } from './eventkit';
+import { yearlyCourt, courtAtSuccession, reignOf, reignMark } from './court';
 import { maxFort } from './core';
 // New game setup, the yearly turn, and player actions that touch several systems.
 import { GOODS, OLD_GOODS } from '../data/goods';
 import { yearlyChurch } from './culture';
-import { settleGoods, checkTrade, startStock, GUN_TROOPS } from './trade';
+import { settleGoods, checkTrade, startStock, GUN_TROOPS, STEWARD_DEFAULT } from './trade';
 import { initKnownWorld } from './overseas';
 import { poolFor } from '../data/names';
 import { yearlyAges } from './ages';
@@ -22,14 +26,15 @@ import { CORE } from '../data/core';
 import {
   rand, pick, randInt, uid, clamp, player, provsOf, incomeOf, log, push, addRel, playerManpower, initialSettlement, grade,
   addTreaty, hasTech, genCharacter, declareWar, nationName, atWar, getRel, hasGood, armyPower, hasCore, coreSlots, hasTreaty, ageId,
-  resetProvIndex, techFx } from './core';
-import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS, trimHand } from './cards';
+  resetProvIndex, techFx, diff } from './core';
+import { drawCat, yearlyCards, grantRandomCards, addCard, CARDS, trimHand, queuePicks } from './cards';
 import { advanceMissions, MISSION_INFO, quarterlyReturns } from './missions';
 import { runAI, PRESTIGE_FADE } from './ai';
 import { quarterlyRevolution } from './government';
 import { applyStart, setupLaterPlayer, laterNation, LATER_DEFS } from './starts';
 import { STARTS } from '../data/starts';
 import { MISSION } from '../data/missions';
+import { DIFFICULTY, LENGTHS } from '../data/difficulty';
 import { yearlyGoals, checkGoals, scenarioFrom } from './goals';
 import { rollEvents, EVENT } from './events';
 import { AMBITIONS, ambitionOptions } from './drafts';
@@ -37,7 +42,12 @@ import { START_FLEETS, yearlyFleet } from './navy';
 import { initSociety, yearlySociety } from './society';
 import { yearlySubjects, unionClaim, autoSurrender } from './diplo';
 
-export const SAVE_VERSION = 2;
+/** The version new games are saved with. Raise it when the shape of a save changes, add the step to MIGRATIONS,
+ *  and first run `npm run make-save` so the old version keeps a test save (scripts/saves/). */
+export const SAVE_VERSION = 4;
+/** The oldest save that can still be loaded. */
+export const OLDEST_SAVE = 2;
+export const canLoad = (version: number) => version >= OLDEST_SAVE && version <= SAVE_VERSION;
 
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 
@@ -87,7 +97,7 @@ export function makeHeirs(s: GameState): Heir[] {
 
 function setRuler(s: GameState, heir: Heir) {
   const me = player(s);
-  if (me.ruler.name) s.stats.kings.push({ name: me.ruler.name, arch: me.ruler.arch, from: me.ruler.from, to: s.year, prestige: Math.round(me.prestige - (me.ruler.prestigeAtStart ?? 0)) });
+  if (me.ruler.name) { s.stats.kings.push({ name: me.ruler.name, arch: me.ruler.arch, from: me.ruler.from, to: s.year, prestige: Math.round(me.prestige - (me.ruler.prestigeAtStart ?? 0)), epithet: reignOf(s).epithet || undefined }); courtAtSuccession(s); }
   // remove the old monarch from the court
   const old = s.characters.find(c => c.ruler);
   if (old) {
@@ -98,7 +108,7 @@ function setRuler(s: GameState, heir: Heir) {
     s.characters = s.characters.filter(c => !c.ruler);
   }
   const name = heir.name.replace(/^Infant[ae] /, '') + (heir.historical || /\s[IVX]+$/.test(heir.name) ? '' : ' ' + ROMAN[Math.min(11, ((s.flags['regnal_' + s.player + heir.name.replace(/^Infant[ae] /, '')] = (s.flags['regnal_' + s.player + heir.name.replace(/^Infant[ae] /, '')] ?? 0) + 1)) - 1)]);
-  me.ruler = { name, traits: heir.traits, arch: heir.arch, skill: heir.skill, from: s.year, to: s.year + heir.reign, prestigeAtStart: me.prestige };
+  me.ruler = { name, traits: heir.traits, arch: heir.arch, skill: heir.skill, from: s.year, to: s.year + heir.reign, prestigeAtStart: me.prestige, start: reignMark(s) };
   const a = RULER_ARCHS[heir.arch];
   if (a.stab) me.stability = clamp(me.stability + a.stab, -3, 3);
   if (a.startCards) grantRandomCards(s, a.startCards);
@@ -126,8 +136,8 @@ const START_WARS: Record<string, string> = {
 };
 
 /** A mission-mode game: the realm, its goals and deadline; no personal ambition on top. */
-export function newMissionGame(nationId: string, mission: string | import('../types').Scenario, startYear = START_YEAR): GameState {
-  const s = newGame(nationId, undefined, startYear);
+export function newMissionGame(nationId: string, mission: string | import('../types').Scenario, startYear = START_YEAR, opts: GameOptions = {}): GameState {
+  const s = newGame(nationId, opts.seed, startYear, { difficulty: opts.difficulty });
   s.scenario = typeof mission === 'string' ? scenarioFrom(mission) : mission;
   s.queue = s.queue.filter(q => !(q.kind === 'draft' && q.draft === 'ambition'));
   // starting points for goals that count what you do during the mission
@@ -142,7 +152,10 @@ export function newMissionGame(nationId: string, mission: string | import('../ty
   return s;
 }
 
-export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9), startYear = START_YEAR): GameState {
+/** Choices made when a game starts. `length` is a LENGTHS id (open game only). */
+export interface GameOptions { difficulty?: number; length?: string; seed?: number; }
+
+export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9), startYear = START_YEAR, opts: GameOptions = {}): GameState {
   const later = STARTS[startYear];
   const s: GameState = {
     version: SAVE_VERSION, seed, rng: seed, nextUid: 1, year: later ? startYear : START_YEAR, quarter: 0, startYear: later ? startYear : START_YEAR, endYear: later?.end ?? 1750, player: nationId,
@@ -150,14 +163,14 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
     cardAccum: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0, culture: 0 },
     bought: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0, culture: 0 },
     np: 3, imports: [], stock: {}, short: {}, routes: [], posts: [], overseas: {}, core: [], coreChanged: -99, fleet: [], art: 5, taxBurden: 0, accepted: [], stateReligion: 'catholic', happiness: 55, stats: { battles: {}, kings: [], fallen: [], wars: { won: 0, lost: 0 } },
-    troops: [], equipment: [], characters: [], missions: [], techs: [], gov: 'feudal', firedEvents: [], usedLegends: [], queue: [],
+    troops: [], equipment: [], characters: [], missions: [], techs: [], gov: 'feudal', firedEvents: [], usedLegends: [], queue: [], pending: [],
     log: [], flags: {}, ambition: null, ambitionDone: false, over: false,
   };
   for (const d of NATIONS) {
     const n: Nation = {
       id: d.id, name: d.name, adj: d.adj, color: d.color, culture: d.culture, capital: d.capital, gold: d.gold,
       manpower: 10, stability: 1, prestige: 0, personality: d.personality, alive: true,
-      army: d.id === nationId ? [] : d.army.map(type => ({ uid: s.nextUid++, type, vet: 0, str: 100 })),
+      army: d.id === nationId ? [] : d.army.map(type => localUnit(groupOfCulture(d.culture), type)).filter((x): x is string => !!x).map(type => ({ uid: s.nextUid++, type, vet: 0, str: 100 })),
       fleet: d.id === nationId ? [] : (START_FLEETS[d.id] ?? []).map(type => ({ uid: s.nextUid++, type, vet: 0, str: 100 })),
       ruler: { name: '', traits: [], arch: 'balanced', skill: 2, from: START_YEAR, to: START_YEAR },
     };
@@ -199,7 +212,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   const me = player(s);
   const def = NATIONS.find(d => d.id === nationId) ?? { army: laterNation(LATER_DEFS.find(d => d.id === nationId)!, ARMIES, startYear).army.map(t => t.type) };
   me.manpower = 5;
-  s.troops = def.army.map(type => ({ uid: uid(s), type, vet: 0, str: 100 }));
+  s.troops = def.army.map(type => localUnit(groupOfCulture(me.culture), type)).filter((x): x is string => !!x).map(type => ({ uid: uid(s), type, vet: 0, str: 100 }));
   s.fleet = (START_FLEETS[nationId] ?? []).map(type => ({ uid: uid(s), type, vet: 0, str: 100 }));
   if (!later) initSociety(s);
   s.stateReligion = LATER_DEFS.find(d => d.id === nationId)?.religion ?? s.provinces[me.capital]?.religion ?? 'catholic'; // the crown shares the faith of its capital
@@ -227,6 +240,13 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   addCard(s, 'eq_plate');
   addCard(s, 'peace_envoy', true);
   if (later) setupLaterPlayer(s, startYear);
+  // the choices of the start screen: difficulty and, for an open game, how long it lasts
+  if (opts.difficulty != null && DIFFICULTY[opts.difficulty]) s.difficulty = opts.difficulty;
+  if (diff(s).gold !== 1) me.gold = Math.round(me.gold * diff(s).gold);
+  const len = LENGTHS.find(l => l.id === opts.length);
+  if (len?.years && s.startYear + len.years < s.endYear) { s.endYear = s.startYear + len.years; s.length = len.id; }
+  s.steward = { on: diff(s).steward, share: STEWARD_DEFAULT };
+  s.flags.rank0 = ranking(s).findIndex(x => x.id === nationId) + 1;
   settleArmies(s);
   s.stock = startStock(s);
   // wars you inherit on the first day: say so plainly
@@ -241,6 +261,11 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
 function successionCheck(s: GameState) {
   const me = player(s);
   if (s.year < me.ruler.to) return;
+  // the reign that ends, summed up before the heirs step forward
+  const r = reignOf(s), plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  const deeds = [r.provs > 0 ? `won ${plural(r.provs, 'province')}` : r.provs < 0 ? `lost ${plural(-r.provs, 'province')}` : '', r.won + r.lost ? `fought ${plural(r.won + r.lost, 'battle')} and won ${r.won}` : '', r.built > 0 ? `raised ${plural(r.built, 'building')}` : '', r.techs > 0 ? `saw ${plural(r.techs, 'new art')} learned` : '', r.works > 0 ? `left ${plural(r.works, 'work')} of art` : ''].filter(Boolean);
+  // said plainly: the ruler is dead, an era of your realm ends, and the game goes on with an heir you choose next
+  push(s, { kind: 'reveal', title: `${me.ruler.name}${r.epithet ? ' ' + r.epithet : ''} has died`, subtitle: `The end of an era: ${me.ruler.from} – ${s.year}, ${plural(r.years, 'year')} on the throne. Your realm goes on: next, choose who takes the crown.`, items: [{ title: 'The reign', text: deeds.length ? `${me.ruler.name} ${deeds.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` : `${me.ruler.name} kept what was inherited, and little more is written.`, tone: 'neutral', kind: 'crown' }, ...(r.epithet ? [{ title: `Remembered as ${r.epithet}`, text: 'So the chroniclers will write it.', tone: 'good' as const, kind: 'quill' }] : [])] });
   push(s, { kind: 'succession', heirs: makeHeirs(s), old: me.ruler.name });
   me.ruler.to = 9999; // until the heir is chosen
   for (const n of Object.values(s.nations)) {
@@ -421,6 +446,8 @@ export function endTurn(s: GameState): YearReport | null {
   s.quarter = (q + 1) % 4;
   if (s.quarter === 0) {
     // the year turns
+    queuePicks(s);
+    checkFirstContact(s);
     yearlyPlayer(s);
     yearlyStrain(s);
     yearlySubjects(s);
@@ -428,6 +455,7 @@ export function endTurn(s: GameState): YearReport | null {
     yearlyFleet(s);
     yearlySociety(s);
     yearlyChurch(s);
+    yearlyCourt(s);
     s.year++;
     yearlyAges(s);
     characterAging(s);
@@ -448,7 +476,12 @@ export function endTurn(s: GameState): YearReport | null {
     // in mission mode only the mission counts; in the open game, the ranking
     const sc = s.scenario;
     if (sc) push(s, { kind: 'gameover', victory: sc.status === 'won', reason: sc.status === 'won' ? `The year is ${s.year}. You accomplished ${sc.name} in ${sc.done}, and the world went on.` : `The year is ${s.year}. ${sc.name} was not accomplished.` });
-    else push(s, { kind: 'gameover', victory: place <= 3, reason: `The year is ${s.year}. ${player(s).name} ranks #${place} among the powers.` });
+    else {
+      // a short game is judged by the climb: few realms reach the top three in forty years
+      const from = s.flags.rank0 ?? place;
+      const climbed = !!s.length && place < from;
+      push(s, { kind: 'gameover', victory: place <= 3 || climbed, reason: `The year is ${s.year}. ${player(s).name} ranks #${place} among the powers${s.length && from !== place ? ` (it began at #${from})` : ''}.` });
+    }
   }
   const tl = s.turnLog!;
   tl.gold = (tl.gold ?? 0) + player(s).gold - g0; tl.np = (tl.np ?? 0) + s.np - np0;
@@ -502,6 +535,7 @@ export function adoptCore(s: GameState, id: string): string | null {
   s.np -= coreCost(s);
   s.core.push(id);
   s.coreChanged = s.year;
+  if (EVENT['core_' + id] && !s.firedEvents.includes('core_' + id)) later(s, 'core_' + id, 1, 5); // every principle answers back, once
   if (id === 'traditional') { player(s).stability = clamp(player(s).stability + 1, -3, 3); addRel(s, s.player, 'papacy', 20); }
   log(s, `The crown adopts a new principle: ${CORE[id].name}.`, 'good');
   return null;
@@ -536,8 +570,9 @@ function addNewProvinces(s: GameState) {
   log(s, `The map grows: ${missing.length} new provinces.`, 'neutral');
 }
 
-/** Fill in fields added after a save was made. */
-export function migrate(s: GameState): GameState {
+/** Version 2 saves were patched field by field as the game grew, so a save of that version can be of any vintage:
+ *  this step fills in everything added up to November 2026. */
+function fromV2(s: GameState) {
   s.core ??= []; s.coreChanged ??= -99; s.overseas ??= {}; s.imports ??= [];
   s.fleet ??= []; s.accepted ??= []; s.gov ??= 'feudal';
   // older games gave every crown the Catholic faith: give it back its own, unless it converted
@@ -567,6 +602,31 @@ export function migrate(s: GameState): GameState {
   // the People menu arrived: a sixth kind of card and a courtier to start with
   s.cardAccum.culture ??= 0; s.bought.culture ??= 0; s.works ??= [];
   if (!s.characters.some(c => ['courtier', 'priest', 'artist', 'leader'].includes(c.role))) s.characters.push(genCharacter(s, 'courtier', player(s).culture, 1));
+  // the goods steward arrived: a running game keeps its economy as it was, the player may switch him on
+  s.steward ??= { on: false, share: STEWARD_DEFAULT };
+}
+
+/** One step per version: MIGRATIONS[n] turns a save of version n into version n + 1. Never edit a step once
+ *  it has shipped; add the next one. */
+/** Phase 3 of the roadmap: events that come back later. People's loyalty and wishes, and rival commanders,
+ *  need nothing here: they are worked out from who the person is until something changes them. */
+function fromV3(s: GameState) {
+  s.pending ??= [];
+}
+const MIGRATIONS: Record<number, (s: GameState) => void> = { 2: fromV2, 3: fromV3 };
+
+/** After any load, whatever the version: the map may have grown since the save was made. */
+function reconcile(s: GameState) {
+  addNewProvinces(s);
+  settleArmies(s);
+  initSociety(s);
+}
+
+/** Bring a save up to the current version, one numbered step at a time. */
+export function migrate(s: GameState): GameState {
+  if (!canLoad(s.version)) throw new Error(`A save of version ${s.version} cannot be loaded (this game reads ${OLDEST_SAVE} to ${SAVE_VERSION}).`);
+  while (s.version < SAVE_VERSION) { MIGRATIONS[s.version](s); s.version++; }
+  reconcile(s);
   return s;
 }
 

@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Types
+        run: npm run typecheck
+      - name: Engine checks
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: One short campaign by the bot
+        run: npm run sim
+        env:
+          SEEDS: 1
+          NATIONS: castile
+          TURNS: 240
+          SIMSEED: 1

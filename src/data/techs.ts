@@ -31,10 +31,15 @@ export interface TechDef {
   year: number;        // when it came historically: studying it sooner costs more
   cost: number;        // research points
   req?: string[]; desc: string; fx?: TechFx;
+  /** Only for realms that must learn from strangers (data/techgroups.ts): needs contact, and opens what is closed. */
+  bridge?: boolean;
 }
 
 // About four per field in each age. Costs rise by age so that a study takes 2–7 years.
 export const TECHS: TechDef[] = [
+  // ---------- learning from strangers (only where techgroups.ts closes something) ----------
+  { id: 'foreign_arms', name: "Strangers' Arms", track: 'military', age: 0, year: 1451, cost: 34, bridge: true, desc: 'Captured guns taken apart, renegade gunners hired, powder made by trial and error. Opens gunpowder and its weapons.' },
+  { id: 'foreign_ships', name: "Strangers' Ships", track: 'economy', age: 0, year: 1451, cost: 30, bridge: true, desc: 'Foreign hulls copied, foreign pilots kept. Opens ocean navigation, charts and the ship of the line.' },
   // ---------- Age of Crusade ----------
   { id: 'pike_square', name: 'Pike Square', track: 'military', age: 0, year: 1453, cost: 20, desc: 'Draft Pikemen. Long Pikes appear in drafts. Levy + Long Pikes → Pikemen.' },
   { id: 'condotta', name: 'Condotta Contracts', track: 'military', age: 0, year: 1455, cost: 20, desc: 'Captains for hire: +2 army size, +0.5 manpower a year.', fx: { army: 2, manpower: 0.5 } },

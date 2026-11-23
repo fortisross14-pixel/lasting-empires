@@ -75,3 +75,177 @@ points (`worldMoments` in history.ts), 4 legendary generals (`src/data/legends.t
 with the troops actually near that border, at most once every 30 years per realm; tiny realms may become vassals of a
 rising neighbour and be absorbed after 20 years. Result (1451, 24 games): top 3 ~5/9, first ~3–4/9, ~2.6 AI wars on
 the player per game, the 1451 top 10 changes by ~3 realms per century.
+
+## Difficulty and pace (roadmap phase 1, November 2026)
+Three levels in `src/data/difficulty.ts`, read through `diff(s)`: how much stronger than your border guard a rival
+must be to declare war on you (×1.6 / ×1.25 / ×1.0), years between such wars (45 / 30 / 12), years of peace at the
+start (15 / 10 / 5), mercy for a crown of three provinces or fewer (90% / 70% / 30%), starting treasure
+(×1.5 / ×1 / ×0.8), rival development (×0.8 / ×1 / ×1.6), rival army limit (−1 / 0 / +2). Standard is the game as it
+was: the same seed gives the same campaign as before the levels existed (checked in `npm test` and against the old code).
+
+First measurement, before the tuning below. `DIFF=0|1|2 MODE=reasonable SEEDS=4 SIMSEED=11 npm run sim` (12 games each, 1451–1750):
+
+| Level | Survived | Top 3 | First | Target for top 3 |
+|---|---|---|---|---|
+| Gentle | 12/12 | 8 (67%) | 5 | about 80% |
+| Standard | 12/12 | 6 (50%) | 3 | 55–65% |
+| Hard | 12/12 | 5 (42%) | 2 | 30–40% |
+
+The order is right and the spread is too narrow: Gentle is not gentle enough and Hard not hard enough for the bot.
+Twelve games a level is a small sample, and the bot keeps its troops at home, so it feels war pressure less than a
+player would. Tuning the table against 30 games a level is roadmap action 4.13; the first levers to move are
+`aiGrowth` and `warEdge`.
+
+### Tuned against 60 games a level (roadmap 4.13)
+After the rivals of phase 4 (goals, warnings, requests). `DIFF=0|1|2 MODE=reasonable SEEDS=10 npm run sim`, run
+twice (`SIMSEED=11` and `SIMSEED=29`): Castile, Portugal and Aragon, ten worlds each, 1451–1750.
+
+| Level | Survived | Top 3, first run | Top 3, second run | Together | First | Target |
+|---|---|---|---|---|---|---|
+| Gentle | 60/60 | 25/30 | 22/30 | 47/60 (78%) | 40 | about 80% |
+| Standard | 60/60 | 20/30 | 15/30 | 35/60 (58%) | 27 | 55–65% |
+| Hard, rivals ×1.6 | 60/60 | 10/30 | 12/30 | 22/60 (37%) | 11 | 30–40% |
+
+One number changed: Hard's `aiGrowth`, 1.3 → 1.6. Gentle and Standard were in their bands already and are untouched,
+so Standard is still the game as it was. How Hard was chosen (30 games each, `SIMSEED=11`):
+
+| Hard variant | Survived | Top 3 |
+|---|---|---|
+| As it was: growth ×1.3, war at ×1.0, every 12 years, army +2 | 30/30 | 15 (50%) |
+| Growth ×1.6, the rest as it was (**chosen**) | 30/30 | 10 (33%) |
+| Growth ×1.5, war at ×0.9, army +3 | 29/30 | 11 (37%) |
+| Growth ×1.4, war at ×0.85, every 8 years, army +4 | 30/30 | 15 (50%) |
+
+What it shows: for the bot, the ranking follows how fast rivals grow, not how often they attack. More and earlier
+wars with bigger armies moved nothing (last row). Two reasons, both to remember when a person plays: the bot keeps
+its companies at home, so a strong border guard holds off most declarations; and since phase 4 a war on the player
+comes a year after its warning, which the bot does not use but a person can. War pressure on Hard is therefore
+judged by play, not by this table. Single runs of 30 games swing by about five games (Standard: 20, then 15), so
+do not tune on fewer than 60.
+
+## Ground at home is a gift to the player (roadmap 2.4)
+Correcting Europe's ground by hand moved the difficulty, and had to be cut back. Standard, 60 games
+(`DIFF=1 MODE=reasonable SEEDS=10`, `SIMSEED=11` and `29`; Castile, Portugal, Aragon):
+
+| Ground | Top 3 |
+|---|---|
+| As it was (three provinces set by hand) | 20 + 15 = 35 (58%) |
+| 80 provinces set by hand | 26 + 20 = 46 (77%) |
+| The same, with Lisbon and Évora left as hills | 23 + 17 = 40 (67%) |
+| The same, without 13 new hills and mountains inside Iberia (**kept**: 67 provinces) | 19 + 15 = 34 (57%) |
+
+Ground counts only in battles the player fights, so high ground in the player's own land helps the player and
+nobody else: thirteen provinces of it were worth 12 games in 60. Making Lisbon and Évora open ground (they had
+been hills) was worth about half as much again, by making Portugal easier to take.
+- Before giving high ground to a realm a player starts in, run this table.
+- The bot plays only the three Iberian realms. The corrections kept elsewhere (the Alps, Italy, the Balkans, the
+  north) are not measured: a start in Savoy, Switzerland or Austria is likely somewhat easier than it was.
+- To draw Iberia truly, first weaken what hills and mountains give the defender (`TERRAINS` in
+  `src/data/terrain.ts`), then add the provinces and run the table again.
+
+## Rivals work to a budget (roadmap 4.5)
+The dice in what rivals build are gone: land, ships, re-arming and the temper's work are saved for at a yearly
+rate and done when a whole unit is saved (`worksOf` in `src/engine/ai.ts`). The rates are what the dice gave on
+average. `RIVALS=1 npm run sim` prints the rivals' totals. Standard, 60 games
+(`RIVALS=1 DIFF=1 MODE=reasonable SEEDS=10`, `SIMSEED=11` and `29`):
+
+| | Rival development in 1750 | Companies | Top 3 (bot) |
+|---|---|---|---|
+| Dice (before) | about 7,520 | about 1,555 | 34/60 (57%) |
+| Budget, every realm at the same pace | 7,604 | 1,592 | 39/60 (65%) |
+| Budget, each realm at its own pace (**kept**) | 7,643 | 1,580 | 33/60 (55%) |
+
+Steady growth with one pace for all made the game easier though the rivals' total was the same: with dice, a few
+realms were lucky for three centuries and stood high in the ranking; with none, nobody pulled ahead and the bot's
+place rose. `DILIGENCE_SPREAD` 0.17 gives each realm a fixed pace from 0.83 to 1.17 (`diligence(id)`), about the
+spread luck gave, and brings the result back.
+- Levers: `AI_DEV_BASE`, `AI_DEV_SIZE` (the land), `SHIP_RATE`, `ARMS_RATE`, `FOCUS_CHANCE`, `DILIGENCE_SPREAD`.
+- A wider spread makes the top of the ranking harder to reach without making the average rival richer.
+
+### The three levels after the budget
+`DIFF=0|1|2 MODE=reasonable SEEDS=10`, `SIMSEED=11` and `29` (60 games a level):
+
+| Level | Top 3 | Target |
+|---|---|---|
+| Gentle | 24 + 22 = 46/60 (77%) | about 80% |
+| Standard | 19 + 14 = 33/60 (55%) | 55–65% |
+| Hard, rivals ×1.6 | 15 + 11 = 26/60 (43%) | 30–40% |
+| Hard, rivals ×1.7 (not kept) | 15 + 13 = 28/60 (47%) | |
+| Hard, rivals ×1.8 (not kept) | 10 + 18 = 28/60 (47%) | |
+
+Hard is over its band, and rival growth between ×1.6 and ×1.8 does not move it: 82 of 180 games, about 45%.
+The 37% recorded when Hard was first tuned (22 of 60) was at the kind end of what 60 games can show: single runs
+of 30 range from 10 to 18. Left at ×1.6. What to try next is in roadmap 6.7: a wider spread of rival pace on Hard.
+
+## Phase 5: picks and a smaller hand (roadmap 5.10–5.14)
+Top 3 for the bot, `DIFF=0|1|2 MODE=reasonable SEEDS=10`, `SIMSEED=11` and `29` (60 games a level):
+
+| Version | Gentle | Standard | Hard |
+|---|---|---|---|
+| Before phase 5 | 77% | 55% | 43% |
+| Picks, hand 5–8, bot picks at random | 53% | 27% | 22% |
+| Hand 6–10, the bot picks what it can use | 48% | 40% | 20% |
+| The same, rivals growing slower (Gentle ×0.6, Standard ×0.8, Hard ×1.3) | 60% | 40% | 20% |
+
+Kept: hand 6–10, the bot's sensible picks, Gentle at ×0.6. Standard and Hard went back to ×1 and ×1.6: slower
+rivals did not move them. Single changes on 30 Standard games (`SIMSEED=29`): picks alone 16, the smaller hand alone
+15, both 10 (before phase 5: about 15). Each alone is within noise; together the year's cards come in one batch and
+the bot sells more of them at the limit. Cards 20% more often (`CARD_BASE` 0.6) did not help (32%).
+
+Open, and a design choice: keep the picks and the small hand and find another lever (war margins, starting cards),
+or give back one of the two. The bot cannot judge what a person gains from choosing; play it first.
+
+## Rivals (roadmap 4.1–4.6)
+Levers, all without dice except the requests' own events:
+- **Goals** (`src/engine/rivals.ts`): `GOAL_MIN` 5 provinces to have one, kept `GOAL_YEARS` 25, `GOAL_WEIGHT` 3 (the
+  goal counts as three candidates when a realm picks a war), `GOAL_DRIFT` −2 relations a year towards the goal.
+  `HIST_GOALS` lists what history gave twelve realms to want.
+- **Warning** (`mayStrikePlayer` in `src/engine/ai.ts`): a realm that wants war with the player sends the dispatch
+  and waits a year; the warning holds `WARNING_VALID` 10 years. The wish itself is unchanged (`wantsPlayer`:
+  relations, grace, `warGap`, `warEdge`).
+- **What rivals do each year** (`aiFocus`): `FOCUS_CHANCE` 0.5; walls cost `WALL_COST` 30 × price level and stop at
+  fort 2, so the cautious do not turn the map into fortresses.
+- **Requests** (`src/engine/requests.ts`): chance a year while the conditions hold, and years before it may come
+  again: ultimatum 6% / 15, silver 7% / 8, joint war 6% / 12, drop an ally 5% / 15.
+- Great-power wars (both sides `GREAT_POWER` 12 provinces or more) reach the player as a dispatch.
+
+Pace, scripted runs with no player actions (seed 4242): 33–43% of turns brought no card and no prompt. With skip
+ahead (`stopReasons` in `src/engine/pace.ts`, at most 8 quarters a press) the same 400 turns take 16–36% fewer
+presses (Portugal 263, Venice 257, Ming 337), and no card, prompt or finished task is ever skipped past.
+An open game can end after a reign (40 years, 160 turns) or a century; a short game counts as won in the top three
+or when the realm finishes higher in the ranking than it began (`flags.rank0`).
+
+## The goods steward (roadmap 1.10)
+`STEWARD_PRICE` 1.5, `STEWARD_SHARES` 5 / 15 / 30% of province income, `STEWARD_ORDER` (what he buys first) in
+`src/engine/trade.ts`; on by default except on Hard (`steward` in `src/data/difficulty.ts`). His spending is part of
+"Goods bought" in the ledger. `NOSTEWARD=1 npm run sim` plays without him.
+Nine `reasonable` games each (SEEDS=3 SIMSEED=11): with the steward, income 37 / 95 / 153 / 285 / 356 / 662 at
+1500…1750 against 42 / 87 / 121 / 194 / 391 / 619 without; happiness 77% against 73% in 1750; median treasury lower
+until 1550 (25 against 111 in 1500), because he spends while the realm has few workshops. Top 3: 4 of 9 against 5 of 9
+(within the noise of nine games). If early treasuries prove too thin for players, lower `STEWARD_DEFAULT` to 0.10.
+
+## The court, chains and commanders (roadmap phase 3)
+Levers: `DISLOYAL` 35 and `LEAVES` 20, the yearly drift in `yearlyCourt`, and each court event's `chance` and
+`repeat` (`src/engine/court.ts`); `COMMANDER_MIN` 8 provinces, `COMMANDER_YEARS` 25, `COMMANDER_FALLS` and
+`COMMANDER_TAKEN` 12% each (`src/engine/commanders.ts`); `GREAT_POWER` 12 provinces for a war to be news
+(`src/engine/ai.ts`); each chain's first-step `chance` (`src/engine/chains.ts`).
+Nine `reasonable` games (SEEDS=3 SIMSEED=11, 1451–1750, no crash): survived 9/9, top 3 in 4, first in 3, the same
+as before the court existed; income 25 / 56 / 127 / 235 / 298 / 667 at 1500…1750 against 37 / 95 / 153 / 285 / 356 /
+662. The early game is poorer because the bot answers events at random and many of the new options cost ducats; a
+player who chooses will not pay for every one. If playtests show thin early treasuries, raise the first-step
+`chance` conditions (none of the chains begins before the fourth year) or lower the costs passed to `needs`/`pay`.
+
+## Battles (roadmap 4.7–4.12)
+Levers: the five rows of `TERRAINS` and `LANDING_FIRE` 1.3 (`src/data/terrain.ts`); `RESERVE_FRESH` 1.5,
+`RETREAT_COST` 10 strength, `ALLY_COMPANIES` 2 (`src/engine/battle.ts`); `TRAIT_TACTIC_CHANCE` 0.5
+(`src/data/troops.ts`); `QUICK_ODDS` 0.8 (`src/ui/prompts.ts`). The bot holds no reserve and never withdraws, so the
+simulation measures only ground, generals' habits and allied companies.
+
+First run with ground in every battle of the world: the `reasonable` bot finished top 3 in 9 of 9 and first in 8
+(it had been 4 and 3). Three runs with one change switched off each showed why: without allied companies 6 and 4,
+without generals' habits 8 and 5, without ground 3 and 2. Ground hindered every attacker, so rival realms conquered
+less and fell behind in a ranking that rewards growth. **Ground now counts only in battles the player fights**
+(`createBattle`): the wars between other realms are as they were tuned. Result, 18 games (SIMSEED 11 and 23,
+SEEDS=3): survived 18/18, top 3 in 10 (56%), first in 7; late income 675 and 637. That is inside the Standard target
+of 55–65%. Allied companies help the player (about two more top-3 finishes in nine); if playtests find alliances
+too strong, lower `ALLY_COMPANIES` to 1.

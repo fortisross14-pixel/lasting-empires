@@ -1,4 +1,5 @@
 // Card faces for every kind of card in the game.
+import { loyaltyOf, DISLOYAL } from '../engine/court';
 import type { TroopCard, EquipCard, Character, GameState } from '../types';
 import { TROOPS, EQUIPMENT, TACTICS } from '../data/troops';
 import { TRAITS, RARITY } from '../data/characters';
@@ -7,9 +8,12 @@ import { CARDS, cardType, CARD_TYPE_NAME, unitFor } from '../engine/cards';
 import { roleName, troopPower } from '../engine/core';
 import { h } from './dom';
 import { icon } from './icons';
-import { artImg } from './art';
+import { faceOf, faceImg, artImg } from './art';
 
 /** The art panel: the painting when there is one, else the line icon. */
+/** A person's portrait: their own face, in the dress of the realm's people. */
+const faceDiv = (c: Character, s: GameState, _fallback: string, ...kids: (HTMLElement | null)[]) =>
+  h('div', { class: 'c-art has-pic', html: faceImg(s.nations[s.player]?.culture ?? '', faceOf(c, s.characters)) }, ...kids);
 const artDiv = (name: string, fallback: string, ...kids: (HTMLElement | null)[]) => { const pic = artImg(name); return h('div', { class: 'c-art' + (pic ? ' has-pic' : ''), html: pic ?? fallback }, ...kids); };
 
 interface Opts { small?: boolean; selected?: boolean; dim?: boolean; onclick?: (e: Event) => void; badge?: string; cls?: string; wide?: boolean; count?: number; }
@@ -43,7 +47,7 @@ function miniTroop(t: Pick<TroopCard, 'type' | 'vet' | 'str'> & { mission?: numb
   );
 }
 
-export function troopCard(t: Pick<TroopCard, 'type' | 'vet' | 'str'> & { mission?: number; might?: number }, o: Opts = {}) {
+function troopCard0(t: Pick<TroopCard, 'type' | 'vet' | 'str'> & { mission?: number; might?: number }, o: Opts = {}) {
   if (o.small) return miniTroop(t, o);
   const d = TROOPS[t.type];
   return shell('troop', { ...o, cls: `tier${d.tier} ${o.cls ?? ''}` },
@@ -69,27 +73,30 @@ export function equipCard(e: Pick<EquipCard, 'type'>, o: Opts = {}) {
 
 export const ROLE_ICON: Record<string, string> = { general: 'helm', diplomat: 'scroll', admin: 'quill', merchant: 'coin', researcher: 'book', explorer: 'anchor', conqueror: 'lance', colonist: 'tower', admiral: 'ship', courtier: 'people', priest: 'church', artist: 'quill', leader: 'laurel' };
 
-export function charCard(c: Character, s: GameState, o: Opts = {}) {
+/** A mark on the card of someone whose loyalty is in doubt, so the player sees it before sending them anywhere. */
+const loyalMark = (c: Character) => (!c.ruler && loyaltyOf(c) < DISLOYAL ? h('span', { class: 'c-disloyal', title: `Disloyal: loyalty ${loyaltyOf(c)}`, 'aria-label': 'Disloyal' }, '!') : null);
+
+function charCard0(c: Character, s: GameState, o: Opts = {}) {
   if (o.wide) return shell('char', { ...o, cls: `r-${c.rarity} role-${c.role} ty-person ${o.cls ?? ''}` },
-    artDiv('role_' + c.role, icon(ROLE_ICON[c.role] ?? 'crown', 34)),
+    faceDiv(c, s, icon(ROLE_ICON[c.role] ?? 'crown', 34)),
     h('div', { class: 'c-body' },
       h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, `Person · ${c.ruler ? 'Monarch' : roleName[c.role]}`), h('span', { class: 'c-rarity' }, RARITY[c.rarity].name)),
       h('div', { class: 'c-name c-title' }, c.name),
       h('div', { class: 'c-text' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || 'No traits', ` · age ${s.year - c.born}`),
-      c.mission != null ? h('div', { class: 'c-away' }, c.mission === -1 ? 'Viceroy' : 'Away') : null));
+      c.mission != null ? h('div', { class: 'c-away' }, c.mission === -1 ? 'Viceroy' : 'Away') : null, loyalMark(c)));
   if (o.small) return shell('char', { ...o, cls: `mini r-${c.rarity} role-${c.role} ${o.cls ?? ''}` },
     h('div', { class: 'm-name' }, c.name),
-    artDiv('role_' + c.role, icon(ROLE_ICON[c.role] ?? 'crown', 26), h('span', { class: 'm-rar' }, RARITY[c.rarity].name)),
+    faceDiv(c, s, icon(ROLE_ICON[c.role] ?? 'crown', 26), h('span', { class: 'm-rar' }, RARITY[c.rarity].name)),
     h('div', { class: 'm-foot' }, h('span', { class: 'm-role' }, c.ruler ? 'Monarch' : roleName[c.role]), h('b', { class: 'm-skill', title: 'Skill' }, String(c.skill))),
-    h('div', { class: 'm-traits' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || '—'));
+    h('div', { class: 'm-traits' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || '—'), loyalMark(c));
   return shell('char', { ...o, cls: `r-${c.rarity} role-${c.role} ${o.cls ?? ''}` },
     h('div', { class: 'c-top' }, h('span', { class: 'c-role' }, c.ruler ? 'Monarch' : roleName[c.role]), h('span', { class: 'c-gem', title: RARITY[c.rarity].name })),
-    artDiv('role_' + c.role, icon(ROLE_ICON[c.role] ?? 'crown', o.small ? 24 : 32)),
+    faceDiv(c, s, icon(ROLE_ICON[c.role] ?? 'crown', o.small ? 24 : 32)),
     h('div', { class: 'c-name c-person' }, c.name),
     h('div', { class: 'c-rarity' }, RARITY[c.rarity].name),
     h('div', { class: 'c-traits' }, c.traits.map(t => TRAITS[t]?.name ?? t).join(' · ') || '—'),
     o.small ? null : h('div', { class: 'c-age' }, `Age ${s.year - c.born}`),
-    c.mission != null ? h('div', { class: 'c-away' }, 'Away') : null,
+    c.mission != null ? h('div', { class: 'c-away' }, 'Away') : null, loyalMark(c),
   );
 }
 
@@ -99,7 +106,7 @@ const KIND_LABEL: Record<string, string> = { ship: 'Ship', troop: 'Troop', equip
 let current: GameState | null = null;
 export const setCardGame = (s: GameState) => { current = s; };
 
-export function handCard(id: string, o: Opts = {}) {
+function handCard0(id: string, o: Opts = {}) {
   const d = CARDS[id];
   const unit = d.cls && current ? unitFor(current, d.cls) : d.troop;
   const t = unit ? TROOPS[unit] : null;
@@ -182,3 +189,12 @@ export function troopDetails(type: string, t?: Pick<TroopCard, 'vet' | 'str'>) {
       t ? row('Veterancy', VET_NAME[Math.min(3, t.vet)], '+15% defence per star') : null),
     d.pike ? h('p', { class: 'muted small' }, 'Pikes: allows the Pike Wall tactic.') : null);
 }
+
+/** Every card carries what it shows, so a long press can open its detail (longpress.ts). */
+export function handCard(id: string, o: Opts = {}) { const el = handCard0(id, o); el.dataset.card = id; return el; }
+
+/** Every card carries what it shows, so a long press can open its detail (longpress.ts). */
+export function troopCard(t: Pick<TroopCard, 'type' | 'vet' | 'str'> & { mission?: number; might?: number }, o: Opts = {}) { const el = troopCard0(t, o); el.dataset.troop = t.type; return el; }
+
+/** Every card carries what it shows, so a long press can open its detail (longpress.ts). */
+export function charCard(c: Character, s: GameState, o: Opts = {}) { const el = charCard0(c, s, o); el.dataset.char = String(c.uid); return el; }

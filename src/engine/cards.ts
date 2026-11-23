@@ -1,3 +1,5 @@
+import { groupDef } from './techgroups';
+import { setRetired } from './culture';
 import { maxFort } from './core';
 // Cards are the actions of the game. Five kinds, each drawn at its own yearly rate.
 import { happinessOf } from './society';
@@ -65,7 +67,7 @@ export const CARD_TYPE_NAME: Record<CardType, string> = { people: 'People', troo
 
 /** How many cards you may keep, by realm rank: per deck and in all. Permanent cards and burdens do not count.
  *  Cards always arrive; over the limit you sell the extras (half a nation point each) before the turn ends. */
-export const HAND_LIMITS: [number, number][] = [[8, 22], [10, 28], [12, 34], [15, 40]]; // Small Kingdom, Kingdom, Great Kingdom, Empire
+export const HAND_LIMITS: [number, number][] = [[6, 20], [7, 24], [8, 28], [10, 32]]; // Small Kingdom, Kingdom, Great Kingdom, Empire (roadmap 5.11: was 8–15 a deck)
 const RANK_MIN = [0, 5, 13, 30]; // as RANKS in realm.ts
 function limitRow(s: GameState): [number, number] {
   if ((globalThis as { NOHANDLIMIT?: boolean }).NOHANDLIMIT) return [Infinity, Infinity];
@@ -107,6 +109,8 @@ export function trimHand(s: GameState) {
   }
 }
 export const RATE_CAP = 1.4;
+/** Cards a year every deck draws before any bonus. */
+export const CARD_BASE = 0.5;
 export const CAT_INFO: Record<Cat, { name: string; icon: string; role: Role; color: string }> = {
   military: { name: 'Military', icon: 'sword', role: 'general', color: '#6e2b2b' },
   diplomacy: { name: 'Diplomacy', icon: 'hands', role: 'diplomat', color: '#2f4f6b' },
@@ -137,17 +141,20 @@ export const UNIT_LINES: Record<UnitClass, string[]> = {
 };
 export const CLASS_NAME: Record<UnitClass, string> = { levy: 'Levy Infantry', inf: 'Infantry', shot: 'Ranged', cav: 'Cavalry', art: 'Artillery' };
 /** The unit a class card hires now. */
-export const unitFor = (s: GameState, cls: UnitClass) => [...UNIT_LINES[cls]].reverse().find(t => techOk(s, TROOPS[t].tech)) ?? UNIT_LINES[cls][0];
+/** The unit a class card hires now: the last of the realm's own line that its research allows (techgroups.ts). */
+export const unitFor = (s: GameState, cls: UnitClass) => { const line = groupDef(s).lines[cls] ?? UNIT_LINES[cls]; return [...line].reverse().find(t => techOk(s, TROOPS[t].tech)) ?? line[0]; };
+/** Can this realm raise this kind of troop at all? (No horses or guns in the Americas.) */
+export const classOpen = (s: GameState, cls: UnitClass) => !!groupDef(s).lines[cls]?.length;
 /** The unit a troop card hires. */
 export const cardTroop = (s: GameState, d: HandCardDef) => (d.cls ? unitFor(s, d.cls) : d.troop!);
 const CLASS_CARDS: [string, UnitClass, string, number, string][] = [
   ['hire_levy', 'levy', 'Levy Infantry', 3, 'Peasants with spears: cheap, and the base for many recipes.'],
-  ['hire_infantry', 'inf', 'Hire Infantry', 2.5, 'Your best foot soldiers: Men-at-Arms, then Pikemen with Pike Square.'],
-  ['hire_ranged', 'shot', 'Hire Ranged', 2.5, 'Your best missile troops: Crossbowmen, then Arquebusiers, Musketeers and Line Infantry as you research them.'],
-  ['hire_cavalry', 'cav', 'Hire Cavalry', 1.8, 'Your best horsemen: Jinetes, then Reiters and Dragoons as you research them. Heavy horse comes from recipes.'],
+  ['hire_infantry', 'inf', 'Hire Infantry', 2.5, 'Your best foot soldiers, of the kind your people raise.'],
+  ['hire_ranged', 'shot', 'Hire Ranged', 2.5, 'Your best missile troops: bows, slings or crossbows, then guns once you know them.'],
+  ['hire_cavalry', 'cav', 'Hire Cavalry', 1.8, 'Your best horsemen, of the kind your people raise.'],
   ['hire_artillery', 'art', 'Hire Artillery', 1, 'Your best guns: Bombards, then Field Cannon with Bronze Cannon.'],
 ];
-for (const [id, cls, name, w, text] of CLASS_CARDS) add({ id, name, cat: 'military', kind: 'troop', cls, troop: UNIT_LINES[cls][0], icon: TROOPS[UNIT_LINES[cls][0]].icon, text, weight: s => (cls === 'levy' && !govOf(s).levies ? 0 : w) });
+for (const [id, cls, name, w, text] of CLASS_CARDS) add({ id, name, cat: 'military', kind: 'troop', cls, troop: UNIT_LINES[cls][0], icon: TROOPS[UNIT_LINES[cls][0]].icon, text, weight: s => (!classOpen(s, cls) || (cls === 'levy' && !govOf(s).levies) ? 0 : w) });
 // old single-unit cards stay playable in saved games, but are no longer drawn
 for (const t of Object.values(TROOPS).filter(t => t.draftable && t.kind !== 'ship' && t.id !== 'levy')) {
   add({ id: 'hire_' + t.id, name: t.name, cat: 'military', kind: 'troop', troop: t.id, icon: t.icon, text: t.desc, weight: never });
@@ -159,21 +166,22 @@ for (const t of Object.values(TROOPS).filter(t => t.draftable && t.kind === 'shi
 }
 for (const e of Object.values(EQUIPMENT)) {
   add({ id: 'eq_' + e.id, name: e.name, cat: 'military', kind: 'equip', equip: e.id, icon: e.icon, text: e.desc,
-    weight: s => (techOk(s, e.tech) ? (e.id === 'banner' ? 0.6 : e.tech ? 1.8 : 1.2) : 0) });
+    // plate and warhorses are European kit: the merge recipes make European troops (knights, men-at-arms)
+    weight: s => (techOk(s, e.tech) && (e.id === 'banner' || groupDef(s).mercenaries) ? (e.id === 'banner' ? 0.6 : e.tech ? 1.8 : 1.2) : 0) });
 }
 add({ id: 'hire_general', name: 'Recruit a General', cat: 'military', kind: 'hire', role: 'general', icon: 'helm', text: 'Meet three captains, keep one. Costs 1 manpower.', weight: () => 1.1 });
 add({ id: 'march_orders', name: 'March Orders', cat: 'military', kind: 'mission', missions: ['conquer', 'raid', 'base'], icon: 'sword', text: 'Send a general and troops to conquer or raid an enemy province within a quarter\'s march, or to set up an invasion base near a far one.', weight: s => (s.wars.some(w => w.a === s.player || w.b === s.player) ? 0.6 : 0.2) });
 add({ id: 'forced_march', name: 'Forced March', cat: 'military', kind: 'instant', target: 'mission', icon: 'boot', text: 'A mission takes 1 year less (minimum 1).', weight: () => 0.9,
   targetOk: (s, t) => { const m = s.missions.find(x => String(x.id) === t); return !!m && m.turnsLeft > 1 && m.kind !== 'research'; },
   play: (s, t) => { s.missions.find(x => String(x.id) === t)!.turnsLeft--; return 'The mission speeds up'; } });
-add({ id: 'drill', name: 'Drill Sergeant', cat: 'military', kind: 'instant', improve: true, target: 'troop', icon: 'banner', text: 'A troop gains a veteran star.', weight: () => 1,
+add({ id: 'drill', name: 'Drill Sergeant', cat: 'military', kind: 'instant', improve: true, target: 'troop', icon: 'banner', text: 'A troop gains a veteran star, and your troops at home return to full strength.', weight: () => 1.8,
   targetOk: (s, t) => s.troops.some(x => String(x.uid) === t && x.vet < 3),
-  play: (s, t) => { const x = s.troops.find(y => String(y.uid) === t)!; x.vet++; return `${TROOPS[x.type].name} gains a star`; } });
+  play: (s, t) => { const x = s.troops.find(y => String(y.uid) === t)!; x.vet++; for (const u of s.troops) if (u.mission == null) u.str = 100; return `${TROOPS[x.type].name} gains a star; ranks refilled`; } });
 add({ id: 'fresh_recruits', name: 'Fresh Recruits', cat: 'military', kind: 'instant', icon: 'spear', text: 'Troops at home return to full strength.', weight: () => 0.8,
   play: s => { for (const t of s.troops) if (t.mission == null) t.str = 100; return 'Ranks refilled'; } });
 add({ id: 'ambush', name: 'Ambush', cat: 'military', kind: 'instant', icon: 'eye', text: 'In your next battle you see the enemy\'s tactic every round.', weight: () => 0.8,
   play: s => { s.flags.ambush = 1; return 'Scouts are ready for the next battle'; } });
-add({ id: 'condottieri', name: 'Swiss Captain', cat: 'military', kind: 'instant', icon: 'pike', text: 'Pay 35 ducats: hire a 1-star company of Swiss Pikes (no manpower needed).', weight: () => 0.6,
+add({ id: 'condottieri', name: 'Swiss Captain', cat: 'military', kind: 'instant', icon: 'pike', text: 'Pay 35 ducats: hire a 1-star company of Swiss Pikes (no manpower needed).', weight: s => (groupDef(s).mercenaries ? 0.6 : 0),
   can: s => player(s).gold < 35 ? 'Needs 35 ducats' : s.troops.length >= armyCap(s) ? 'Army is at full size' : null,
   play: s => { player(s).gold -= 35; s.troops.push({ uid: uid(s), type: 'swiss', vet: 1, str: 100 }); return 'Swiss Pikes join your army'; } });
 add({ id: 'conquistadors', name: 'Conquistadors', cat: 'military', kind: 'instant', icon: 'gun', text: 'Veterans return from overseas: gain a 1-star troop for free.', weight: never,
@@ -217,6 +225,8 @@ add({ id: 'conquista', name: 'Conquista', cat: 'military', kind: 'mission', miss
 add({ id: 'hire_admin', name: 'Appoint an Administrator', cat: 'internal', kind: 'hire', role: 'admin', icon: 'quill', text: 'Meet three officials, keep one. Costs 1 manpower.', weight: () => 1.1 });
 add({ id: 'royal_works', name: 'Royal Works', cat: 'internal', kind: 'mission', missions: ['build'], group: 'internal', icon: 'hammer', text: 'Build a temple, library, barracks, fortress, courthouse or university.', weight: () => 2.5 });
 add({ id: 'settlers', name: 'Settlers', cat: 'internal', kind: 'mission', missions: ['develop'], icon: 'wheat', text: 'Develop a province: +1 development.', weight: () => 1.5 });
+// one Treatise for every field: the researcher chooses the study when it is played (roadmap 5.10)
+add({ id: 'study', name: 'Treatise', cat: 'research', kind: 'mission', missions: ['research'], icon: 'book', text: 'A researcher studies a technology of any field.', weight: s => trackOpen(s, 'military') + trackOpen(s, 'economy') + trackOpen(s, 'state') });
 add({ id: 'found_settlement', name: 'Found a Settlement', cat: 'internal', kind: 'mission', missions: ['found'], icon: 'tower', text: 'Found a village, town or city where there is none. The better the administrator, the bigger it starts.', weight: s => (provsOf(s, s.player).some(p => !p.settlement) ? 1.4 : 0) });
 add({ id: 'grow_settlement', name: 'Grow your Settlement', cat: 'internal', kind: 'mission', missions: ['grow'], icon: 'tower', text: 'Grow a village to a town, a town to a city, a city to a metropolis.', weight: () => 1.3 });
 add({ id: 'royal_progress', name: 'Royal Progress', cat: 'internal', kind: 'mission', missions: ['progress'], icon: 'crown', text: 'Tour the realm: stability +1, prestige +2, control +10 everywhere.', weight: () => 1.2 });
@@ -247,10 +257,10 @@ add({ id: 'charter', name: 'Charter of Privileges', cat: 'culture', kind: 'insta
   play: s => { const c = largestForeignCulture(s)!; s.accepted.push(c); return `${CULTURE_NAMES[c] ?? c} culture is accepted`; } });
 add({ id: 'tolerance', name: 'Edict of Tolerance', cat: 'culture', kind: 'instant', icon: 'dove', text: 'For 20 years, other faiths are less unhappy. The Papacy disapproves (−20).', weight: s => (provsOf(s, s.player).some(p => p.religion !== s.stateReligion) ? 0.6 : 0),
   play: s => { s.flags.tolerance_until = s.year + 20; addRel(s, s.player, 'papacy', -20); return 'Other faiths may worship in peace'; } });
-add({ id: 'harvest', name: 'Bountiful Harvest', cat: 'internal', kind: 'instant', icon: 'wheat', text: 'Stability +1, manpower +2.', weight: () => 1,
-  play: s => { stab(s, 1); player(s).manpower += 2; return 'Stability +1, manpower +2'; } });
-add({ id: 'sermon', name: 'Inspired Sermon', cat: 'culture', kind: 'instant', icon: 'church', text: 'Stability +1, prestige +3.', weight: () => 1,
-  play: s => { stab(s, 1); player(s).prestige += 3; return 'Stability +1, prestige +3'; } });
+add({ id: 'harvest', name: 'Bountiful Harvest', cat: 'internal', kind: 'instant', icon: 'wheat', text: 'Stability +1, manpower +3.', weight: () => 1.9,
+  play: s => { stab(s, 1); player(s).manpower += 3; return 'Stability +1, manpower +3'; } });
+add({ id: 'sermon', name: 'Inspired Sermon', cat: 'culture', kind: 'instant', icon: 'church', text: 'Stability +1, prestige +5.', weight: () => 1.4,
+  play: s => { stab(s, 1); player(s).prestige += 5; return 'Stability +1, prestige +5'; } });
 add({ id: 'census', name: 'Royal Census', cat: 'internal', kind: 'instant', icon: 'people', text: 'Manpower +3.', weight: () => 0.9,
   play: s => { player(s).manpower += 3; return 'Manpower +3'; } });
 add({ id: 'pacify', name: 'Royal Pardon', cat: 'internal', kind: 'instant', icon: 'dove', text: 'Control +15 in every province.', weight: () => 0.9,
@@ -272,8 +282,8 @@ add({ id: 'tax_farm', name: 'Tax Farmers', cat: 'economy', kind: 'mission', miss
 add({ id: 'irrigation', name: 'Irrigation', cat: 'economy', kind: 'mission', missions: ['develop'], icon: 'wheat', text: 'Develop a province: +1 development.', weight: () => 1 });
 add({ id: 'levy_tax', name: 'Extraordinary Levy', cat: 'economy', kind: 'instant', icon: 'coin', text: 'Gain 6 + 2 per province in ducats. Stability −1.', weight: () => 1.2,
   play: s => { const g = Math.round((6 + 2 * provsOf(s, s.player).length) * inflation(s)); player(s).gold += g; stab(s, -1); s.taxBurden = Math.min(30, s.taxBurden + 10); return `+${g} ducats, stability −1, taxes weigh on the people`; } });
-add({ id: 'windfall', name: 'Silver Windfall', cat: 'economy', kind: 'instant', icon: 'coin', text: 'Gain 35 ducats.', weight: () => 0.9,
-  play: s => { const g = Math.round(35 * inflation(s)); player(s).gold += g; return `+${g} ducats`; } });
+add({ id: 'windfall', name: 'Silver Windfall', cat: 'economy', kind: 'instant', icon: 'coin', text: 'Gain 35 ducats, or 8 for every trade treaty and 5 more if that is greater.', weight: () => 1.9,
+  play: s => { const n = s.treaties.filter(t => t.kind === 'trade' && (t.a === s.player || t.b === s.player)).length; const g = Math.round(Math.max(35, 5 + 8 * n) * inflation(s)); player(s).gold += g; return `+${g} ducats`; } });
 add({ id: 'trade_fair', name: 'Trade Fair', cat: 'economy', kind: 'instant', icon: 'scales', text: 'Gain 8 ducats per trade treaty, and 5 more.', weight: () => 1,
   play: s => { const n = s.treaties.filter(t => t.kind === 'trade' && (t.a === s.player || t.b === s.player)).length; const g = Math.round((5 + 8 * n) * inflation(s)); player(s).gold += g; return `+${g} ducats`; } });
 add({ id: 'loan', name: 'Genoese Loan', cat: 'economy', kind: 'instant', icon: 'chain', text: 'Gain 60 ducats now. A Crown Debt card is added.', weight: () => 0.7,
@@ -303,7 +313,15 @@ add({ id: 'greek_scholars', name: 'Greek Scholars', cat: 'research', kind: 'inst
 export const handOf = (s: GameState, cat: Cat) => s.hand.filter(h => CARDS[h.card]?.cat === cat);
 
 /** Add a card to hand. Respects the hand limit unless forced (burdens always arrive). */
-export function addCard(s: GameState, card: string, force = false): boolean {
+/** Cards merged into another (roadmap 5.10): no longer drawn, and given as their successor; one already in a hand
+ *  still plays as it always did. */
+export const RETIRED: Record<string, string> = {
+  census: 'harvest', trade_fair: 'windfall', relic: 'sermon', fresh_recruits: 'drill', irrigation: 'settlers',
+  study_military: 'study', study_economy: 'study', study_state: 'study',
+};
+setRetired(RETIRED);
+export function addCard(s: GameState, card0: string, force = false): boolean {
+  const card = RETIRED[card0] ?? card0;
   const def = CARDS[card];
   if (def?.permanent && s.hand.some(h => h.card === card)) { s.np += 1; return false; } // you already hold it: a nation point instead
   void force;
@@ -314,10 +332,34 @@ export function addCard(s: GameState, card: string, force = false): boolean {
 export function randomCard(s: GameState, cat: Cat, type?: CardType): string {
   // never offer what can't be used: a permanent card you already hold, or a hire with a full court
   const courtFull = courtCount(s) >= courtCap(s);
-  const pool = Object.values(CARDS).filter(c => c.cat === cat && (!type || cardType(c) === type) && !(c.permanent && s.hand.some(h => h.card === c.id)) && !(c.kind === 'hire' && courtFull))
+  const pool = Object.values(CARDS).filter(c => c.cat === cat && !RETIRED[c.id] && (!type || cardType(c) === type) && !(c.permanent && s.hand.some(h => h.card === c.id)) && !(c.kind === 'hire' && courtFull))
     .map(c => [c.id, c.weight(s)] as [string, number]).filter(([, w]) => w > 0);
   if (!pool.length) return Object.values(CARDS).filter(c => c.cat === cat && !c.permanent && c.weight(s) > 0)[0]?.id ?? 'scholar';
   return weighted(s, pool);
+}
+
+/** How many cards each pick offers. */
+export const PICK_OF = 3;
+/** Three different cards of a deck to choose from (fewer only if the deck has fewer to give). */
+export function pickOptions(s: GameState, cat: Cat): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < 12 && out.length < PICK_OF; i++) { const c = randomCard(s, cat); if (!out.includes(c)) out.push(c); }
+  return out;
+}
+/** When the year turns: the cards due become one screen of picks. */
+export function queuePicks(s: GameState) {
+  const due = s.picksDue ?? {};
+  const picks: { cat: Cat; options: string[] }[] = [];
+  for (const c of CATS) for (let i = 0; i < (due[c] ?? 0); i++) picks.push({ cat: c, options: pickOptions(s, c) });
+  s.picksDue = {};
+  if (picks.length) s.queue.push({ kind: 'picks', year: s.year, picks });
+}
+/** Take the chosen card of each pick (by its place in the options), and close the screen. */
+export function choosePicks(s: GameState, chosen: number[]) {
+  const p = s.queue[0];
+  if (!p || p.kind !== 'picks') return;
+  p.picks.forEach((pk, i) => { const id = pk.options[chosen[i] ?? 0] ?? pk.options[0]; if (id) addCard(s, id); });
+  s.queue.shift();
 }
 
 export function drawCat(s: GameState, cat: Cat): boolean {
@@ -330,7 +372,7 @@ export function cardRates(s: GameState): Record<Cat, { rate: number; parts: Rate
   const out = {} as Record<Cat, { rate: number; parts: RatePart[] }>;
   const arch = RULER_ARCHS[player(s).ruler.arch];
   for (const c of CATS) {
-    const parts: RatePart[] = [{ label: 'Base', v: 0.5 }];
+    const parts: RatePart[] = [{ label: 'Base', v: CARD_BASE }];
     let b = 0;
     // temples, libraries and universities work at half pace without books and art
     const arts = 1 - 0.5 * (s.short?.arts ?? 0);
@@ -385,7 +427,9 @@ export function yearlyCards(s: GameState, share = 1): Record<Cat, number> {
     got[c] = 0;
     while (s.cardAccum[c] >= 1) {
       s.cardAccum[c] -= 1;
-      if (drawCat(s, c)) got[c]++;
+      // a card due is not handed over at once: it waits to be chosen, one of three, when the year turns
+      (s.picksDue ??= {})[c] = (s.picksDue[c] ?? 0) + 1;
+      got[c]++;
     }
   }
   s.np += npRate(s).rate * share;
@@ -464,7 +508,7 @@ export function cardFor(s: GameState, kind: MissionKind, opts: { track?: TechTra
   return s.hand.find(h => {
     const d = CARDS[h.card];
     if (d.kind !== 'mission' || !d.missions?.includes(kind)) return false;
-    if (opts.track && d.track !== opts.track) return false;
+    if (opts.track && d.track && d.track !== opts.track) return false; // a Treatise without a field studies any
     if (opts.group && d.group !== opts.group) return false;
     return true;
   });

@@ -41,6 +41,18 @@ export const RAW = Object.values(GOODS).filter(g => g.kind === 'raw').map(g => g
 export const MADE = Object.values(GOODS).filter(g => g.kind === 'made').map(g => g.id);
 export const FOOD = Object.values(GOODS).filter(g => g.food).map(g => g.id);
 
+/** The six things a realm needs, as the Goods screen shows them first. `needs` are the keys of needs() in trade.ts;
+ *  `goods` are the goods to look at when the need is not met (the made good, then what it is made from). */
+export interface NeedGroup { id: string; name: string; icon: string; needs: string[]; goods: string[]; idle: string; lack: string; }
+export const NEED_GROUPS: NeedGroup[] = [
+  { id: 'food', name: 'Food', icon: 'wheat', needs: ['food'], goods: ['grain', 'fish', 'meat', 'produce'], idle: 'Nobody to feed yet.', lack: 'hunger: unhappy people and fewer recruits' },
+  { id: 'clothing', name: 'Clothing', icon: 'cloth', needs: ['cloth'], goods: ['cloth', 'fibres', 'dyes'], idle: 'No cloth needed yet.', lack: 'the people go ill-clad and unhappy' },
+  { id: 'building', name: 'Building', icon: 'brick', needs: ['materials', 'tools'], goods: ['materials', 'tools', 'wood', 'iron', 'leather'], idle: 'No town buildings, farms or mines to keep up yet.', lack: 'towns decay, and farms and mines make less' },
+  { id: 'arms', name: 'Arms', icon: 'sword', needs: ['weapons', 'gunpowder'], goods: ['weapons', 'gunpowder', 'iron', 'coal', 'saltpetre'], idle: 'No troops to arm.', lack: 'wounded companies do not recover' },
+  { id: 'fleet', name: 'The fleet', icon: 'anchor', needs: ['stores'], goods: ['stores', 'wood', 'fibres'], idle: 'No ships to keep.', lack: 'damaged ships are not refitted' },
+  { id: 'court', name: 'The court', icon: 'ring', needs: ['arts', 'luxuries'], goods: ['arts', 'luxuries', 'gold', 'dyes', 'spices'], idle: 'The court asks for nothing yet.', lack: 'prestige falls, and temples and libraries work at half pace' },
+];
+
 /** Old saves used other goods. */
 export const OLD_GOODS: Record<string, string> = {
   cattle: 'meat', timber: 'wood', horses: 'leather', furs: 'leather', wool: 'fibres', cotton: 'fibres', silk: 'fibres',

@@ -7,6 +7,10 @@ import { goalView } from '../src/engine/goals';
 import { revolutionBlocked, startRevolution } from '../src/engine/government';
 import { autoResolve, finishBattle } from '../src/engine/battle';
 import { takeDraftOption, doMerge, mergePreview, buyCard, hireWithCard, sellOffices, officeCost } from '../src/engine/drafts';
+import { choosePicks } from '../src/engine/cards';
+import { REGIONS } from '../src/data/overseas';
+import { groupOf } from '../src/engine/techgroups';
+import { cardHasTarget } from '../src/engine/pace';
 import { launchMission, missionBlocked, cardRole, cardRoles, attackRoute } from '../src/engine/missions';
 import { discoverable, provRegion } from '../src/engine/overseas';
 import { hireShip, transportOf } from '../src/engine/navy';
@@ -16,7 +20,7 @@ import { provsOf, player, enemiesOf, armyCap, incomeOf, atWar } from '../src/eng
 import { CARDS, playCard, cardBlocked, buyCost } from '../src/engine/cards';
 import { neighbours } from '../src/engine/map';
 import { CATS, type GameState } from '../src/types';
-import { NATIONS } from '../src/data/nations';
+import { NATIONS, NO_STATE } from '../src/data/nations';
 import { troopsNear } from '../src/engine/army';
 import { happinessOf } from '../src/engine/society';
 import { partners, routeBlocked, postBlocked, quarterFlow, defaultMake } from '../src/engine/trade';
@@ -37,6 +41,8 @@ function resolveQueue(s: GameState) {
       const r = chooseEventOption(s, ok[Math.floor(R() * ok.length)][1]);
       if (typeof r === 'string') s.queue.shift();
     } else if (p.kind === 'battle') { autoResolve(s, p.battle); finishBattle(s, p.battle); s.queue.shift(); }
+    // the bot picks as a player would: a card it can use now, otherwise the one the deck rates highest
+    else if (p.kind === 'picks') choosePicks(s, p.picks.map(pk => { const score = (id: string) => (cardHasTarget(s, id) ? 10 : 0) + (CARDS[id]?.weight(s) ?? 0) + R() * 0.5; let b = 0; pk.options.forEach((id, i) => { if (score(id) > score(pk.options[b])) b = i; }); return b; }));
     else if (p.kind === 'draft') { takeDraftOption(s, p.options[Math.floor(R() * p.options.length)]); s.queue.shift(); }
     else if (p.kind === 'succession') chooseHeir(s, Math.floor(R() * p.heirs.length));
     else if (p.kind === 'peace') {
@@ -137,7 +143,7 @@ function botTurn(s: GameState) {
       }
     } else if (kind === 'research') {
       const r = free(s, role); if (!r) continue;
-      const t = TECHS.find(t => t.track === d.track && !missionBlocked(s, 'research', t.id));
+      const t = TECHS.find(t => (!d.track || t.track === d.track) && !missionBlocked(s, 'research', t.id));
       if (t) launchMission(s, 'research', r.uid, t.id, [], undefined, h.uid);
     } else {
       const a = free(s, role) ?? s.characters.filter(c => !c.ruler && c.mission == null && cardRoles(d.id).includes(c.role)).sort((x, y) => y.skill - x.skill)[0]; if (!a) continue;
@@ -168,7 +174,7 @@ function botTurn(s: GameState) {
 }
 
 // ---------- runner ----------
-// MODE=reasonable|passive|greedy  SEEDS=n
+// MODE=reasonable|passive|greedy  SEEDS=n  DIFF=0|1|2
 const MODE = process.env.MODE ?? 'reasonable';
 const SEEDS = Number(process.env.SEEDS ?? 4);
 const START_Y = Number(process.env.START ?? 1451);
@@ -180,7 +186,16 @@ const finals: Row[] = [];
 function snap(s: GameState): Row {
   const me = player(s); const inc = incomeOf(s, s.player);
   const r = ranking(s);
-  return { gold: me.gold, inc: inc.total, gross: inc.provinces + inc.trade + inc.goods + inc.other, upk: inc.upkeep + inc.salaries + inc.imports, provs: provsOf(s, s.player).length, stab: me.stability, happy: s.happiness, hand: s.hand.length, troops: s.troops.length, rank: r.findIndex(x => x.id === s.player) + 1, alive: me.alive ? 1 : 0 };
+  // how the rivals are doing: the development of all their land, their companies and their ships (RIVALS=1 prints it)
+  const rivals = Object.values(s.nations).filter(x => x.alive && x.id !== s.player && x.id !== NO_STATE);
+  const rdev = Object.values(s.provinces).reduce((a, p) => a + (p.owner !== s.player && p.owner !== NO_STATE ? p.dev : 0), 0);
+  const rarmy = rivals.reduce((a, x) => a + x.army.length, 0), rfleet = rivals.reduce((a, x) => a + (x.fleet?.length ?? 0), 0);
+  const rforts = Object.values(s.provinces).reduce((a, p) => a + (p.owner !== s.player && p.owner !== NO_STATE ? p.fort : 0), 0);
+  // the New World: provinces held by realms from elsewhere (COLONIES=1 prints it)
+  const nw = Object.values(s.provinces).filter(p => REGIONS[provRegion(p.id)]?.where === 'New World');
+  const nwForeign = nw.filter(p => s.nations[p.owner]?.alive && groupOf(s, p.owner) !== 'american').length;
+  const nwFree = nw.filter(p => p.owner === NO_STATE).length;
+  return { nwForeign, nwFree, nwAll: nw.length, rdev, rarmy, rfleet, rforts, gold: me.gold, inc: inc.total, gross: inc.provinces + inc.trade + inc.goods + inc.other, upk: inc.upkeep + inc.salaries + inc.imports, provs: provsOf(s, s.player).length, stab: me.stability, happy: s.happiness, hand: s.hand.length, troops: s.troops.length, rank: r.findIndex(x => x.id === s.player) + 1, alive: me.alive ? 1 : 0 };
 }
 function passiveTurn(s: GameState) {
   for (const h of [...s.hand]) { const d = CARDS[h.card]; if (d.kind === 'instant' && !d.target && !cardBlocked(s, d) && !d.burden) playCard(s, h.uid, ''); }
@@ -197,8 +212,10 @@ function greedyExtra(s: GameState) {
 const PICK = process.env.NATIONS === 'all' ? NATIONS.filter(d => !d.native).map(d => d.id) : process.env.NATIONS ? process.env.NATIONS.split(',') : ['castile', 'portugal', 'aragon'];
 for (const n of (MODE === 'big' ? ['castile'] : PICK)) for (let seed = 1; seed <= SEEDS; seed++) {
   const START = Number(process.env.START ?? 1451);
-  const s = process.env.MISSION ? newMissionGame(n, process.env.MISSION, START) : newGame(n, seed * 7919 + (MODE === 'passive' ? 1 : MODE === 'greedy' ? 2 : 0), START);
+  const DIFF = process.env.DIFF != null ? Number(process.env.DIFF) : undefined; // 0 gentle, 1 standard, 2 hard (data/difficulty.ts)
+  const s = process.env.MISSION ? newMissionGame(n, process.env.MISSION, START, { difficulty: DIFF }) : newGame(n, seed * 7919 + (MODE === 'passive' ? 1 : MODE === 'greedy' ? 2 : 0), START, { difficulty: DIFF });
   if (MODE === 'big') { for (const id of ['granada', 'malaga', 'almeria', 'porto', 'lisbon', 'evora', 'faro', 'coimbra', 'pamplona', 'zaragoza', 'barcelona', 'valencia', 'tangier', 'fez', 'oran', 'tlemcen']) { const prov = s.provinces[id]; const from = prov.owner; prov.owner = n; if (!Object.values(s.provinces).some(x => x.owner === from)) s.nations[from].alive = false; } s.wars = s.wars.filter(w => s.nations[w.a].alive && s.nations[w.b].alive); for (let i = 0; i < 8; i++) s.troops.push({ uid: 50000 + i, type: 'pikemen', vet: 1, str: 100 }); }
+  if (process.env.NOSTEWARD && s.steward) s.steward.on = false; // compare the goods economy with and without him
   resolveQueue(s);
   let turns = 0;
   try {
@@ -230,6 +247,14 @@ const med = (a: Row[], k: string) => { const v = a.map(r => r[k]).sort((x, y) =>
 console.log(`MODE ${MODE}, ${finals.length} campaigns`);
 console.log('year  n  gold(med) income gross  costs provs stab happy hand troops rank');
 for (const y of CHECK) { const a = rows[y] ?? []; if (!a.length) continue; console.log(String(y).padEnd(5), String(a.length).padStart(2), String(Math.round(med(a, 'gold'))).padStart(8), avg(a, 'inc').toFixed(0).padStart(6), avg(a, 'gross').toFixed(0).padStart(5), avg(a, 'upk').toFixed(0).padStart(6), avg(a, 'provs').toFixed(1).padStart(5), avg(a, 'stab').toFixed(1).padStart(4), avg(a, 'happy').toFixed(0).padStart(5), avg(a, 'hand').toFixed(0).padStart(4), avg(a, 'troops').toFixed(0).padStart(6), avg(a, 'rank').toFixed(1).padStart(4)); }
+if (process.env.COLONIES) {
+  console.log('colonies: year  New World held from elsewhere / unclaimed / all (mean of the campaigns)');
+  for (const y of CHECK) { const a = rows[y] ?? []; if (a.length) console.log('colonies:', String(y).padEnd(5), avg(a, 'nwForeign').toFixed(0).padStart(4), avg(a, 'nwFree').toFixed(0).padStart(6), avg(a, 'nwAll').toFixed(0).padStart(5)); }
+}
+if (process.env.RIVALS) {
+  console.log('rivals: year  development  companies  ships  forts   (all rival realms together, mean of the campaigns)');
+  for (const y of CHECK) { const a = rows[y] ?? []; if (a.length) console.log('rivals:', String(y).padEnd(5), avg(a, 'rdev').toFixed(0).padStart(11), avg(a, 'rarmy').toFixed(0).padStart(10), avg(a, 'rfleet').toFixed(0).padStart(6), avg(a, 'rforts').toFixed(0).padStart(6)); }
+}
 const survived = finals.filter(f => f.year > END_Y && f.provs > 0).length;
 console.log(`survived ${survived}/${finals.length} · top3 ${finals.filter(f => f.year > END_Y && f.rank >= 1 && f.rank <= 3).length} · wins(#1) ${finals.filter(f => f.year > END_Y && f.rank === 1).length}`);
 if (process.env.LIST) for (const f of finals) console.log('  final', f.nation ?? '', f.provs, f.rank);
