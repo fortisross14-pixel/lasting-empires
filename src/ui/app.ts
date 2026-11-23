@@ -47,6 +47,7 @@ import { MapView, MAP_MODES, legendFor } from './map';
 import { scenarioCastilePortugal } from '../engine/scenarios';
 import { troopsNear, setDefence, garrisons, moveTroops, travel, locOf, nearestGarrison, baseFor, READY_STR, HEAL, healOf } from '../engine/army';
 import { armsSvg } from './banners';
+import { kvGet, kvSet, kvRemove, kvJson, exportData, importData, onStorageError } from './storage';
 import { rankOf, nextRank, missionCap, missionsLeft, VICEROY_COST, viceroyBlocked, territoryOf, appointViceroy, recallViceroy, viceroyFocus, FOCUS_TEXT } from '../engine/realm';
 
 const KEY = 'lasting-empires.save.v2';
@@ -100,7 +101,7 @@ function shield(id: string, color: string, small = false) {
   return el;
 }
 
-function saveNow() { clearTimeout(saveT); saveT = 0; try { S.savedAt = Date.now(); localStorage.setItem(slotKey(slot), JSON.stringify(S)); } catch { /* storage may be blocked */ } }
+function saveNow() { clearTimeout(saveT); saveT = 0; if (!S) return; S.savedAt = Date.now(); kvSet(slotKey(slot), JSON.stringify(S)); }
 /** Saving writes the whole game, so it waits a moment after a change; leaving the page saves at once. */
 let saveT = 0;
 function save() { if (!saveT) saveT = window.setTimeout(saveNow, 1500); }
@@ -108,19 +109,56 @@ addEventListener('pagehide', () => { if (saveT) saveNow(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && saveT) saveNow(); });
 function loadSlot(n: number): GameState | null {
   try {
-    const raw = localStorage.getItem(slotKey(n));
+    const raw = kvGet(slotKey(n));
     if (!raw) return null;
     const s = JSON.parse(raw) as GameState;
     return s.version === SAVE_VERSION ? migrate(s) : null;
   } catch { return null; }
 }
-function clearSlot(n: number) { try { localStorage.removeItem(slotKey(n)); } catch { /* */ } }
+function clearSlot(n: number) { kvRemove(slotKey(n)); }
 function migrateOldSave() {
+  const old = kvGet(KEY);
+  if (old && !kvGet(slotKey(1))) kvSet(slotKey(1), old);
+  if (old) kvRemove(KEY);
+}
+/** Saving problems stay on screen until dismissed: a lost save must never be silent. */
+function showStorageError(msg: string) {
+  let el = document.getElementById('save-err');
+  if (!el) { el = h('div', { id: 'save-err', role: 'alert' }); document.body.append(el); }
+  clear(el).append(h('p', {}, h('b', {}, msg), ' Your latest progress may not be kept. Export a save file from the title screen to keep a copy.'),
+    h('button', { class: 'btn ghost small', onclick: () => el!.remove() }, 'Dismiss'));
+}
+onStorageError(showStorageError);
+
+/** Download everything the game keeps as one file. */
+function exportSaveFile() {
   try {
-    const old = localStorage.getItem(KEY);
-    if (old && !localStorage.getItem(slotKey(1))) localStorage.setItem(slotKey(1), old);
-    if (old) localStorage.removeItem(KEY);
-  } catch { /* */ }
+    const url = URL.createObjectURL(new Blob([exportData()], { type: 'application/json' }));
+    const a = h('a', { href: url, download: `lasting-empires-save-${new Date().toISOString().slice(0, 10)}.json` });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    return null;
+  } catch { return 'This browser could not create the file'; }
+}
+let fileNote: { text: string; ok: boolean } | null = null;
+function saveFileSection() {
+  const input = h('input', { type: 'file', accept: '.json,application/json', hidden: true }) as HTMLInputElement;
+  input.addEventListener('change', () => {
+    const f = input.files?.[0];
+    if (!f) return;
+    f.text().then(text => {
+      const r = importData(text);
+      fileNote = typeof r === 'number' ? { text: 'Save file loaded.', ok: true } : { text: r, ok: false };
+      showTitle();
+    }, () => { fileNote = { text: 'Could not read the file', ok: false }; showTitle(); });
+  });
+  const note = fileNote; fileNote = null;
+  return h('details', { class: 'howto savefile', ...(note ? { open: true } : {}) }, h('summary', {}, 'Save file'),
+    h('p', { class: 'muted' }, 'Keep a copy of your campaigns and completed missions, or bring them to another browser. Loading a file replaces the slots it contains.'),
+    note ? h('p', { class: note.ok ? 'sf-ok' : 'sf-bad', role: 'status' }, note.text) : null,
+    h('div', { class: 'sf-acts' },
+      h('button', { class: 'btn', onclick: () => { const r = exportSaveFile(); if (r) { fileNote = { text: r, ok: false }; showTitle(); } } }, 'Export save file'),
+      h('button', { class: 'btn', onclick: () => input.click() }, 'Import save file'), input));
 }
 function startIn(n: number, s: GameState) { slot = n; pending = null; if (s.tutorial == null) s.tutorial = wantTutorial ? 0 : -1; start(s); saveNow(); }
 export function snapshot() { return S ? { save: JSON.stringify(S), slot } : {}; }
@@ -133,8 +171,7 @@ export const STYLES = [
   { id: 'heraldic', name: 'Heraldic Court', desc: 'Royal purple, banners, bright gold', sw: ['#1f1638', '#e7b93f', '#1a2546'] },
 ];
 function currentStyle() {
-  let v: string | null = null;
-  try { v = localStorage.getItem(STYLE_KEY); } catch { /* */ }
+  let v = kvGet(STYLE_KEY);
   if (!v || v === 'manuscript') v = 'chancery';
   return STYLES.some(x => x.id === v) ? v : 'chancery';
 }
@@ -142,7 +179,7 @@ export function applyStyle(_id = currentStyle()) {
   // one style only: the Chancery
   document.documentElement.dataset.style = 'chancery';
 }
-function setStyle(id: string) { try { localStorage.setItem(STYLE_KEY, id); } catch { /* */ } applyStyle(id); }
+function setStyle(id: string) { kvSet(STYLE_KEY, id); applyStyle(id); }
 function stylePicker(onChange: () => void) {
   const cur = currentStyle();
   return h('div', { class: 'stylepick' }, STYLES.map(st => h('button', { class: st.id === cur ? 'on' : '', onclick: () => { setStyle(st.id); onChange(); } },
@@ -184,29 +221,29 @@ function slotsSection() {
 // The long goal of the game: complete every mission. Completions are kept on this device, across campaigns.
 const DONE_KEY = 'lasting-empires.missions-done';
 type DoneRec = { nation: string; realm: string; year: number; when: number };
-function missionsDone(): Record<string, DoneRec> { try { return JSON.parse(localStorage.getItem(DONE_KEY) ?? '{}'); } catch { return {}; } }
+function missionsDone(): Record<string, DoneRec> { return kvJson<Record<string, DoneRec>>(DONE_KEY, {}); }
 function recordMission() {
   const sc = S?.scenario;
   if (!sc || sc.status !== 'won' || sc.custom || !MISSIONS.some(m => m.id === sc.id)) return;
   const done = missionsDone();
   if (done[sc.id]) return;
   done[sc.id] = { nation: S.player, realm: player(S).name, year: sc.done ?? S.year, when: Date.now() };
-  try { localStorage.setItem(DONE_KEY, JSON.stringify(done)); } catch { /* storage may be blocked */ }
+  kvSet(DONE_KEY, JSON.stringify(done));
   const n = Object.keys(done).filter(id => MISSIONS.some(m => m.id === id)).length;
   toast(`Mission recorded: ${n} of ${MISSIONS.length} completed`, 'good');
 }
 const doneCount = () => { const d = missionsDone(); return MISSIONS.filter(m => d[m.id]).length; };
 // Unlocks: the beginner missions first, then the real ones; the open game after one real mission.
 const UNLOCK_KEY = 'lasting-empires.unlock-all';
-const unlockAll = () => { try { return localStorage.getItem(UNLOCK_KEY) === '1'; } catch { return false; } };
+const unlockAll = () => kvGet(UNLOCK_KEY) === '1';
 const BEGINNER = () => MISSIONS.filter(m => m.beginner);
 const beginnersDone = () => { const d = missionsDone(); return BEGINNER().filter(m => d[m.id]).length; };
 const realUnlocked = () => unlockAll() || beginnersDone() >= BEGINNER().length;
 const sandboxUnlocked = () => { const d = missionsDone(); return unlockAll() || MISSIONS.some(m => !m.beginner && d[m.id]); };
 
 const CUSTOM_KEY = 'lasting-empires.custom-missions';
-function customMissions(): (Scenario & { nation: string })[] { try { return JSON.parse(localStorage.getItem(CUSTOM_KEY) ?? '[]'); } catch { return []; } }
-function saveCustom(list: (Scenario & { nation: string })[]) { try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(list.slice(-12))); } catch { /* */ } }
+function customMissions(): (Scenario & { nation: string })[] { return kvJson<(Scenario & { nation: string })[]>(CUSTOM_KEY, []); }
+function saveCustom(list: (Scenario & { nation: string })[]) { kvSet(CUSTOM_KEY, JSON.stringify(list.slice(-12))); }
 
 function startMission(nation: string, mission: string | Scenario) {
   const start = typeof mission === 'string' ? MISSIONS.find(m => m.id === mission)?.start ?? 1451 : (mission as Scenario & { start?: number }).start ?? 1451;
@@ -259,11 +296,11 @@ function showMissionDetail(m: MissionDef) {
 
 /** Collapsible mission sections; the open/closed choice is remembered. */
 const FOLD_KEY = 'lasting-empires.mission-folds';
-function folds(): Record<string, boolean> { try { return JSON.parse(localStorage.getItem(FOLD_KEY) ?? '{}'); } catch { return {}; } }
+function folds(): Record<string, boolean> { return kvJson<Record<string, boolean>>(FOLD_KEY, {}); }
 function section(key: string, title: string, openByDefault: boolean, ...kids: (HTMLElement | null)[]) {
   const f = folds();
   const d = h('details', { class: 'msec', ...((f[key] ?? openByDefault) ? { open: true } : {}) }, h('summary', { class: 'mhead' }, title), ...kids) as HTMLDetailsElement;
-  d.addEventListener('toggle', () => { const x = folds(); x[key] = d.open; try { localStorage.setItem(FOLD_KEY, JSON.stringify(x)); } catch { /* */ } });
+  d.addEventListener('toggle', () => { const x = folds(); x[key] = d.open; kvSet(FOLD_KEY, JSON.stringify(x)); });
   return d;
 }
 
@@ -301,7 +338,7 @@ function showMissions() {
             confirmBtn('Delete', 'Tap again to delete', () => { saveCustom(customMissions().filter(x => x.id !== c.id)); showMissions(); })))))));
       return out;
     })(),
-    unlockAll() ? null : h('p', { class: 'unlock-all' }, 'Already know the game? ', confirmBtn('Unlock everything', 'Tap again to unlock all', () => { try { localStorage.setItem(UNLOCK_KEY, '1'); } catch { /* */ } showMissions(); }))));
+    unlockAll() ? null : h('p', { class: 'unlock-all' }, 'Already know the game? ', confirmBtn('Unlock everything', 'Tap again to unlock all', () => { kvSet(UNLOCK_KEY, '1'); showMissions(); }))));
 }
 
 /** Goal templates for the builder: a label and how to make the goal from one value. */
@@ -459,6 +496,7 @@ function showTitle() {
       h('button', { class: 'btn wide newgame' + (sandboxUnlocked() ? '' : ' blocked'), onclick: () => (sandboxUnlocked() ? showPicker() : toast('The open game unlocks when you complete your first historic mission', 'bad')) }, sandboxUnlocked() ? 'Open game: any realm, any year' : 'Open game · unlocks after your first historic mission'),
       SLOTS.some(n => loadSlot(n)) || pending ? h('h2', { class: 'pick-h' }, 'Your campaigns') : null,
       SLOTS.some(n => loadSlot(n)) || pending ? slotsSection() : null,
+      saveFileSection(),
       h('details', { class: 'howto' }, h('summary', {}, 'Test scenarios'),
         h('p', { class: 'muted' }, 'Ready-made games to try a system quickly. They use a free campaign slot.'),
         h('button', { class: 'btn wide', onclick: () => startFresh('the battle test', scenarioCastilePortugal) }, 'Battles: Castile at war with Portugal, summer 1467')),
@@ -2033,7 +2071,8 @@ function showGameMenu() {
       row('hourglass', 'Tasks under way', S.missions.length ? 'Your people at work, and when they finish' : 'Nobody is at work right now', () => openSheet('missions'), S.missions.length ? String(S.missions.length) : ''),
       row('crown', 'Realm and ruler', `${player(S).ruler.name} · cards and nation points each year`, () => openSheet('realm')),
       row('laurel', 'Chronicle', 'Rankings of the powers, records and history', () => openSheet('chronicle')),
-      row('book', ageOf(S).name, 'The age you live in and the next one', () => showEra())),
+      row('book', ageOf(S).name, 'The age you live in and the next one', () => showEra()),
+      row('scroll', 'Export save file', 'Download a copy of your campaigns', () => { saveNow(); const r = exportSaveFile(); if (r) toast(r, 'bad'); })),
     h('p', { class: 'muted small gm-save' }, `Saved in slot ${slot} every season.`),
     h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: () => { saveNow(); closeModal(); showTitle(); } }, 'Save and exit to title'), h('button', { class: 'btn primary', onclick: closeModal }, 'Continue'))));
 }

@@ -1738,3 +1738,15 @@ details[open] > summary .br-chev { rotate: 180deg; }
   #sheet .sh-head { padding-top: 14px; }
 }
 @media (max-width: 760px) and (prefers-reduced-motion: reduce) { #sheet { transition: none; } }
+
+/* Saving problems: stays on screen until dismissed */
+#save-err { position: fixed; left: 0; right: 0; margin: 0 auto; top: calc(env(safe-area-inset-top, 0px) + 8px); z-index: 200; width: min(560px, calc(100% - 24px)); box-sizing: border-box;
+  display: flex; gap: 10px; align-items: center; padding: 10px 12px; background: var(--card); color: var(--wax); border: 1.5px solid var(--wax); box-shadow: var(--shadow); font-family: var(--f-body); animation: rise .18s ease-out; }
+#save-err p { margin: 0; flex: 1; font-size: 14px; color: var(--text); }
+#save-err b { color: var(--wax); font-family: var(--f-title); display: block; }
+#save-err .btn { min-height: 40px; flex: none; }
+.savefile .sf-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.savefile .sf-acts .btn { min-height: 44px; flex: 1 1 160px; }
+.savefile .sf-ok, .savefile .sf-bad { margin: 6px 0 0; font-family: var(--f-title); }
+.savefile .sf-bad { color: var(--wax); }
+@media (prefers-reduced-motion: reduce) { #save-err { animation: none; } }

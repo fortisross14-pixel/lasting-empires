@@ -9,7 +9,7 @@ npm install
 npm run build        # writes dist/index.html (standalone) and dist/lasting-empires.html
 ```
 
-Open `dist/index.html` in any browser. The core menus (Military, Diplomacy, Internal, Economy, Research) open as a window with tabs: Cards, Missions (pick a person then a mission, or a mission then a person) and the menu's own pages. The game saves automatically in the browser, in one of three campaign slots (continue, replace or delete them from the title screen).
+Open `dist/index.html` in any browser. The core menus (Military, Diplomacy, Internal, Economy, Research) open as a window with tabs: Cards, Missions (pick a person then a mission, or a mission then a person) and the menu's own pages. The game saves automatically in the browser (IndexedDB), in one of three campaign slots (continue, replace or delete them from the title screen); Save file on the title screen exports or imports a copy.
 
 **Install it like an app.** On the GitHub Pages site, use the browser's *Install app* (Chrome/Edge) or *Share → Add to Home Screen* (Safari on iPad/iPhone). It then opens full screen from its own icon and works offline.
 
