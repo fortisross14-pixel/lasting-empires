@@ -48,15 +48,19 @@ The highest-return change: navigation, pacing, onboarding and perceived intellig
 - [x] **A2.3** Smoke: a first-time profile (the smoke no longer unlocks anything) reaches a realm game in two taps,
   and no mission shows a lock. A first launch turns the chancellor's notes on.
 
-### M3 — Map attention and search
-- [ ] **A3.1 Pins** for agenda items with a place: threat (war colour), opportunity (gold), risk (ink). Reuse
-  `setGoalPins`' layer.
-- [ ] **A3.2 Camera buttons:** Home (capital and core), Current threat, Selected army, Mission target. Open the
-  game framed on home and its frontier, not the sea.
-- [ ] **A3.3 Command palette** (`/` or a search button): provinces, realms, people by name; queries "idle",
-  "short", "unrest", "war". Pure search in `src/engine/search.ts`, tested.
-- [ ] **A3.4 Back/close conventions:** one Back on every page, Escape closes the top layer, a "map" key returns
-  to the map; listed in the Rules tab.
+### M3 — Map attention and search ✅
+- [x] **A3.1 Pins** for agenda lines about one place (an army on the march, land held by the enemy, a province close
+  to revolt or uneasy): a disc with the tier's mark (! ✦ ▾), urgent in the war colour.
+- [x] **A3.2 Camera buttons** at the top right, icons only: Search, Home (the land joined to the capital and its
+  frontier, without far colonies), Next danger (armies on the march, occupied land, unrest, then the border with
+  enemies; each press moves on, with a count), Next army (garrisons and camps, biggest first), Mission targets.
+  A game now opens framed on Home, not on everything the realm owns.
+- [x] **A3.3 Search** (the button or `/`): provinces you know, realms, people, accents ignored; words that list
+  things (idle, war, unrest, short, agenda) and roles (merchant, general…). Arrows and Enter on a keyboard. Pure
+  `search()` in `src/engine/search.ts`, tested.
+- [x] **A3.4 Keys and conventions:** / search · H home · T next danger · A next army · G mission targets · Escape goes
+  back one step (as before). Written in the Rules tab under "Finding your way". "Selected army" became "Next army":
+  the map has no army selection to frame.
 
 ### M4 — Try freely: preview and undo
 - [ ] **A4.1 Action preview** on the planner's last step: cost, time, who is occupied, outcome odds by rarity,

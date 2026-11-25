@@ -2286,3 +2286,25 @@ body:has(#pickbar) #timeline, body:has(#pickbar) #goalbar, body:has(#pickbar) #m
   .learn-t { min-height: 52px; display: grid; grid-template-columns: 28px 1fr; column-gap: 10px; align-items: center; }
   .learn-t .lt-i { grid-row: 1 / 3; }
 }
+
+/* ---------- Map attention: camera buttons, agenda pins, search (docs/PLAN-DIRECTION.md, M3) ---------- */
+#cam { position: absolute; z-index: 2; top: 8px; right: max(8px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 6px; }
+.cam-b { position: relative; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; background: var(--card); color: var(--text); border: 1.5px solid var(--text); box-shadow: var(--shadow); cursor: pointer; }
+.cam-b:active { translate: 2px 2px; box-shadow: 1px 1px 0 var(--text); }
+.cam-b.cam-threat { color: var(--wax); border-color: var(--wax); box-shadow: 3px 3px 0 var(--wax); }
+.cam-n { position: absolute; top: -7px; right: -7px; min-width: 18px; height: 18px; padding: 0 4px; display: grid; place-items: center; border-radius: 999px; background: var(--wax); color: var(--panel); font: 700 calc(11px * var(--ts, 1))/1 var(--f-body); font-style: normal; border: 1.5px solid var(--panel); }
+@media (min-width: 761px) { #app:has(#sheet:not([hidden])) #cam { right: calc(min(440px, 100%) + 10px); } }
+@media (max-width: 760px) { #goalbar:not([hidden]) ~ #cam { top: 62px; } #app:has(#sheet:not([hidden])) #cam { display: none; } }
+#app:has(#win:not([hidden])) #cam, body:has(#pickbar) #cam { display: none; }
+#map .agpin .ap-disc { fill: var(--card, #fffdf8); stroke: var(--text, #1b1a17); stroke-width: 1.8; }
+#map .agpin .ap-pole { stroke: var(--text, #1b1a17); stroke-width: 2; }
+#map .agpin .ap-mark { font: 700 17px/1 var(--f-body); text-anchor: middle; dominant-baseline: middle; fill: var(--text, #1b1a17); }
+#map .agpin.t-urgent .ap-disc { fill: var(--wax, #b3261e); stroke: #1b1a17; }
+#map .agpin.t-urgent .ap-mark { fill: var(--card, #fffdf8); }
+#map .agpin.t-opportunity .ap-disc { stroke: var(--leaf, #a8781f); stroke-width: 2.4; }
+#map .agpin.t-opportunity .ap-mark { fill: var(--leaf, #a8781f); }
+.srch .srch-in { width: 100%; min-height: 44px; padding: 8px 12px; margin: 4px 0 8px; font: inherit; font-size: calc(16px * var(--ts, 1)); color: var(--text); background: var(--card); border: 1.5px solid var(--text); border-radius: 0; }
+.srch .srch-in:focus { outline: 2px solid var(--lapis); outline-offset: 1px; }
+.srch-list { max-height: min(56vh, 480px); overflow-y: auto; }
+.srch-row.on { background: #1b1a170f; box-shadow: inset 4px 0 0 var(--lapis); }
+.linkish { padding: 0; background: none; border: 0; font: inherit; color: var(--lapis); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; min-height: 0; }

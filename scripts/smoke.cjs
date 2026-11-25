@@ -48,6 +48,15 @@ async function run(browser, name, opts) {
   await closeWin();
   await p.evaluate(() => document.querySelector('#sheet .sh-head .iconbtn')?.click()); await wait();
   if (name === 'phone' && (await p.locator('#agenda.open').count())) await tap('#agenda .ag-head', 'fold the agenda');
+  // finding your way: search a province, then home, danger and armies
+  await tap('#cam .cam-search', 'search'); await p.keyboard.type('tole'); await wait(); await shot('search');
+  if (!(await p.locator('.srch-row').count())) problems.push(`${name}: search for "tole" found nothing`);
+  await p.keyboard.press('Enter'); await wait(); await shot('search-go');
+  if (!(await p.locator('#sheet:not([hidden])').count())) problems.push(`${name}: a search result did not open the province`);
+  await p.evaluate(() => document.querySelector('#sheet .sh-head .iconbtn')?.click()); await wait();
+  await tap('#cam .cam-b >> nth=1', 'home'); await shot('home');
+  if (await p.locator('#cam .cam-threat').count()) { await tap('#cam .cam-threat', 'next danger'); await shot('danger'); await p.evaluate(() => document.querySelector('#sheet .sh-head .iconbtn')?.click()); await wait(); }
+  await tap('#cam .cam-b >> nth=1', 'home');
   // roadmap 5: the map screen stays a map, not a page of text. A soft limit: 40–50 words is fine, 90 is not.
   const words = await p.evaluate(() => { let n = 0; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); while (w.nextNode()) { const e = w.currentNode.parentElement; if (e.closest('#map, #toast, [hidden]') || !e.offsetParent) continue; n += (w.currentNode.textContent.match(/[A-Za-zÀ-ÿ]{2,}/g) || []).length; } return n; });
   if (words > 50) problems.push(`${name}: the map screen shows ${words} words (50 at most, agenda included)`);

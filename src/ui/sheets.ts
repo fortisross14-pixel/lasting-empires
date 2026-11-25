@@ -545,7 +545,10 @@ function rulesTab(body: HTMLElement) {
     h('h3', {}, 'The ranking'),
     h('p', {}, 'A realm\'s score is half its prestige, plus its development, plus five for every point of development gained since the start, plus two for every point held by its subjects. An open game is won in the top three; a shortened one also by ending higher than it began.'),
     h('h3', {}, 'Turns'),
-    h('p', {}, `One turn is a season. Skip plays up to ${SKIP_MAX} quiet seasons and stops when something needs you. A task can be taken back for ${UNDO_SECONDS} seconds after it is started.`));
+    h('p', {}, `One turn is a season. Skip plays up to ${SKIP_MAX} quiet seasons and stops when something needs you. A task can be taken back for ${UNDO_SECONDS} seconds after it is started.`),
+    h('h3', {}, 'Finding your way'),
+    h('p', {}, 'The buttons at the right of the map: search, home (your realm and its border), the next danger, the next army and the mission targets. Each press of danger or army moves on to the next one. Agenda lines that are about one place put a pin on it: ! urgent, ✦ an opportunity, ▾ a risk.'),
+    h('p', { class: 'muted' }, 'Keys: / search · H home · T next danger · A next army · G mission targets · Escape goes back one step. In search, a word lists things: idle, war, unrest, short, agenda; a role (merchant, general…) lists everyone of that role.'));
 }
 
 export function chronicleSheet(body: HTMLElement) {

@@ -4,6 +4,7 @@ import './longpress';
 import { showHand, renderHandBtn } from './hand';
 import { renderGoalBar } from './goalbar';
 import { renderAgenda } from './agenda';
+import { renderCamera, agendaPins, goHome } from './camera';
 import { sfx } from './sound';
 import type { GameState, RevealItem } from '../types';
 import { CATS } from '../types';
@@ -43,7 +44,7 @@ export function start(s: GameState) {
     h('main', { id: 'board' }, h('div', { id: 'goalbar', hidden: true }), h('div', { id: 'timeline' }), h('section', { id: 'agenda', hidden: true, 'aria-label': 'Empire agenda' }), h('button', { id: 'handbtn', 'aria-label': 'Your cards', onclick: () => showHand() }),
       h('button', { class: 'viewpill', id: 'modebtn', 'aria-label': 'Map view', onclick: () => toggleModes() }, h('span', { html: icon('map', 16) }), h('span', { id: 'modelabel' }, 'Map: Realms'), h('span', { class: 'caret' }, '▾')),
       h('div', { id: 'modes', hidden: true }), h('div', { id: 'legend', hidden: true }),
-      h('div', { id: 'tracker' })),
+      h('div', { id: 'tracker' }), h('div', { id: 'cam', role: 'toolbar', 'aria-label': 'Map camera' })),
     h('aside', { id: 'sheet', hidden: true }),
     h('section', { id: 'win', hidden: true, role: 'dialog', 'aria-modal': 'false' }),
     h('nav', { id: 'tabs' }),
@@ -55,7 +56,7 @@ export function start(s: GameState) {
   map.onSelect = id => { setShownRealm(null); if (pickHand != null) { if (id) toast('Hold your finger on the province to choose it'); return; } if (id) openSheet('province', id); else if (sheet?.kind === 'province') closeSheet(); };
   document.documentElement.style.setProperty('--me', player(S).color);
   refresh();
-  requestAnimationFrame(() => map.focus(provsOf(S, S.player).map(p => p.id), 120));
+  requestAnimationFrame(() => goHome()); // home and its frontier, not the sea between far colonies
   processQueue();
 }
 
@@ -117,7 +118,7 @@ export function refresh() {
   map.realm = sheet?.kind === 'nation' ? sheet.arg ?? null : shownRealm;
   setTodo(attention(S));
   for (const id of [...seenTodo]) if (!todo.some(a => a.id === id)) seenTodo.delete(id); // gone and back again is news
-  renderTop(); renderTabs(); renderHandBtn(); renderGoalBar(); map.render(S); renderTimeline(); renderTracker(); renderLegend(); renderAgenda();
+  renderTop(); renderTabs(); renderHandBtn(); renderGoalBar(); agendaPins(); map.render(S); renderTimeline(); renderTracker(); renderLegend(); renderAgenda(); renderCamera();
   syncMusic(player(S).culture);
   if (sheet) renderSheet();
   if (win) renderWin();

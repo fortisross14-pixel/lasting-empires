@@ -38,6 +38,7 @@ import { DIFFICULTY, LENGTHS, STANDARD } from '../src/data/difficulty';
 import { STARTS } from '../src/data/starts';
 import { attention, agenda, readyByDeck, markTurn, stopReasons, cardHasTarget, SKIP_MAX, TIERS, UNREST_ALERT } from '../src/engine/pace';
 import { setDefence as setDefenceT } from '../src/engine/army';
+import { search, homeView, threatPlaces, armyPlaces, fold } from '../src/engine/search';
 import { missionCap } from '../src/engine/realm';
 import { player, provsOf, genCharacter } from '../src/engine/core';
 import type { GameState, BattleUnit, BattleGeneral } from '../src/types';
@@ -230,6 +231,35 @@ check('the agenda: tiers, jumps, threats first, and long-term lines that never n
   ok(longs.every(x => x.nag === false) && !attention(s).some(x => x.tier === 'long'), 'a long-term line can stop the turn');
   s.missions.pop();
   ok(UNREST_ALERT > 0, 'no unrest threshold');
+});
+
+check('finding your way: search, home, danger and armies', () => {
+  const s = newGame('castile', 24); answer(s);
+  eq(fold('Córdoba'), 'cordoba', 'accents are not folded');
+  const tol = search(s, 'tole');
+  ok(tol[0]?.kind === 'province' && tol[0].title === 'Toledo', `"tole" does not find Toledo first (${tol[0]?.title})`);
+  ok(search(s, 'fran').some(x => x.kind === 'nation' && x.id === 'france'), '"fran" does not find France');
+  const me = s.characters[0];
+  ok(search(s, me.name.split(' ')[0]).some(x => x.kind === 'person' && x.id === String(me.uid)), 'a person is not found by name');
+  const idle = search(s, 'idle');
+  ok(idle.length > 0 && idle.every(x => x.kind === 'person' && s.characters.find(c => String(c.uid) === x.id)?.mission == null), '"idle" lists someone busy, or nobody');
+  ok(search(s, 'war').some(x => x.kind === 'nation' && x.id === 'granada'), '"war" does not list Granada, at war with Castile in 1451');
+  ok(search(s, 'merch').every(x => x.kind !== 'person' || s.characters.find(c => String(c.uid) === x.id)?.role === 'merchant' || x.title.toLowerCase().includes('merch')), 'a role search lists other roles');
+  eq(search(s, '   ').length, 0, 'an empty search found something');
+  ok(search(s, 'a').length <= 12, 'too many results');
+  // home: the capital and its land, with the border beyond, and no far-off land of yours
+  const home = homeView(s);
+  ok(home.includes(s.nations.castile.capital), 'home does not include the capital');
+  ok(home.some(id => s.provinces[id].owner !== 'castile'), 'home does not show the frontier');
+  // danger: an army on the march comes first; the border with Granada counts
+  const t0 = threatPlaces(s);
+  ok(t0.some(id => s.provinces[id].owner === 'castile'), 'no danger shown on the border of a realm at war');
+  const target = Object.values(s.provinces).find(p => p.owner === 'castile' && !t0.includes(p.id))!;
+  s.incoming = [{ id: 1, nation: 'portugal', target: target.id, force: [], due: 999999 }];
+  eq(threatPlaces(s)[0], target.id, 'an army on the march is not the first danger');
+  s.incoming = [];
+  const ap = armyPlaces(s);
+  ok(ap.length > 0 && ap.every(id => !!s.provinces[id]), 'no army places, or a place that is not a province');
 });
 
 check('skip ahead never passes a card, a prompt or a finished task', () => {

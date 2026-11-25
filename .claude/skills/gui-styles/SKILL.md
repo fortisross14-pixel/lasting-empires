@@ -48,6 +48,7 @@ One style, `data-style="chancery"` on `<html>`; its rules are the override block
 - Sound never carries information alone: whatever it marks is also shown.
 
 ## Map
+- Finding your way (`src/ui/camera.ts`): the column `#cam` at the top right holds icon-only buttons (search, home, next danger, next army, mission targets); the places come from `src/engine/search.ts` (`homeView`, `threatPlaces`, `armyPlaces`). A game opens framed on `homeView`: the land joined to the capital and its frontier. Agenda lines about one place get a pin (`setAgendaPins`, disc with ! ✦ ▾). Keys: / H T A G, Escape back. A new way to find something is a case in `search()` with a test, not a new button.
 - Province shapes come from `scripts/gen-world.ts` (`npm run gen-world` after editing provinces); never edit `src/data/world.json` by hand. Realm borders (`.realm-edge`) and realm names (`.rlabel`) are drawn by `map.ts` from ownership; `.prov` strokes are hairlines.
 - A new map view is an entry in `MAP_MODES`, a case in `fill` and one in `legendFor`.
 - Ground marks are one small path for each province (`buildTerrain`, shapes in `TERRAIN_MARKS`), shown where province names show. Keep them one element a province: one path for the whole world was three times slower to pan. The paper grain is a pattern fill from a tile made once (`grainTile`); never a live SVG filter.

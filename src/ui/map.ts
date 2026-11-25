@@ -148,6 +148,10 @@ export class MapView {
   /** Provinces a goal names: a flag on each, wax while still to take, green when held (goalbar.ts). */
   private goalPins: { id: string; held: boolean }[] = [];
   setGoalPins(pins: { id: string; held: boolean }[]) { this.goalPins = pins; }
+  goalPinIds() { return this.goalPins.map(p => p.id); }
+  /** The agenda's places: a marked disc on each province a line is about (urgent, opportunity or risk). */
+  private agendaPins: { id: string; tier: string }[] = [];
+  setAgendaPins(pins: { id: string; tier: string }[]) { this.agendaPins = pins; }
   /** Effects that play over the map for a moment: battles, conquests, numbers that float up (roadmap 5.6–5.8). */
   private fxG!: SVGGElement;
   /** What the provinces looked like at the last draw, to see what has changed since. */
@@ -778,6 +782,16 @@ export class MapView {
       if (!c) continue;
       const pin = svgEl('g', { 'data-x': c[0], 'data-y': c[1], class: 'goalpin' + (gp.held ? ' held' : '') });
       pin.append(svgEl('path', { d: 'M-1 4 V-26', class: 'gp-pole' }), svgEl('path', { d: 'M0 -26 H15 L11 -20.5 L15 -15 H0 Z', class: 'gp-flag' }));
+      this.marks.append(pin);
+    }
+    // the agenda: a disc with the tier's mark, so the place reads without colour
+    for (const ap of this.agendaPins) {
+      const c = g.center[ap.id];
+      if (!c) continue;
+      const pin = svgEl('g', { 'data-x': c[0], 'data-y': c[1], class: 'agpin t-' + ap.tier });
+      pin.append(svgEl('circle', { cx: 0, cy: -34, r: 13, class: 'ap-disc' }), svgEl('path', { d: 'M0 -21 V-10', class: 'ap-pole' }));
+      const t = svgEl('text', { x: 0, y: -33, class: 'ap-mark' }); t.textContent = ap.tier === 'urgent' ? '!' : ap.tier === 'opportunity' ? '✦' : '▾';
+      pin.append(t);
       this.marks.append(pin);
     }
     // your settlements: a small house, bigger for towns and cities, so you can spread them out
