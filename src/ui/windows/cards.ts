@@ -65,7 +65,7 @@ export function cardsTab(cat: Cat, body: HTMLElement) {
   body.append(h('div', { class: 'seg cfilter' }, filters.map(([id, label, n]) => h('button', { class: 'seg-b' + (cv.filter === id ? ' on' : ''), onclick: () => { setCv({ ...cv, filter: id }); renderWin(); } }, label, n ? h('small', {}, ` ${n}`) : null))));
   if (cv.mode === 'select') {
     body.append(h('div', { class: 'mcap' }, h('b', {}, `Tap cards to sell (${cv.sel.length} chosen · +${(cv.sel.length / 2).toFixed(1)} nation points)`), h('span', {},
-      h('button', { class: 'btn small primary' + (cv.sel.length ? '' : ' blocked'), onclick: () => { if (!cv.sel.length) return; const n = cv.sel.length; sfx('coin'); act(() => sellCards(S, cv.sel), `${n} card${n > 1 ? 's' : ''} sold: +${(n / 2).toFixed(1)} nation points`); setCv({ ...cv, mode: handExcess(S).total > 0 ? 'select' : 'browse', sel: [] }); renderWin(); } }, 'Sell'),
+      h('button', { class: 'btn small primary' + (cv.sel.length ? '' : ' blocked'), onclick: () => { if (!cv.sel.length) return; const n = cv.sel.length; sfx('coin'); act(() => sellCards(S, cv.sel), `${n} card${n > 1 ? 's' : ''} sold: +${(n / 2).toFixed(1)} nation points`, `${n} card${n > 1 ? 's' : ''} sold`); setCv({ ...cv, mode: handExcess(S).total > 0 ? 'select' : 'browse', sel: [] }); renderWin(); } }, 'Sell'),
       h('button', { class: 'btn small ghost', onclick: () => setMode('select') }, 'Cancel'))));
   }
   const f = cv.filter;
@@ -185,5 +185,5 @@ export function missionRow(m: GameState['missions'][number]) {
     h('div', { class: 'a-t' }, h('b', {}, missionTitle(m)),
       h('small', {}, `${c?.name ?? '?'}${m.troops.length ? ` with ${m.troops.length} troops` : ''} · ${qText(m.turnsLeft)} left`),
       h('div', { class: 'pbar' }, h('i', { style: `width:${pct}%` }))),
-    h('button', { class: 'iconbtn', 'aria-label': 'Recall', title: 'Recall', onclick: () => confirmBox('Recall this task?', 'The card is lost. Construction refunds half its cost.', 'Recall', () => act(() => cancelMission(S, m.id))), html: icon('close', 16) }));
+    h('button', { class: 'iconbtn', 'aria-label': 'Recall', title: 'Recall', onclick: () => confirmBox('Recall this task?', 'The card is lost. Construction refunds half its cost.', 'Recall', () => act(() => cancelMission(S, m.id), undefined, 'Task recalled')), html: icon('close', 16) }));
 }

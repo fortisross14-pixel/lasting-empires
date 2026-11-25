@@ -8,7 +8,7 @@ import { openSheet } from './sheets';
 import { openPage, closeModal, charDetail } from './modal';
 import { jumpTo } from './agenda';
 import { sfx } from './sound';
-import { toast } from './app';
+import { toast, undoLast, undoCount } from './app';
 
 /** Each button steps through its places on every press; reset when the places change. */
 const step: Record<string, { key: string; i: number }> = {};
@@ -111,12 +111,18 @@ export function openSearch() {
 }
 
 // ---------- keys (desktop) ----------
-// / search · H home · T next danger · A next army · G mission targets · Escape closes the top layer (modal.ts).
+// Ctrl+Z or U undo · / search · H home · T next danger · A next army · G mission targets · Escape closes the top layer (modal.ts).
 addEventListener('keydown', e => {
-  if (!S || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (!S) return;
   const t = e.target as HTMLElement | null;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
   if (!document.getElementById('board')) return; // not in a game
+  // Ctrl+Z (or U): take back the last step of this season, when nothing is open on top
+  if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) || (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'u')) {
+    if (!modalOpen && undoCount()) { e.preventDefault(); undoLast(); }
+    return;
+  }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === '/') { e.preventDefault(); if (!modalOpen) openSearch(); return; }
   if (modalOpen || win || (sheet && sheet.kind !== 'province' && sheet.kind !== 'nation')) return;
   const k = e.key.toLowerCase();

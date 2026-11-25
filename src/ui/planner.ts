@@ -35,7 +35,8 @@ import { happinessOf, CULTURE_NAMES, RELIGION_NAMES } from '../engine/society';
 import { troopsNear, travel, locOf, nearestGarrison, baseFor, READY_STR } from '../engine/army';
 import { missionsLeft } from '../engine/realm';
 import { S, map, win, preferChar, RARITY_ORDER_I, setPreferChar } from './state';
-import { refresh, toast, act, missionTitle, placeName, qLabel, qText, offerUndo } from './app';
+import { refresh, toast, act, missionTitle, placeName, qLabel, qText, offerUndo, undoBegin, SEASONS } from './app';
+import { taskPreview } from '../engine/preview';
 import { openWin, closeWin } from './windows/frame';
 import { closeSheet, oddsLine, costBenefit } from './sheets';
 import { goodsNote, openPostPicker } from './windows/economy';
@@ -141,7 +142,7 @@ export function openCardModal(handUid: number) {
   const body = h('div', { class: 'targets-wrap' });
   const done = (msg: string) => { closeModal(); if (msg.startsWith('!')) toast(msg.slice(1), 'bad'); else { sfx('play'); buzz(); toast(msg, 'good'); } refresh(); processQueue(); };
   const footer = h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: closeModal }, 'Keep it'),
-    !def.burden ? h('button', { class: 'btn ghost', onclick: () => { closeModal(); act(() => discardCard(S, handUid), 'Discarded: +0.5 nation points'); } }, 'Discard (+0.5 NP)') : null);
+    !def.burden ? h('button', { class: 'btn ghost', onclick: () => { closeModal(); act(() => discardCard(S, handUid), 'Discarded: +0.5 nation points', 'Card discarded'); } }, 'Discard (+0.5 NP)') : null);
 
   if (def.kind === 'troop') {
     const unit = cardTroop(S, def);
@@ -422,7 +423,12 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
     if (STEPS && step === 2) { // the last look: who leads, who goes
       boxAppend(h('h3', {}, 'Your army'), h('div', { class: 'cards-row wrap' }, charCard(ch, S, { small: true }), ...S.troops.filter(t => picked.includes(t.uid)).map(t => troopCard(t, { small: true })), ...S.fleet.filter(t => ships.includes(t.uid)).map(t => troopCard(t, { small: true }))));
     }
-    if (!STEPS || step === 2) boxAppend(h('div', { class: 'facts' }, facts.map(f => h('span', { class: 'fact' }, f))));
+    if (!STEPS || step === 2) {
+      // what sending it commits: the dry run, so these numbers are what launching will do
+      const pv = taskPreview(S, { kind, char: ch.uid, target, troops: picked, building, card: cardUid, good, ships, trade: trade ? { dir: trade.dir, amount: trade.amount } : undefined });
+      if (!pv.blocked) boxAppend(previewBox(pv));
+      boxAppend(h('div', { class: 'facts' }, facts.map(f => h('span', { class: 'fact' }, f))));
+    }
     else if (step === 1) boxAppend(h('div', { class: 'facts' }, h('span', { class: 'fact' }, `${picked.length} of ${maxTroops()} companies chosen`)));
     const why = (kind === 'route' && trade ? routeBlocked(S, trade.good, trade.dir, target, trade.amount) : missionBlocked(S, kind, target, building)) ?? (military && !picked.length ? 'Choose at least one troop' : null) ?? (naval && transportOf(S, ships, ch) < picked.length ? 'Not enough ships to carry these troops' : null);
     // Back goes one step back, or to the card you came from
@@ -438,7 +444,7 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
       h('button', { class: 'btn ghost', onclick: back }, '‹ Back'),
       h('button', { class: 'btn primary' + (why ? ' blocked' : ''), onclick: () => {
         if (why) return toast(why, 'bad');
-        const before = JSON.stringify(S), asked = S.queue.length;
+        const before = undoBegin();
         const r = launchMission(S, kind, ch.uid, target, picked, building, cardUid, good, ships, trade ? { dir: trade.dir, amount: trade.amount } : undefined);
         if (r) return toast(r, 'bad');
         const from = (box.querySelector('.pl-foot .btn.primary') as HTMLElement | null)?.getBoundingClientRect() ?? null;
@@ -446,12 +452,27 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
         sfx('play'); buzz();
         flyCard(card.card, from, target);
         // sending someone out shows nothing new, so it can be taken back; not if the game answered at once
-        if (S.queue.length === asked) offerUndo(before, `${ch.name} sets out`); else toast(`${ch.name} sets out`, 'good');
+        offerUndo(before, `${ch.name} sets out`);
         refresh();
       } }, 'Send them')));
   };
   draw();
   openPage(box);
+}
+
+/** The commitment, in four short lines and a list of what becomes harder: cost, time, who is away, the card. */
+function previewBox(pv: ReturnType<typeof taskPreview>) {
+  const cost = [pv.ducats > 0 ? `${pv.ducats} ducats` : '', pv.manpower > 0 ? `${pv.manpower} manpower` : '', ...pv.goods.map(g => `${g.n} ${g.name.toLowerCase()}`)].filter(Boolean).join(' · ') || 'Nothing now';
+  const row = (k: string, v: string) => h('div', { class: 'pv-r' }, h('span', { class: 'pv-k' }, k), h('b', {}, v));
+  return h('section', { class: 'pv', 'aria-label': 'What this commits' },
+    h('h3', { class: 'pv-h' }, 'If you send them'),
+    h('div', { class: 'pv-grid' },
+      row('Costs', cost),
+      row('Takes', pv.turns ? `${qText(pv.turns)} · done by ${SEASONS[pv.endQuarter]} ${pv.endYear}` : 'Under a season'),
+      row('Away', pv.ties.join(', ')),
+      row('Card', pv.cardKept ? 'Stays in your hand' : 'Used up')),
+    pv.after.length ? h('ul', { class: 'pv-after' }, pv.after.map(x => h('li', {}, x))) : null,
+    h('p', { class: 'pv-undo muted small' }, 'You can take it back until the season ends, unless the game answers at once.'));
 }
 
 // ---------- a played card travels (roadmap 2.11) ----------

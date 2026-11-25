@@ -61,9 +61,9 @@ export function armyTab(body: HTMLElement) {
   if (sel.length) {
     const from = S.troops.find(t => t.uid === sel[0])!;
     body.append(h('div', { class: 'mcap' }, h('b', {}, `${sel.length} selected · move to:`),
-      h('div', { class: 'targets' }, garrisons(S).filter(g => g !== from.loc).map(g => { const q = travel(locOf(S, from), g); return h('button', { class: 'tchip', onclick: () => { const ids = [...sel]; setForge([]); act(() => moveTroops(S, ids, g), q ? `On the march: ${qText(q)}` : 'Moved'); } }, `${placeName(g)} · ${q ? qText(q) : 'now'}`); }),
+      h('div', { class: 'targets' }, garrisons(S).filter(g => g !== from.loc).map(g => { const q = travel(locOf(S, from), g); return h('button', { class: 'tchip', onclick: () => { const ids = [...sel]; setForge([]); act(() => moveTroops(S, ids, g), q ? `On the march: ${qText(q)}` : 'Moved', `${ids.length === 1 ? 'A company' : ids.length + ' companies'} to ${placeName(g)}`); } }, `${placeName(g)} · ${q ? qText(q) : 'now'}`); }),
         garrisons(S).some(g => g !== from.loc) ? null : h('small', { class: 'muted' }, 'Nowhere else to go: troops stand in the capital, in provinces with Barracks (Internal) or at an invasion base.'),
-        sel.length === 1 ? h('button', { class: 'btn ghost danger small', onclick: () => confirmBox(`Disband ${TROOPS[from.type].name}?`, 'The troop is removed for good.', 'Disband', () => { setForge([]); act(() => disbandTroop(S, from.uid)); }) }, 'Disband') : null)));
+        sel.length === 1 ? h('button', { class: 'btn ghost danger small', onclick: () => confirmBox(`Disband ${TROOPS[from.type].name}?`, 'The troop is removed for good.', 'Disband', () => { setForge([]); act(() => disbandTroop(S, from.uid), undefined, `${TROOPS[from.type].name} disbanded`); }) }, 'Disband') : null)));
   }
   if (!provsOf(S, S.player).some(p => p.buildings.includes('barracks'))) body.append(h('p', { class: 'muted' }, 'Tip: Barracks (Internal) make troops heal 50% faster there.'));
   // reference: what each troop card hires now and next, folded under the armies

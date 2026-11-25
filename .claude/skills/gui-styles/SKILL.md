@@ -39,6 +39,7 @@ One style, `data-style="chancery"` on `<html>`; its rules are the override block
 - Age plates: `art/age_<era id>.webp`, shown by `showReveal` when its title is the name of an age. Title scenes: `art/title_wide.webp` and `title_tall.webp`, set in CSS (`.title-bg`).
 - Event paintings: `art/event_<scene>.webp` (480 × 320), named for events in `EVENT_ART` (`src/ui/art.ts`). A new painting is a file and a line there; the prompts that made the set are in `docs/art-prompts-phase2.md`.
 - A person's page (`charDetail` in `modal.ts`) uses the wide card (`charCard(c, S, { wide: true })`) so the portrait is never squeezed, then loyalty and wish.
+- Undo (`undoBegin` / `undoCommit` / `act(fn, msg, undoLabel)` in `app.ts`): give an action an undo label only if it reveals nothing (no draw, no roll, no prompt). The planner's last step shows `previewBox` from `taskPreview`.
 - `src/ui/share.ts` draws on a canvas with the same two fonts and the tokens' colours written out (a canvas cannot read CSS variables): keep `INK`, `PAPER`, `WAX` there in step with the style tokens.
 
 ## Sound

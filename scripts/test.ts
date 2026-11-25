@@ -9,7 +9,11 @@ import { aiEconomy, worksOf, landRate, yearsToLand, diligence, DILIGENCE_SPREAD 
 import { cardHasTarget } from '../src/engine/pace';
 import { closedBecause, groupOf, checkFirstContact } from '../src/engine/techgroups';
 import { provRegion } from '../src/engine/overseas';
-import { techCost } from '../src/engine/missions';
+import { techCost, launchMission, cardRoles } from '../src/engine/missions';
+import { taskPreview } from '../src/engine/preview';
+import { cardHasTarget as hasTarget } from '../src/engine/pace';
+import { BUILDINGS as BLD, TECHS } from '../src/data/techs';
+import { missionBlocked as blockedFor } from '../src/engine/missions';
 import { unitFor, classOpen } from '../src/engine/cards';
 import { RETIRED, cardFor, addCard as addCardT } from '../src/engine/cards';
 import { EVENT_SCENES, eventsWithArt, FACE_FAMILIES, faceFamily, faceOf } from '../src/ui/art';
@@ -260,6 +264,42 @@ check('finding your way: search, home, danger and armies', () => {
   s.incoming = [];
   const ap = armyPlaces(s);
   ok(ap.length > 0 && ap.every(id => !!s.provinces[id]), 'no army places, or a place that is not a province');
+});
+
+check('the preview of a task is what sending it does, and touches nothing', () => {
+  let tried = 0;
+  for (const n of ['castile', 'venice', 'ming', 'portugal']) {
+    const s = newGame(n, 31); answer(s);
+    for (const hc of [...s.hand]) {
+      const d = CARDS[hc.card];
+      if (!d || d.kind !== 'mission' || d.permanent || !d.missions?.length || !hasTarget(s, hc.card)) continue;
+      const kind = d.missions[0];
+      // a target this card can be used on: one of your provinces, a realm or a study
+      let target = '', building: string | undefined;
+      if (kind === 'research') target = TECHS.find(t => (!d.track || t.track === d.track) && !s.techs.includes(t.id) && !blockedFor(s, 'research', t.id))?.id ?? '';
+      else if (kind === 'build') { for (const p of Object.values(s.provinces).filter(p => p.owner === s.player)) { const b = Object.values(BLD).find(b => b.group === d.group && (!b.tech || s.techs.includes(b.tech)) && !blockedFor(s, 'build', p.id, b.id)); if (b) { target = p.id; building = b.id; break; } } }
+      else if (['develop', 'found', 'grow', 'grace'].includes(kind)) target = Object.values(s.provinces).find(p => p.owner === s.player && !blockedFor(s, kind, p.id))?.id ?? '';
+      else continue;
+      if (!target) continue;
+      const ch = s.characters.find(c => c.mission == null && cardRoles(hc.card).includes(c.role));
+      if (!ch) continue;
+      const before = JSON.stringify(s);
+      const pv = taskPreview(s, { kind, char: ch.uid, target, troops: [], building, card: hc.uid });
+      eq(JSON.stringify(s), before, `the preview of ${d.name} changed the game`);
+      if (pv.blocked) continue;
+      const gold = s.nations[s.player].gold;
+      const r = launchMission(s, kind, ch.uid, target, [], building, hc.uid);
+      eq(r, null, `${d.name} was previewed as possible but could not be sent`);
+      ok(Math.abs(gold - s.nations[s.player].gold - pv.ducats) < 0.11, `${d.name}: preview says ${pv.ducats} ducats, sending cost ${gold - s.nations[s.player].gold}`);
+      const m = s.missions.find(x => x.char === ch.uid)!;
+      eq(pv.turns, m.turnsLeft, `${d.name}: preview says ${pv.turns} quarters`);
+      ok(pv.ties[0].startsWith(ch.name), 'the preview does not say who goes');
+      ok(pv.after.some(x => /task/.test(x)), 'the preview does not say how many tasks are left');
+      tried++;
+      if (tried >= 12) return;
+    }
+  }
+  ok(tried >= 4, `only ${tried} tasks could be previewed`);
 });
 
 check('skip ahead never passes a card, a prompt or a finished task', () => {

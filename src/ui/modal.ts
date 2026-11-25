@@ -139,7 +139,7 @@ export function charDetail(c: Character) {
     to ? h('p', { class: 'muted promo' }, ({ diplomat: `Send ${c.name.split(' ')[0]} on a Voyage of Discovery and they become an explorer for good.`, general: `Lead an attack with ships to become an admiral, or a conquista to become a conqueror. Both are for good.`, admin: `Send ${c.name.split(' ')[0]} to found a colony and they become a colonist for good.`, courtier: `The first mission decides: a Religious Mission or Mission to the Church makes a churchman, a Work of Art an artist, Royal Grace, Integration or Embrace a Culture a cultural leader. For good.` } as Record<string, string>)[c.role]) : null,
     h('div', { class: 'mrow' },
       h('button', { class: 'btn ghost', onclick: closeModal }, 'Close'),
-      !m && !c.ruler ? h('button', { class: 'btn ghost danger', onclick: () => { closeModal(); confirmBox(`Dismiss ${c.name}?`, 'This frees a seat at court.', 'Dismiss', () => act(() => dismissCharacter(S, c.uid))); } }, 'Dismiss') : null)));
+      !m && !c.ruler ? h('button', { class: 'btn ghost danger', onclick: () => { closeModal(); confirmBox(`Dismiss ${c.name}?`, 'This frees a seat at court.', 'Dismiss', () => act(() => dismissCharacter(S, c.uid), undefined, `${c.name} dismissed`)); } }, 'Dismiss') : null)));
 }
 
 // Setters: other modules import these variables read-only, so they change them here.

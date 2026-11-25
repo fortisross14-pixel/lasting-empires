@@ -112,7 +112,7 @@ export function renderTutorial() {
 (globalThis as { __refresh?: () => void }).__refresh = () => refresh();
 (globalThis as { __map?: () => unknown }).__map = () => map;
 export function refresh() {
-  if (undoSnap && gameMark() !== undoMark) clearUndo(); // something else was done since: the snapshot is stale
+  if (undoStack.length && gameMark() !== undoStack[undoStack.length - 1].mark) clearUndo(); // moved on by something that cannot be undone
   setCardGame(S);
   recordMission();
   map.realm = sheet?.kind === 'nation' ? sheet.arg ?? null : shownRealm;
@@ -135,38 +135,63 @@ export function toast(msg: string, tone: 'good' | 'bad' | 'neutral' = 'neutral')
   setTimeout(() => el.remove(), 3100);
 }
 
-/** The game as it was before the last task was started, kept until the turn ends or something new is shown. */
-let undoSnap: string | null = null;
+/** Undo for the season: every action that showed the player nothing new (no draw, no outcome, no question) can be
+ *  taken back, one after another, until the turn ends. Each step keeps the game as it was before and a fingerprint of
+ *  the game just after: if the game has moved since by an action that cannot be undone, the whole stack is dropped,
+ *  so undo never takes back more than it says. */
+interface UndoStep { snap: string; what: string; mark: string; }
+let undoStack: UndoStep[] = [];
+/** How many steps are kept (each is a whole saved game). */
+export const UNDO_MAX = 12;
 let undoEl: HTMLElement | null = null;
-let undoMark = '';
-/** A cheap fingerprint of the game: if it moves, something else was done and the old snapshot must not be offered. */
-const gameMark = () => `${S.hand.length}|${S.missions.length}|${S.troops.length}|${S.characters.length}|${S.queue.length}|${Math.round(player(S).gold)}|${S.np}|${S.year}|${S.quarter}`;
-export const UNDO_SECONDS = 6;
-/** Offer to take back what was just done: a strip with an Undo button for a few seconds. `before` is the saved game
- *  from just before the action. Only for actions that showed the player nothing new (no outcome, no cards revealed). */
-export function offerUndo(before: string, what: string) {
-  clearUndo();
-  undoSnap = before;
-  undoMark = gameMark();
-  const el = undoEl = h('div', { class: 'toast-msg t-good undo' }, h('span', {}, what),
-    h('button', { class: 'btn small', onclick: () => {
-      if (!undoSnap) return;
-      const s = JSON.parse(undoSnap) as GameState;
-      clearUndo();
-      setS(s);
-      sfx('flip');
-      refresh();
-      toast('Taken back');
-    } }, 'Undo'));
-  $('#toast').append(el);
-  setTimeout(() => { if (undoEl === el) clearUndo(); }, UNDO_SECONDS * 1000);
+/** A cheap fingerprint of the game: almost every action writes to the log or moves one of these. */
+const gameMark = () => [S.hand.length, S.missions.length, S.troops.length, S.characters.length, S.queue.length, Math.round(player(S).gold * 10), S.np, S.year, S.quarter,
+  S.log.length, S.wars.length, S.treaties.length, S.routes.length, S.troops.map(t => `${t.loc}${t.moving ? '>' + t.moving : ''}`).join(','),
+  provsOf(S, S.player).map(p => p.make ?? '').join(',')].join('|');
+export interface UndoToken { snap: string; mark: string; asked: number; }
+/** Call before an action that may be taken back. */
+export function undoBegin(): UndoToken { return { snap: JSON.stringify(S), mark: gameMark(), asked: S.queue.length }; }
+/** Call after it succeeded: it joins the stack unless the game asked or revealed something on the way. */
+export function undoCommit(t: UndoToken, what: string) {
+  if (S.queue.length !== t.asked) { clearUndo(); return; }
+  const top = undoStack[undoStack.length - 1];
+  if (top && top.mark !== t.mark) undoStack = []; // something that cannot be undone happened in between
+  undoStack.push({ snap: t.snap, what, mark: gameMark() });
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
 }
-export function clearUndo() { undoSnap = null; undoEl?.remove(); undoEl = null; }
+export const undoCount = () => undoStack.length;
+export const undoLabel = () => undoStack[undoStack.length - 1]?.what ?? '';
+/** Take back the last step. */
+export function undoLast() {
+  const st = undoStack.pop();
+  if (!st) return;
+  undoEl?.remove(); undoEl = null;
+  setS(JSON.parse(st.snap) as GameState);
+  sfx('flip');
+  refresh();
+  toast(`Taken back: ${st.what}`);
+}
+/** A short strip after the action, with Undo, as a reminder; the top bar keeps an Undo button for the whole season. */
+export function offerUndo(t: UndoToken, what: string) {
+  undoCommit(t, what);
+  if (!undoStack.length) { toast(what, 'good'); return; }
+  undoEl?.remove();
+  const el = undoEl = h('div', { class: 'toast-msg t-good undo' }, h('span', {}, what), h('button', { class: 'btn small', onclick: undoLast }, 'Undo'));
+  $('#toast').append(el);
+  setTimeout(() => { if (undoEl === el) { el.remove(); undoEl = null; } }, UNDO_SECONDS * 1000);
+}
+export function clearUndo() { undoStack = []; undoEl?.remove(); undoEl = null; }
+export const UNDO_SECONDS = 6;
 
-export function act(fn: () => string | null | void, okMsg?: string) {
+/** Run an action from a button: show its error, or its message, and redraw. With `undo`, it can be taken back. */
+export function act(fn: () => string | null | void, okMsg?: string, undo?: string) {
+  const t = undo ? undoBegin() : null;
   const r = fn();
   if (typeof r === 'string' && r) toast(r, 'bad');
-  else if (okMsg) toast(okMsg, 'good');
+  else {
+    if (t) undoCommit(t, undo!);
+    if (okMsg) toast(okMsg, 'good');
+  }
   refresh();
   processQueue();
 }
@@ -211,6 +236,8 @@ export function renderTop() {
         h('span', { html: icon('star', 18) }), h('span', { class: 'tb-l' }, 'Goals'), h('span', { class: 'badge' }, goalsBadge)) : null,
       h('button', { class: 'tbtn menu-b', onclick: () => showGameMenu(), title: 'Menu', 'aria-label': 'Menu' },
         h('span', { html: icon('list', 18) }), h('span', { class: 'tb-l' }, 'Menu'), S.missions.length ? h('span', { class: 'badge' }, String(S.missions.length)) : null),
+      undoCount() ? h('button', { class: 'tbtn undo-b', onclick: undoLast, title: `Undo: ${undoLabel()}  ( Ctrl+Z )`, 'aria-label': `Undo: ${undoLabel()}. ${undoCount()} step${undoCount() > 1 ? 's' : ''} can be taken back this season` },
+        h('span', { html: icon('undo', 18) }), h('span', { class: 'tb-l' }, 'Undo'), undoCount() > 1 ? h('span', { class: 'badge' }, String(undoCount())) : null) : null,
       settings().skip ? h('button', { class: 'tbtn skip-b', onclick: onSkipAhead, title: 'Skip ahead until something happens', 'aria-label': `Skip ahead: play up to ${SKIP_MAX} seasons, stopping when something needs you` },
         h('span', { html: icon('skip', 18) }), h('span', { class: 'tb-l' }, 'Skip')) : null,
       endTurnButton()),

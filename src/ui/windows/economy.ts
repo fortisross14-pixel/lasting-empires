@@ -164,7 +164,7 @@ export function tradeTab(body: HTMLElement) {
     return h('div', { class: 'grow-row' },
       h('span', { class: 'gico', style: `color:${GOODS[r.good].color}`, html: icon(GOODS[r.good].icon, 20) }),
       h('div', { class: 'g-t' }, h('b', {}, `${r.dir === 'buy' ? 'Buy' : 'Sell'} ${r.amount} ${GOODS[r.good].name.toLowerCase()} a year`), h('small', {}, `${r.dir === 'buy' ? 'from' : 'to'} ${nationName(S, r.partner)} · ${each.toFixed(1)} each · `, h('span', { class: r.dir === 'buy' ? 'bad' : 'good' }, `${r.dir === 'buy' ? '−' : '+'}${(each * r.amount).toFixed(1)}/yr`))),
-      h('div', { class: 'g-acts' }, h('button', { class: 'btn small ghost', onclick: () => confirmBox('Close this route?', 'Opening it again takes a merchant another quarter.', 'Close route', () => act(() => { S.routes = S.routes.filter(x => x !== r); }, 'Route closed')) }, 'Close')));
+      h('div', { class: 'g-acts' }, h('button', { class: 'btn small ghost', onclick: () => confirmBox('Close this route?', 'Opening it again takes a merchant another quarter.', 'Close route', () => act(() => { S.routes = S.routes.filter(x => x !== r); }, 'Route closed', 'Route closed')) }, 'Close')));
   };
   const pending = S.missions.filter(m => m.kind === 'route' || m.kind === 'post');
   if (pending.length) { body.append(h('h3', {}, 'Being set up')); for (const m of pending) body.append(missionRow(m)); }
@@ -188,7 +188,7 @@ export function workshopRow(p: Province, f = quarterFlow(S)) {
   const made = f.factories.find(x => x.prov === p.id)?.made ?? 0;
   const chips = h('div', { class: 'tags' }, MADE.map(g => {
     const ok = canMake(S, g);
-    return h('button', { class: 'tchip small' + (p.make === g ? ' sel' : '') + (ok ? '' : ' blocked'), title: GOODS[g].desc, onclick: () => { if (!ok) return toast(`Needs ${TECH[GOODS[g].tech!].name}`, 'bad'); p.make = g; refresh(); }, html: icon(GOODS[g].icon, 14) + ' ' + GOODS[g].name });
+    return h('button', { class: 'tchip small' + (p.make === g ? ' sel' : '') + (ok ? '' : ' blocked'), title: GOODS[g].desc, onclick: () => { if (!ok) return toast(`Needs ${TECH[GOODS[g].tech!].name}`, 'bad'); act(() => { p.make = g; }, undefined, `${p.name} makes ${GOODS[g].name.toLowerCase()}`); }, html: icon(GOODS[g].icon, 14) + ' ' + GOODS[g].name });
   }));
   const rec = p.make ? GOODS[p.make]?.recipe : null;
   const note = !p.make ? 'Choose what it makes.' : made + 0.05 < cap ? `Makes ${f1(made)} of ${f1(cap)} a year: short of ${Object.keys(rec!).map(i => GOODS[i].name.toLowerCase()).join(' or ')}.` : `Makes ${f1(cap)} ${GOODS[p.make].name.toLowerCase()} a year from ${Object.entries(rec!).map(([i, a]) => `${f1(a * cap)} ${GOODS[i].name.toLowerCase()}`).join(' + ')}.`;

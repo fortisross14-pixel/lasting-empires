@@ -62,11 +62,17 @@ The highest-return change: navigation, pacing, onboarding and perceived intellig
   back one step (as before). Written in the Rules tab under "Finding your way". "Selected army" became "Next army":
   the map has no army selection to frame.
 
-### M4 — Try freely: preview and undo
-- [ ] **A4.1 Action preview** on the planner's last step: cost, time, who is occupied, outcome odds by rarity,
-  what becomes unavailable (yearly task cap, the person, the card).
-- [ ] **A4.2 Undo for the season** for deterministic actions (moving troops, workshop orders, sending a task
-  before the next reveal): a stack cleared at End Turn, replacing the 6-second strip.
+### M4 — Try freely: preview and undo ✅
+- [x] **A4.1 Preview** on the planner's last step ("If you send them"): what it costs (ducats, manpower, goods), how
+  long and the season it ends, who and what is away, whether the card is used up, and what becomes harder (the
+  year's last task, no other free person of that role, no companies left at home, your last card of the kind, a
+  treasury below zero). It is a dry run of `launchMission` on a copy (`taskPreview` in `src/engine/preview.ts`), so
+  it cannot disagree with sending; a test sends a dozen previewed tasks and compares.
+- [x] **A4.2 Undo for the season:** a stack of up to 12 steps, cleared at End Turn, behind an Undo button in the top
+  bar (Ctrl+Z or U). Undoable: sending a task (unless the game answers at once), moving troops, a workshop order,
+  closing a route, recalling a task, selling or discarding cards, disbanding, dismissing. Anything that reveals
+  something (drawing or buying cards, an outcome, a question, war) cannot be undone and drops the stack, checked by
+  a fingerprint of the game after each step.
 
 ### M5 — Less friction in the middle game
 - [ ] **A5.1** Repeat a trade arrangement / renew a route in one tap.

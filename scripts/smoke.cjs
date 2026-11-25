@@ -57,6 +57,31 @@ async function run(browser, name, opts) {
   await tap('#cam .cam-b >> nth=1', 'home'); await shot('home');
   if (await p.locator('#cam .cam-threat').count()) { await tap('#cam .cam-threat', 'next danger'); await shot('danger'); await p.evaluate(() => document.querySelector('#sheet .sh-head .iconbtn')?.click()); await wait(); }
   await tap('#cam .cam-b >> nth=1', 'home');
+  // try freely: a task shows what it commits, goes out, and comes back with Undo
+  if (!(await p.locator('#agenda.open').count())) await tap('#agenda .ag-head', 'the agenda');
+  await tap('#agenda .ag-more', 'the full agenda');
+  if (await p.locator('#modal .ag-row:has-text("free to carry it out")').count()) {
+    await tap('#modal .ag-row:has-text("free to carry it out") >> nth=0', 'a card someone can carry out');
+    const target = '#win .btn.small:not(.blocked):not(.page-back)';
+    if (await p.locator(target).count()) {
+      await tap(target + ' >> nth=0', 'a target');
+      for (let i = 0; i < 3 && /^Next/.test((await p.locator('.pl-foot .btn.primary').first().textContent().catch(() => '')) || ''); i++) await tap('.pl-foot .btn.primary', 'Next step');
+      if (!(await p.locator('.pv .pv-grid').count())) problems.push(`${name}: the planner shows no preview of what the task commits`);
+      await shot('preview');
+      const before = await p.evaluate(() => __game().missions.length);
+      await tap('.pl-foot .btn.primary', 'Send them'); await wait(500);
+      const sent = await p.evaluate(() => __game().missions.length);
+      if (sent === before + 1) {
+        if (!(await p.locator('.undo-b').count())) problems.push(`${name}: no Undo after sending a task`);
+        await shot('undo');
+        await tap('.undo-b', 'Undo');
+        const back = await p.evaluate(() => __game().missions.length);
+        if (back !== before) problems.push(`${name}: Undo did not take the task back (${back} tasks, ${before} before)`);
+      }
+    }
+  }
+  await closeWin();
+  if (name === 'phone' && (await p.locator('#agenda.open').count())) await tap('#agenda .ag-head', 'fold the agenda');
   // roadmap 5: the map screen stays a map, not a page of text. A soft limit: 40–50 words is fine, 90 is not.
   const words = await p.evaluate(() => { let n = 0; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); while (w.nextNode()) { const e = w.currentNode.parentElement; if (e.closest('#map, #toast, [hidden]') || !e.offsetParent) continue; n += (w.currentNode.textContent.match(/[A-Za-zÀ-ÿ]{2,}/g) || []).length; } return n; });
   if (words > 50) problems.push(`${name}: the map screen shows ${words} words (50 at most, agenda included)`);
