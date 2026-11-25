@@ -23,7 +23,7 @@ land harder. None of them adds a new simulation (ROADMAP rule 1).
 
 ## Milestones
 
-### M1 — Empire Agenda and an End Turn that says why (this commit) ✅
+### M1 — Empire Agenda and an End Turn that says why ✅
 The highest-return change: navigation, pacing, onboarding and perceived intelligence at once.
 - [x] **A1.1 Tiers.** Every `Attention` gets a `tier`: `urgent` (this season: an army on the march, a province
   about to rise, an enemy holding your land, a hand over the limit), `opportunity` (a card someone can carry now,
@@ -40,12 +40,13 @@ The highest-return change: navigation, pacing, onboarding and perceived intellig
   thing always stops End Turn once (even with reminders off); the reminder list is grouped by tier.
 - [x] **A1.6 Tests** in `scripts/test.ts` for tiers, the new rules and that long-term lines never nag; a smoke step.
 
-### M2 — Title screen: play first, learn second
-- [ ] **A2.1** Primary actions: **Continue** and **Start any realm** (realm, date, difficulty, length). Secondary:
-  Learn through missions · Historic challenges · Test battle.
-- [ ] **A2.2** Unlocks become achievements (badges on mission cards, a count), never a lock on the open game.
-  `sandboxUnlocked` stops gating; keep the flag for the achievement.
-- [ ] **A2.3** Smoke: a first-time profile reaches a realm game in two taps.
+### M2 — Title screen: play first, learn second ✅
+- [x] **A2.1** Primary actions: **Continue** and **Start a realm** (realm, date, difficulty, length in the picker).
+  Secondary, as three tiles under "Learn and challenge": Learn the game · Historic challenges · Test a battle.
+- [x] **A2.2** Unlocks became laurels (`laurels()`: course done, historic and wild won), shown on the tiles and the
+  missions screen; nothing playable is locked. The "Unlock everything" button is gone with the locks.
+- [x] **A2.3** Smoke: a first-time profile (the smoke no longer unlocks anything) reaches a realm game in two taps,
+  and no mission shows a lock. A first launch turns the chancellor's notes on.
 
 ### M3 — Map attention and search
 - [ ] **A3.1 Pins** for agenda items with a place: threat (war colour), opportunity (gold), risk (ink). Reuse
@@ -107,3 +108,4 @@ pass so colours and emphasis are decided once, with all the new screens in place
 - In a fresh Castile 1451 game, the agenda shows at least one opportunity on turn one; an invasion is always urgent.
 - Long-term lines never stop End Turn or skip-ahead (`npm test`).
 - No sideways scroll and no page error at 390×844 and 1180×820 (`npm run smoke`).
+- The map screen stays a map: about 40–50 words with the agenda open (a soft limit; the smoke test fails above 50).

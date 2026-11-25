@@ -96,7 +96,9 @@ export type Jump =
 /** Something still open this turn. `cat`/`tab` name the window that deals with it; `jump`, when set, the exact place. */
 export interface Attention { id: string; title: string; text: string; cat: Cat; tab: string; icon: string; tier: Tier; jump?: Jump;
   /** false: already answered (a defence chosen): shown, but it does not stop End Turn again. */
-  nag?: boolean; }
+  nag?: boolean;
+  /** A shorter title for the panel over the map, where the icon already says the deck. */
+  short?: string; }
 
 /** Shortages above this share of a need are worth a line. */
 export const SHORT_ALERT = 0.2;
@@ -135,14 +137,14 @@ export function attention(s: GameState): Attention[] {
   const ready = readyByDeck(s);
   for (const c of CATS) {
     const r = ready[c];
-    if (r) out.push({ id: 'deck:' + c, tier: 'opportunity', title: `${CAT_INFO[c].name}: ${r.card}${r.count > 1 ? ` and ${r.count - 1} more` : ''}`, text: `${r.person} is free to carry it out.`, cat: c, tab: 'cards', icon: CAT_INFO[c].icon, jump: { to: 'card', cat: c, uid: r.uid } });
+    if (r) out.push({ id: 'deck:' + c, tier: 'opportunity', short: `${r.card}${r.count > 1 ? ` +${r.count - 1}` : ''}`, title: `${CAT_INFO[c].name}: ${r.card}${r.count > 1 ? ` and ${r.count - 1} more` : ''}`, text: `${r.person} is free to carry it out.`, cat: c, tab: 'cards', icon: CAT_INFO[c].icon, jump: { to: 'card', cat: c, uid: r.uid } });
   }
   // someone with nothing to carry, in a deck where a new card would give them work
   if (missionsLeft(s) > 0) for (const c of ['internal', 'economy', 'research', 'culture'] as Cat[]) {
     if (ready[c]) continue;
     const who = freeWith(s, DECK_ROLES[c]);
     if (!who || buyBlocked(s, c, 'action')) continue;
-    out.push({ id: 'idle:' + c, tier: 'opportunity', title: `${who.name} has no task`, text: `${/^[AEIOU]/.test(CAT_INFO[c].name) ? 'An' : 'A'} ${CAT_INFO[c].name} card costs ${buyCost(s, c)} nation points (you have ${Math.floor(s.np)}).`, cat: c, tab: 'cards', icon: 'people', jump: { to: 'win', cat: c, tab: 'cards' } });
+    out.push({ id: 'idle:' + c, tier: 'opportunity', short: `${who.name.split(' ')[0]} is idle`, title: `${who.name} has no task`, text: `${/^[AEIOU]/.test(CAT_INFO[c].name) ? 'An' : 'A'} ${CAT_INFO[c].name} card costs ${buyCost(s, c)} nation points (you have ${Math.floor(s.np)}).`, cat: c, tab: 'cards', icon: 'people', jump: { to: 'win', cat: c, tab: 'cards' } });
   }
   // ----- risks: what will hurt later -----
   for (const n of Object.values(s.nations)) {

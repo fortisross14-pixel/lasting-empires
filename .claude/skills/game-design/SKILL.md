@@ -75,7 +75,7 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 - Data in `src/data/missions.ts` (`MISSIONS`): start year, nation, `goals`, optional `beginner`, `wild`, extra `cards`/`gold`, and guided `steps` (from the `STEPS` record).
 - Goals are checked every quarter by `checkGoals` in `src/engine/goals.ts`; `goalView` shows each goal's progress. A new goal kind needs a type in `src/types.ts`, a case in `goalView`, and a baseline flag in `newMissionGame` if it counts gains (`goal_*0`, `stat_*`).
 - In mission mode the mission alone decides victory: finishing it shows the celebration screen and the player may play on. Rank only matters in the sandbox.
-- Unlocks: beginner missions first; finishing them all opens the historic and wild missions; one real mission opens the sandbox (`realUnlocked`, `sandboxUnlocked`, saved in localStorage).
+- Nothing is locked: the open game, every start and every mission are playable from the first launch. Completions are laurels (`laurels()` in `src/ui/title.ts`, from `missionsDone()` in storage), shown on the title's Learn and challenge tiles and the missions screen. Beginner missions are recommended, never a gate.
 - Beginner missions teach one system each and are guided: steps complete in order, the current step leads the timeline, and the generic tutorial is off (`tutorial = -1`). Every step must be reachable with the cards the mission hands out.
 - Verify a mission with the sim (`START=<year> MISSION=<id> NATIONS=<nation> npm run sim`; set START for 1600/1700 missions) or a scripted play when the bot cannot follow steps. Check every step's cards are handed out (step cards add copies), and that no goal is already met at the start.
 

@@ -50,7 +50,7 @@ function isOpen() {
 export function agendaRow(a: Attention, onGo: () => void, brief = false, grouped = false) {
   return h('button', { class: `ag-row t-${a.tier}${brief ? ' brief' : ''}`, onclick: onGo, 'aria-label': `${TIER_NAMES[a.tier]}: ${a.title}. ${a.text}` },
     h('span', { class: 'ag-i', html: icon(a.icon, 18) }),
-    h('span', { class: 'ag-t' }, brief || grouped ? null : h('small', { class: 'ag-tier' }, `${TIER_MARKS[a.tier]} ${TIER_NAMES[a.tier]}`), h('b', {}, brief ? h('span', { class: 'ag-mark', 'aria-hidden': 'true' }, TIER_MARKS[a.tier] + ' ') : null, a.title), brief ? null : h('span', { class: 'ag-sub' }, a.text)),
+    h('span', { class: 'ag-t' }, brief || grouped ? null : h('small', { class: 'ag-tier' }, `${TIER_MARKS[a.tier]} ${TIER_NAMES[a.tier]}`), h('b', {}, brief ? h('span', { class: 'ag-mark', 'aria-hidden': 'true' }, TIER_MARKS[a.tier] + ' ') : null, brief ? a.short ?? a.title : a.title), brief ? null : h('span', { class: 'ag-sub' }, a.text)),
     h('span', { class: 'a-go', html: icon('next', 14) }));
 }
 
@@ -88,7 +88,7 @@ export function renderAgenda() {
   if (!open) { place(box); return; }
   const shown = lines.slice(0, AGENDA_MAX);
   box.append(h('div', { class: 'ag-list', id: 'ag-list' }, shown.map(a => agendaRow(a, () => jumpTo(a), true)),
-    h('button', { class: 'ag-more', onclick: showAgenda }, lines.length > shown.length ? `All ${lines.length}, with reasons` : 'Reasons')));
+    h('button', { class: 'ag-more', onclick: showAgenda }, lines.length > shown.length ? `All ${lines.length} ›` : 'Why ›')));
   place(box);
 }
 

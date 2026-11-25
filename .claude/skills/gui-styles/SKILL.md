@@ -16,6 +16,9 @@ description: Interface rules for Lasting Empires — layout, touch targets, the 
 - Modals (`openModal`) are for what the game asks: events, reveals, battles, drafts, succession, confirmations. They may lie over a window or a page.
 - Every blocked action stays visible with its reason (`actionRow(..., blocked)`), never silently hidden, unless it can never apply (e.g. coastal-only buildings inland).
 
+## Title screen
+- Play first, learn second: **Continue** (the latest unfinished campaign) and **Start a realm** (`.start-b`, the picker) are the big buttons; the primary colour goes to Continue when there is one, else to Start. Below, **Learn and challenge**: three tiles (`.learn-t`) for the beginner missions, the historic challenges (`showMissions('beg' | 'real')` opens and scrolls to that section) and the battle test. Never show a lock on anything playable.
+
 ## Touch
 - Minimum target 40–44px. No hover-only information: anything in a `title` must also be reachable by tapping.
 - Map: tap selects (pointer capture + `elementFromPoint`), drag pans, pinch zooms.

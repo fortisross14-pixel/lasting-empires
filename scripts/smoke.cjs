@@ -16,7 +16,6 @@ async function run(browser, name, opts) {
   const p = await ctx.newPage();
   p.on('pageerror', e => problems.push(`${name}: page error: ${e.message}`));
   p.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|net::ERR/.test(m.text())) problems.push(`${name}: console: ${m.text()}`); });
-  await p.addInitScript(() => { try { localStorage.setItem('lasting-empires.unlock-all', '1'); } catch { /* */ } });
   await p.goto(PAGE); await p.waitForTimeout(700);
   const wait = (ms = 350) => p.waitForTimeout(ms);
   const check = async what => { const [w, v] = await p.evaluate(() => [document.documentElement.scrollWidth, innerWidth]); if (w > v) problems.push(`${name}: ${what}: the page scrolls sideways (${w} > ${v})`); };
@@ -28,11 +27,15 @@ async function run(browser, name, opts) {
 
   await shot('title');
   // missions and one mission's page
-  await tap('.missions-b', 'Missions'); await shot('missions');
+  await tap('.learn-t >> nth=0', 'Learn the game'); await shot('missions');
   await tap('.mcard >> nth=0', 'a mission card'); await shot('mission');
   await tap('.pick-top .btn', 'back to missions'); await tap('.pick-top .btn', 'back to title');
-  // the open game
-  await tap('text=Open game'); await shot('picker');
+  // a first launch: the learn tiles lead to their sections, and nothing is locked
+  await tap('.learn-t >> nth=1', 'Historic challenges'); await shot('historic');
+  if (await p.locator('.mcard.locked, .md-lock').count()) problems.push(`${name}: a mission is still shown locked`);
+  await tap('.pick-top .btn', 'back to title');
+  // the open game, from the first launch, in two taps
+  await tap('.start-b', 'Start a realm'); await shot('picker');
   await p.locator('#tutcheck').uncheck().catch(() => {});
   await tap('.pick-panel .btn.primary', 'Play'); await wait(700); await answer();
   await shot('game');
@@ -45,13 +48,10 @@ async function run(browser, name, opts) {
   await closeWin();
   await p.evaluate(() => document.querySelector('#sheet .sh-head .iconbtn')?.click()); await wait();
   if (name === 'phone' && (await p.locator('#agenda.open').count())) await tap('#agenda .ag-head', 'fold the agenda');
-  // roadmap 5: the map screen stays a map, not a page of text
-  const words = await p.evaluate(() => { let n = 0; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); while (w.nextNode()) { const e = w.currentNode.parentElement; if (e.closest('#map, #toast, #agenda, [hidden]') || !e.offsetParent) continue; n += (w.currentNode.textContent.match(/[A-Za-zÀ-ÿ]{2,}/g) || []).length; } return n; });
-  if (words > 40) problems.push(`${name}: the map screen shows ${words} words (40 at most)`);
-  // the agenda has its own budget: titles only on the map, the reasons one tap away
-  const agWords = await p.evaluate(() => { const a = document.querySelector('#agenda'); return a && !a.hidden ? (a.innerText.match(/[A-Za-zÀ-ÿ]{2,}/g) || []).length : 0; });
-  if (agWords > 34) problems.push(`${name}: the agenda shows ${agWords} words (34 at most)`);
-  console.log(`${name}: map ${words} words, agenda ${agWords}`);
+  // roadmap 5: the map screen stays a map, not a page of text. A soft limit: 40–50 words is fine, 90 is not.
+  const words = await p.evaluate(() => { let n = 0; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); while (w.nextNode()) { const e = w.currentNode.parentElement; if (e.closest('#map, #toast, [hidden]') || !e.offsetParent) continue; n += (w.currentNode.textContent.match(/[A-Za-zÀ-ÿ]{2,}/g) || []).length; } return n; });
+  if (words > 50) problems.push(`${name}: the map screen shows ${words} words (50 at most, agenda included)`);
+  console.log(`${name}: the map screen shows ${words} words`);
   // every deck and every tab in it
   for (let d = 0; d < 6; d++) {
     await tap(`#tabs .tab >> nth=${d}`, `deck ${d}`);
@@ -95,7 +95,9 @@ async function run(browser, name, opts) {
   await tap('#modebtn', 'Map view'); await tap('.mode-b >> text=Relations', 'Relations view'); await shot('relations'); await tap('.lg-x', 'back to realms');
   // back to the title, then the battle test
   await tap('.menu-b', 'Menu'); await tap('#modal .btn.ghost', 'Save and exit');
-  await tap('summary >> text=Test scenarios'); await tap('.howto .btn.wide', 'the battle test'); await wait(700); await answer();
+  await shot('title-continue');
+  if (!(await p.locator('.continue-b.primary').count()) || (await p.locator('.start-b.primary').count())) problems.push(`${name}: with a campaign under way, Continue is not the one main button`);
+  await tap('.learn-t >> nth=2', 'the battle test'); await wait(700); await answer();
   await tap('#tabs .tab >> nth=0', 'Military deck');
   if (await p.locator('#win .win-body .card').count()) { await tap('#win .win-body .card >> nth=0', 'March Orders'); await shot('targets'); }
   await ctx.close();

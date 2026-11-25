@@ -2267,3 +2267,22 @@ body:has(#pickbar) #timeline, body:has(#pickbar) #goalbar, body:has(#pickbar) #m
 #app:has(#win:not([hidden])) #agenda, body:has(#pickbar) #agenda { display: none; }
 @media (max-width: 760px) { #app:has(#sheet:not([hidden])) #agenda { display: none; } }
 @media (prefers-reduced-motion: no-preference) { :root:not([data-motion="calm"]) #agenda.open .ag-list { animation: rise 180ms ease-out; } }
+
+/* ---------- Title: play first, learn second (docs/PLAN-DIRECTION.md, M2) ---------- */
+.start-b { display: flex; align-items: center; justify-content: center; gap: 12px; text-align: left; }
+.start-b .cb-t, .continue-b .cb-t { display: flex; flex-direction: column; line-height: 1.15; }
+.start-b .cb-t small { font-family: var(--f-body); font-size: calc(13px * var(--ts, 1)); text-transform: none; letter-spacing: 0; font-variant: normal; opacity: .85; }
+.title-inner .learn-h { margin: 6px 0 -4px; font-size: calc(17px * var(--ts, 1)); text-align: left; }
+.learn-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.learn-t { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-height: 92px; padding: 10px 12px; text-align: left; font: inherit; color: var(--text); background: var(--card); border: 1.2px solid var(--text); box-shadow: var(--shadow); cursor: pointer; }
+.learn-t:active { translate: 2px 2px; box-shadow: 1px 1px 0 var(--text); }
+.learn-t .lt-i { display: grid; color: var(--lapis); }
+.learn-t b { font-family: var(--f-title); font-weight: 400; font-size: calc(16px * var(--ts, 1)); line-height: 1.1; }
+.learn-t small { color: var(--muted); font-size: calc(12.5px * var(--ts, 1)); line-height: 1.25; }
+.learn-t.done .lt-i { color: var(--leaf); }
+.md-tip { margin: 0; color: var(--muted); font-style: italic; }
+@media (max-width: 520px) {
+  .learn-row { grid-template-columns: 1fr; gap: 8px; }
+  .learn-t { min-height: 52px; display: grid; grid-template-columns: 28px 1fr; column-gap: 10px; align-items: center; }
+  .learn-t .lt-i { grid-row: 1 / 3; }
+}
