@@ -93,7 +93,7 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 - Avoid dice where a hash will do (`appoint`, `loyaltyOf`): new systems should not shift the world's other rolls.
 
 ## Pace and difficulty
-- `src/engine/pace.ts` is pure (no RNG, no changes). `attention(s)` lists what is still open this turn; `stopReasons` says when skip-ahead must stop. A new thing the player should not miss gets a rule in `attention` (with an id that stays the same while the thing is open) and a check in `scripts/test.ts`; a new kind of mission card needs a case in `cardHasTarget`.
+- `src/engine/pace.ts` is pure (no RNG, no changes). `attention(s)` lists what is still open this turn, each line with a `tier` (urgent, opportunity, risk) and a `jump` to the place where it is done; `agenda(s)` adds the long-term lines (work under way, `nag: false`, never stopping a turn); `stopReasons` says when skip-ahead must stop. A new thing the player should not miss gets a rule in `attention` (with an id that stays the same while the thing is open, the right tier, and the most direct jump) and a check in `scripts/test.ts`; a new kind of mission card needs a case in `cardHasTarget`. An urgent line always stops End Turn once; the others only with reminders on.
 - Never list something the player cannot act on, and never list permanent cards: a list that nags is a list that is ignored.
 - Difficulty is one table, `DIFFICULTY` in `src/data/difficulty.ts`, read through `diff(s)`. Standard must stay the game as balanced; a new lever gets a neutral value there (×1 or +0) and is used as `diff(s).lever`, never as a number in the logic.
 - `newGame(nation, seed, startYear, { difficulty, length })`; `length` is a `LENGTHS` id and only shortens an open game.

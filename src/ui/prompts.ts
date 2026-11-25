@@ -361,19 +361,22 @@ function quickBattle(b: Battle): boolean {
   return true;
 }
 
-/** An enemy army is on its way: choose who defends. The battle comes next quarter and plays itself. */
-export function showIncoming(id: number) {
+/** An enemy army is on its way: choose who defends. The battle comes next quarter and plays itself.
+ *  `again`: opened from the agenda after the first answer, to change who defends (the queue is not touched). */
+export function showIncoming(id: number, again = false) {
   const inc = S.incoming?.find(x => x.id === id);
-  const done = () => { S.queue.shift(); afterPrompt(); };
+  const done = again ? () => { closeModal(); refresh(); } : () => { S.queue.shift(); afterPrompt(); };
   if (!inc) return done();
   const n = S.nations[inc.nation], prov = S.provinces[inc.target];
   const force = n.army.filter(t => inc.force.includes(t.uid));
   const spied = (n.spiedUntil ?? 0) > S.year;
-  const near = troopsNear(S, S.player, prov.id);
-  const gens = S.characters.filter(c => (c.role === 'general' || c.role === 'conqueror' || (c.ruler && RULER_ARCHS[player(S).ruler.arch]?.role === 'general')) && c.mission == null);
-  let gen: number | undefined = [...gens].sort((a, b) => b.skill - a.skill)[0]?.uid;
+  // those already standing for this attack may stand again, or be sent home
+  const kept = inc.chosen ? S.troops.filter(t => inc.defenders?.includes(t.uid)) : [];
+  const near = [...kept, ...troopsNear(S, S.player, prov.id).filter(t => !kept.includes(t))];
+  const gens = S.characters.filter(c => (c.role === 'general' || c.role === 'conqueror' || (c.ruler && RULER_ARCHS[player(S).ruler.arch]?.role === 'general')) && (c.mission == null || (inc.chosen && c.uid === inc.general)));
+  let gen: number | undefined = inc.chosen ? inc.general : [...gens].sort((a, b) => b.skill - a.skill)[0]?.uid;
   const cap = () => { const g = S.characters.find(c => c.uid === gen); return g ? commandOf(g.skill) : GENERIC_COMMAND; };
-  let picked = [...near].sort((a, b) => armyPower([b]) - armyPower([a])).slice(0, cap()).map(t => t.uid);
+  let picked = inc.chosen ? kept.map(t => t.uid) : [...near].sort((a, b) => armyPower([b]) - armyPower([a])).slice(0, cap()).map(t => t.uid);
   const box = h('div', { class: 'mbox planner' });
   const draw = () => {
     clear(box);
@@ -394,7 +397,7 @@ export function showIncoming(id: number) {
     for (const t of near) tr.append(troopCard(t, { small: true, selected: picked.includes(t.uid), onclick: () => { if (!picked.includes(t.uid) && picked.length >= cap()) return toast(`Your general can lead only ${cap()} companies`, 'bad'); picked = picked.includes(t.uid) ? picked.filter(x => x !== t.uid) : [...picked, t.uid]; draw(); } }));
     box.append(tr);
     box.append(h('div', { class: 'facts' }, h('span', { class: 'fact' }, `Your strength ${Math.round(mine)} + fort ${prov.fort}`), h('span', { class: 'fact' }, `Theirs ${spied ? Math.round(theirs) : `~${Math.round(theirs * 0.8)}–${Math.round(theirs * 1.25)}`}`)));
-    box.append(h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: () => { setDefence(S, id, picked, gen); closeModal(); done(); } }, 'Hold the line')));
+    box.append(h('div', { class: 'mrow' }, again ? h('button', { class: 'btn ghost', onclick: done }, 'Keep it') : null, h('button', { class: 'btn primary', onclick: () => { setDefence(S, id, picked, gen); closeModal(); done(); } }, 'Hold the line')));
   };
   draw();
   openModal(box);

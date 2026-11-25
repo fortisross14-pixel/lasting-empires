@@ -36,7 +36,8 @@ import { CARDS } from '../src/engine/cards';
 import { MISSIONS } from '../src/data/missions';
 import { DIFFICULTY, LENGTHS, STANDARD } from '../src/data/difficulty';
 import { STARTS } from '../src/data/starts';
-import { attention, readyByDeck, markTurn, stopReasons, cardHasTarget, SKIP_MAX } from '../src/engine/pace';
+import { attention, agenda, readyByDeck, markTurn, stopReasons, cardHasTarget, SKIP_MAX, TIERS, UNREST_ALERT } from '../src/engine/pace';
+import { setDefence as setDefenceT } from '../src/engine/army';
 import { missionCap } from '../src/engine/realm';
 import { player, provsOf, genCharacter } from '../src/engine/core';
 import type { GameState, BattleUnit, BattleGeneral } from '../src/types';
@@ -193,6 +194,42 @@ check('things to do: shortages and unrest', () => {
   s.short.weapons = 0.1;
   ok(!attention(s).some(a => a.id === 'short:weapons'), 'a 10% shortage was listed');
   ok(!cardHasTarget(s, 'march_orders') || s.wars.some(w => w.a === s.player || w.b === s.player), 'March Orders had a target at peace');
+});
+
+check('the agenda: tiers, jumps, threats first, and long-term lines that never nag', () => {
+  const s = newGame('castile', 23); answer(s);
+  const first = agenda(s);
+  ok(first.some(a => a.tier === 'opportunity'), 'a new game shows no opportunity on the agenda');
+  ok(first.every(a => TIERS.includes(a.tier)), 'a line without a tier');
+  ok(first.every((a, i) => i === 0 || TIERS.indexOf(first[i - 1].tier) <= TIERS.indexOf(a.tier)), 'the agenda is not sorted by tier');
+  const deck = first.find(a => a.id.startsWith('deck:'));
+  ok(deck?.jump?.to === 'card' && s.hand.some(x => x.uid === (deck.jump as { uid: number }).uid), 'a ready card does not jump to that card');
+  // an army on the march is urgent, leads to the defence, and stops the turn only until a defence is chosen
+  const foe = Object.values(s.nations).find(n => n.alive && n.id !== s.player && n.army.length)!;
+  const home = Object.values(s.provinces).find(p => p.owner === s.player)!;
+  s.incoming = [{ id: 901, nation: foe.id, target: home.id, force: [foe.army[0].uid], due: 999999 }];
+  let a = attention(s).find(x => x.id === 'incoming:901');
+  ok(a?.tier === 'urgent' && a.jump?.to === 'incoming' && a.nag !== false, 'an incoming army is not an urgent line that leads to the defence');
+  eq(attention(s)[0].id, 'incoming:901', 'an incoming army is not first');
+  setDefenceT(s, 901, [], undefined);
+  a = attention(s).find(x => x.id === 'incoming:901');
+  ok(a?.nag === false, 'an answered attack still stops the turn');
+  const t = s.troops[0];
+  if (t) { setDefenceT(s, 901, [t.uid], undefined); setDefenceT(s, 901, [], undefined); ok(t.mission == null, 'changing the defence did not release the first choice'); }
+  s.incoming = [];
+  // provinces held by the enemy, and unrest, are urgent and point at the place
+  const p2 = Object.values(s.provinces).filter(p => p.owner === s.player)[1] ?? home;
+  const owner = p2.owner; p2.owner = foe.id; p2.occupiedFrom = s.player;
+  a = attention(s).find(x => x.id === 'occupied');
+  ok(a?.tier === 'urgent' && a.jump?.to === 'province' && (a.jump as { id: string }).id === p2.id, 'an occupied province is not an urgent line to that province');
+  p2.owner = owner; delete p2.occupiedFrom;
+  // long-term lines are shown but never stop a turn or a skip
+  s.missions.push({ id: 9901, kind: 'research', target: 'x', char: -1, turnsLeft: 5, total: 8, progress: 0 } as unknown as typeof s.missions[number]);
+  const longs = agenda(s).filter(x => x.tier === 'long');
+  ok(longs.length > 0, 'a study under way is not on the agenda');
+  ok(longs.every(x => x.nag === false) && !attention(s).some(x => x.tier === 'long'), 'a long-term line can stop the turn');
+  s.missions.pop();
+  ok(UNREST_ALERT > 0, 'no unrest threshold');
 });
 
 check('skip ahead never passes a card, a prompt or a finished task', () => {

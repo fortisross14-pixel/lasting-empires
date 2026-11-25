@@ -19,13 +19,15 @@ export interface Settings {
   quickBattles: boolean;
   /** Text size: 1, 1.15 or 1.3 times the designed size. */
   text: number;
+  /** The Empire Agenda over the map: 'auto' opens it on wide screens, folds it on phones. */
+  agenda: 'auto' | 'open' | 'closed';
   /** The difficulty and open-game length chosen last, offered again next time. */
   difficulty: number;
   length: string;
 }
 
 const KEY = 'lasting-empires.settings';
-const DEFAULTS: Settings = { warn: false, skip: true, calm: false, sfx: 1, music: 0.5, haptics: true, quickBattles: false, text: 1, difficulty: STANDARD, length: 'age' };
+const DEFAULTS: Settings = { warn: false, skip: true, calm: false, sfx: 1, music: 0.5, haptics: true, quickBattles: false, text: 1, agenda: 'auto', difficulty: STANDARD, length: 'age' };
 
 let cache: Settings | null = null;
 export function settings(): Settings {

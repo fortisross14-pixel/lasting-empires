@@ -36,9 +36,22 @@ async function run(browser, name, opts) {
   await p.locator('#tutcheck').uncheck().catch(() => {});
   await tap('.pick-panel .btn.primary', 'Play'); await wait(700); await answer();
   await shot('game');
+  // the Empire Agenda: the panel, its full list, and a line that leads somewhere
+  if (!(await p.locator('#agenda:not([hidden])').count())) problems.push(`${name}: no agenda on the map`);
+  if (!(await p.locator('#agenda.open').count())) await tap('#agenda .ag-head', 'the agenda');
+  await shot('agenda');
+  await tap('#agenda .ag-more', 'the full agenda'); await shot('agenda-all');
+  await tap('#modal .ag-row >> nth=0', 'an agenda line'); await shot('agenda-jump');
+  await closeWin();
+  await p.evaluate(() => document.querySelector('#sheet .sh-head .iconbtn')?.click()); await wait();
+  if (name === 'phone' && (await p.locator('#agenda.open').count())) await tap('#agenda .ag-head', 'fold the agenda');
   // roadmap 5: the map screen stays a map, not a page of text
-  const words = await p.evaluate(() => { let n = 0; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); while (w.nextNode()) { const e = w.currentNode.parentElement; if (e.closest('#map, #toast, [hidden]') || !e.offsetParent) continue; n += (w.currentNode.textContent.match(/[A-Za-zÀ-ÿ]{2,}/g) || []).length; } return n; });
+  const words = await p.evaluate(() => { let n = 0; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); while (w.nextNode()) { const e = w.currentNode.parentElement; if (e.closest('#map, #toast, #agenda, [hidden]') || !e.offsetParent) continue; n += (w.currentNode.textContent.match(/[A-Za-zÀ-ÿ]{2,}/g) || []).length; } return n; });
   if (words > 40) problems.push(`${name}: the map screen shows ${words} words (40 at most)`);
+  // the agenda has its own budget: titles only on the map, the reasons one tap away
+  const agWords = await p.evaluate(() => { const a = document.querySelector('#agenda'); return a && !a.hidden ? (a.innerText.match(/[A-Za-zÀ-ÿ]{2,}/g) || []).length : 0; });
+  if (agWords > 34) problems.push(`${name}: the agenda shows ${agWords} words (34 at most)`);
+  console.log(`${name}: map ${words} words, agenda ${agWords}`);
   // every deck and every tab in it
   for (let d = 0; d < 6; d++) {
     await tap(`#tabs .tab >> nth=${d}`, `deck ${d}`);

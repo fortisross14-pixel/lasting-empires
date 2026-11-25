@@ -143,6 +143,7 @@ export const DEFENDING = -5; // mission marker: standing ready to meet an announ
 export function setDefence(s: GameState, id: number, defenders: number[], general?: number) {
   const inc = s.incoming?.find(x => x.id === id);
   if (!inc) return;
+  if (inc.chosen) release(s, inc); // a second answer replaces the first
   inc.defenders = defenders; inc.general = general; inc.chosen = true;
   for (const t of s.troops) if (defenders.includes(t.uid)) t.mission = DEFENDING;
   const g = s.characters.find(c => c.uid === general);

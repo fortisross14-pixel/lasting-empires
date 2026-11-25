@@ -3,6 +3,7 @@ import { syncMusic } from './music';
 import './longpress';
 import { showHand, renderHandBtn } from './hand';
 import { renderGoalBar } from './goalbar';
+import { renderAgenda } from './agenda';
 import { sfx } from './sound';
 import type { GameState, RevealItem } from '../types';
 import { CATS } from '../types';
@@ -39,7 +40,7 @@ export function start(s: GameState) {
   const root = clear($('#app'));
   root.append(
     h('header', { id: 'top' }),
-    h('main', { id: 'board' }, h('div', { id: 'goalbar', hidden: true }), h('div', { id: 'timeline' }), h('button', { id: 'handbtn', 'aria-label': 'Your cards', onclick: () => showHand() }),
+    h('main', { id: 'board' }, h('div', { id: 'goalbar', hidden: true }), h('div', { id: 'timeline' }), h('section', { id: 'agenda', hidden: true, 'aria-label': 'Empire agenda' }), h('button', { id: 'handbtn', 'aria-label': 'Your cards', onclick: () => showHand() }),
       h('button', { class: 'viewpill', id: 'modebtn', 'aria-label': 'Map view', onclick: () => toggleModes() }, h('span', { html: icon('map', 16) }), h('span', { id: 'modelabel' }, 'Map: Realms'), h('span', { class: 'caret' }, '▾')),
       h('div', { id: 'modes', hidden: true }), h('div', { id: 'legend', hidden: true }),
       h('div', { id: 'tracker' })),
@@ -116,7 +117,7 @@ export function refresh() {
   map.realm = sheet?.kind === 'nation' ? sheet.arg ?? null : shownRealm;
   setTodo(attention(S));
   for (const id of [...seenTodo]) if (!todo.some(a => a.id === id)) seenTodo.delete(id); // gone and back again is news
-  renderTop(); renderTabs(); renderHandBtn(); renderGoalBar(); map.render(S); renderTimeline(); renderTracker(); renderLegend();
+  renderTop(); renderTabs(); renderHandBtn(); renderGoalBar(); map.render(S); renderTimeline(); renderTracker(); renderLegend(); renderAgenda();
   syncMusic(player(S).culture);
   if (sheet) renderSheet();
   if (win) renderWin();
@@ -211,9 +212,17 @@ export function renderTop() {
         h('span', { html: icon('list', 18) }), h('span', { class: 'tb-l' }, 'Menu'), S.missions.length ? h('span', { class: 'badge' }, String(S.missions.length)) : null),
       settings().skip ? h('button', { class: 'tbtn skip-b', onclick: onSkipAhead, title: 'Skip ahead until something happens', 'aria-label': `Skip ahead: play up to ${SKIP_MAX} seasons, stopping when something needs you` },
         h('span', { html: icon('skip', 18) }), h('span', { class: 'tb-l' }, 'Skip')) : null,
-      h('button', { id: 'endturn', class: 'btn primary', onclick: onEndTurn, 'aria-label': `End turn, ${SEASONS[S.quarter ?? 0]} ${S.year}${todo.length ? `. ${todo.length} thing${todo.length > 1 ? 's' : ''} to do` : ''}` },
-        h('span', { class: 'et-l' }, 'End Turn'), h('small', {}, `${SEASONS[S.quarter ?? 0]} ${S.year}`), todo.length ? h('span', { class: 'badge et-badge' }, String(todo.length)) : null)),
+      endTurnButton()),
   );
+}
+/** End Turn, with a badge that says what kind of thing is waiting: urgent things in the war colour, else all in ink. */
+function endTurnButton() {
+  const urgent = todo.filter(a => a.tier === 'urgent').length;
+  const n = urgent || todo.length;
+  const what = urgent ? `${urgent} urgent thing${urgent > 1 ? 's' : ''} need${urgent > 1 ? '' : 's'} you` : todo.length ? `${todo.length} thing${todo.length > 1 ? 's' : ''} you could do` : '';
+  return h('button', { id: 'endturn', class: 'btn primary', onclick: onEndTurn, title: what || undefined, 'aria-label': `End turn, ${SEASONS[S.quarter ?? 0]} ${S.year}${what ? '. ' + what : ''}` },
+    h('span', { class: 'et-l' }, 'End Turn'), h('small', {}, `${SEASONS[S.quarter ?? 0]} ${S.year}`),
+    n ? h('span', { class: 'badge et-badge' + (urgent ? ' urgent' : '') }, urgent ? `!${urgent}` : String(n)) : null);
 }
 export function chip(ic: string, v: string, sub: string, label: string, tone = '') {
   // each number opens the screen that explains it

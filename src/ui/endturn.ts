@@ -1,5 +1,4 @@
 // Ending a turn: what must be settled first, skip ahead, settings, and the year's report.
-import { infoToggle } from './simplify';
 import { sfx } from './sound';
 import type { GameState, MissionKind, Cat, BattleRecord } from '../types';
 import { CATS } from '../types';
@@ -11,6 +10,7 @@ import { MISSION_INFO } from '../engine/missions';
 import { h, sleep, reduced, signed } from './dom';
 import { icon } from './icons';
 import { markTurn, stopReasons, SKIP_MAX } from '../engine/pace';
+import { agendaGroups, jumpTo } from './agenda';
 import { DIFFICULTY, LENGTHS, STANDARD } from '../data/difficulty';
 import { settings, setSetting, TEXT_SIZES, type Settings } from './settings';
 import { S, sheet, modalOpen, todo, seenTodo, saveNow, exportSaveFile, setCv, setWin, setPendingReport } from './state';
@@ -40,7 +40,9 @@ export function readyToEnd(again: () => void): boolean {
   }
   // the chancellor's notes and a guided mission already say what to do next: no second voice on top of them
   const guided = (S.tutorial ?? -1) >= 0 && (S.tutorial ?? -1) < TUTORIAL.length || (!!S.scenario?.steps?.length && S.scenario.status === 'active');
-  if (settings().warn && !guided && todo.some(a => !seenTodo.has(a.id))) { showAttention(again); return false; }
+  // something urgent and new always stops the turn once; the rest only when the player asked for reminders
+  const fresh = todo.filter(a => a.nag !== false && !seenTodo.has(a.id));
+  if (fresh.some(a => a.tier === 'urgent') || (settings().warn && !guided && fresh.length)) { showAttention(again); return false; }
   return true;
 }
 
@@ -48,15 +50,13 @@ export function readyToEnd(again: () => void): boolean {
 export function showAttention(again: () => void) {
   const fresh = new Set(todo.filter(a => !seenTodo.has(a.id)).map(a => a.id));
   for (const a of todo) seenTodo.add(a.id);
-  // one line for each thing still open; who would do it, and how to stop these reminders, behind ⓘ
-  const subs = todo.map(a => h('small', { hidden: true }, a.text));
-  const note = h('p', { class: 'muted small gm-save', hidden: true }, 'You will not be asked again about these. Reminders can be switched off in Menu → Settings.');
+  const urgent = todo.some(a => a.tier === 'urgent');
+  const note = h('p', { class: 'muted small gm-save' }, urgent ? 'Urgent things stop the turn once. Other reminders can be switched on or off in Menu → Settings.' : 'You will not be asked again about these. Reminders can be switched off in Menu → Settings.');
   openModal(h('div', { class: 'mbox narrow gmenu todo' },
-    h('div', { class: 'gm-head' }, h('h2', {}, 'Still to do', infoToggle([...subs, note], 'Details')), h('button', { class: 'iconbtn', 'aria-label': 'Close', onclick: closeModal, html: icon('close', 18) })),
-    h('div', { class: 'gm-list' }, todo.map((a, i) => h('button', { class: 'gm-row' + (fresh.has(a.id) ? ' new' : ''), onclick: () => { closeModal(); openWin(a.cat, a.tab); } },
-      h('span', { class: 'gm-i', html: icon(a.icon, 20) }), h('span', { class: 'gm-t' }, h('b', {}, a.title), subs[i]), h('span', { class: 'a-go', html: icon('next', 14) })))),
+    h('div', { class: 'gm-head' }, h('h2', {}, urgent ? 'Before the season ends' : 'Still to do'), h('button', { class: 'iconbtn', 'aria-label': 'Close', onclick: closeModal, html: icon('close', 18) })),
+    agendaGroups(todo, a => { closeModal(); jumpTo(a); }, fresh),
     note,
-    h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: closeModal }, 'Back to the map'), h('button', { class: 'btn primary', onclick: () => { closeModal(); again(); } }, 'End the turn'))));
+    h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: closeModal }, 'Back to the map'), h('button', { class: urgent ? 'btn ghost danger' : 'btn primary', onclick: () => { closeModal(); again(); } }, urgent ? 'End it anyway' : 'End the turn'))));
 }
 
 export const cardsLine = (cards: Record<string, number>) => (CATS.some(c => cards[c]) ? ' · cards: ' + CATS.filter(c => cards[c]).map(c => `${cards[c]} ${CAT_INFO[c].name}`).join(', ') : '');
@@ -119,7 +119,7 @@ export function showSettings() {
   openModal(h('div', { class: 'mbox narrow gmenu' },
     h('div', { class: 'gm-head' }, h('h2', {}, 'Settings'), h('button', { class: 'iconbtn', 'aria-label': 'Close', onclick: closeModal, html: icon('close', 18) })),
     h('div', { class: 'gm-list' },
-      toggle('warn', 'Things to do', 'Before a turn ends, list the cards and people still waiting.'),
+      toggle('warn', 'Reminders', 'Before a turn ends, list the cards and people still waiting. Urgent things (an army on the march, a province about to rise) always stop the turn once.'),
       toggle('skip', 'Skip ahead button', `Plays up to ${SKIP_MAX} quiet seasons in one tap and stops when something happens.`),
       toggle('quickBattles', 'Quick battles', `A battle you are nearly sure to win or lose (${Math.round(QUICK_ODDS * 100)}% or more either way) is fought without stopping, and told in one line.`),
       toggle('calm', 'Less motion', 'No sliding or turning cards. Always on when your device asks for reduced motion.'),
