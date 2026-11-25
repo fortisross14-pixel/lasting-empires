@@ -249,3 +249,17 @@ less and fell behind in a ranking that rewards growth. **Ground now counts only 
 SEEDS=3): survived 18/18, top 3 in 10 (56%), first in 7; late income 675 and 637. That is inside the Standard target
 of 55–65%. Allied companies help the player (about two more top-3 finishes in nine); if playtests find alliances
 too strong, lower `ALLY_COMPANIES` to 1.
+
+## The campaign arc (November 2026, M7)
+
+Chained ambitions and turning points give prestige more than once a game (grand ambitions reward 60–90, as the first
+ones do). `MODE=reasonable`, Standard, before (main at `26715e4`) and after, on the same seeds:
+
+| Sample | Top 3 before | Top 3 after | Wins before | Wins after |
+|---|---|---|---|---|
+| 6 campaigns (`SEEDS=2`) | 2 | 4 | 0 | 3 |
+| 15 campaigns (`SEEDS=5`) | 9 (60%) | 5 (33%) | 6 | 4 |
+| All 21 | 11 (52%) | 9 (43%) | 6 | 7 |
+
+The two samples point opposite ways: the difference is the spread of the dice (any new prompt shifts every later
+roll), not the ambitions. No change to the rewards. Watch it again when the score formula is next tuned.
