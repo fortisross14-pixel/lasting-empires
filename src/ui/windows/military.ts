@@ -46,7 +46,14 @@ export function armyTab(body: HTMLElement) {
   const groups: [string, typeof S.troops][] = gs.map(g => [g, S.troops.filter(t => t.loc === g && !t.moving)]);
   const moving = S.troops.filter(t => t.moving), away = S.troops.filter(t => t.mission != null && !t.moving);
   for (const [g, ts] of groups) {
-    body.append(h('div', { class: 'garrison' }, h('b', {}, placeName(g)), h('small', {}, `${g === player(S).capital ? 'capital · ' : g.startsWith('base:') ? 'camp · ' : S.provinces[g]?.buildings.includes('barracks') ? 'barracks · ' : ''}${ts.filter(t => t.mission == null).length} companies · power ${Math.round(armyPower(ts.filter(t => t.mission == null)))}`)));
+    body.append(h('div', { class: 'garrison' }, h('b', {}, placeName(g)), h('small', {}, `${g === player(S).capital ? 'capital · ' : g.startsWith('base:') ? 'camp · ' : S.provinces[g]?.buildings.includes('barracks') ? 'barracks · ' : ''}${ts.filter(t => t.mission == null).length} companies · power ${Math.round(armyPower(ts.filter(t => t.mission == null)))}`),
+      (() => { // several at once: choose everyone here, or call every free company elsewhere to this place
+        const here = ts.filter(t => t.mission == null).map(t => t.uid);
+        const callable = garrisons(S).includes(g) ? S.troops.filter(t => t.mission == null && !t.moving && t.loc !== g && t.str > 0).map(t => t.uid) : [];
+        return h('span', { class: 'gar-acts' },
+          here.length > 1 ? h('button', { class: 'btn ghost small', onclick: () => { const all = here.every(u => sel.includes(u)); setForge(all ? sel.filter(u => !here.includes(u)) : [...new Set([...sel, ...here])]); renderWin(); } }, here.every(u => sel.includes(u)) ? 'Clear' : 'Select all') : null,
+          callable.length ? h('button', { class: 'btn ghost small', onclick: () => { setForge([]); act(() => moveTroops(S, callable, g), `${callable.length} ${callable.length === 1 ? 'company' : 'companies'} called to ${placeName(g)}`, `${callable.length} ${callable.length === 1 ? 'company' : 'companies'} called to ${placeName(g)}`); } }, `Call all here (${callable.length})`) : null);
+      })()));
     const row = h('div', { class: 'cards-row wrap' });
     if (!ts.length) row.append(h('p', { class: 'muted' }, 'Empty.'));
     for (const t of ts) row.append(troopCard(t, { small: true, selected: sel.includes(t.uid), dim: t.mission != null || t.str < 100, badge: t.mission === -5 ? 'defending' : t.str < 100 ? `+${healOf(S, t).q}% a season` : undefined, onclick: () => t.mission === -5 ? toast('Standing ready to defend') : t.mission != null ? toast('Away on a task') : (t.str < 100 && toast(`Heals ${healOf(S, t).q}% a season${healOf(S, t).why.length ? ': ' + healOf(S, t).why.join(', ') : ''}. ${t.str < READY_STR ? 'Too weak to attack until half strength, but it can march.' : 'Ready to fight.'}`), toggle(t.uid)) }));

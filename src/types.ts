@@ -149,6 +149,8 @@ export interface Artwork { id: number; name: string; genre: string; quality: num
 /** A standing trade route: buys or sells loads of one good every quarter. */
 export interface TradeRoute { id: number; good: string; dir: 'buy' | 'sell'; partner: string; amount: number; since: number; deal: number; }
 /** A trading post abroad: cheaper buying and better selling with that realm. */
+/** A task that could be done again: one that finished, or a trade route that was cut. */
+export interface RedoEntry { kind: MissionKind; target: string; building?: string; good?: string; dir?: 'buy' | 'sell'; amount?: number; why: 'done' | 'lost'; year: number; }
 export interface TradePost { nation: string; since: number; }
 
 export interface Treaty { a: string; b: string; kind: 'trade' | 'alliance' | 'marriage'; since: number; }
@@ -322,6 +324,8 @@ export interface GameState {
   over: boolean;
   difficulty?: number;              // index into DIFFICULTY (data/difficulty.ts); Standard when missing
   pending?: { id: string; year: number; vars: Record<string, string | number> }[]; // events an earlier choice set in motion
+  redo?: RedoEntry[];               // tasks worth doing again, and routes cut by war (routine.ts), newest first
+  routines?: string[];              // the chancellor's routines the player switched on (ROUTINES in routine.ts)
   steward?: { on: boolean; share: number }; // the goods steward buys what a need lacks, up to this share of province income
   length?: string;                  // open game only: a LENGTHS id when the game ends before the age does
   savedAt?: number; // when the game was last written, to offer Continue on the title screen

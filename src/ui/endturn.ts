@@ -14,7 +14,8 @@ import { agendaGroups, jumpTo } from './agenda';
 import { DIFFICULTY, LENGTHS, STANDARD } from '../data/difficulty';
 import { settings, setSetting, TEXT_SIZES, type Settings } from './settings';
 import { S, sheet, modalOpen, todo, seenTodo, saveNow, exportSaveFile, setCv, setWin, setPendingReport } from './state';
-import { TUTORIAL, refresh, toast, SEASONS, clearUndo } from './app';
+import { TUTORIAL, refresh, toast, SEASONS, clearUndo, undoBegin, undoCommit } from './app';
+import { runRoutines, ROUTINES } from '../engine/routine';
 import { openWin } from './windows/frame';
 import { missionRow } from './windows/cards';
 import { closeSheet } from './sheets';
@@ -67,9 +68,13 @@ export async function onEndTurn() {
   clearUndo();
   sfx('seal');
   const rep = endTurn(S);
+  // the chancellor's routines: each chore is its own step, so Undo can take back any of them
+  const chores: string[] = [];
+  if (rep && !S.queue.length) for (;;) { const t = undoBegin(); const did = runRoutines(S); if (!did.length) break; chores.push(...did); undoCommit(t, `Chancellor: ${did.join('; ')}`); if (chores.length >= ROUTINES.length) break; }
   saveNow();
   if (sheet?.kind === 'province' && !S.provinces[sheet.arg!]) closeSheet();
   refresh();
+  if (chores.length) toast(`Your chancellor: ${chores.join(' · ')}. Undo takes it back.`, 'good');
   if (rep) {
     lastReport = rep;
     if ((S.quarter ?? 0) === 0) { setPendingReport(true); yearReport = S.turnLog ?? null; await yearFlash(S.year, ageOf(S).name); }
@@ -92,6 +97,7 @@ export function onSkipAhead() {
     const before = markTurn(S);
     const rep = endTurn(S);
     if (!rep) break;
+    if (!S.queue.length) runRoutines(S); // quiet seasons keep the routines going
     n++; gold += rep.gold; lastReport = rep;
     for (const [c, v] of Object.entries(rep.cards)) cards[c] = (cards[c] ?? 0) + v;
     const why = stopReasons(S, before, rep);
@@ -139,6 +145,11 @@ export function showSettings() {
     h('p', { class: 'set-note' }, h('b', {}, d.name), ` · ${d.text}`),
     h('p', { class: 'set-note' }, S.scenario ? `Mission: ${S.scenario.name}, to ${S.scenario.deadline}.` : `${len ? len.name : 'The whole age'}: the game ends after ${S.endYear}.`),
     h('p', { class: 'muted small' }, 'Difficulty and length are chosen when a game starts.'),
+    h('h3', {}, "The chancellor's routines"),
+    h('p', { class: 'muted small' }, 'Chores you can hand over in this campaign. Each still spends your card, your person and one of the year\'s tasks, is told at the start of the season, and can be undone.'),
+    h('div', { class: 'gm-list' }, ROUTINES.map(r => h('label', { class: 'set-row' },
+      h('span', { class: 'gm-t' }, h('b', {}, r.name), h('small', {}, r.text)),
+      h('input', { type: 'checkbox', class: 'set-sw', role: 'switch', checked: S.routines?.includes(r.id) ? true : undefined, onchange: (e: Event) => { const on = (e.target as HTMLInputElement).checked; S.routines = [...(S.routines ?? []).filter(x => x !== r.id), ...(on ? [r.id] : [])]; saveNow(); } })))),
     h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: closeModal }, 'Done'))));
 }
 

@@ -2321,3 +2321,6 @@ body:has(#pickbar) #timeline, body:has(#pickbar) #goalbar, body:has(#pickbar) #m
 .pv-undo { margin: 6px 0 0; }
 @media (max-width: 480px) { .pv-grid { grid-template-columns: 1fr; } }
 @media (max-width: 480px) { #top:has(.undo-b) .skip-b { display: none; } } /* on a phone, Undo takes Skip's place while it is offered */
+/* several companies at once (M5) */
+.garrison .gar-acts { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+.garrison .gar-acts .btn { min-height: 36px; }

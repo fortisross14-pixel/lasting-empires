@@ -1,3 +1,4 @@
+import { rememberRedo } from './routine';
 import { localUnit, checkFirstContact } from './techgroups';
 import { groupOfCulture } from '../data/techgroups';
 import { later } from './eventkit';
@@ -44,7 +45,7 @@ import { yearlySubjects, unionClaim, autoSurrender } from './diplo';
 
 /** The version new games are saved with. Raise it when the shape of a save changes, add the step to MIGRATIONS,
  *  and first run `npm run make-save` so the old version keeps a test save (scripts/saves/). */
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 /** The oldest save that can still be loaded. */
 export const OLDEST_SAVE = 2;
 export const canLoad = (version: number) => version >= OLDEST_SAVE && version <= SAVE_VERSION;
@@ -163,7 +164,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
     cardAccum: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0, culture: 0 },
     bought: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0, culture: 0 },
     np: 3, imports: [], stock: {}, short: {}, routes: [], posts: [], overseas: {}, core: [], coreChanged: -99, fleet: [], art: 5, taxBurden: 0, accepted: [], stateReligion: 'catholic', happiness: 55, stats: { battles: {}, kings: [], fallen: [], wars: { won: 0, lost: 0 } },
-    troops: [], equipment: [], characters: [], missions: [], techs: [], gov: 'feudal', firedEvents: [], usedLegends: [], queue: [], pending: [],
+    troops: [], equipment: [], characters: [], missions: [], techs: [], gov: 'feudal', firedEvents: [], usedLegends: [], queue: [], pending: [], redo: [], routines: [],
     log: [], flags: {}, ambition: null, ambitionDone: false, over: false,
   };
   for (const d of NATIONS) {
@@ -431,8 +432,9 @@ export function endTurn(s: GameState): YearReport | null {
   settleArmies(s);
   resolveIncoming(s);
   quarterlyReturns(s); // envoys already riding home get closer before new results come in
-  const before = s.missions.map(m => ({ id: m.id, kind: m.kind, target: m.target }));
+  const before = s.missions.map(m => ({ id: m.id, kind: m.kind, target: m.target, building: m.building }));
   advanceMissions(s);
+  for (const m of before) if (m.kind !== 'route' && !s.missions.some(x => x.id === m.id)) rememberRedo(s, { kind: m.kind, target: m.target, building: m.building, why: 'done', year: s.year });
   for (const m of before) if (!s.missions.some(x => x.id === m.id)) s.turnLog.done.push({ kind: m.kind, title: `${MISSION_INFO[m.kind].name}${s.provinces[m.target] ? ' · ' + s.provinces[m.target].name : s.nations[m.target] ? ' · ' + s.nations[m.target].name : ''}`, ok: true });
   quarterlyMarch(s);
   quarterlyBases(s);
@@ -613,7 +615,12 @@ function fromV2(s: GameState) {
 function fromV3(s: GameState) {
   s.pending ??= [];
 }
-const MIGRATIONS: Record<number, (s: GameState) => void> = { 2: fromV2, 3: fromV3 };
+/** Phase 5: tasks worth doing again, and the chancellor's routines (both start empty; routines are opt-in). */
+function fromV4(s: GameState) {
+  s.redo ??= [];
+  s.routines ??= [];
+}
+const MIGRATIONS: Record<number, (s: GameState) => void> = { 2: fromV2, 3: fromV3, 4: fromV4 };
 
 /** After any load, whatever the version: the map may have grown since the save was made. */
 function reconcile(s: GameState) {

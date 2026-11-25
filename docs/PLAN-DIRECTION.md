@@ -74,12 +74,21 @@ The highest-return change: navigation, pacing, onboarding and perceived intellig
   something (drawing or buying cards, an outcome, a question, war) cannot be undone and drops the stack, checked by
   a fingerprint of the game after each step.
 
-### M5 — Less friction in the middle game
-- [ ] **A5.1** Repeat a trade arrangement / renew a route in one tap.
-- [ ] **A5.2** Multi-select and bulk assignment (move several companies, send several merchants).
-- [ ] **A5.3** Optional automation for chores: the steward exists for goods; extend to routine builds and
-  idle researchers assisting the current study (opt-in, listed, reversible).
-- [ ] **A5.4** Measure: clicks per in-game year in the sim's scripted player, before and after.
+### M5 — Less friction in the middle game ✅
+- [x] **A5.1 Do it again.** Tasks worth repeating (relations, development, conversion, assimilation, the arts,
+  pilgrimages, voyages, patronage) and trade routes cut by war or a fallen realm are remembered (`s.redo`, the
+  last 6). When the card and a free person are at hand, the agenda offers "Again: …" or "Reopen: …" (two at most),
+  and the planner opens filled in; a cut route goes to the best partner still open. `src/engine/routine.ts`.
+- [x] **A5.2 Several at once.** Moving several companies already worked; each garrison now has Select all and Call all
+  here (every free company elsewhere marches to it, one step that Undo takes back). Selling several cards already
+  worked.
+- [x] **A5.3 The chancellor's routines** (per campaign, off by default, Menu → Settings): keep the scholars studying
+  (the quickest open study in the card's field), help the current study, reopen cut routes. They play the player's
+  own cards through `launchMission`, use the year's tasks, are told at the start of the season and each is an Undo
+  step; skip-ahead keeps them going in quiet seasons. Save version 5 (`s.redo`, `s.routines`).
+- [x] **A5.4 Measure.** `npm test` plays Venice for ten years with every routine on and prints how many tasks the
+  chancellor started (3 in that run: the bot holds few study cards). A clicks-per-year count of a human-style
+  player is still to do; the sim's bot does not tap, so it cannot measure it.
 
 ### M6 — Decisions that land, and rivals with an aim
 - [ ] **A6.1 After-action payoff:** for battles won, provinces taken, routes opened, studies finished: a map flash on

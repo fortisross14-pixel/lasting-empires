@@ -1,5 +1,6 @@
 // Goods: what the realm makes, what it uses, what it buys and sells.
 // Everything is counted in loads a year and settled every quarter from the warehouses (s.stock).
+import { rememberRedo } from './routine';
 import type { GameState, Province, TradeRoute } from '../types';
 import { GOODS, RAW, MADE, FOOD } from '../data/goods';
 import { BUILDINGS } from '../data/techs';
@@ -269,6 +270,7 @@ export function checkTrade(s: GameState) {
     const n = s.nations[r.partner];
     if (!n?.alive || atWar(s, s.player, r.partner)) {
       s.routes = s.routes.filter(x => x !== r);
+      rememberRedo(s, { kind: 'route', target: r.partner, good: r.good, dir: r.dir, amount: r.amount, why: 'lost', year: s.year });
       log(s, `The ${GOODS[r.good]?.name ?? r.good} route with ${nationName(s, r.partner)} is cut.`, 'bad');
     }
   }

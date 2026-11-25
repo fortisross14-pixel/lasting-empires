@@ -11,6 +11,8 @@ import { closedBecause, groupOf, checkFirstContact } from '../src/engine/techgro
 import { provRegion } from '../src/engine/overseas';
 import { techCost, launchMission, cardRoles } from '../src/engine/missions';
 import { taskPreview } from '../src/engine/preview';
+import { redoOptions, rememberRedo, runRoutines } from '../src/engine/routine';
+import { checkTrade } from '../src/engine/trade';
 import { cardHasTarget as hasTarget } from '../src/engine/pace';
 import { BUILDINGS as BLD, TECHS } from '../src/data/techs';
 import { missionBlocked as blockedFor } from '../src/engine/missions';
@@ -300,6 +302,49 @@ check('the preview of a task is what sending it does, and touches nothing', () =
     }
   }
   ok(tried >= 4, `only ${tried} tasks could be previewed`);
+});
+
+check('less routine: tasks to do again, cut routes, and the chancellor\'s routines', () => {
+  const s = newGame('castile', 41); answer(s);
+  eq(s.redo?.length, 0, 'a new game remembers tasks');
+  // a task worth repeating is offered again when its card and someone free are at hand
+  const devId = Object.values(CARDS).find(d => d.kind === 'mission' && !d.permanent && d.missions?.includes('develop'))!.id;
+  addCardT(s, devId, true);
+  const dev = s.hand.find(h => h.card === devId);
+  ok(!!dev, 'no development card to test with');
+  const prov = Object.values(s.provinces).find(p => p.owner === s.player && !blockedFor(s, 'develop', p.id));
+  if (dev && prov) {
+    rememberRedo(s, { kind: 'develop', target: prov.id, why: 'done', year: s.year });
+    ok(redoOptions(s).some(o => o.entry.kind === 'develop' && o.target === prov.id), 'a development done before is not offered again');
+    ok(attention(s).some(a => a.id.startsWith('redo:develop') && a.jump?.to === 'plan'), 'the agenda does not offer to develop again');
+  }
+  rememberRedo(s, { kind: 'build', target: 'x', why: 'done', year: s.year });
+  ok(!(s.redo ?? []).some(e => e.kind === 'build'), 'a building was remembered as something to do again');
+  // a route cut by war is remembered with its good, direction and amount
+  const partner = Object.values(s.nations).find(n => n.alive && n.id !== s.player && n.id !== 'granada')!;
+  s.routes.push({ id: 9001, good: 'grain', dir: 'sell', partner: partner.id, amount: 2, since: s.year, deal: 1 });
+  partner.alive = false;
+  checkTrade(s);
+  ok((s.redo ?? []).some(e => e.kind === 'route' && e.why === 'lost' && e.good === 'grain' && e.amount === 2), 'a cut route was not remembered');
+  partner.alive = true;
+  // routines are off by default, and the study routine starts a study with a card and a free scholar
+  eq(runRoutines(s).length, 0, 'a routine ran without being switched on');
+  s.routines = ['study'];
+  const studies = s.missions.filter(m => m.kind === 'research').length;
+  const card = s.hand.find(h => CARDS[h.card]?.missions?.includes('research'));
+  const scholar = s.characters.find(c => c.role === 'researcher' && c.mission == null);
+  const did = runRoutines(s);
+  if (card && scholar) {
+    ok(did.length === 1 && s.missions.filter(m => m.kind === 'research').length === studies + 1, 'the study routine did not start a study');
+    ok(!s.hand.some(h => h.uid === card.uid), 'the study routine did not spend the card');
+  }
+  // measure (A5.4): over ten years with every routine on, how many tasks the chancellor starts for the player
+  const g = newGame('venice', 42); answer(g);
+  g.routines = ['study', 'assist', 'routes'];
+  let chores = 0;
+  for (let i = 0; i < 40 && !g.over; i++) { endTurn(g); answer(g); chores += runRoutines(g).length; }
+  ok(chores > 0, 'ten years of routines did nothing');
+  console.log(`       routines: ${chores} tasks started for Venice in ten years (taps saved)`);
 });
 
 check('skip ahead never passes a card, a prompt or a finished task', () => {

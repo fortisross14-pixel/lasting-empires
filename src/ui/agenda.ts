@@ -7,7 +7,7 @@ import { agenda, AGENDA_MAX, TIERS, TIER_NAMES, type Attention, type Jump } from
 import { openModal, closeModal } from './modal';
 import { openWin } from './windows/frame';
 import { openSheet } from './sheets';
-import { openCardModal } from './planner';
+import { openCardModal, openPlanner } from './planner';
 import { showIncoming, processQueue } from './prompts';
 import { settings, setSetting } from './settings';
 import { sfx } from './sound';
@@ -29,7 +29,11 @@ export function jumpTo(a: Attention) {
     map.select(j.id);
     openSheet('province', j.id);
   } else if (j.to === 'nation') openSheet('nation', j.id);
-  else if (j.to === 'incoming') {
+  else if (j.to === 'plan') {
+    if (!S.hand.some(x => x.uid === j.card)) { openWin(j.cat, 'cards'); return; }
+    openWin(j.cat, 'cards');
+    openPlanner(j.kind, j.target, j.building, j.card, j.trade);
+  } else if (j.to === 'incoming') {
     const head = S.queue[0];
     if (head?.kind === 'incoming' && head.id === j.id) processQueue(); else showIncoming(j.id, true);
   }

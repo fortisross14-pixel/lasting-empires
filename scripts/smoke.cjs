@@ -90,7 +90,7 @@ async function run(browser, name, opts) {
   for (let d = 0; d < 6; d++) {
     await tap(`#tabs .tab >> nth=${d}`, `deck ${d}`);
     const tabs = await p.locator('#win .win-tab').count();
-    for (let t = 0; t < tabs; t++) { await tap(`#win .win-tab >> nth=${t}`, `deck ${d} tab ${t}`); await check(`deck ${d} tab ${t}`); if (t === 0 && d === 0) await shot('cards'); if (d === 3 && t === 1) await shot('goods'); if (d === 4 && t === 1) await shot('research'); }
+    for (let t = 0; t < tabs; t++) { await tap(`#win .win-tab >> nth=${t}`, `deck ${d} tab ${t}`); await check(`deck ${d} tab ${t}`); if (t === 0 && d === 0) await shot('cards'); if (d === 0 && t === 1) await shot('army'); if (d === 3 && t === 1) await shot('goods'); if (d === 4 && t === 1) await shot('research'); }
     await closeWin();
   }
   // a person of the court: loyalty and wish
@@ -112,7 +112,7 @@ async function run(browser, name, opts) {
     // the realm and its records open from the coat of arms; tasks and settings from the menu
     if (r === 'Realm and ruler' || r === 'Chronicle') { await tap('#top .crest', 'the coat of arms'); if (r === 'Chronicle') await tap('#sheet .crown-link >> text=Chronicle', 'Chronicle'); }
     else { await tap('.menu-b', 'Menu'); if (r === rows[0]) await shot('menu'); await tap(`.gm-row >> text=${r}`, r); }
-    if (r === 'Settings') await shot('settings');
+    if (r === 'Settings') { await shot('settings'); if (!(await p.locator('#modal h3:has-text("routines")').count())) problems.push(`${name}: Settings shows no chancellor's routines`); }
     if (r === 'Chronicle') { await shot('chronicle'); await tap('#sheet .seg-b >> text=Rules', 'the Rules page'); await shot('rules'); await tap('#sheet .seg-b >> text=Annals', 'the Annals'); await tap('#sheet .btn.wide', 'the history of the realm'); await shot('history'); }
     await p.evaluate(() => { const m = document.querySelector('#modal'); if (m && !m.hidden) m.querySelector('.btn.primary, .iconbtn')?.click(); document.querySelector('#sheet:not([hidden]) .iconbtn')?.click(); }); await wait();
   }

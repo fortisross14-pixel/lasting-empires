@@ -9,6 +9,7 @@ import { missionsLeft } from './realm';
 import { provsOf, enemiesOf, ageIndex, incomeOf } from './core';
 import { warned, warnedNow } from './rivals';
 import { wantsPlayer } from './ai';
+import { redoOptions } from './routine';
 import { TECHS, BUILDINGS } from '../data/techs';
 import { GENRES } from '../data/culture';
 import { cultureRows } from './culture';
@@ -91,7 +92,8 @@ export type Jump =
   | { to: 'province'; id: string }
   | { to: 'nation'; id: string }
   | { to: 'incoming'; id: number }
-  | { to: 'sheet'; kind: string };
+  | { to: 'sheet'; kind: string }
+  | { to: 'plan'; cat: Cat; kind: MissionKind; target: string; building?: string; card: number; trade?: { good: string; dir: 'buy' | 'sell'; amount: number } };
 
 /** Something still open this turn. `cat`/`tab` name the window that deals with it; `jump`, when set, the exact place. */
 export interface Attention { id: string; title: string; text: string; cat: Cat; tab: string; icon: string; tier: Tier; jump?: Jump;
@@ -108,6 +110,8 @@ export const UNREST_ALERT = 25;
 export const UNEASE_ALERT = 35;
 /** A treasury that runs dry within this many quarters is a risk worth a line. */
 export const DEBT_QUARTERS = 4;
+/** How many "do it again" lines the agenda offers at once. */
+export const REDO_SHOWN = 2;
 /** The most lines the agenda panel over the map shows at once (the full list is one tap away). */
 export const AGENDA_MAX = 4;
 
@@ -145,6 +149,12 @@ export function attention(s: GameState): Attention[] {
     const who = freeWith(s, DECK_ROLES[c]);
     if (!who || buyBlocked(s, c, 'action')) continue;
     out.push({ id: 'idle:' + c, tier: 'opportunity', short: `${who.name.split(' ')[0]} is idle`, title: `${who.name} has no task`, text: `${/^[AEIOU]/.test(CAT_INFO[c].name) ? 'An' : 'A'} ${CAT_INFO[c].name} card costs ${buyCost(s, c)} nation points (you have ${Math.floor(s.np)}).`, cat: c, tab: 'cards', icon: 'people', jump: { to: 'win', cat: c, tab: 'cards' } });
+  }
+  // tasks worth doing again: the same card, a free person, the same place (or the best partner for a cut route)
+  for (const o of redoOptions(s).slice(0, REDO_SHOWN)) {
+    const e = o.entry, cat = CARDS[s.hand.find(x => x.uid === o.card)!.card].cat;
+    out.push({ id: 'redo:' + [e.kind, e.target, e.good ?? '', e.dir ?? ''].join('|'), tier: 'opportunity', title: o.title, short: o.title.replace(/^(Again|Reopen): /, '$1: ').replace(/ · /, ' '), text: e.why === 'lost' ? 'The route was cut. The contract and a free merchant are ready: the planner opens filled in.' : `Done in ${e.year}. The card and someone free are ready: the planner opens filled in.`, cat, tab: 'cards', icon: 'next',
+      jump: { to: 'plan', cat, kind: e.kind, target: o.target, building: e.building, card: o.card, trade: e.kind === 'route' && e.good && e.dir ? { good: e.good, dir: e.dir, amount: e.amount ?? 1 } : undefined } });
   }
   // ----- risks: what will hurt later -----
   for (const n of Object.values(s.nations)) {
