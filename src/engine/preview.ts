@@ -24,7 +24,7 @@ export interface TaskPreview {
 
 export interface TaskArgs {
   kind: MissionKind; char: number; target: string; troops: number[]; building?: string; card: number;
-  good?: string; ships?: number[]; trade?: { dir: 'buy' | 'sell'; amount: number };
+  good?: string; ships?: number[]; trade?: { dir: 'buy' | 'sell'; amount: number }; gift?: number;
 }
 
 const plural = (n: number, w: string) => `${n} ${n === 1 ? w : w.endsWith('y') ? w.slice(0, -1) + 'ies' : w + 's'}`;
@@ -32,7 +32,7 @@ const plural = (n: number, w: string) => `${n} ${n === 1 ? w : w.endsWith('y') ?
 export function taskPreview(s: GameState, a: TaskArgs): TaskPreview {
   const copy = JSON.parse(JSON.stringify(s)) as GameState;
   const hc = s.hand.find(x => x.uid === a.card);
-  const blocked = launchMission(copy, a.kind, a.char, a.target, a.troops, a.building, a.card, a.good, a.ships ?? [], a.trade);
+  const blocked = launchMission(copy, a.kind, a.char, a.target, a.troops, a.building, a.card, a.good, a.ships ?? [], a.trade, a.gift ?? 0);
   const ch = s.characters.find(c => c.uid === a.char);
   const empty: TaskPreview = { blocked, ducats: 0, manpower: 0, goods: [], turns: 0, endQuarter: s.quarter ?? 0, endYear: s.year, cardKept: !!(hc && CARDS[hc.card]?.permanent), ties: [], after: [] };
   if (blocked || !ch) return empty;

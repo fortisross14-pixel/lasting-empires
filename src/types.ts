@@ -150,6 +150,8 @@ export interface Artwork { id: number; name: string; genre: string; quality: num
 /** A standing trade route: buys or sells loads of one good every quarter. */
 export interface TradeRoute { id: number; good: string; dir: 'buy' | 'sell'; partner: string; amount: number; since: number; deal: number; }
 /** A trading post abroad: cheaper buying and better selling with that realm. */
+/** A decisive moment of the reign: the decision, its result and what it changed, in words. */
+export interface ReignMoment { year: number; quarter: number; because: string; title: string; changes: string[]; weight: number; place?: string; }
 /** A task that could be done again: one that finished, or a trade route that was cut. */
 export interface RedoEntry { kind: MissionKind; target: string; building?: string; good?: string; dir?: 'buy' | 'sell'; amount?: number; why: 'done' | 'lost'; year: number; }
 export interface TradePost { nation: string; since: number; }
@@ -244,7 +246,7 @@ export type Prompt =
   | { kind: 'event'; eventId: string; vars: Record<string, string | number> }
   | { kind: 'battle'; battle: Battle; story?: Story }
   | { kind: 'reveal'; title: string; subtitle?: string; items: RevealItem[]; alarm?: boolean; story?: Story }
-  | { kind: 'draft'; draft: 'buy' | 'court' | 'ambition' | 'gift'; cat?: Cat; options: DraftOption[] }
+  | { kind: 'draft'; draft: 'buy' | 'court' | 'ambition' | 'gift'; cat?: Cat; options: DraftOption[]; pivot?: 'done' | 'age' }
   /** The year's new cards: for each card due, a choice of three (roadmap 5.12). */
   | { kind: 'picks'; year: number; picks: { cat: Cat; options: string[] }[] }
   | { kind: 'succession'; heirs: Heir[]; old: string }
@@ -330,7 +332,9 @@ export interface GameState {
   difficulty?: number;              // index into DIFFICULTY (data/difficulty.ts); Standard when missing
   pending?: { id: string; year: number; vars: Record<string, string | number> }[]; // events an earlier choice set in motion
   redo?: RedoEntry[];               // tasks worth doing again, and routes cut by war (routine.ts), newest first
-  routines?: string[];              // the chancellor's routines the player switched on (ROUTINES in routine.ts)
+  routines?: string[];
+  ambitions?: { id: string; from: number; to?: number; result?: 'won' | 'failed' | 'set aside' }[]; // every ambition held (arc.ts)
+  reign?: ReignMoment[];            // the decisive moments, for the chronicle at the end (arc.ts)              // the chancellor's routines the player switched on (ROUTINES in routine.ts)
   steward?: { on: boolean; share: number }; // the goods steward buys what a need lacks, up to this share of province income
   length?: string;                  // open game only: a LENGTHS id when the game ends before the age does
   savedAt?: number; // when the game was last written, to offer Continue on the title screen

@@ -5,6 +5,8 @@ import { getGeo } from '../engine/map';
 import { player, provsOf } from '../engine/core';
 import { provKnown } from '../engine/overseas';
 import { historyOf } from '../engine/chronicle';
+import { decisiveMoments } from '../engine/arc';
+import { ambitionLines } from './chronicle';
 import { NO_STATE } from '../data/nations';
 import { wash } from './map';
 
@@ -66,6 +68,19 @@ export function historyCanvas(s: GameState): HTMLCanvasElement {
   type Row = { font: string; color: string; text: string; gap: number; indent?: number };
   const rows: Row[] = [];
   const inner = W - PAD * 2;
+  // the reign in brief first: ambitions and the choices that decided it (M7)
+  const amb = ambitionLines(s), moments = decisiveMoments(s);
+  if (amb.length) {
+    rows.push({ font: `600 34px ${DISPLAY}`, color: INK, text: 'Ambitions', gap: 30 });
+    for (const a of amb) rows.push({ font: `400 26px ${BODY}`, color: a.tone === 'bad' ? WAX : INK, text: `${a.mark}  ${a.text}`, gap: 8 });
+  }
+  if (moments.length) {
+    rows.push({ font: `600 34px ${DISPLAY}`, color: INK, text: 'The choices that decided it', gap: 30 });
+    for (const m of moments) {
+      probe.font = `400 26px ${BODY}`;
+      wrap(probe, `${m.year}  ${m.title}. ${m.because}`, inner).forEach((line, i) => rows.push({ font: `400 26px ${BODY}`, color: INK, text: line, gap: i ? 2 : 10 }));
+    }
+  }
   for (const c of chapters) {
     rows.push({ font: `600 34px ${DISPLAY}`, color: INK, text: `${c.ruler}${c.epithet ? ' ' + c.epithet : ''}`, gap: 30 });
     rows.push({ font: `400 22px ${BODY}`, color: MUTED, text: `${c.from} – ${c.to}`, gap: 4 });

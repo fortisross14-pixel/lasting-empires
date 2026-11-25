@@ -123,6 +123,9 @@ export const GRADES = [
   { name: 'Shoddy', mult: 0.75 }, { name: 'Standard', mult: 1 }, { name: 'Fine', mult: 1.25 }, { name: 'Grand', mult: 1.5 }, { name: 'Wonder', mult: 2 },
 ];
 
+/** Sweetening a diplomatic offer (M7): a gift in ducats (times inflation) and what it adds to the odds. Step 0 is none. */
+export const GIFT_STEPS = [{ ducats: 0, bonus: 0 }, { ducats: 10, bonus: 0.05 }, { ducats: 25, bonus: 0.1 }, { ducats: 50, bonus: 0.15 }];
+export const giftCost = (s: GameState, step: number) => Math.round((GIFT_STEPS[step]?.ducats ?? 0) * inflation(s));
 export const developCost = (s: GameState, prov: string) => Math.round((25 + s.provinces[prov].dev * 15) * inflation(s));
 
 export const foundCost = (s: GameState) => Math.round(50 * inflation(s));
@@ -395,7 +398,7 @@ export function missionBlocked(s: GameState, kind: MissionKind, target: string, 
   return null;
 }
 
-export function launchMission(s: GameState, kind: MissionKind, charUid: number, target: string, troopUids: number[], building?: string, cardUid?: number, good?: string, shipUids: number[] = [], trade?: { dir: 'buy' | 'sell'; amount: number }): string | null {
+export function launchMission(s: GameState, kind: MissionKind, charUid: number, target: string, troopUids: number[], building?: string, cardUid?: number, good?: string, shipUids: number[] = [], trade?: { dir: 'buy' | 'sell'; amount: number }, gift = 0): string | null {
   const card = s.hand.find(h => h.uid === cardUid);
   const cdef = card && CARDS[card.card];
   if (!cdef || !cdef.missions?.includes(kind)) return 'You need a card for this mission';
@@ -410,6 +413,8 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   if (ch.ruler && roles[0] !== ch.role && SPECIAL_BASE[roles[0]]) return 'The monarch cannot leave the court for this'; 
   const why = kind === 'colonize' ? colonizeBlocked(s, target, ch) : kind === 'route' ? routeBlocked(s, good ?? '', trade?.dir ?? 'buy', target, trade?.amount ?? 0) : missionBlocked(s, kind, target, building);
   if (why) return why;
+  if (gift > 0 && (!DIPLO.includes(kind) || !GIFT_STEPS[gift])) return 'Only a diplomatic offer can be sweetened';
+  if (gift > 0 && player(s).gold < envoyCost(s, target) + giftCost(s, gift)) return `The journey and the gift need ${envoyCost(s, target) + giftCost(s, gift)} ducats`;
   if ((kind === 'conquer' || kind === 'raid' || kind === 'conquista' || kind === 'base') && !troopUids.length) return 'Send at least one troop';
   const sent = s.troops.filter(t => troopUids.includes(t.uid));
   if ((kind === 'conquer' || kind === 'raid') && sent.some(t => travel(locOf(s, t), target) > 1)) return 'Some of these troops are too far away';
@@ -436,6 +441,7 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   if (kind === 'base') m.turnsLeft = Math.max(1, Math.max(...sent.map(t => travel(locOf(s, t), target))) - 1);
   if (!cdef.permanent) s.hand = s.hand.filter(h => h.uid !== cardUid);
   if (DIPLO.includes(kind)) player(s).gold -= envoyCost(s, target);
+  if (DIPLO.includes(kind) && gift > 0) { player(s).gold -= giftCost(s, gift); m.bonus = GIFT_STEPS[gift]?.bonus ?? 0; }
   m.total = m.turnsLeft;
   if (kind === 'build') {
     m.progress = buildingCost(s, building!);

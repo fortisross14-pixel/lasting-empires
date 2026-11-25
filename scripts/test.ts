@@ -14,7 +14,10 @@ import { taskPreview } from '../src/engine/preview';
 import { redoOptions, rememberRedo, runRoutines } from '../src/engine/routine';
 import { checkTrade } from '../src/engine/trade';
 import { worldAmbitions } from '../src/engine/rivals';
-import { advanceMissions } from '../src/engine/missions';
+import { advanceMissions, GIFT_STEPS, giftCost, envoyCost } from '../src/engine/missions';
+import { pivotOptions, offerAmbition, beginAmbition, endAmbition, decisiveMoments, rememberBattle, GRAND_AMBITIONS } from '../src/engine/arc';
+import { openAge } from '../src/engine/ages';
+import { ERAS } from '../src/data/eras';
 import { cardHasTarget as hasTarget } from '../src/engine/pace';
 import { BUILDINGS as BLD, TECHS } from '../src/data/techs';
 import { missionBlocked as blockedFor } from '../src/engine/missions';
@@ -382,6 +385,63 @@ check('after a decision: because, the place and what changed; the world\'s ambit
   ok(!!mine?.aboutYou, `${big.nation}, set on your land, is not shown as wanting it`);
   eq(w2[0].aboutYou, true, 'a realm that wants your land is not listed first');
   ok(attention(g).some(a => a.id === 'ambition:' + big.nation && a.tier === 'risk') || attention(g).some(a => a.id === 'warning:' + big.nation), 'a great power that wants your land is not on the agenda');
+});
+
+check('the campaign arc: a new ambition when one ends, a turning point at a new age, the reign\'s choices', () => {
+  const s = newGame('portugal', 61); answer(s);
+  ok(!!s.ambition && (s.ambitions ?? []).length === 1 && s.ambitions![0].id === s.ambition, 'the first ambition is not recorded');
+  // a turning point offers to keep the ambition, plus grand ones the realm is not yet past; no dice
+  const opts = pivotOptions(s);
+  ok(opts[0]?.t === 'ambition' && opts[0].id === s.ambition, 'a turning point does not offer to keep the open ambition');
+  ok(opts.length >= 2 && opts.slice(1).every(o => o.t === 'ambition' && GRAND_AMBITIONS.some(g => g.id === o.id)), 'a turning point offers no grand ambition');
+  eq(JSON.stringify(pivotOptions(s)), JSON.stringify(opts), 'a turning point is not the same twice');
+  // a new age is a turning point
+  const next = ERAS[ERAS.findIndex(e => e.id === (s.age?.id ?? ERAS[0].id)) + 1];
+  s.queue = [];
+  ok(openAge(s, next.id, s.player), 'the next age did not open');
+  ok(s.queue.some(p => p.kind === 'draft' && p.draft === 'ambition' && p.pivot === 'age'), 'a new age offered no turning point');
+  // choosing a grand one sets the old aside; meeting it records it and asks for the next
+  const grand = opts.find(o => o.t === 'ambition' && o.id !== s.ambition)!;
+  const old = s.ambition;
+  beginAmbition(s, (grand as { id: string }).id);
+  eq(s.ambitions!.find(a => a.id === old)?.result, 'set aside', 'the old ambition was not set aside');
+  beginAmbition(s, (grand as { id: string }).id);
+  eq(s.ambitions!.filter(a => a.id === (grand as { id: string }).id).length, 1, 'keeping the same ambition recorded it twice');
+  s.queue = [];
+  endAmbition(s, 'won'); s.ambitionDone = true;
+  eq(s.ambitions![s.ambitions!.length - 1].result, 'won', 'a fulfilled ambition is not recorded as won');
+  ok(decisiveMoments(s).some(m => m.title.startsWith('Ambition fulfilled')), 'a fulfilled ambition is not in the chronicle');
+  offerAmbition(s, 'done');
+  ok(s.queue.some(p => p.kind === 'draft' && p.draft === 'ambition' && p.pivot === 'done'), 'no new ambition after one was fulfilled');
+  // land taken in battle is a decisive moment, and the chronicle keeps the weightiest in order
+  rememberBattle(s, { province: 'lisbon', context: 'conquer' }, 'Lisbon', true, 'Lisbon taken');
+  const ms = decisiveMoments(s);
+  ok(ms.some(m => m.title === 'Lisbon taken' && m.weight === 5), 'a province taken in battle is not in the chronicle');
+  // mission mode has its own goal: no turning points
+  const mg = newGame('castile', 62); answer(mg); mg.scenario = { id: 'x', name: 'x', goals: [], deadline: 1500, status: 'active' } as unknown as typeof mg.scenario; mg.queue = [];
+  offerAmbition(mg, 'age');
+  ok(!mg.queue.some(p => p.kind === 'draft'), 'a mission game was offered an ambition');
+});
+
+check('sweetening a diplomatic offer: the gift is paid, raises the odds, and the preview knows it', () => {
+  const s = newGame('castile', 63); answer(s);
+  const relId = Object.values(CARDS).find(d => d.kind === 'mission' && !d.permanent && d.missions?.includes('relations'))?.id ?? Object.values(CARDS).find(d => d.missions?.includes('relations'))!.id;
+  addCardT(s, relId, true);
+  const card = s.hand.find(h => h.card === relId)!;
+  const dip = s.characters.find(c => c.mission == null && c.role === 'diplomat')!;
+  const target = Object.values(s.nations).find(n => n.alive && n.id !== s.player && n.id !== 'granada' && !blockedFor(s, 'relations', n.id))!;
+  ok(!!card && !!dip && !!target, 'no card, diplomat or realm to test a gift with');
+  s.nations[s.player].gold = 500;
+  const pv0 = taskPreview(s, { kind: 'relations', char: dip.uid, target: target.id, troops: [], card: card.uid });
+  const pv2 = taskPreview(s, { kind: 'relations', char: dip.uid, target: target.id, troops: [], card: card.uid, gift: 2 });
+  ok(Math.abs(pv2.ducats - pv0.ducats - giftCost(s, 2)) < 0.11, `the preview does not count the gift (${pv0.ducats} → ${pv2.ducats})`);
+  const gold = s.nations[s.player].gold;
+  eq(launchMission(s, 'relations', dip.uid, target.id, [], undefined, card.uid, undefined, [], undefined, 2), null, 'a sweetened offer could not be sent');
+  ok(Math.abs(gold - s.nations[s.player].gold - envoyCost(s, target.id) - giftCost(s, 2)) < 0.11, 'the gift was not paid');
+  eq(s.missions.find(m => m.char === dip.uid)?.bonus, GIFT_STEPS[2].bonus, 'the gift did not raise the odds');
+  s.nations[s.player].gold = 0;
+  const dip2 = s.characters.find(c => c.mission == null && c.role === 'diplomat');
+  if (dip2) ok(!!launchMission(s, 'relations', dip2.uid, target.id, [], undefined, card.uid, undefined, [], undefined, 3), 'a gift was sent without the ducats for it');
 });
 
 check('skip ahead never passes a card, a prompt or a finished task', () => {

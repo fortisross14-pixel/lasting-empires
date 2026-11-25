@@ -1,3 +1,4 @@
+import { ambitionDef, endAmbition, offerAmbition } from './arc';
 import { rememberRedo } from './routine';
 import { localUnit, checkFirstContact } from './techgroups';
 import { groupOfCulture } from '../data/techgroups';
@@ -45,7 +46,7 @@ import { yearlySubjects, unionClaim, autoSurrender } from './diplo';
 
 /** The version new games are saved with. Raise it when the shape of a save changes, add the step to MIGRATIONS,
  *  and first run `npm run make-save` so the old version keeps a test save (scripts/saves/). */
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 /** The oldest save that can still be loaded. */
 export const OLDEST_SAVE = 2;
 export const canLoad = (version: number) => version >= OLDEST_SAVE && version <= SAVE_VERSION;
@@ -164,7 +165,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
     cardAccum: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0, culture: 0 },
     bought: { military: 0, diplomacy: 0, internal: 0, economy: 0, research: 0, culture: 0 },
     np: 3, imports: [], stock: {}, short: {}, routes: [], posts: [], overseas: {}, core: [], coreChanged: -99, fleet: [], art: 5, taxBurden: 0, accepted: [], stateReligion: 'catholic', happiness: 55, stats: { battles: {}, kings: [], fallen: [], wars: { won: 0, lost: 0 } },
-    troops: [], equipment: [], characters: [], missions: [], techs: [], gov: 'feudal', firedEvents: [], usedLegends: [], queue: [], pending: [], redo: [], routines: [],
+    troops: [], equipment: [], characters: [], missions: [], techs: [], gov: 'feudal', firedEvents: [], usedLegends: [], queue: [], pending: [], redo: [], routines: [], ambitions: [], reign: [],
     log: [], flags: {}, ambition: null, ambitionDone: false, over: false,
   };
   for (const d of NATIONS) {
@@ -378,17 +379,22 @@ function yearlyStrain(s: GameState) {
 
 function checkAmbition(s: GameState) {
   if (!s.ambition || s.ambitionDone) return;
-  const a = AMBITIONS.find(x => x.id === s.ambition)!;
+  const a = ambitionDef(s.ambition);
+  if (!a) return;
   if (a.deadline && s.year > a.deadline) {
     s.ambitionDone = true;
+    endAmbition(s, 'failed');
     push(s, { kind: 'reveal', title: 'Ambition failed', items: [{ title: a.name, text: `The deadline of ${a.deadline} has passed.`, tone: 'bad', kind: 'twist' }] });
+    offerAmbition(s, 'done');
     return;
   }
   if (a.check(s)) {
     s.ambitionDone = true;
     player(s).prestige += a.reward;
-    push(s, { kind: 'reveal', title: 'Ambition fulfilled!', items: [{ title: a.name, text: `${a.text} Prestige +${a.reward}.`, tone: 'good', kind: 'crown' }] });
+    endAmbition(s, 'won');
+    push(s, { kind: 'reveal', title: 'Ambition fulfilled!', items: [{ title: a.name, text: `${a.text}${a.reward ? ` Prestige +${a.reward}.` : ''}`, tone: 'good', kind: 'crown' }] });
     log(s, `Ambition fulfilled: ${a.name}!`, 'good');
+    offerAmbition(s, 'done');
   }
 }
 
@@ -620,7 +626,12 @@ function fromV4(s: GameState) {
   s.redo ??= [];
   s.routines ??= [];
 }
-const MIGRATIONS: Record<number, (s: GameState) => void> = { 2: fromV2, 3: fromV3, 4: fromV4 };
+/** Phase 5, the campaign arc: the record of ambitions starts with the one held now; the reign's moments start empty. */
+function fromV5(s: GameState) {
+  s.ambitions ??= s.ambition ? [{ id: s.ambition, from: s.startYear, ...(s.ambitionDone ? { to: s.year } : {}) }] : [];
+  s.reign ??= [];
+}
+const MIGRATIONS: Record<number, (s: GameState) => void> = { 2: fromV2, 3: fromV3, 4: fromV4, 5: fromV5 };
 
 /** After any load, whatever the version: the map may have grown since the save was made. */
 function reconcile(s: GameState) {

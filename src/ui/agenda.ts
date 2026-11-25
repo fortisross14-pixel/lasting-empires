@@ -86,7 +86,7 @@ export function renderAgenda() {
   const now = lines.filter(a => a.tier !== 'long').length;
   box.classList.toggle('open', open);
   box.classList.toggle('has-urgent', urgent > 0);
-  const summary = urgent ? `${urgent} urgent` : now ? `${now} to decide` : 'All in hand';
+  const summary = urgent ? `${urgent} urgent` : now ? `${now} open` : 'All in hand';
   box.append(h('button', { class: 'ag-head', 'aria-expanded': String(open), 'aria-controls': 'ag-list', onclick: () => { setSetting('agenda', open ? 'closed' : 'open'); renderAgenda(); } },
     h('span', { html: icon('list', 16) }), h('b', {}, 'Agenda'), h('small', { class: 'ag-sum' }, summary), h('span', { class: 'caret' }, open ? '▴' : '▾')));
   if (!open) { place(box); return; }

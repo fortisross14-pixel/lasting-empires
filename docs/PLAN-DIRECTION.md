@@ -103,13 +103,22 @@ The highest-return change: navigation, pacing, onboarding and perceived intellig
   The year's report adds **The world this year** (what the great powers did) with a link to Ambitions.
 - [x] **A6.3 Sound:** a quill as a good result's place rings, a knock for a bad one; the palette is unchanged.
 
-### M7 — Campaign arc
-- [ ] **A7.1** A personal ambition chosen at the start of an open game (from `AMBITIONS`), always in the goal bar.
-- [ ] **A7.2** A mid-game pivot: at the second age, a choice of a new ambition that builds on the realm's state.
-- [ ] **A7.3** A final chronicle: an illustrated summary of the reign's decisive choices (from `chronicle.ts`'
-  weights), shareable (`share.ts`).
-- [ ] **A7.4** More distinct decision shapes: battles (reserve, withdrawal) are one; add a negotiation table in
-  diplomacy (offer/ask with live acceptance) and a route choice in exploration, keeping the card as the entry.
+### M7 — Campaign arc ✅
+- [x] **A7.1 An ambition always in view.** The open game already began with a choice of three ambitions shown in the
+  goal bar; now, when one is fulfilled or fails, the next is chosen at once (`offerAmbition` in `src/engine/arc.ts`).
+- [x] **A7.2 Turning points.** Every new age asks: keep the ambition, or reach for a grander one: An Empire, First
+  Among the Powers, A Realm of Learning, Mistress of the Seas, An Empire Overseas, A Realm of Cities, King of Kings,
+  Undying Glory. They are chosen by how far the realm already is (`fit`, shown as "33% of the way"), not by dice.
+  Every ambition held is kept with how it ended (`s.ambitions`). Mission games keep their mission as the only goal.
+- [x] **A7.3 The chronicle of the reign.** Land won or lost (tasks and battles), treaties, trade posts, studies,
+  growing towns and great prestige are kept as moments with their "Because you sent …" (`s.reign`). The end of a game
+  opens on **The reign in brief** (the realm then and now, the ambitions ✓ ✕ –, the choices that decided it) with
+  **Share the chronicle**; the same section heads the realm's history, and the shared picture carries it. Save
+  version 6.
+- [x] **A7.4 A different kind of decision.** Diplomatic tasks can be sweetened with a gift (10 / 25 / 50 ducats in
+  today's prices for +5 / +10 / +15%): the odds move live as you choose, a gift that would add nothing (odds at their
+  cap) is refused with the reason, and the preview counts it. A negotiation table with live acceptance and a route
+  choice for explorers remain ideas for later.
 
 ### M8 — One visual language and accessibility
 - [ ] **A8.1 Emphasis levels:** urgent (war colour, solid), actionable (gold), reference (quiet ink, denser),

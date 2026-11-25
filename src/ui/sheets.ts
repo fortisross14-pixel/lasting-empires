@@ -1,4 +1,7 @@
 // Side panels: province, realm, goals, tasks, overseas, chronicle, and the rows they share.
+import { GIFT_STEPS } from '../engine/missions';
+import { chronicleSection } from './chronicle';
+import { ambitionDef } from '../engine/arc';
 import { ageOf } from '../engine/ages';
 import { yearReport, showTurnReport } from './endturn';
 import { showEra } from './app';
@@ -501,6 +504,8 @@ export function showHistory() {
   openModal(h('div', { class: 'mbox history' },
     h('p', { class: 'eyebrow' }, `${S.startYear} – ${S.year}`),
     h('h2', {}, `The History of ${me.name}`),
+    chronicleSection(S, !!S.over),
+    h('h3', { class: 'hist-h' }, 'The reigns, year by year'),
     chapters.length ? null : h('p', { class: 'muted' }, 'Nothing is written yet. Wars, treaties, great works and new ages will be set down here as they happen.'),
     ...chapters.map(c => h('section', { class: 'hist-ch' },
       h('h3', {}, c.ruler, c.epithet ? h('em', {}, ` ${c.epithet}`) : null, h('small', {}, ` ${c.from} – ${c.to}`)),
@@ -546,6 +551,9 @@ function rulesTab(body: HTMLElement) {
     h('p', {}, 'A realm\'s score is half its prestige, plus its development, plus five for every point of development gained since the start, plus two for every point held by its subjects. An open game is won in the top three; a shortened one also by ending higher than it began.'),
     h('h3', {}, 'Turns'),
     h('p', {}, `One turn is a season. Skip plays up to ${SKIP_MAX} quiet seasons and stops when something needs you. Until the season ends, Undo in the top bar (Ctrl+Z or U) takes back sending a task, moving troops, a workshop order, closing a route, recalling a task, selling or discarding cards, disbanding or dismissing: anything that showed you nothing new. Buying or drawing cards, a reveal, a question, a battle or a declaration of war cannot be taken back, and clears what came before.`),
+    h('h3', {}, 'The arc of a campaign'),
+    h('p', {}, 'An open game always has an ambition in view. When one is fulfilled or fails, you choose the next at once; when a new age opens, a turning point lets you keep yours or reach for a grander one (an empire, first place among the powers, a realm of learning or of cities, a merchant power, an empire overseas, subject kings, undying glory). Each shows how far you have already come. Land won or lost, treaties, trade posts, studies and growing towns are kept as the decisive moments of the reign: the history page and the end of the game tell them with your ambitions and the realm then and now, and the picture you can share carries them too.'),
+    h('p', {}, `A diplomatic offer can be sweetened with a gift: ${GIFT_STEPS.slice(1).map(g => `${g.ducats} ducats for +${Math.round(g.bonus * 100)}%`).join(', ')} (in today\'s prices), up to the cap of the odds. The gift is spent whatever the answer.`),
     h('h3', {}, 'After a decision'),
     h('p', {}, 'When a task ends, the map first shows where (a ring on the place), then the result opens with the decision that caused it ("Because you sent … in Spring 1451") and What changed: every number that moved in the realm and at the place, ▴ up, ▾ down, ◆ a change of hands, faith or treaty. See it on the map goes there. A battle names the decision that began it, and its place rings when you continue. Diplomacy → Ambitions says what the great powers are after; a great power\'s aims are plain to all, a smaller realm\'s only once your envoys or spies learn them. A great power that wants your land is on the agenda as a risk.'),
     h('h3', {}, 'Less routine'),
@@ -560,7 +568,7 @@ export function chronicleSheet(body: HTMLElement) {
     h('button', { class: 'seg-b' + (chronTab === k ? ' on' : ''), onclick: () => { setChronTab(k); renderSheet(); } }, l)));
   body.append(tabs);
   if (chronTab === 'powers') {
-    const a = AMBITIONS.find(x => x.id === S.ambition);
+    const a = ambitionDef(S.ambition ?? '');
     if (a) body.append(h('div', { class: 'ambition' + (S.ambitionDone ? ' done' : '') }, h('span', { html: icon('crown', 20) }), h('div', {}, h('b', {}, `Ambition: ${a.name}`), h('small', {}, `${a.text} Reward: ${a.reward} prestige.${S.ambitionDone ? ' Resolved.' : ''}`))));
     const score = Object.fromEntries(ranking(S).map(r => [r.id, r.score]));
     const rows = powerTable(S).sort((x, y) => (score[y.id] ?? 0) - (score[x.id] ?? 0));

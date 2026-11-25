@@ -4,6 +4,7 @@
 import type { GameState, Mission, Character, Story, StoryChange } from '../types';
 import { provsOf, getRel, nationName, player } from './core';
 import { MISSION_INFO } from './missions';
+import { rememberStory } from './arc';
 import { happinessOf, CULTURE_NAMES, RELIGION_NAMES } from './society';
 import { TECH } from '../data/techs';
 import { GENRES } from '../data/culture';
@@ -59,6 +60,13 @@ function changes(a: Measure, b: Measure): StoryChange[] {
   return out;
 }
 
+/** One change in words, readable without colour (the screens add the mark). */
+export function changeText(c: StoryChange): string {
+  if (c.from != null) return `${c.label}: ${c.from} → ${c.to}`;
+  const pct = /happiness|control/.test(c.label) ? '%' : '';
+  return `${c.label} ${c.delta > 0 ? '+' : '−'}${Math.abs(c.delta)}${pct}`;
+}
+
 /** "Because you sent Rodrigo to develop Toledo in Spring 1451." */
 export function becauseOf(s: GameState, m: Mission, ch: Character | undefined): string {
   const info = MISSION_INFO[m.kind];
@@ -86,5 +94,9 @@ export function withStory(s: GameState, m: Mission, ch: Character | undefined, e
     place: s.provinces[m.target] ? m.target : s.nations[m.target]?.capital && s.provinces[s.nations[m.target].capital] ? s.nations[m.target].capital : undefined,
     changes: changes(before, after),
   };
-  for (const p of s.queue.slice(q0)) if ((p.kind === 'reveal' || p.kind === 'battle') && !p.story) p.story = story;
+  const shown = s.queue.slice(q0);
+  for (const p of shown) if ((p.kind === 'reveal' || p.kind === 'battle') && !p.story) p.story = story;
+  // a decisive result joins the chronicle of the reign (a battle is told when it is fought: arc.ts via the battle)
+  const r = shown.find(p => p.kind === 'reveal');
+  if (r && r.kind === 'reveal') rememberStory(s, story, r.title, story.changes.map(changeText));
 }

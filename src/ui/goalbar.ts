@@ -1,5 +1,6 @@
 // The goal, always in view (roadmap 5.1–5.3): a banner over the map with what you are working towards and how far
 // you have come, pins on the provinces a goal names, and a stamp when a goal is met.
+import { ambitionDef } from '../engine/arc';
 import { S, map } from './state';
 import { h, $, clear } from './dom';
 import { icon } from './icons';
@@ -55,7 +56,7 @@ export function renderGoalBar() {
     open = () => openSheet('goals');
     items = [{ id: 'end', v: { title: sc.status === 'won' ? `Mission accomplished${sc.done ? ` in ${sc.done}` : ''}` : 'Mission failed', status: '', have: 0, need: 0, met: false } }];
   } else {
-    const a = AMBITIONS.find(x => x.id === S.ambition);
+    const a = ambitionDef(S.ambition ?? '');
     if (a) { items = [{ id: 'amb', v: { title: a.name, status: a.text, have: S.ambitionDone ? 1 : 0, need: 1, met: S.ambitionDone } }]; deadline = a.deadline ?? null; }
     const r = ranking(S), pos = r.findIndex(x => x.id === S.player) + 1;
     items.push({ id: 'rank', v: { title: `${pos}${pos === 1 ? 'st' : pos === 2 ? 'nd' : pos === 3 ? 'rd' : 'th'} of ${r.length}`, status: 'Your place among the powers', have: 0, need: 0, met: false } });

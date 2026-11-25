@@ -1,6 +1,7 @@
 // After a decision, on screen: the map shows the place, then the result opens with "Because you …" and
 // "What changed" (the engine side is src/engine/story.ts). Clear first, pretty second.
 import type { Story, StoryChange } from '../types';
+import { changeText } from '../engine/story';
 import { S, map, win } from './state';
 import { h } from './dom';
 import { icon } from './icons';
@@ -12,12 +13,7 @@ import { sfx } from './sound';
 export const STAGE_MS = 750;
 
 /** One change, readable without colour: a mark, the name, and the amount or the new word. */
-export function changeLine(c: StoryChange): string {
-  if (c.from != null) return `${c.label}: ${c.from} → ${c.to}`;
-  const v = Math.abs(c.delta);
-  const pct = /happiness|control/.test(c.label) ? '%' : '';
-  return `${c.label} ${c.delta > 0 ? '+' : '−'}${v}${pct}`;
-}
+export const changeLine = (c: StoryChange) => changeText(c);
 const mark = (c: StoryChange) => (c.from != null ? '◆' : c.good ? '▴' : '▾');
 
 /** The band at the top of a result: what you decided, and when. */

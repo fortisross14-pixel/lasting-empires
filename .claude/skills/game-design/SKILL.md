@@ -84,6 +84,10 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 - Six decks: Military, Diplomacy, Internal, Economy, Research, People (`culture`). Each draws `0.5 + bonuses` cards a year (capped at 1.4); fractions carry over (`cardAccum`). Add bonuses through `cardRates` parts (buildings, research, monarch, cities, core cards) so the breakdown stays visible to the player.
 - The hand limit (below), the yearly mission cap, army size and building slots are the limits.
 
+## The campaign arc
+- `src/engine/arc.ts`: an ambition is chosen with `beginAmbition` and ended with `endAmbition` (kept in `s.ambitions`); `offerAmbition` asks for the next after one ends and at every new age (`pivotOptions`: keep the open one, plus the grand ambitions the realm is best placed for, by `fit`, never dice). A new grand ambition needs `check` and `fit`. Decisive results join `s.reign` through `rememberStory` (by `weightOf`) and battles through `rememberBattle`; the chronicle shows `decisiveMoments`. Mission games get no ambitions.
+- A diplomatic offer may carry a gift (`GIFT_STEPS`, `giftCost`, the `gift` argument of `launchMission`), stored as the mission's `bonus` that `diploChance` reads.
+
 ## Events, people and stories
 - After a task: `withStory` (`src/engine/story.ts`) wraps every task ending and attaches a `story` (because, place, measured changes) to the reveals and battles it pushes. A new task kind gets this for free; a new number worth showing is a line in `measure`. Never fake a change: the list is a before/after diff.
 - An event is an `EventDef` (`src/engine/eventkit.ts`): text, options with `can` (why it is blocked) and `run` (returns what to reveal). Use the kit's helpers (`good`, `bad`, `neutral`, `stab`, `needs`, `pay`, `scaled`); never write a bare number of ducats. Follow `docs/WRITING.md` (60 words, speak to "you", one concrete detail, every option costs something).

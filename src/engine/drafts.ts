@@ -1,4 +1,5 @@
 // Buying cards with nation points, hiring people, forging troops, and ambitions.
+import { beginAmbition } from './arc';
 import { troopPower } from './core';
 import type { TroopCard } from '../types';
 import { getGeo } from './map';
@@ -76,7 +77,7 @@ export function takeDraftOption(s: GameState, opt: DraftOption) {
     s.characters.push(opt.ch);
     s.flags.stat_people = (s.flags.stat_people ?? 0) + 1;
     if (opt.ch.legendId) { s.usedLegends.push(opt.ch.legendId); log(s, `${opt.ch.name} joins your court!`, 'good'); }
-  } else if (opt.t === 'ambition') s.ambition = opt.id;
+  } else if (opt.t === 'ambition') beginAmbition(s, opt.id);
 }
 
 // ---------- forging ----------

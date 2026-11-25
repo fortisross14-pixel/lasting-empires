@@ -21,7 +21,7 @@ import { cardTroop, CLASS_NAME } from '../engine/cards';
 import { CARDS, playCard, cardBlocked, troopHireCost, discardCard } from '../engine/cards';
 import {
   MISSION_INFO, DIPLO, missionBlocked, launchMission, diploChance, missionTurns, techCost, researchRate, attackRoute, developCost, foundCost, growCost, projectGoods,
-  projectShortfall, pilgrimageCost, helpersOf, cardRole, cardRoles, becomesOnMission, voyageCost, envoyCost, envoyTravel,
+  projectShortfall, pilgrimageCost, helpersOf, cardRole, cardRoles, becomesOnMission, voyageCost, envoyCost, envoyTravel, GIFT_STEPS, giftCost,
 } from '../engine/missions';
 import { hireWithCard, mergePreview, doMerge } from '../engine/drafts';
 import { exploreChance, colonizeChance, conquistaChance, colonyCost, provRegion, provKnown, regionDef } from '../engine/overseas';
@@ -323,6 +323,7 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
   const harbourShips = S.fleet.filter(t => t.mission == null && t.str >= 30);
   let ships: number[] = naval ? harbourShips.map(t => t.uid) : [];
   const good: string | undefined = trade?.good;
+  let gift = 0; // sweetening a diplomatic offer: a step of GIFT_STEPS
 
   const tname = kind === 'assist' ? TECH[S.missions.find(x => String(x.id) === target)?.target ?? '']?.name ?? 'a study' : kind === 'artwork' ? GENRES[target]?.name.toLowerCase() ?? 'a work' : kind === 'accept' ? `${cultureName(target)} people` : kind === 'pilgrimage' ? churchHead(S).name : S.provinces[target]?.name ?? S.nations[target]?.name ?? TECH[target]?.name ?? 'the realm';
   const box = h('div', { class: 'mbox planner' });
@@ -357,7 +358,7 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
     if (!['conquer', 'raid'].includes(kind) && show(0)) boxAppend(h('div', { class: 'oddsbox' }, h('small', { class: 'muted' }, `Outcome odds with a ${RARITY[ch.rarity].name} ${roleName[ch.role].toLowerCase()}:`), oddsLine(ch)));
     const turns = missionTurns(S, kind, ch, target, building);
     const facts: (string | HTMLElement)[] = [qText(turns)];
-    if (DIPLO.includes(kind)) facts.push(`${Math.round(diploChance(S, kind, ch, target) * 100)}% chance`, `Journey ${envoyCost(S, target)} ducats · back at court ${qText(Math.max(1, envoyTravel(S, target)))} after`, CARDS[card.card].permanent ? 'The card stays in your hand' : 'The card is used up');
+    if (DIPLO.includes(kind)) facts.push(`${Math.round(diploChance(S, kind, ch, target, GIFT_STEPS[gift].bonus) * 100)}% chance`, `Journey ${envoyCost(S, target)} ducats · back at court ${qText(Math.max(1, envoyTravel(S, target)))} after`, CARDS[card.card].permanent ? 'The card stays in your hand' : 'The card is used up');
     if (kind === 'research') facts.push(`${researchRate(S, ch, TECH[target]?.track)} research a year · ${techCost(S, target)} needed`);
     facts.push(kind === 'route' ? 'A quick errand: does not use up one of the year\'s tasks' : `Tasks left this year: ${missionsLeft(S)}`);
     const pgKey = kind === 'artwork' ? target : building;
@@ -423,9 +424,23 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
     if (STEPS && step === 2) { // the last look: who leads, who goes
       boxAppend(h('h3', {}, 'Your army'), h('div', { class: 'cards-row wrap' }, charCard(ch, S, { small: true }), ...S.troops.filter(t => picked.includes(t.uid)).map(t => troopCard(t, { small: true })), ...S.fleet.filter(t => ships.includes(t.uid)).map(t => troopCard(t, { small: true }))));
     }
+    if (DIPLO.includes(kind) && (!STEPS || step === 2)) {
+      // a different kind of choice: how much to sweeten the offer, with the odds moving as you choose
+      const base = diploChance(S, kind, ch, target, 0);
+      boxAppend(h('section', { class: 'gift' }, h('h3', {}, 'Sweeten the offer'),
+        h('div', { class: 'seg gift-seg', role: 'radiogroup', 'aria-label': 'Gift' }, GIFT_STEPS.map((g, i) => {
+          const cost = giftCost(S, i), p = Math.round(diploChance(S, kind, ch, target, g.bonus) * 100);
+          const tooDear = i > 0 && player(S).gold < envoyCost(S, target) + cost;
+          const useless = i > 0 && p <= Math.round(base * 100); // the odds are already at their cap: no gift for nothing
+          const why = tooDear ? `Not enough ducats for a gift of ${cost}` : useless ? 'The odds are as high as they go: this gift would add nothing' : null;
+          return h('button', { class: 'seg-b gift-b' + (i === gift ? ' on' : '') + (why ? ' blocked' : ''), role: 'radio', 'aria-checked': String(i === gift), 'aria-disabled': why ? 'true' : undefined, onclick: () => { if (why) return toast(why, 'bad'); gift = i; draw(); } },
+            h('b', {}, i ? `${cost} ducats` : 'No gift'), h('small', {}, `${p}%${i && p > Math.round(base * 100) ? ` (+${p - Math.round(base * 100)})` : ''}`));
+        })),
+        h('p', { class: 'muted small' }, Math.round(diploChance(S, kind, ch, target, GIFT_STEPS[GIFT_STEPS.length - 1].bonus) * 100) >= Math.round(base * 100) + 1 ? 'A gift travels with the envoy and is spent whatever the answer.' : 'The odds are as high as they go: a gift would add nothing.')));
+    }
     if (!STEPS || step === 2) {
       // what sending it commits: the dry run, so these numbers are what launching will do
-      const pv = taskPreview(S, { kind, char: ch.uid, target, troops: picked, building, card: cardUid, good, ships, trade: trade ? { dir: trade.dir, amount: trade.amount } : undefined });
+      const pv = taskPreview(S, { kind, char: ch.uid, target, troops: picked, building, card: cardUid, good, ships, trade: trade ? { dir: trade.dir, amount: trade.amount } : undefined, gift });
       if (!pv.blocked) boxAppend(previewBox(pv));
       boxAppend(h('div', { class: 'facts' }, facts.map(f => h('span', { class: 'fact' }, f))));
     }
@@ -445,7 +460,7 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
       h('button', { class: 'btn primary' + (why ? ' blocked' : ''), onclick: () => {
         if (why) return toast(why, 'bad');
         const before = undoBegin();
-        const r = launchMission(S, kind, ch.uid, target, picked, building, cardUid, good, ships, trade ? { dir: trade.dir, amount: trade.amount } : undefined);
+        const r = launchMission(S, kind, ch.uid, target, picked, building, cardUid, good, ships, trade ? { dir: trade.dir, amount: trade.amount } : undefined, gift);
         if (r) return toast(r, 'bad');
         const from = (box.querySelector('.pl-foot .btn.primary') as HTMLElement | null)?.getBoundingClientRect() ?? null;
         closeModal();

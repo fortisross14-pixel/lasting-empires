@@ -1,4 +1,5 @@
 // Ages open by research or event, not by the calendar. The first realm to get there is the pioneer.
+import { offerAmbition } from './arc';
 import type { GameState } from '../types';
 import { ERAS, ERA, eraOfYear, AGE_TECH, PIONEER_YEARS, type EraDef } from '../data/eras';
 import { player, provsOf, rand, push, log, nationName } from './core';
@@ -38,6 +39,7 @@ export function openAge(s: GameState, id: string, pioneer: string) {
       : { title: `${nationName(s, pioneer)} is the pioneer`, text: 'They gain prestige and a richer capital. The age is open to every realm.', tone: 'neutral', kind: 'crown' },
   ] });
   log(s, `${mine ? 'You open' : nationName(s, pioneer) + ' opens'} the ${next.name}.`, mine ? 'good' : 'neutral');
+  offerAmbition(s, 'age'); // a turning point: keep your ambition, or take a grander one
   return true;
 }
 

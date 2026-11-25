@@ -1,4 +1,7 @@
 // Decisions the game puts to the player: reveals, events, drafts, succession, battles, attacks, peace, endings.
+import { chronicleSection } from './chronicle';
+import { shareHistory } from './share';
+import { ambitionDef } from '../engine/arc';
 import { stage, becauseBand, changesBox, seeItButton } from './story';
 import { showHistory } from './sheets';
 import { commanderOf } from '../engine/commanders';
@@ -39,7 +42,7 @@ export function processQueue() {
   if (p.kind === 'reveal' && p.story) { staging = true; stage(p.story, () => { staging = false; if (S.queue[0] === p && !modalOpen) showReveal(p.title, p.subtitle, p.items, () => { S.queue.shift(); afterPrompt(); }, p.alarm, p.story); }); return; }
   if (p.kind === 'reveal') showReveal(p.title, p.subtitle, p.items, () => { S.queue.shift(); afterPrompt(); }, p.alarm);
   else if (p.kind === 'event') showEvent();
-  else if (p.kind === 'draft') showDraft(p.draft, p.options);
+  else if (p.kind === 'draft') showDraft(p.draft, p.options, p.pivot);
   else if (p.kind === 'picks') showPicks(p.year, p.picks);
   else if (p.kind === 'battle') { if (!quickBattle(p.battle)) showBattle(p.battle); }
   else if (p.kind === 'succession') showSuccession(p.heirs, p.old);
@@ -145,13 +148,17 @@ export function draftFront(o: DraftOption) {
   if (o.t === 'char') return charCard(o.ch, S);
   if (o.t === 'card') return handCard(o.card);
   if (o.t === 'equip') return handCard('eq_' + o.type);
-  const a = AMBITIONS.find(x => x.id === o.id)!;
-  return h('div', { class: 'card k-event' }, h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, 'Ambition')),
-    h('div', { class: 'c-art', html: icon('crown', 34) }), h('div', { class: 'c-name c-title' }, a.name), h('div', { class: 'c-text' }, a.text), h('div', { class: 'c-text gold' }, `+${a.reward} prestige`));
+  const a = ambitionDef(o.id)!;
+  const keep = o.id === S.ambition && !S.ambitionDone;
+  const fit = 'fit' in a ? Math.round((a as { fit: (s: typeof S) => number }).fit(S) * 100) : null;
+  return h('div', { class: 'card k-event' + (keep ? ' amb-keep' : '') }, h('div', { class: 'c-top' }, h('span', { class: 'c-cat' }, keep ? 'Keep your ambition' : 'Ambition')),
+    h('div', { class: 'c-art', html: icon(keep ? 'laurel' : 'crown', 34) }), h('div', { class: 'c-name c-title' }, a.name), h('div', { class: 'c-text' }, a.text),
+    fit != null ? h('div', { class: 'amb-fit', 'aria-label': `${fit}% of the way` }, h('i', { style: `width:${fit}%` }), h('small', {}, `${fit}% of the way`)) : null,
+    a.reward ? h('div', { class: 'c-text gold' }, `+${a.reward} prestige`) : h('div', { class: 'c-text gold' }, 'Glory for its own sake'));
 }
 
 export function optName(o: DraftOption) {
-  return o.t === 'troop' ? TROOPS[o.type].name : o.t === 'equip' ? EQUIPMENT[o.type].name : o.t === 'char' ? o.ch.name : o.t === 'card' ? CARDS[o.card].name : AMBITIONS.find(a => a.id === o.id)!.name;
+  return o.t === 'troop' ? TROOPS[o.type].name : o.t === 'equip' ? EQUIPMENT[o.type].name : o.t === 'char' ? o.ch.name : o.t === 'card' ? CARDS[o.card].name : ambitionDef(o.id)!.name;
 }
 
 /** The year's new cards on one screen: a row of three for each card due; tap one in every row, then take them.
@@ -184,11 +191,13 @@ export function showPicks(year: number, picks: { cat: Cat; options: string[] }[]
   openModal(h('div', { class: 'mbox picks' }, h('h2', {}, `New cards, ${year}`), h('p', { class: 'muted' }, picks.length === 1 ? 'Keep one of three.' : `Keep one of three in each row.`), ...rows, h('div', { class: 'mrow' }, take)));
 }
 
-export function showDraft(kind: string, options: DraftOption[]) {
+export function showDraft(kind: string, options: DraftOption[], pivot?: 'done' | 'age') {
   const titles: Record<string, [string, string]> = {
     buy: ['A new card', 'Three cards are revealed. Keep one.'], gift: ['A gift of fortune', 'Keep one.'],
     court: ['An audience at court', 'Three candidates seek your favour. Keep one.'], ambition: ['Your ambition', 'Choose the goal your crown will pursue. Fulfil it for great prestige.'],
   };
+  if (kind === 'ambition' && pivot === 'done') titles.ambition = ['A new ambition', 'Your last ambition is behind you. Choose what your crown pursues next: each shows how far you have already come.'];
+  if (kind === 'ambition' && pivot === 'age') titles.ambition = ['A new age: a turning point', 'Keep your ambition, or reach for a grander one. Each shows how far you have already come.'];
   const [t, sub] = titles[kind] ?? titles.buy;
   const row = h('div', { class: 'reveal-row' });
   let ready = false;
@@ -488,9 +497,13 @@ export function showMissionEnd(won: boolean) {
 export function showGameOver(victory: boolean, reason: string) {
   const r = ranking(S);
   const sc = S.scenario;
-  openModal(h('div', { class: 'mbox narrow' },
+  openModal(h('div', { class: 'mbox history final' },
+    h('p', { class: 'eyebrow' }, `${S.startYear} – ${S.year}`),
     h('h2', {}, sc ? (sc.status === 'won' ? 'Mission accomplished' : 'The end of an age') : victory ? 'A lasting empire' : 'The end of an age'), h('p', {}, reason),
+    chronicleSection(S, true),
+    h('h3', {}, 'The powers at the end'),
     h('ol', { class: 'rank' }, r.slice(0, 8).map(x => h('li', { class: x.id === S.player ? 'me' : '' }, h('span', {}, x.name), h('b', {}, String(x.score))))),
+    h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: async () => { const res = await shareHistory(S); if (res === 'saved') toast('The chronicle is saved as a picture', 'good'); else if (res === 'failed') toast('The picture could not be made', 'bad'); } }, 'Share the chronicle')),
     h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: () => { S.queue.shift(); closeModal(); refresh(); showHistory(); } }, 'Read its history'), h('button', { class: 'btn ghost', onclick: () => { S.queue.shift(); closeModal(); refresh(); } }, 'Look at the map'),
       h('button', { class: 'btn primary', onclick: () => { S.queue.shift(); closeModal(); clearSlot(slot); showTitle(); } }, 'New campaign'))));
 }

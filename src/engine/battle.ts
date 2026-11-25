@@ -1,4 +1,5 @@
 // Battles: three rounds, each side commits a face-down tactic, then both flip.
+import { rememberBattle } from './arc';
 import { TERRAINS, LANDING_FIRE, terrainOf, type Terrain } from '../data/terrain';
 import { troopsNear } from './army';
 import { commanderFate } from './commanders';
@@ -377,6 +378,7 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
   const playerInvolved = b.att.player || b.def.player;
   const attWon = b.winner === 'att';
   const prov = s.provinces[b.province];
+  const owner0 = prov?.owner;
   const lines: string[] = [];
   let good = false;
   let title = '';
@@ -494,6 +496,8 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
     s.missions = s.missions.filter(m => m.id !== b.missionId);
   }
   log(s, title, good ? 'good' : 'bad');
+  // land that changes hands in a battle you fought is a moment of the reign (arc.ts)
+  if (playerInvolved && prov && owner0 !== prov.owner && (owner0 === s.player || prov.owner === s.player)) rememberBattle(s, b, prov.name, prov.owner === s.player, title);
   return { title, lines, good };
 }
 
