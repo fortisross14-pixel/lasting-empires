@@ -128,6 +128,7 @@ export type MissionKind =
 
 export interface Mission {
   id: number;
+  since?: { year: number; quarter: number }; // when it was sent (for "Because you sent … in Spring 1451"); unset in older saves
   kind: MissionKind;
   char: number;          // character uid
   troops: number[];      // troop uids
@@ -228,6 +229,10 @@ export interface Battle {
   result?: { title: string; lines: string[]; good: boolean };
 }
 
+/** One measured change after a task: a number that moved (delta), or a word that changed (from → to). */
+export interface StoryChange { label: string; delta: number; from?: string; to?: string; good: boolean; }
+/** What a result is the consequence of (story.ts): the decision in words, where, and what it changed. */
+export interface Story { because: string; kind: MissionKind; place?: string; changes: StoryChange[]; }
 export interface RevealItem {
   title: string;
   text: string;
@@ -237,8 +242,8 @@ export interface RevealItem {
 
 export type Prompt =
   | { kind: 'event'; eventId: string; vars: Record<string, string | number> }
-  | { kind: 'battle'; battle: Battle }
-  | { kind: 'reveal'; title: string; subtitle?: string; items: RevealItem[]; alarm?: boolean }
+  | { kind: 'battle'; battle: Battle; story?: Story }
+  | { kind: 'reveal'; title: string; subtitle?: string; items: RevealItem[]; alarm?: boolean; story?: Story }
   | { kind: 'draft'; draft: 'buy' | 'court' | 'ambition' | 'gift'; cat?: Cat; options: DraftOption[] }
   /** The year's new cards: for each card due, a choice of three (roadmap 5.12). */
   | { kind: 'picks'; year: number; picks: { cat: Cat; options: string[] }[] }

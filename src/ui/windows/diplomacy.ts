@@ -3,7 +3,10 @@ import { provsOf, getRel, atWar, hasTreaty } from '../../engine/core';
 import { provKnown } from '../../engine/overseas';
 import { h, signed } from '../dom';
 import { subjectsOf, integrateBlocked, tributeShare } from '../../engine/diplo';
-import { S } from '../state';
+import { S, shield } from '../state';
+import { icon } from '../icons';
+import { worldAmbitions } from '../../engine/rivals';
+import { rising } from '../../engine/ai';
 import { openSheet } from '../sheets';
 
 export function subjectsTab(body: HTMLElement) {
@@ -35,4 +38,18 @@ export function realmsTab(body: HTMLElement) {
       h('span', { class: 'nr-badges' }, badges.map(b => h('span', { class: 'tag ' + b.toLowerCase() }, b))),
       h('span', { class: 'nr-rel ' + (rel >= 30 ? 'good' : rel <= -30 ? 'bad' : '') }, signed(rel))));
   }
+}
+
+/** What the great powers are after: one realm a row, its shield, one or two lines, a tap opens it (M6). */
+export function ambitionsTab(body: HTMLElement) {
+  const list = worldAmbitions(S, id => rising(S, id));
+  body.append(h('p', { class: 'muted' }, 'What the great powers are after. A great power\'s aims are plain to all; a smaller realm keeps them to itself unless your envoys or spies learn them. Tap a realm for its page.'));
+  body.append(h('div', { class: 'amb-list' }, list.map(a => {
+    const n = S.nations[a.nation];
+    return h('button', { class: 'amb-row' + (a.aboutYou ? ' you' : ''), onclick: () => openSheet('nation', a.nation) },
+      shield(a.nation, n.color, true),
+      h('span', { class: 'amb-t' }, h('b', {}, n.name, h('small', {}, ` · ${a.provinces} provinces`)),
+        ...a.lines.map(l => h('span', { class: 'amb-l t-' + l.tone }, `${l.tone === 'bad' ? '▾ ' : ''}${n.name} ${l.text}.`))),
+      h('span', { class: 'a-go', html: icon('next', 14) }));
+  })));
 }

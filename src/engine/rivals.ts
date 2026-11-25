@@ -2,8 +2,10 @@
 // and why, the warning that comes before a war, and what it has lately been doing.
 // Nothing here rolls dice except the warning's own event, so the rest of the world falls as it did.
 import type { GameState, Nation, Personality } from '../types';
-import { provsOf, getRel, addRel, atWar, hasTreaty, inTruce, borders, nationName } from './core';
+import { provsOf, getRel, addRel, atWar, hasTreaty, inTruce, borders, nationName, enemiesOf } from './core';
 import { NO_STATE } from '../data/nations';
+import { provRegion } from './overseas';
+import { REGIONS } from '../data/overseas';
 
 // ---------- what a realm wants ----------
 /** Provinces a realm needs before it has a goal worth the name. */
@@ -124,3 +126,53 @@ export const warned = (s: GameState, id: string) => { const y = s.flags['warned_
 export const warnedNow = (s: GameState, id: string) => (s.flags['warned_' + id] ?? 0) === s.year;
 export const markWarned = (s: GameState, id: string) => { s.flags['warned_' + id] = s.year; };
 
+
+// ---------- the world's ambitions (docs/PLAN-DIRECTION.md, M6) ----------
+/** How many of the greatest realms the ambitions list follows (plus any realm that wants your land). */
+export const AMBITION_REALMS = 8;
+export interface AmbitionLine { text: string; tone: 'good' | 'bad' | 'neutral'; }
+export interface Ambition { nation: string; provinces: number; aboutYou: boolean; lines: AmbitionLine[]; }
+
+/** Provinces a realm holds in the overseas regions (the New World and beyond), away from its own: an empire overseas.
+ *  Another landmass at home (Norway for Denmark, the Levant for Egypt) is not overseas. */
+export const overseasOf = (s: GameState, id: string) => {
+  const cap = s.nations[id]?.capital;
+  const home = cap ? provRegion(cap) : '';
+  return provsOf(s, id).filter(p => { const r = provRegion(p.id); return r !== home && !!REGIONS[r]; }).length;
+};
+
+/** What the great powers are after, in plain words, most pressing for you first. A great power's aim is plain to
+ *  all; a smaller realm's only when you know it (goalKnown). Pure but for goalOf's yearly memo. */
+/** A realm's goal, read without writing its yearly memo, so looking never changes the game. */
+function peek<T>(s: GameState, id: string, read: () => T): T {
+  const n = s.nations[id];
+  if (!n) return read();
+  const had = n.goal ? { ...n.goal } : undefined;
+  const v = read();
+  if (had) n.goal = had; else delete n.goal;
+  return v;
+}
+export const peekGoal = (s: GameState, id: string) => peek(s, id, () => goalOf(s, id));
+export function worldAmbitions(s: GameState, isRising: (id: string) => boolean = () => false): Ambition[] {
+  const alive = Object.values(s.nations).filter(n => n.alive && n.id !== s.player && n.id !== NO_STATE);
+  const big = alive.map(n => ({ n, p: provsOf(s, n.id).length })).sort((a, b) => b.p - a.p || a.n.name.localeCompare(b.n.name));
+  const chosen = big.filter((x, i) => i < AMBITION_REALMS || peekGoal(s, x.n.id) === s.player);
+  const out: Ambition[] = [];
+  for (const { n, p } of chosen) {
+    const goal = peekGoal(s, n.id);
+    const plain = p >= BIG_REALM || peek(s, n.id, () => goalKnown(s, n.id));
+    const lines: AmbitionLine[] = [];
+    if (goal === s.player && plain) lines.push({ text: `wants your lands${getRel(s, n.id, s.player) <= -40 ? ', and says so' : ''}`, tone: 'bad' });
+    const foes = enemiesOf(s, n.id).filter(x => s.nations[x]?.alive);
+    if (foes.includes(s.player)) lines.push({ text: 'is at war with you', tone: 'bad' });
+    const others = foes.filter(x => x !== s.player);
+    if (others.length) lines.push({ text: `is at war with ${others.slice(0, 2).map(x => nationName(s, x)).join(' and ')}${others.length > 2 ? ` and ${others.length - 2} more` : ''}`, tone: 'neutral' });
+    if (goal && goal !== s.player && plain) lines.push({ text: `seeks the lands of ${nationName(s, goal)}`, tone: 'neutral' });
+    const far = overseasOf(s, n.id);
+    if (far >= 2) lines.push({ text: `builds an empire overseas: ${far} lands`, tone: 'neutral' });
+    if (isRising(n.id)) lines.push({ text: 'is rising fast', tone: 'neutral' });
+    if (!lines.length) lines.push({ text: plain ? 'keeps to its own affairs' : 'keeps its aims to itself: an embassy or spies would learn them', tone: 'neutral' });
+    out.push({ nation: n.id, provinces: p, aboutYou: lines.some(l => l.tone === 'bad'), lines: lines.slice(0, 2) });
+  }
+  return out.sort((a, b) => Number(b.aboutYou) - Number(a.aboutYou) || b.provinces - a.provinces);
+}

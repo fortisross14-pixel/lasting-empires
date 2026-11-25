@@ -90,13 +90,18 @@ The highest-return change: navigation, pacing, onboarding and perceived intellig
   chancellor started (3 in that run: the bot holds few study cards). A clicks-per-year count of a human-style
   player is still to do; the sim's bot does not tap, so it cannot measure it.
 
-### M6 — Decisions that land, and rivals with an aim
-- [ ] **A6.1 After-action payoff:** for battles won, provinces taken, routes opened, studies finished: a map flash on
-  the place, a short chronicle card with "Because you …", then the reveal.
-- [ ] **A6.2 Rival agenda:** a "The world's ambitions" list (from `goalOf` / `attitude`): "France seeks Lombardy",
-  "Portugal is colonising"; one line per great power on the map in the Realms view, and in the agenda as `risk`
-  when it touches you.
-- [ ] **A6.3 Sound coverage:** quiet cues for agenda open, jump, pin; nothing new in the palette.
+### M6 — Decisions that land, and rivals with an aim ✅
+- [x] **A6.1 After-action payoff.** Every task ending is wrapped by `withStory` (`src/engine/story.ts`): the realm and the
+  task's target are measured before and after, and each result it shows carries the story. On screen (`src/ui/story.ts`):
+  the map moves to the place and rings it (with the change in a few words unless the map already floats it), then the
+  result opens with "Because you sent Juan Osorio to develop Toledo in Spring 1451." and **What changed** (▴ ▾ ◆, never
+  colour alone; "Nothing that can be counted changed" when nothing did), and **See it on the map**. Battles name the
+  decision that began them and ring their place when you continue. Tasks now keep when they were sent (`since`).
+- [x] **A6.2 The world's ambitions.** Diplomacy → **Ambitions**: the eight greatest realms (and any that wants your
+  land), one or two plain lines each: who it seeks, its wars, its empire overseas, whether it is rising. A great power's
+  aims are plain; a smaller realm's only when known. A great power that wants your land is a `risk` on the agenda.
+  The year's report adds **The world this year** (what the great powers did) with a link to Ambitions.
+- [x] **A6.3 Sound:** a quill as a good result's place rings, a knock for a bad one; the palette is unchanged.
 
 ### M7 — Campaign arc
 - [ ] **A7.1** A personal ambition chosen at the start of an open game (from `AMBITIONS`), always in the goal bar.

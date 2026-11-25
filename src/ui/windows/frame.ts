@@ -18,7 +18,7 @@ import { refresh } from '../app';
 import { govTab, realmTab, coreSection, provincesTab } from './internal';
 import { cardsTab, missionsTab } from './cards';
 import { armyTab, navyTab, warsTab } from './military';
-import { subjectsTab, realmsTab } from './diplomacy';
+import { subjectsTab, realmsTab, ambitionsTab } from './diplomacy';
 import { ledgerTab, goodsTab, tradeTab } from './economy';
 import { culturesTab, religionTab, artsTab } from './culture';
 import { techTab } from './research';
@@ -29,7 +29,7 @@ import { pickHand, stopMapPick } from '../planner';
 // ---------- the core menus: a centred window with tabs ----------
 export const WIN_TABS: Record<Cat, [string, string][]> = {
   military: [['cards', 'Cards'], ['army', 'Army'], ['navy', 'Navy'], ['wars', 'Wars & battles']],
-  diplomacy: [['cards', 'Cards'], ['realms', 'Realms'], ['explore', 'Exploration'], ['subjects', 'Subjects']],
+  diplomacy: [['cards', 'Cards'], ['realms', 'Realms'], ['world', 'Ambitions'], ['explore', 'Exploration'], ['subjects', 'Subjects']],
   internal: [['cards', 'Cards'], ['gov', 'Government'], ['core', 'Core'], ['realm', 'Rank & viceroys'], ['provinces', 'Provinces']],
   economy: [['cards', 'Cards'], ['goods', 'Goods'], ['trade', 'Trade'], ['ledger', 'Ledger']],
   culture: [['cards', 'Cards'], ['cultures', 'Cultures'], ['religion', 'Religion'], ['arts', 'Arts']],
@@ -154,7 +154,7 @@ export function winTab(cat: Cat, tab: string, body: HTMLElement) {
     else if (tab === 'navy') navyTab(body);
     else warsTab(body);
   } else if (cat === 'diplomacy') {
-    if (tab === 'realms') realmsTab(body); else if (tab === 'explore') overseasSheet(body); else subjectsTab(body);
+    if (tab === 'realms') realmsTab(body); else if (tab === 'world') ambitionsTab(body); else if (tab === 'explore') overseasSheet(body); else subjectsTab(body);
   } else if (cat === 'internal') {
     if (tab === 'gov') govTab(body);
     else if (tab === 'core') body.append(coreSection());

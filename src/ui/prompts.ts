@@ -1,8 +1,9 @@
 // Decisions the game puts to the player: reveals, events, drafts, succession, battles, attacks, peace, endings.
+import { stage, becauseBand, changesBox, seeItButton } from './story';
 import { showHistory } from './sheets';
 import { commanderOf } from '../engine/commanders';
 import { sfx, buzz, type Sfx } from './sound';
-import type { DraftOption, RevealItem, Battle, Heir, BattleUnit, BattleSide, Cat } from '../types';
+import type { DraftOption, RevealItem, Story, Battle, Heir, BattleUnit, BattleSide, Cat } from '../types';
 import { RULER_ARCHS } from '../data/nations';
 import { TROOPS, EQUIPMENT, TACTICS, TRAIT_TACTIC } from '../data/troops';
 import { MISSIONS } from '../data/missions';
@@ -21,18 +22,21 @@ import { icon } from './icons';
 import { troopCard, charCard, handCard, tacticCard, backCard, flipCard } from './cards';
 import { warScore, peaceTerms, enemyDemands, concludePeace } from '../engine/diplo';
 import { troopsNear, setDefence } from '../engine/army';
-import { S, pendingReport, modalOpen, slot, saveNow, save, clearSlot, startIn, shield, setPendingReport } from './state';
+import { S, map, pendingReport, modalOpen, slot, saveNow, save, clearSlot, startIn, shield, setPendingReport } from './state';
 import { eventArt, artImg } from './art';
 import { ERAS } from '../data/eras';
 import { recordMission, doneCount, showMissions, showTitle, setMissionYear } from './title';
 import { refresh, toast } from './app';
 import { openModal, closeModal } from './modal';
 
+/** True while the map shows a result's place, before the result opens. */
+let staging = false;
 export function processQueue() {
   // the year's report no longer opens by itself: its changes are shown on the map, and the report waits in the menu
   if (!modalOpen && !S.queue.length && pendingReport) setPendingReport(false);
-  if (modalOpen || !S.queue.length) return;
+  if (modalOpen || staging || !S.queue.length) return;
   const p = S.queue[0];
+  if (p.kind === 'reveal' && p.story) { staging = true; stage(p.story, () => { staging = false; if (S.queue[0] === p && !modalOpen) showReveal(p.title, p.subtitle, p.items, () => { S.queue.shift(); afterPrompt(); }, p.alarm, p.story); }); return; }
   if (p.kind === 'reveal') showReveal(p.title, p.subtitle, p.items, () => { S.queue.shift(); afterPrompt(); }, p.alarm);
   else if (p.kind === 'event') showEvent();
   else if (p.kind === 'draft') showDraft(p.draft, p.options);
@@ -79,13 +83,14 @@ export async function flipAll(flips: { flip: () => void }[], delay = 380) {
   for (const f of flips) { await sleep(reduced() ? 0 : delay); f.flip(); sfx('flip'); buzz(); }
 }
 
-export function showReveal(title: string, subtitle: string | undefined, items: RevealItem[], done: () => void, alarm = false) {
+export function showReveal(title: string, subtitle: string | undefined, items: RevealItem[], done: () => void, alarm = false, story?: Story) {
   const row = h('div', { class: 'reveal-row' });
   const flips = items.map(it => { const f = flipCard(infoCard(it), ''); row.append(f.el); return f; });
   // an age opens (or its page is asked for) with its plate, the name written across the sky
   const era = ERAS.find(e => e.name === title);
   const plate = era ? h('div', { class: 'age-plate' }, h('img', { src: `art/age_${era.id}.webp`, alt: '', width: '960', height: '640', decoding: 'async' }), h('h2', {}, title)) : null;
-  openModal(h('div', { class: 'mbox reveal' + (alarm ? ' alarm' : '') + (plate ? ' has-plate' : '') }, alarm ? h('div', { class: 'alarm-band', html: icon('sword', 28) }) : null, plate ?? h('h2', {}, title), subtitle ? h('p', { class: 'muted' }, subtitle) : null, row, h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: done }, 'Continue'))));
+  openModal(h('div', { class: 'mbox reveal' + (alarm ? ' alarm' : '') + (plate ? ' has-plate' : '') }, alarm ? h('div', { class: 'alarm-band', html: icon('sword', 28) }) : null, plate ?? h('h2', {}, title), story ? becauseBand(story) : null, subtitle ? h('p', { class: 'muted' }, subtitle) : null, row, story ? changesBox(story) : null,
+    h('div', { class: 'mrow' }, story ? seeItButton(story, done) : null, h('button', { class: 'btn primary', onclick: done }, 'Continue'))));
   if (alarm) sfx('drum');
   void flipAll(flips).then(() => { const s = stingFor(items, alarm); if (s) sfx(s, 0.12); });
 }
@@ -285,6 +290,9 @@ export function showBattle(b: Battle) {
     const foeName = foe.nation === 'rebels' ? 'Rebels' : nationName(S, foe.nation);
     const ctx = { conquer: 'Siege of', defend: 'Defence of', raid: 'Raid on', rebels: 'Fighting at', sea: 'Sea battle off' }[b.context];
     const deploy = b.round === 0 && !b.done;
+    const head = S.queue[0];
+    const st = head?.kind === 'battle' && head.battle === b ? head.story : undefined;
+    if (st) box.append(becauseBand(st));
     box.append(h('div', { class: 'b-head' }, h('h2', {}, `${ctx} ${prov.name}`),
       h('p', { class: 'muted' }, deploy ? 'Before the first round' : `Round ${Math.min(3, b.round + (b.done ? 0 : 1))} of 3`, foe.fort ? ` · their walls: level ${foe.fort}` : me.fort ? ` · your walls: level ${me.fort}` : ''),
       b.naval ? null : h('p', { class: 'b-ground' }, h('span', { html: icon('map', 14) }), ' ', groundLine(b.terrain, b.landing && b.playerSide === 'att'))));
@@ -314,7 +322,7 @@ export function showBattle(b: Battle) {
       const out = b.result ?? (b.result = finishBattle(S, b));
       save();
       box.append(h('div', { class: 'b-result ' + (out.good ? 'win' : 'loss') }, h('h3', {}, out.title), ...out.lines.map(l => h('p', {}, l))),
-        h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: () => { S.queue.shift(); afterPrompt(); } }, 'Continue')));
+        h('div', { class: 'mrow' }, h('button', { class: 'btn primary', onclick: () => { S.queue.shift(); afterPrompt(); if (!reduced()) map.pulse(b.province, out.good ? 'good' : 'bad', out.good ? (S.provinces[b.province]?.owner === S.player ? 'Taken' : 'Victory') : 'Defeat'); } }, 'Continue')));
       if (!resultPlayed) { resultPlayed = true; sfx(out.good ? 'great' : 'bad', 0.35); }
       return;
     }

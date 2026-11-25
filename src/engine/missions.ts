@@ -1,3 +1,4 @@
+import { withStory } from './story';
 import { groupDef, closedBecause } from './techgroups';
 import { learnGoal, goalOf } from './rivals';
 import { addLoyalty } from './court';
@@ -421,6 +422,7 @@ export function launchMission(s: GameState, kind: MissionKind, charUid: number, 
   const m: Mission = {
     id: uid(s), kind, char: charUid, troops: troopUids, target, building,
     turnsLeft: missionTurns(s, kind, ch, target, building), total: 0, progress: 0, bonus: 0, good,
+    since: { year: s.year, quarter: s.quarter ?? 0 },
   };
   if (kind === 'route') { m.dir = trade!.dir; m.amount = trade!.amount; }
   if (kind === 'post') { m.progress = postCost(s, target); player(s).gold -= m.progress; }
@@ -505,12 +507,12 @@ export function advanceMissions(s: GameState) {
       if (rand(s) < 0.02) { m.progress += 2; log(s, `Breakthrough in the study of ${TECH[m.target].name}!`, 'good'); }
       const cost = techCost(s, m.target);
       m.turnsLeft = Math.max(0, Math.ceil((cost - m.progress) / ((researchRate(s, ch, TECH[m.target].track) + help) / 4)));
-      if (m.progress >= cost) completeResearch(s, m, ch);
+      if (m.progress >= cost) withStory(s, m, ch, () => completeResearch(s, m, ch));
       continue;
     }
     m.turnsLeft--;
     if (m.turnsLeft > 0) continue;
-    resolveMission(s, m, ch);
+    withStory(s, m, ch, () => resolveMission(s, m, ch));
   }
 }
 

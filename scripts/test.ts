@@ -13,6 +13,8 @@ import { techCost, launchMission, cardRoles } from '../src/engine/missions';
 import { taskPreview } from '../src/engine/preview';
 import { redoOptions, rememberRedo, runRoutines } from '../src/engine/routine';
 import { checkTrade } from '../src/engine/trade';
+import { worldAmbitions } from '../src/engine/rivals';
+import { advanceMissions } from '../src/engine/missions';
 import { cardHasTarget as hasTarget } from '../src/engine/pace';
 import { BUILDINGS as BLD, TECHS } from '../src/data/techs';
 import { missionBlocked as blockedFor } from '../src/engine/missions';
@@ -345,6 +347,41 @@ check('less routine: tasks to do again, cut routes, and the chancellor\'s routin
   for (let i = 0; i < 40 && !g.over; i++) { endTurn(g); answer(g); chores += runRoutines(g).length; }
   ok(chores > 0, 'ten years of routines did nothing');
   console.log(`       routines: ${chores} tasks started for Venice in ten years (taps saved)`);
+});
+
+check('after a decision: because, the place and what changed; the world\'s ambitions', () => {
+  const s = newGame('castile', 51); answer(s);
+  // a development task, one season from done: its result says why, where, and what moved
+  const devId = Object.values(CARDS).find(d => d.kind === 'mission' && !d.permanent && d.missions?.includes('develop'))!.id;
+  addCardT(s, devId, true);
+  const hc = s.hand.find(h => h.card === devId)!;
+  const prov = Object.values(s.provinces).find(p => p.owner === s.player && !blockedFor(s, 'develop', p.id))!;
+  const ch = s.characters.find(c => c.mission == null && cardRoles(devId).includes(c.role))!;
+  eq(launchMission(s, 'develop', ch.uid, prov.id, [], undefined, hc.uid), null, 'the development could not be sent');
+  const m = s.missions.find(x => x.char === ch.uid)!;
+  m.turnsLeft = 1;
+  const q0 = s.queue.length;
+  advanceMissions(s);
+  const shown = s.queue.slice(q0).find(p => p.kind === 'reveal' && p.story);
+  ok(!!shown, 'a finished task showed no story');
+  const st = (shown as { story: { because: string; place?: string; changes: { label: string }[] } }).story;
+  ok(st.because.startsWith('Because you sent ') && st.because.includes(prov.name) && st.because.includes(ch.name.split(' ')[0]), `the story does not say who went where: "${st.because}"`);
+  eq(st.place, prov.id, 'the story does not point at the province');
+  ok(Array.isArray(st.changes), 'the story has no list of changes');
+  ok(st.because.endsWith(`in Spring ${s.year}.`) || st.because.includes(`Spring ${s.year}`), `the story names the wrong season: "${st.because}"`);
+  // the world: the great powers, read without changing the game, and a realm that wants your land comes first
+  const g = newGame('castile', 52); answer(g);
+  const before = JSON.stringify(g);
+  const w = worldAmbitions(g);
+  eq(JSON.stringify(g), before, 'reading the ambitions changed the game');
+  ok(w.length >= 8 && w.every(a => a.lines.length >= 1 && a.lines.length <= 2), 'the ambitions list is short, or a realm has no line');
+  const big = w.find(a => a.provinces >= 12 && !a.aboutYou)!;
+  g.nations[big.nation].goal = { target: g.player, since: g.year };
+  const w2 = worldAmbitions(g);
+  const mine = w2.find(a => a.nation === big.nation);
+  ok(!!mine?.aboutYou, `${big.nation}, set on your land, is not shown as wanting it`);
+  eq(w2[0].aboutYou, true, 'a realm that wants your land is not listed first');
+  ok(attention(g).some(a => a.id === 'ambition:' + big.nation && a.tier === 'risk') || attention(g).some(a => a.id === 'warning:' + big.nation), 'a great power that wants your land is not on the agenda');
 });
 
 check('skip ahead never passes a card, a prompt or a finished task', () => {

@@ -553,6 +553,18 @@ export class MapView {
       this.marks.append(pin);
     }
   }
+  /** A decision lands: two rings spread from the province, and a few words rise from it (story.ts, M6). */
+  pulse(pid: string, tone: 'good' | 'bad' | 'neutral', label = '') {
+    const c = getGeo().center[pid];
+    if (!c) return;
+    const sc = (0.62 / (this.lastPx || 1)).toFixed(4);
+    const g = svgEl('g', { transform: `translate(${c[0]} ${c[1]}) scale(${sc})`, class: 'pulse ' + tone });
+    g.append(svgEl('circle', { r: 22, class: 'pu-ring' }), svgEl('circle', { r: 22, class: 'pu-ring pu-2' }), svgEl('circle', { r: 8, class: 'pu-dot' }));
+    // the words sit above the rings, clear of the map's own floating numbers
+    if (label) { const t = svgEl('text', { x: 0, y: -44, class: 'pu-t' }); t.textContent = label; g.append(t); }
+    this.fxG.append(g);
+    setTimeout(() => g.remove(), 1800);
+  }
   /** A few words that rise from a province and fade. */
   private float(pid: string, text: string, tone: string) {
     const c = getGeo().center[pid];

@@ -3,6 +3,8 @@ import { sfx } from './sound';
 import type { GameState, MissionKind, Cat, BattleRecord } from '../types';
 import { CATS } from '../types';
 import { ageOf } from '../engine/ages';
+import { BIG_REALM } from '../engine/rivals';
+import { provsOf } from '../engine/core';
 import { nationName } from '../engine/core';
 import { endTurn } from '../engine/turn';
 import { CAT_INFO, heldOf, handExcess } from '../engine/cards';
@@ -13,7 +15,7 @@ import { markTurn, stopReasons, SKIP_MAX } from '../engine/pace';
 import { agendaGroups, jumpTo } from './agenda';
 import { DIFFICULTY, LENGTHS, STANDARD } from '../data/difficulty';
 import { settings, setSetting, TEXT_SIZES, type Settings } from './settings';
-import { S, sheet, modalOpen, todo, seenTodo, saveNow, exportSaveFile, setCv, setWin, setPendingReport } from './state';
+import { S, shield, sheet, modalOpen, todo, seenTodo, saveNow, exportSaveFile, setCv, setWin, setPendingReport } from './state';
 import { TUTORIAL, refresh, toast, SEASONS, clearUndo, undoBegin, undoCommit } from './app';
 import { runRoutines, ROUTINES } from '../engine/routine';
 import { openWin } from './windows/frame';
@@ -185,6 +187,14 @@ export function showTurnReport() {
   if (tl.done.length) {
     box.append(h('h3', {}, 'Missions completed this year'));
     box.append(h('ul', { class: 'rlist' }, tl.done.map(d => h('li', {}, h('span', { html: icon(MISSION_INFO[d.kind as MissionKind]?.icon ?? 'star', 14) }), d.title))));
+  }
+  // the world this year: what the great powers did, so the map feels alive between your own turns
+  const world = Object.values(S.nations).filter(n => n.alive && n.id !== S.player && provsOf(S, n.id).length >= BIG_REALM)
+    .flatMap(n => (n.deeds ?? []).filter(d => d.year >= tl.year).map(d => ({ n, d }))).slice(0, 5);
+  if (world.length) {
+    box.append(h('h3', {}, 'The world this year'));
+    box.append(h('ul', { class: 'rlist' }, world.map(({ n, d }) => h('li', {}, shield(n.id, n.color, true), h('span', {}, h('b', {}, n.name), ` ${d.text.charAt(0).toLowerCase()}${d.text.slice(1)}`)))));
+    box.append(h('button', { class: 'btn ghost small', onclick: () => { closeModal(); openWin('diplomacy', 'world'); } }, 'What the powers are after ›'));
   }
   box.append(h('h3', {}, `Under way (${S.missions.length})`));
   if (!S.missions.length) box.append(h('p', { class: 'muted' }, 'No tasks under way. Open a menu and send someone out.'));

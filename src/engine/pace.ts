@@ -10,6 +10,7 @@ import { provsOf, enemiesOf, ageIndex, incomeOf } from './core';
 import { warned, warnedNow } from './rivals';
 import { wantsPlayer } from './ai';
 import { redoOptions } from './routine';
+import { worldAmbitions } from './rivals';
 import { TECHS, BUILDINGS } from '../data/techs';
 import { GENRES } from '../data/culture';
 import { cultureRows } from './culture';
@@ -161,6 +162,12 @@ export function attention(s: GameState): Attention[] {
     if (!n.alive || n.id === s.player || !(warned(s, n.id) || warnedNow(s, n.id)) || !wantsPlayer(s, n)) continue;
     const since = s.flags['warned_' + n.id] ?? s.year;
     out.push({ id: 'warning:' + n.id, tier: 'risk', title: `${n.name} gathers on your border`, text: `It may declare war from ${since + 1}. Make a friend who fears it, win it over, or raise the frontier walls.`, cat: 'diplomacy', tab: 'realms', icon: 'sword', jump: { to: 'nation', id: n.id } });
+  }
+  // a great power (or a realm whose aim you know) that wants your land, before it gathers on the border
+  for (const a of worldAmbitions(s)) {
+    if (!a.aboutYou || out.some(x => x.id === 'warning:' + a.nation) || enemiesOf(s, s.player).includes(a.nation)) continue;
+    const n = s.nations[a.nation];
+    out.push({ id: 'ambition:' + a.nation, tier: 'risk', title: `${n.name} wants your lands`, short: `${n.name} eyes you`, text: 'Its aim is plain. Win it over, find an ally who fears it too, or strengthen the border before it gathers its levies.', cat: 'diplomacy', tab: 'world', icon: 'eye', jump: { to: 'nation', id: a.nation } });
   }
   const me = s.nations[s.player];
   if (me) {

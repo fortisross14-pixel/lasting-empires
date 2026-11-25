@@ -41,6 +41,7 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
   Never give a European unit (Swiss, Tercio, Knights) to a realm outside Europe; mercenary cards check `mercenaries`.
 
 ## Rivals
+- `worldAmbitions` (rivals.ts) is what the Ambitions tab and the agenda read: the great powers' aims (plain for `BIG_REALM`+, else only when `goalKnown`), wars, empires overseas (provinces in `REGIONS`), rising. It reads goals through `peekGoal`, so looking never writes `n.goal`. A new kind of line is a case there, true to what the code really does.
 - `src/engine/rivals.ts`: `goalOf` (what a realm wants), `TEMPERS` (what its personality does, in words: keep them true to `ai.ts`), `attitude` (one word and the reasons), `deed` (its record). All without dice.
 - A realm may declare war on the player only through `mayStrikePlayer` (`ai.ts`): the warning goes out first and the realm waits a year. An event that makes a realm declare war on the player must be its own announcement (an ultimatum, a demand refused).
 - A reason shown in `attitude` must be something the code really applies each year; when a new yearly effect on relations is added, add its line there.
@@ -84,6 +85,7 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 - The hand limit (below), the yearly mission cap, army size and building slots are the limits.
 
 ## Events, people and stories
+- After a task: `withStory` (`src/engine/story.ts`) wraps every task ending and attaches a `story` (because, place, measured changes) to the reveals and battles it pushes. A new task kind gets this for free; a new number worth showing is a line in `measure`. Never fake a change: the list is a before/after diff.
 - An event is an `EventDef` (`src/engine/eventkit.ts`): text, options with `can` (why it is blocked) and `run` (returns what to reveal). Use the kit's helpers (`good`, `bad`, `neutral`, `stab`, `needs`, `pay`, `scaled`); never write a bare number of ducats. Follow `docs/WRITING.md` (60 words, speak to "you", one concrete detail, every option costs something).
 - Where it goes: history and general events in `events.ts` / `annals.ts`; events about people in `court.ts` (wrap with `courtEvent` so the court stirs at most once a year); stories in three steps in `chains.ts`.
 - A choice that comes back: `later(s, id, min, max, vars)` from an option; the later step has `chance: 0` and reads `vars.path`. Three steps at most, and every road must end. `npm test` walks every road and renders every text.
