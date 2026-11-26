@@ -9,6 +9,7 @@ import { NO_STATE } from '../data/nations';
 import { travel } from './army';
 import { rankOf, RANKS } from './realm';
 import { usesPowder } from './technology';
+import { nationKnown } from './overseas';
 
 export const EXTRACT = ['farm', 'pasture', 'mine', 'fishery', 'woodcutter', 'plantation'];
 const CULTURE_B = ['temple', 'library', 'university'];
@@ -112,7 +113,7 @@ export interface Partner { nation: string; deal: number; post: boolean; dist: nu
 export function partners(s: GameState, g: string, dir: 'buy' | 'sell', merchant = 1): Partner[] {
   const out: Partner[] = [];
   for (const n of Object.values(s.nations)) {
-    if (!n.alive || n.id === s.player || n.id === NO_STATE || !n.capital || !provsOf(s, n.id).length) continue;
+    if (!n.alive || n.id === s.player || n.id === NO_STATE || !n.capital || !provsOf(s, n.id).length || !nationKnown(s, n.id)) continue; // only realms you have found
     const has = supplies(s, n.id, g);
     if (dir === 'buy' ? !has : has || provsOf(s, n.id).length < 3) continue;
     const war = atWar(s, s.player, n.id);

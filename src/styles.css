@@ -2541,3 +2541,5 @@ body:has(#pickbar) #timeline, body:has(#pickbar) #goalbar, body:has(#pickbar) #m
 .mc-tags .mt-difficult { color: var(--wax); border-color: var(--wax); }
 .md-brief .mc-tags { margin: 0; }
 @media (max-width: 860px) { .mf-layout { grid-template-columns: 1fr; } .mf-panel { position: static; } }
+/* an event is its card and its choices, floating over the map: no empty frame around them */
+[data-style="chancery"] #modal .mbox.event, #modal .mbox.event { border: 0 !important; box-shadow: none !important; background: none !important; outline: 0; }

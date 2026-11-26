@@ -14,6 +14,8 @@ import { taskPreview } from '../src/engine/preview';
 import { redoOptions, rememberRedo, runRoutines } from '../src/engine/routine';
 import { checkTrade } from '../src/engine/trade';
 import { worldAmbitions } from '../src/engine/rivals';
+import { nationKnown as nationKnownT } from '../src/engine/overseas';
+import { partners as partnersT } from '../src/engine/trade';
 import { getGeo as getGeoT } from '../src/engine/map';
 import { capsOf, canEverRecruit, canAcquireEquipment, researchBlock, heritageOf, unitNeeds } from '../src/engine/technology';
 import { unitFor } from '../src/engine/cards';
@@ -788,6 +790,17 @@ check('historical means: what each realm can field follows its heritage, for the
   const later = newGame('castile', 88, 1600); answer(later);
   const jp = Object.values(later.nations).find(n => n.alive && heritageOf(later, n.id) === 'japanese');
   if (jp) ok(capsOf(later, jp.id).has('gunpowder'), 'Japanese realms have no guns in 1600');
+});
+
+check('only discovered realms: no envoy, contract or trade partner beyond the known world', () => {
+  const s = newGame('inca', 91); answer(s);
+  ok(!nationKnownT(s, 'castile') && !nationKnownT(s, 'ming'), 'the Inca know Castile or Ming in 1451');
+  ok(/not discovered/.test(blockedFor(s, 'relations', 'castile') ?? ''), 'an embassy to undiscovered Castile is not refused');
+  ok(/not discovered/.test(blockedFor(s, 'route', 'ming') ?? ''), 'a trade route to undiscovered Ming is not refused');
+  ok(!partnersT(s, 'grain', 'sell').some(p => !nationKnownT(s, p.nation)), 'an undiscovered realm is offered as a trade partner');
+  ok(!worldAmbitions(s).some(a => !nationKnownT(s, a.nation)), 'the ambitions list shows an undiscovered realm');
+  const near = Object.values(s.nations).find(n => n.alive && n.id !== s.player && nationKnownT(s, n.id));
+  if (near) ok(!/not discovered/.test(blockedFor(s, 'relations', near.id) ?? ''), 'a known neighbour is refused as undiscovered');
 });
 
 check('text size: every font size in the stylesheet scales with --ts', () => {

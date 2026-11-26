@@ -4,7 +4,7 @@
 import type { GameState, Nation, Personality } from '../types';
 import { provsOf, getRel, addRel, atWar, hasTreaty, inTruce, borders, nationName, enemiesOf } from './core';
 import { NO_STATE } from '../data/nations';
-import { provRegion } from './overseas';
+import { provRegion, nationKnown } from './overseas';
 import { REGIONS } from '../data/overseas';
 
 // ---------- what a realm wants ----------
@@ -154,7 +154,8 @@ function peek<T>(s: GameState, id: string, read: () => T): T {
 }
 export const peekGoal = (s: GameState, id: string) => peek(s, id, () => goalOf(s, id));
 export function worldAmbitions(s: GameState, isRising: (id: string) => boolean = () => false): Ambition[] {
-  const alive = Object.values(s.nations).filter(n => n.alive && n.id !== s.player && n.id !== NO_STATE);
+  // only realms the player has discovered: the list must not reveal a world not yet found
+  const alive = Object.values(s.nations).filter(n => n.alive && n.id !== s.player && n.id !== NO_STATE && nationKnown(s, n.id));
   const big = alive.map(n => ({ n, p: provsOf(s, n.id).length })).sort((a, b) => b.p - a.p || a.n.name.localeCompare(b.n.name));
   const chosen = big.filter((x, i) => i < AMBITION_REALMS || peekGoal(s, x.n.id) === s.player);
   const out: Ambition[] = [];

@@ -27,6 +27,9 @@ export function initKnownWorld(s: GameState) {
   for (const r of known) regionState(s, r).found = true;
 }
 export const provKnown = (s: GameState, provId: string) => regionKnown(s, provRegion(provId));
+/** Has the player discovered this realm? Yes once any province of it is known: no envoy, merchant or contract goes
+ *  to a realm on the far side of a world you have not found. */
+export const nationKnown = (s: GameState, id: string) => id === s.player || Object.values(s.provinces).some(p => p.owner === id && provKnown(s, p.id));
 
 /** Regions an explorer could find next. */
 export function discoverable(s: GameState): RegionDef[] {

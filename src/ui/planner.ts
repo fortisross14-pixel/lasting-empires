@@ -43,6 +43,7 @@ import { goodsNote, openPostPicker } from './windows/economy';
 import { techYears } from './windows/research';
 import { openModal, openPage, closeModal } from './modal';
 import { processQueue } from './prompts';
+import { nationKnown } from '../engine/overseas';
 
 export interface TargetRow { label: string; sub: string; color?: string; acts: { label: string; kind: MissionKind; target: string; building?: string; why: string | null }[]; }
 
@@ -83,7 +84,7 @@ export function missionTargets(handUid: number, all = false): TargetRow[] {
     }
     rows.push(...(all ? far : far.slice(0, 12)));
   } else if (DIPLO.includes(kind)) {
-    for (const n of Object.values(S.nations).filter(n => n.alive && n.id !== S.player)) {
+    for (const n of Object.values(S.nations).filter(n => n.alive && n.id !== S.player && nationKnown(S, n.id))) {
       const why = missionBlocked(S, kind, n.id);
       if (why && (why.startsWith('You are') || why.includes('already') || why === 'Not your subject' || why.startsWith('Already a subject') || why.startsWith('Too large'))) continue;
       rows.push({ label: n.name, sub: `Relations ${getRel(S, S.player, n.id)}`, color: n.color, acts: [{ label: MISSION_INFO[kind].name, kind, target: n.id, why }] });

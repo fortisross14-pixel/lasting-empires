@@ -28,6 +28,7 @@ import {
   rollOutcome, outcomeName, TIERS, tierOf, GROW_DEV, hasCore, rollBest, rollTraits, techFx, ageIndex } from './core';
 import { getGeo } from './map';
 import { createBattle, makeSide, toBattleUnits, genericGeneral, freeMission, transferProvince, alliedHelp } from './battle';
+import { nationKnown } from './overseas';
 
 export const MISSION_INFO: Record<MissionKind, { name: string; role: Role; icon: string; verb: string }> = {
   conquer: { name: 'Conquest', role: 'general', icon: 'sword', verb: 'Conquer' },
@@ -265,6 +266,8 @@ export function powerEdge(s: GameState, target: string): number {
 
 /** Returns a reason the mission cannot be launched, or null. */
 export function missionBlocked(s: GameState, kind: MissionKind, target: string, building?: string): string | null {
+  // a realm you have not discovered cannot be dealt with (envoys, trade posts, contracts)
+  if ((DIPLO.includes(kind) || kind === 'post' || kind === 'route') && s.nations[target] && !nationKnown(s, target)) return 'You have not discovered this realm';
   const me = s.player;
   if (kind === 'post') return postBlocked(s, target);
   if (kind === 'assist') {
