@@ -5,6 +5,7 @@ import type { GameState } from '../types';
 import { player, push, log, declareWar, atWar, addRel, uid, makePeace, rand, borders, inTruce, hasTreaty, provsOf } from './core';
 import { provKnown } from './overseas';
 import { makeSide, createBattle, toBattleUnits, transferProvince } from './battle';
+import { raise } from './technology';
 
 const CITY = 'constantinople';
 /** The Sultan's host for the siege: his standing army plus the great levy and Urban's guns. */
@@ -39,7 +40,7 @@ function worldMoments(s: GameState) {
     s.flags['wh_' + m.id] = 1;
     if (m.name && provsOf(s, n.id).length >= 3) { n.name = m.name; if (m.adj) n.adj = m.adj; }
     const type = s.year < 1470 ? 'men_at_arms' : s.year < 1552 ? 'pikemen' : s.year < 1685 ? 'musketeers' : 'line_infantry';
-    for (let i = 0; i < (m.troops ?? 0); i++) n.army.push({ uid: uid(s), type, vet: 1, str: 100 });
+    for (let i = 0; i < (m.troops ?? 0); i++) raise(s, n.id, type, 1, 100, () => uid(s)); // the soldier of its age that this realm can field
     const foe = m.war && s.nations[m.war];
     if (foe && foe.alive && foe.id !== s.player && !atWar(s, n.id, foe.id) && !inTruce(s, n.id, foe.id) && !hasTreaty(s, n.id, foe.id, 'alliance') && borders(s, n.id, foe.id)) declareWar(s, n.id, foe.id);
     if (provKnown(s, n.capital)) dispatch(s, n.id, m.text);

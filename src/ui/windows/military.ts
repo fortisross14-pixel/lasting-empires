@@ -25,6 +25,7 @@ export function unitsPanel() {
   for (const cls of ['levy', 'inf', 'shot', 'cav', 'art'] as UnitClass[]) {
     if (!classOpen(S, cls)) continue; // a kind your people cannot raise (no horses in the Americas)
     const now = unitFor(S, cls);
+    if (!now) continue; // a kind of soldier your people cannot field
     const line = groupDef(S).lines[cls] ?? UNIT_LINES[cls];
     const next = line.slice(line.indexOf(now) + 1)[0];
     const d = TROOPS[now];

@@ -7,6 +7,7 @@ import { player, provsOf, uid, push, log, clamp, rand, declareWar, makePeace, en
 import { createNation } from './realm';
 import { getGeo } from './map';
 import { CARDS } from './cards';
+import { raise } from './technology';
 
 export const REVOLUTION_YEARS = 12;
 /** How many times their army must be broken before their capital gives up. */
@@ -124,7 +125,7 @@ export function quarterlyRevolution(s: GameState) {
     r.broken = (r.broken ?? 0) + 1;
     if (r.broken >= BREAKS) { log(s, `The ${n.name} have no army left: ${s.provinces[r.rebelCapital].name} opens its gates.`, 'good'); s.provinces[r.rebelCapital].owner = s.player; return endRevolution(s, true); }
     const k = Math.max(2, Math.ceil(provsOf(s, r.rebel).length / 2));
-    for (let i = 0; i < k; i++) n.army.push({ uid: uid(s), type: i % 2 ? 'men_at_arms' : 'levy', vet: 0, str: 100 });
+    for (let i = 0; i < k; i++) raise(s, n.id, i % 2 ? 'men_at_arms' : 'levy', 0, 100, () => uid(s));
     push(s, { kind: 'reveal', title: 'The rebels call up new levies', items: [{ title: n.name, text: `Their army is broken (${r.broken} of ${BREAKS}), but they raise ${k} new companies. Break them ${BREAKS} times, or take ${s.provinces[r.rebelCapital].name}, and the revolution is won.`, tone: 'neutral', kind: 'torch' }] });
   }
   if (s.provinces[r.myCapital]?.owner !== s.player || s.year - r.since >= REVOLUTION_YEARS) return endRevolution(s, false);

@@ -20,6 +20,7 @@ import { NO_STATE } from '../data/nations';
 import { getGeo } from './map';
 import { warScore, makeSubject, subjectsOf } from './diplo';
 import { createBattle, makeSide, toBattleUnits, genericGeneral, autoResolve, finishBattle } from './battle';
+import { canEverRecruit } from './technology';
 
 // When AI nations get each troop type (they lag behind the player's research a little).
 const AI_UPGRADES: [string, string, number][] = [
@@ -30,8 +31,10 @@ const AI_UPGRADES: [string, string, number][] = [
 ];
 
 function aiRecruitPool(s: GameState, n: Nation): [string, number][] {
-  const year = s.year, g = groupOf(s, n.id), closed = TECH_GROUPS[g].closed;
-  return aiRecruitPoolEuro(year).map(([t, w]) => [TROOPS[t].tech && closed.includes(TROOPS[t].tech!) ? null : localUnit(g, t), w] as [string | null, number]).filter((x): x is [string, number] => !!x[0]);
+  // the year says what an AI realm would reach for (a stand-in for its research); its means say what it can have
+  const year = s.year, g = groupOf(s, n.id);
+  return aiRecruitPoolEuro(year).map(([t, w]) => [localUnit(g, t), w] as [string | null, number])
+    .filter((x): x is [string, number] => !!x[0] && canEverRecruit(s, n.id, x[0]));
 }
 function aiRecruitPoolEuro(year: number): [string, number][] {
   const pool: [string, number][] = [['levy', 3], ['crossbow', 2], ['jinetes', 1.5], ['men_at_arms', 1.5], ['knights', 0.7], ['bombard', 0.4]];
@@ -149,15 +152,19 @@ export function aiEconomy(s: GameState, n: Nation) {
     w.ships += SHIP_RATE;
     if (w.ships >= 1) {
       w.ships -= 1;
-      const type = s.year >= 1650 ? 'man_of_war' : s.year >= 1545 ? 'galleon' : s.year >= 1490 && hashOf(n.id + s.year + 'hull') % 2 ? 'carrack' : 'galley';
+      const want = s.year >= 1650 ? 'man_of_war' : s.year >= 1545 ? 'galleon' : s.year >= 1490 && hashOf(n.id + s.year + 'hull') % 2 ? 'carrack' : 'galley';
+      // the best hull its sea traditions allow, down to the galley; a realm with no warships of its own builds none
+      const type = [want, 'galleon', 'carrack', 'galley'].find(t => canEverRecruit(s, n.id, t));
+      if (!type) { w.ships = 0; } else {
       n.gold -= 30; n.fleet.push({ uid: uid(s), type, vet: 0, str: 100 });
       deed(s, n, `Launched a ${TROOPS[type].name.toLowerCase()}.`);
+      }
     }
   }
   for (const t of n.fleet) t.str = Math.min(100, t.str + 20);
   // upgrade old units
   const own = Object.values(groupDef(s, n.id).lines).flat();
-  const upgradeOf = (type: string) => AI_UPGRADES.find(([from, to, y]) => from === type && s.year >= y && own.includes(to));
+  const upgradeOf = (type: string) => AI_UPGRADES.find(([from, to, y]) => from === type && s.year >= y && own.includes(to) && canEverRecruit(s, n.id, to));
   const old = n.army.filter(t => upgradeOf(t.type));
   w.arms = old.length ? w.arms + ARMS_RATE * old.length : Math.min(w.arms, 1);
   for (const t of old) {

@@ -9,6 +9,7 @@ import { threatOf } from './ai';
 import { goalOf } from './rivals';
 import { NO_STATE } from '../data/nations';
 import { good, bad, neutral, stab, P, scaled, needs, pay, later, type EventDef, type Vars } from './eventkit';
+import { raise } from './technology';
 
 const nat = (s: GameState, v: Vars, k = 'nation'): Nation | undefined => s.nations[String(v[k])];
 const nm = (s: GameState, v: Vars, k = 'nation') => nationName(s, String(v[k]));
@@ -94,7 +95,7 @@ export const REQUEST_EVENTS: EventDef[] = [
     },
     text: (s, v) => `${nm(s, v)} is at war with ${nm(s, v, 'foe')} and running short of coin. Its envoy puts it plainly: every company his master raises is one that ${nm(s, v, 'foe')} cannot send against you. He asks ${scaled(s, 25)} ducats.`,
     options: [
-      { label: 'Send the silver', can: s => needs(s, 25), run: (s, v) => { pay(s, 25); const n = nat(s, v); if (!n?.alive) return [neutral('Too late', 'The realm that asked is no more.')]; addRel(s, P(s), n.id, 20); for (let i = 0; i < 2; i++) n.army.push({ uid: uid(s), type: troopOfDay(s), vet: 0, str: 100 }); return [good('Your silver marches', `${n.name} raises two companies with it. Relations +20.`, 'coin')]; } },
+      { label: 'Send the silver', can: s => needs(s, 25), run: (s, v) => { pay(s, 25); const n = nat(s, v); if (!n?.alive) return [neutral('Too late', 'The realm that asked is no more.')]; addRel(s, P(s), n.id, 20); for (let i = 0; i < 2; i++) raise(s, n.id, troopOfDay(s), 0, 100, () => uid(s)); return [good('Your silver marches', `${n.name} raises two companies with it. Relations +20.`, 'coin')]; } },
       { label: 'Wish them well', run: (s, v) => { addRel(s, P(s), String(v.nation), -8); return [neutral('Kind words', `${nm(s, v)} had hoped for more. Relations −8.`)]; } },
     ],
   },

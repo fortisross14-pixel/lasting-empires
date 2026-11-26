@@ -14,6 +14,11 @@ import { taskPreview } from '../src/engine/preview';
 import { redoOptions, rememberRedo, runRoutines } from '../src/engine/routine';
 import { checkTrade } from '../src/engine/trade';
 import { worldAmbitions } from '../src/engine/rivals';
+import { getGeo as getGeoT } from '../src/engine/map';
+import { capsOf, canEverRecruit, canAcquireEquipment, researchBlock, heritageOf, unitNeeds } from '../src/engine/technology';
+import { unitFor } from '../src/engine/cards';
+import { TROOPS } from '../src/data/troops';
+import { mergePreview } from '../src/engine/drafts';
 import { missionTags, matches, EMPTY_FILTER, DIFFICULTIES, REGIONS_TAG, TOPICS } from '../src/engine/missiontags';
 import { advanceMissions, GIFT_STEPS, giftCost, envoyCost } from '../src/engine/missions';
 import { pivotOptions, offerAmbition, beginAmbition, endAmbition, decisiveMoments, rememberBattle, GRAND_AMBITIONS } from '../src/engine/arc';
@@ -732,6 +737,57 @@ check('a peace envoy\'s news comes before the table, and a battle ends with its 
     ok(/fought/.test(rep.items[1].text) && /Strength left/.test(rep.items[1].text), `your side's line says nothing of the fight: ${rep.items[1].text}`);
     ok(/^(.* taken|Attack succeeded|Attack beaten back)$/.test(rep.items[0].title), `an attack's outcome reads oddly: ${rep.items[0].title}`);
   }
+});
+
+check('historical means: what each realm can field follows its heritage, for the player and the AI', () => {
+  // every army in the world fits its realm's means, at each start and after forty turns of AI recruiting
+  for (const y of [1451, 1600, 1700]) {
+    const s = newGame('castile', 81, y); answer(s);
+    const bad = (g: typeof s) => Object.values(g.nations).filter(n => n.alive).flatMap(n => [...n.army, ...(n.fleet ?? [])].filter(t => !canEverRecruit(g, n.id, t.type)).map(t => `${n.id}:${t.type}`));
+    eq(bad(s).join(' '), '', `${y}: armies beyond their realm's means at the start`);
+    if (y === 1451) { for (let i = 0; i < 40; i++) { endTurn(s); answer(s); } eq(bad(s).join(' '), '', 'after forty turns an AI realm fields what it cannot'); }
+  }
+  // the Inca: no plate, no horses, no guns, no cannon; Andean soldiers only
+  const inca = newGame('inca', 82); answer(inca);
+  eq(heritageOf(inca, 'inca'), 'andean', 'the Inca are not Andean');
+  ok(!capsOf(inca).has('horses') && !capsOf(inca).has('gunpowder') && !capsOf(inca).has('iron'), 'the Inca start with horses, guns or iron');
+  eq(unitFor(inca, 'cav'), null, 'the Inca can hire cavalry');
+  eq(unitFor(inca, 'art'), null, 'the Inca can hire artillery');
+  ok(!inca.hand.some(h => h.card === 'eq_plate'), 'the Inca were handed plate armour');
+  ok(!canAcquireEquipment(inca, 'inca', 'plate').ok && !canAcquireEquipment(inca, 'inca', 'warhorse').ok, 'plate or warhorses are open to the Inca');
+  ok(inca.troops.every(t => unitNeeds(t.type).length === 0), `an Inca company needs what the Inca lack: ${inca.troops.map(t => t.type).join(', ')}`);
+  ok(!!researchBlock(inca, 'firearms'), 'firearms can be studied without gunpowder');
+  // forging plate onto a levy is refused without spending anything
+  inca.troops.push({ uid: 990001, type: 'levy', vet: 0, str: 100 }); inca.hand.push({ uid: 990002, card: 'eq_plate' });
+  const gold = inca.nations.inca.gold;
+  const mp = mergePreview(inca, 990001, 990002);
+  ok('error' in mp && /no plate|no iron/i.test(mp.error), `forging plate for the Inca was not refused for want of means: ${JSON.stringify(mp)}`);
+  eq(inca.nations.inca.gold, gold, 'a refused forge cost ducats');
+  // contact opens the study, not the mastery: Castile on the border, then Strangers' Arms, then firearms
+  const castileCap = Object.values(inca.provinces).find(p => p.owner === 'inca')!;
+  const near = Object.values(inca.provinces).find(p => p.owner !== 'inca' && getGeoT().adj[castileCap.id]?.includes(p.id));
+  if (near) {
+    const old = near.owner; near.owner = 'castile';
+    ok(researchBlock(inca, 'foreign_arms') === null, "Strangers' Arms is closed with Castile on the border");
+    ok(!!researchBlock(inca, 'firearms'), 'contact alone opened firearms');
+    near.owner = old;
+  }
+  inca.techs.push('foreign_arms');
+  ok(capsOf(inca).has('gunpowder') && researchBlock(inca, 'firearms') === null, "Strangers' Arms did not open firearms");
+  // the Aztecs: regional foot, no horses; Castile: the medieval kit; Ming: gunpowder; Brunei: ships and guns
+  const az = newGame('aztec', 83); answer(az);
+  ok(az.troops.length > 0 && az.troops.every(t => !TROOPS[t.type].id.match(/men_at_arms|knights|jinetes|crossbow/)), `the Aztecs field European troops: ${az.troops.map(t => t.type).join(', ')}`);
+  const ca = newGame('castile', 84); answer(ca);
+  ok(ca.hand.some(h => h.card === 'eq_plate') && unitFor(ca, 'cav') === 'jinetes', 'Castile lacks its plate or its Jinetes');
+  const mi = newGame('ming', 85); answer(mi);
+  ok(capsOf(mi).has('gunpowder') && capsOf(mi).has('cannon') && researchBlock(mi, 'firearms') === null, 'Ming starts without gunpowder');
+  const br = newGame('brunei', 86); answer(br);
+  ok(capsOf(br).has('ships') && capsOf(br).has('ocean') && canEverRecruit(br, 'brunei', 'galley'), 'Brunei has no ships');
+  // Japan learned the matchlock in 1543: not in 1451, yes by 1600
+  ok(!capsOf(newGame('japan', 87)).has('gunpowder'), 'Japan has guns in 1451');
+  const later = newGame('castile', 88, 1600); answer(later);
+  const jp = Object.values(later.nations).find(n => n.alive && heritageOf(later, n.id) === 'japanese');
+  if (jp) ok(capsOf(later, jp.id).has('gunpowder'), 'Japanese realms have no guns in 1600');
 });
 
 check('text size: every font size in the stylesheet scales with --ts', () => {

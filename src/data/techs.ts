@@ -1,4 +1,5 @@
 // Research and buildings.
+import type { Capability } from './heritage';
 
 export type TechTrack = 'military' | 'economy' | 'state';
 type Rates = Partial<Record<'military' | 'diplomacy' | 'internal' | 'economy' | 'research' | 'culture', number>>;
@@ -31,25 +32,32 @@ export interface TechDef {
   year: number;        // when it came historically: studying it sooner costs more
   cost: number;        // research points
   req?: string[]; desc: string; fx?: TechFx;
-  /** Only for realms that must learn from strangers (data/techgroups.ts): needs contact, and opens what is closed. */
+  /** A study of strangers' knowledge: open only to a realm that lacks what it `grants` and has met a realm that has
+   *  it (a shared border, a war or a trade treaty); learned, it grants those capabilities (src/engine/technology.ts). */
   bridge?: boolean;
+  /** Capabilities this study gives the realm once learned (data/heritage.ts). */
+  grants?: Capability[];
+  /** Capabilities the realm must have before it can study this at all (no firearms without gunpowder). */
+  needs?: Capability[];
 }
 
 // About four per field in each age. Costs rise by age so that a study takes 2–7 years.
 export const TECHS: TechDef[] = [
   // ---------- learning from strangers (only where techgroups.ts closes something) ----------
-  { id: 'foreign_arms', name: "Strangers' Arms", track: 'military', age: 0, year: 1451, cost: 34, bridge: true, desc: 'Captured guns taken apart, renegade gunners hired, powder made by trial and error. Opens gunpowder and its weapons.' },
-  { id: 'foreign_ships', name: "Strangers' Ships", track: 'economy', age: 0, year: 1451, cost: 30, bridge: true, desc: 'Foreign hulls copied, foreign pilots kept. Opens ocean navigation, charts and the ship of the line.' },
+  { id: 'foreign_arms', name: "Strangers' Arms", track: 'military', age: 0, year: 1451, cost: 34, bridge: true, grants: ['gunpowder', 'cannon'], desc: 'Captured guns taken apart, renegade gunners hired, powder made by trial and error. Opens gunpowder and its weapons.' },
+  { id: 'foreign_ships', name: "Strangers' Ships", track: 'economy', age: 0, year: 1451, cost: 30, bridge: true, grants: ['ships', 'ocean'], desc: 'Foreign hulls copied, foreign pilots kept. Opens ocean navigation, charts and the ship of the line.' },
+  { id: 'foreign_horses', name: "Strangers' Horses", track: 'military', age: 0, year: 1451, cost: 32, bridge: true, grants: ['horses'], desc: 'Strayed and traded horses, bred and broken by men who had never seen one. Opens horsemen and cavalry.' },
+  { id: 'foreign_iron', name: "Strangers' Iron", track: 'economy', age: 0, year: 1451, cost: 36, bridge: true, grants: ['iron'], desc: 'Foreign smiths watched, bought or taken, until your own forges can smelt the ore. Opens iron weapons and the pike.' },
   // ---------- Age of Crusade ----------
-  { id: 'pike_square', name: 'Pike Square', track: 'military', age: 0, year: 1453, cost: 20, desc: 'Draft Pikemen. Long Pikes appear in drafts. Levy + Long Pikes → Pikemen.' },
+  { id: 'pike_square', needs: ['iron'], name: 'Pike Square', track: 'military', age: 0, year: 1453, cost: 20, desc: 'Draft Pikemen. Long Pikes appear in drafts. Levy + Long Pikes → Pikemen.' },
   { id: 'condotta', name: 'Condotta Contracts', track: 'military', age: 0, year: 1455, cost: 20, desc: 'Captains for hire: +2 army size, +0.5 manpower a year.', fx: { army: 2, manpower: 0.5 } },
-  { id: 'firearms', name: 'Firearms', track: 'military', age: 0, year: 1465, cost: 26, desc: 'Draft Arquebusiers. Levy or Crossbow + Arquebus → Arquebusiers. Make gunpowder.' },
-  { id: 'bronze_cannon', name: 'Bronze Cannon', track: 'military', age: 0, year: 1475, cost: 29, desc: 'Bombard + Bronze Casting → Field Cannon. +1 siege for artillery.' },
+  { id: 'firearms', needs: ['gunpowder'], name: 'Firearms', track: 'military', age: 0, year: 1465, cost: 26, desc: 'Draft Arquebusiers. Levy or Crossbow + Arquebus → Arquebusiers. Make gunpowder.' },
+  { id: 'bronze_cannon', needs: ['cannon'], name: 'Bronze Cannon', track: 'military', age: 0, year: 1475, cost: 29, desc: 'Bombard + Bronze Casting → Field Cannon. +1 siege for artillery.' },
 
   { id: 'guilds', name: 'Guilds', track: 'economy', age: 0, year: 1453, cost: 20, desc: 'Workshops make 25% more. +0.2 Economy cards a year.', fx: { rates: { economy: 0.2 } } },
   { id: 'printing', name: 'Printing Press', track: 'economy', age: 0, year: 1460, cost: 24, desc: 'Build Universities. +0.2 Research cards a year.', fx: { rates: { research: 0.2 } } },
   { id: 'banking', name: 'Banking', track: 'economy', age: 0, year: 1470, cost: 27, desc: '+10% income. Build Banks. +1 trade route and post.', fx: { income: 0.1, routes: 1, posts: 1, rates: { economy: 0.1 } } },
-  { id: 'navigation', name: 'Ocean Navigation', track: 'economy', age: 0, year: 1480, cost: 31, desc: 'Build Harbours. Voyages to the farthest seas. +1 trade post. The first realm to learn it opens the Age of Discovery.', fx: { posts: 1 } },
+  { id: 'navigation', needs: ['ships'], grants: ['ocean'], name: 'Ocean Navigation', track: 'economy', age: 0, year: 1480, cost: 31, desc: 'Build Harbours. Voyages to the farthest seas. +1 trade post. The first realm to learn it opens the Age of Discovery.', fx: { posts: 1 } },
 
   { id: 'chancery', name: 'Royal Chancery', track: 'state', age: 0, year: 1453, cost: 20, desc: '+10% diplomatic success, missions 1 year shorter. Build Chancery Offices. +0.2 Diplomacy cards.', fx: { rates: { diplomacy: 0.2 } } },
   { id: 'heraldry', name: 'Heraldry and Orders', track: 'state', age: 0, year: 1455, cost: 20, desc: 'Orders of knighthood bind the nobles: +1 prestige a year, +0.1 Diplomacy cards.', fx: { prestige: 1, rates: { diplomacy: 0.1 } } },
@@ -57,12 +65,12 @@ export const TECHS: TechDef[] = [
   { id: 'embassies', name: 'Resident Embassies', track: 'state', age: 0, year: 1480, cost: 27, req: ['chancery'], desc: '+1 court seat. Alliances need 15 less relation.', fx: { seats: 1, rates: { diplomacy: 0.1 } } },
 
   // ---------- Age of Discovery ----------
-  { id: 'tercio_doctrine', name: 'Tercio Doctrine', track: 'military', age: 1, year: 1495, cost: 38, req: ['pike_square', 'firearms'], desc: 'Pikemen + Arquebusiers → Tercio.' },
+  { id: 'tercio_doctrine', needs: ['gunpowder', 'iron'], name: 'Tercio Doctrine', track: 'military', age: 1, year: 1495, cost: 38, req: ['pike_square', 'firearms'], desc: 'Pikemen + Arquebusiers → Tercio.' },
   { id: 'star_forts', name: 'Star Forts', track: 'military', age: 1, year: 1500, cost: 34, req: ['bronze_cannon'], desc: 'Walls can rise one level higher than the age allows. +1 wall level in your capital.' },
-  { id: 'wheellock', name: 'Wheellock', track: 'military', age: 1, year: 1515, cost: 38, req: ['firearms'], desc: 'Pistols: Jinetes → Reiters, Knights → Cuirassiers.' },
-  { id: 'naval_gunnery', name: 'Naval Gunnery', track: 'military', age: 1, year: 1510, cost: 38, req: ['bronze_cannon'], desc: 'Build Galleons. Carrack + Bronze Casting → Galleon. +1 navy size.', fx: { navy: 1 } },
+  { id: 'wheellock', needs: ['gunpowder'], name: 'Wheellock', track: 'military', age: 1, year: 1515, cost: 38, req: ['firearms'], desc: 'Pistols: Jinetes → Reiters, Knights → Cuirassiers.' },
+  { id: 'naval_gunnery', needs: ['cannon', 'ships'], name: 'Naval Gunnery', track: 'military', age: 1, year: 1510, cost: 38, req: ['bronze_cannon'], desc: 'Build Galleons. Carrack + Bronze Casting → Galleon. +1 navy size.', fx: { navy: 1 } },
 
-  { id: 'cartography', name: 'Cartography', track: 'economy', age: 1, year: 1495, cost: 34, req: ['navigation'], desc: 'Charts of every coast: +1 trade route, +1 trade post.', fx: { routes: 1, posts: 1 } },
+  { id: 'cartography', needs: ['ocean'], name: 'Cartography', track: 'economy', age: 1, year: 1495, cost: 34, req: ['navigation'], desc: 'Charts of every coast: +1 trade route, +1 trade post.', fx: { routes: 1, posts: 1 } },
   { id: 'double_entry', name: 'Double-Entry Books', track: 'economy', age: 1, year: 1500, cost: 34, desc: 'Every ducat accounted for: +5% income, buildings 10% cheaper.', fx: { income: 0.05, build: 0.1 } },
   { id: 'colonial_charters', name: 'Colonial Charters', track: 'economy', age: 1, year: 1505, cost: 38, req: ['navigation'], desc: 'Build Plantations. +0.1 Economy and Diplomacy cards.', fx: { rates: { economy: 0.1, diplomacy: 0.1 } } },
   { id: 'merchant_marine', name: 'Merchant Marine', track: 'economy', age: 1, year: 1515, cost: 38, desc: 'Ships for hire: +1 trade route, +1 navy size.', fx: { routes: 1, navy: 1 } },
@@ -73,7 +81,7 @@ export const TECHS: TechDef[] = [
   { id: 'diplomatic_corps', name: 'Diplomatic Corps', track: 'state', age: 1, year: 1515, cost: 38, req: ['embassies'], desc: 'Trained envoys: +1 court seat, +0.2 Diplomacy cards.', fx: { seats: 1, rates: { diplomacy: 0.2 } } },
 
   // ---------- Age of Reformation ----------
-  { id: 'musket', name: 'Musket', track: 'military', age: 2, year: 1530, cost: 46, req: ['firearms'], desc: 'Arquebusiers → Musketeers, Tercio → Tercio Viejo.' },
+  { id: 'musket', needs: ['gunpowder'], name: 'Musket', track: 'military', age: 2, year: 1530, cost: 46, req: ['firearms'], desc: 'Arquebusiers → Musketeers, Tercio → Tercio Viejo.' },
   { id: 'standing_army', name: 'Standing Army', track: 'military', age: 2, year: 1560, cost: 49, req: ['tercio_doctrine'], desc: '+3 army size, troop upkeep −20%, +0.2 Military cards a year.', fx: { army: 3, upkeep: 0.2, rates: { military: 0.2 } } },
   { id: 'siege_engineering', name: 'Siege Engineering', track: 'military', age: 2, year: 1545, cost: 46, req: ['star_forts'], desc: 'Sappers and trenches: +5% battle strength, +1 army size.', fx: { battle: 0.05, army: 1 } },
   { id: 'military_drill', name: 'Military Drill', track: 'military', age: 2, year: 1590, cost: 53, req: ['standing_army'], desc: 'Reiters + Muskets → Dragoons. +10% battle strength.', fx: { battle: 0.1 } },
@@ -88,10 +96,10 @@ export const TECHS: TechDef[] = [
   { id: 'absolutism', name: 'Absolutism', track: 'state', age: 2, year: 1600, cost: 53, req: ['councils'], desc: '+1 stability, +2 prestige a year. +1 core card slot. The first realm to learn it opens the Age of Absolutism.', fx: { stability: 1, prestige: 2 } },
 
   // ---------- Age of Absolutism ----------
-  { id: 'flintlock', name: 'Flintlock', track: 'military', age: 3, year: 1630, cost: 53, req: ['musket'], desc: 'Guns that fire in the rain: +5% battle strength, troop upkeep −5%.', fx: { battle: 0.05, upkeep: 0.05 } },
+  { id: 'flintlock', needs: ['gunpowder'], name: 'Flintlock', track: 'military', age: 3, year: 1630, cost: 53, req: ['musket'], desc: 'Guns that fire in the rain: +5% battle strength, troop upkeep −5%.', fx: { battle: 0.05, upkeep: 0.05 } },
   { id: 'military_academies', name: 'Military Academies', track: 'military', age: 3, year: 1640, cost: 57, req: ['military_drill'], desc: 'Officers trained, not born: +2 army size, +0.2 Military cards.', fx: { army: 2, rates: { military: 0.2 } } },
-  { id: 'ship_of_line', name: 'Ship of the Line', track: 'military', age: 3, year: 1650, cost: 57, req: ['naval_gunnery'], desc: 'Build Ships of the Line. +1 navy size.', fx: { navy: 1 } },
-  { id: 'bayonet', name: 'Bayonet', track: 'military', age: 3, year: 1660, cost: 61, req: ['musket', 'military_drill'], desc: 'Musketeers + Bayonets → Line Infantry.' },
+  { id: 'ship_of_line', needs: ['cannon', 'ocean'], name: 'Ship of the Line', track: 'military', age: 3, year: 1650, cost: 57, req: ['naval_gunnery'], desc: 'Build Ships of the Line. +1 navy size.', fx: { navy: 1 } },
+  { id: 'bayonet', needs: ['gunpowder'], name: 'Bayonet', track: 'military', age: 3, year: 1660, cost: 61, req: ['musket', 'military_drill'], desc: 'Musketeers + Bayonets → Line Infantry.' },
 
   { id: 'mercantilism', name: 'Mercantilism', track: 'economy', age: 3, year: 1620, cost: 53, req: ['manufactories'], desc: 'Trade treaties are worth 50% more. +2 trade routes, +1 trade post.', fx: { routes: 2, posts: 1 } },
   { id: 'central_bank', name: 'Central Bank', track: 'economy', age: 3, year: 1660, cost: 61, req: ['banking'], desc: 'A bank of the realm: +10% income.', fx: { income: 0.1, rates: { economy: 0.1 } } },
@@ -105,7 +113,7 @@ export const TECHS: TechDef[] = [
 
   // ---------- Age of Enlightenment ----------
   { id: 'light_infantry', name: 'Light Infantry', track: 'military', age: 4, year: 1705, cost: 64, req: ['flintlock'], desc: 'Skirmishers ahead of the line: +5% battle strength.', fx: { battle: 0.05 } },
-  { id: 'standard_artillery', name: 'Standard Artillery', track: 'military', age: 4, year: 1720, cost: 68, req: ['bayonet'], desc: 'Guns of fixed calibres: +5% battle strength, troop upkeep −5%.', fx: { battle: 0.05, upkeep: 0.05 } },
+  { id: 'standard_artillery', needs: ['cannon'], name: 'Standard Artillery', track: 'military', age: 4, year: 1720, cost: 68, req: ['bayonet'], desc: 'Guns of fixed calibres: +5% battle strength, troop upkeep −5%.', fx: { battle: 0.05, upkeep: 0.05 } },
   { id: 'general_staff', name: 'General Staff', track: 'military', age: 4, year: 1730, cost: 72, req: ['military_academies'], desc: 'Planned campaigns: +3 army size, +0.2 Military cards.', fx: { army: 3, rates: { military: 0.2 } } },
   { id: 'naval_reform', name: 'Naval Reform', track: 'military', age: 4, year: 1715, cost: 64, req: ['ship_of_line'], desc: 'Dockyards and press gangs: +2 navy size.', fx: { navy: 2 } },
 
@@ -122,7 +130,7 @@ export const TECHS: TechDef[] = [
   // ---------- Age of Revolutions ----------
   { id: 'levee_en_masse', name: 'Levée en Masse', track: 'military', age: 5, year: 1793, cost: 80, req: ['general_staff'], desc: 'The whole nation in arms: +4 army size, +2 manpower a year.', fx: { army: 4, manpower: 2 } },
   { id: 'divisions', name: 'Army Divisions', track: 'military', age: 5, year: 1795, cost: 82, req: ['general_staff'], desc: 'Self-contained divisions march apart and fight together: +10% battle strength.', fx: { battle: 0.1 } },
-  { id: 'horse_artillery', name: 'Horse Artillery', track: 'military', age: 5, year: 1790, cost: 78, req: ['standard_artillery'], desc: 'Guns that gallop with the cavalry: +5% battle strength, troop upkeep −5%.', fx: { battle: 0.05, upkeep: 0.05 } },
+  { id: 'horse_artillery', needs: ['cannon', 'horses'], name: 'Horse Artillery', track: 'military', age: 5, year: 1790, cost: 78, req: ['standard_artillery'], desc: 'Guns that gallop with the cavalry: +5% battle strength, troop upkeep −5%.', fx: { battle: 0.05, upkeep: 0.05 } },
   { id: 'copper_hulls', name: 'Copper-Sheathed Hulls', track: 'military', age: 5, year: 1780, cost: 76, req: ['naval_reform'], desc: 'Faster ships that stay at sea for years: +2 navy size.', fx: { navy: 2 } },
 
   { id: 'spinning_jenny', name: 'Spinning Jenny', track: 'economy', age: 5, year: 1770, cost: 78, req: ['steam_pump'], desc: 'Cloth by machine: +10% income.', fx: { income: 0.1 } },

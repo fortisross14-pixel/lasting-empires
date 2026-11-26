@@ -95,6 +95,8 @@ export interface Nation {
   work?: { land: number; focus: number; ships: number; arms: number };
   goal?: { target: string; since: number }; // the realm this one means to have (rivals.ts)
   deeds?: { year: number; text: string }[]; // what it has lately done, newest first
+  learned?: import('./data/heritage').Capability[]; // capabilities adopted through contact (engine/technology.ts)
+  exposure?: Partial<Record<import('./data/heritage').Capability, number>>; // years of contact towards each, so far
 }
 
 export interface Province {

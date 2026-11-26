@@ -144,8 +144,10 @@ export function openCardModal(handUid: number) {
   const footer = h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: closeModal }, 'Keep it'),
     !def.burden ? h('button', { class: 'btn ghost', onclick: () => { closeModal(); act(() => discardCard(S, handUid), 'Discarded: +0.5 nation points', 'Card discarded'); } }, 'Discard (+0.5 NP)') : null);
 
-  if (def.kind === 'troop') {
-    const unit = cardTroop(S, def);
+  if (def.kind === 'troop' && !cardTroop(S, def)) {
+    body.append(h('p', { class: 'bad' }, 'Your people raise no soldiers of this kind. Sell the card, or keep it for the day they do.'));
+  } else if (def.kind === 'troop') {
+    const unit = cardTroop(S, def)!;
     body.append(h('p', {}, `${def.cls ? `Hires your best ${CLASS_NAME[def.cls].toLowerCase()}: ${TROOPS[unit].name}. ` : ''}1 manpower and ${troopHireCost(S, unit)} ducats. Upkeep ${TROOPS[unit].upkeep} a year. A better general trains better troops: veteran stars depend on the outcome.`), goodsNote(hireNeeds(unit, TROOPS[unit].kind)), troopDetails(unit));
     const gens = S.characters.filter(c => (c.role === 'general' || c.role === 'conqueror') && c.mission == null);
     let gsel: Character | null = [...gens].sort((a, b) => RARITY_ORDER_I(b) - RARITY_ORDER_I(a))[0] ?? null;

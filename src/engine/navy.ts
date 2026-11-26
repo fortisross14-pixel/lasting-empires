@@ -6,6 +6,7 @@ import { player, provsOf, hasTech, hasCore, inflation, uid, rollOutcome, outcome
 import { getGeo } from './map';
 import { CARDS, removeCard } from './cards';
 import { RARITY } from '../data/characters';
+import { canRecruitUnit } from './technology';
 
 export function navyCap(s: GameState): number {
   const ps = provsOf(s, s.player);
@@ -27,6 +28,8 @@ export function shipHireCost(s: GameState, type: string): number {
 
 export function shipBlocked(s: GameState, type: string): string | null {
   if (!provsOf(s, s.player).some(p => getGeo().coastal[p.id])) return 'You need a coastal province';
+  const can = canRecruitUnit(s, s.player, type);
+  if (!can.ok) return can.why;
   if (s.fleet.length >= navyCap(s)) return `Navy is at full size (${navyCap(s)}). Build harbours for more.`;
   if (player(s).manpower < 1) return 'Needs 1 manpower';
   if (player(s).gold < shipHireCost(s, type)) return `Needs ${shipHireCost(s, type)} ducats`;

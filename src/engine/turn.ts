@@ -1,6 +1,6 @@
 import { ambitionDef, endAmbition, offerAmbition } from './arc';
 import { rememberRedo } from './routine';
-import { localUnit, checkFirstContact } from './techgroups';
+import { localUnit, checkFirstContact, groupDef } from './techgroups';
 import { groupOfCulture } from '../data/techgroups';
 import { later } from './eventkit';
 import { yearlyCourt, courtAtSuccession, reignOf, reignMark } from './court';
@@ -43,10 +43,13 @@ import { AMBITIONS, ambitionOptions } from './drafts';
 import { START_FLEETS, yearlyFleet } from './navy';
 import { initSociety, yearlySociety } from './society';
 import { yearlySubjects, unionClaim, autoSurrender } from './diplo';
+import { canAcquireEquipment, fitAllArmies, adoptByContact } from './technology';
+import { CAPABILITIES } from '../data/heritage';
+import { deed } from './rivals';
 
 /** The version new games are saved with. Raise it when the shape of a save changes, add the step to MIGRATIONS,
  *  and first run `npm run make-save` so the old version keeps a test save (scripts/saves/). */
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 /** The oldest save that can still be loaded. */
 export const OLDEST_SAVE = 2;
 export const canLoad = (version: number) => version >= OLDEST_SAVE && version <= SAVE_VERSION;
@@ -239,7 +242,8 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   s.stats.kings = [];
   me.ruler.from = r.from;
   for (const c of CATS) { drawCat(s, c); drawCat(s, c); }
-  addCard(s, 'eq_plate');
+  // a first piece of equipment only where the realm can use it (no plate harness for peoples without the craft)
+  if (canAcquireEquipment(s, nationId, 'plate').ok) addCard(s, 'eq_plate'); else if (canAcquireEquipment(s, nationId, 'banner').ok) addCard(s, 'eq_banner');
   addCard(s, 'peace_envoy', true);
   if (later) setupLaterPlayer(s, startYear);
   // the choices of the start screen: difficulty and, for an open game, how long it lasts
@@ -249,6 +253,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   if (len?.years && s.startYear + len.years < s.endYear) { s.endYear = s.startYear + len.years; s.length = len.id; }
   s.steward = { on: diff(s).steward, share: STEWARD_DEFAULT };
   s.flags.rank0 = ranking(s).findIndex(x => x.id === nationId) + 1;
+  fitAllArmies(s, id => groupDef(s, id).lines); // every army within its realm's means (technology.ts)
   settleArmies(s);
   s.stock = startStock(s);
   // wars you inherit on the first day: say so plainly
@@ -471,6 +476,11 @@ export function endTurn(s: GameState): YearReport | null {
     checkAmbition(s);
     autoSurrender(s);
     yearlyGoals(s);
+    // knowledge spreads to the AI realms through years of contact, never by the calendar (technology.ts)
+    for (const a of adoptByContact(s)) {
+      const n = s.nations[a.nation];
+      if (n) deed(s, n, `Learned ${CAPABILITIES.find(c => c.id === a.cap)?.name.toLowerCase() ?? a.cap} from ${nationName(s, a.from)}.`);
+    }
   } else { autoSurrender(s); checkGoals(s, false); }
   scriptedHistory(s);
   if (!provsOf(s, s.player).length) {
@@ -631,7 +641,23 @@ function fromV5(s: GameState) {
   s.ambitions ??= s.ambition ? [{ id: s.ambition, from: s.startYear, ...(s.ambitionDone ? { to: s.year } : {}) }] : [];
   s.reign ??= [];
 }
-const MIGRATIONS: Record<number, (s: GameState) => void> = { 2: fromV2, 3: fromV3, 4: fromV4, 5: fromV5 };
+/** Historical identity, part 1: what a realm can field follows its heritage (technology.ts). A running game keeps
+ *  every company the player raised; equipment cards the realm could never use are exchanged for a nation point each;
+ *  AI armies are fitted to their realms' means. */
+function fromV6(s: GameState) {
+  for (const n of Object.values(s.nations)) { n.learned ??= []; n.exposure ??= {}; }
+  let refund = 0;
+  s.hand = s.hand.filter(h => {
+    const d = CARDS[h.card];
+    if (d?.kind !== 'equip' || !d.equip || canAcquireEquipment(s, s.player, d.equip).missing.length === 0) return true;
+    refund++; return false;
+  });
+  if (refund) { s.np += refund; log(s, `${refund} equipment card${refund > 1 ? 's' : ''} your people cannot use exchanged for ${refund} nation point${refund > 1 ? 's' : ''}.`, 'neutral'); }
+  const mine = { troops: s.troops, fleet: s.fleet };
+  fitAllArmies(s, id => groupDef(s, id).lines);
+  s.troops = mine.troops; s.fleet = mine.fleet; // the player's own companies are kept as they are
+}
+const MIGRATIONS: Record<number, (s: GameState) => void> = { 2: fromV2, 3: fromV3, 4: fromV4, 5: fromV5, 6: fromV6 };
 
 /** After any load, whatever the version: the map may have grown since the save was made. */
 function reconcile(s: GameState) {

@@ -8,11 +8,13 @@ import { player, provsOf, inflation, controlMult, grade, hasTech, hasCore, atWar
 import { NO_STATE } from '../data/nations';
 import { travel } from './army';
 import { rankOf, RANKS } from './realm';
+import { usesPowder } from './technology';
 
 export const EXTRACT = ['farm', 'pasture', 'mine', 'fishery', 'woodcutter', 'plantation'];
 const CULTURE_B = ['temple', 'library', 'university'];
 /** Companies and ships that fire guns. */
-export const GUN_TROOPS = new Set(['arquebusiers', 'tercio', 'field_cannon', 'bombard', 'reiters', 'cuirassiers', 'musketeers', 'old_tercio', 'dragoons', 'line_infantry', 'galleass', 'galleon', 'ship_of_line']);
+/** Soldiers and ships that burn powder: from what each needs (technology.ts), not a list kept by hand. */
+export const GUN_TROOPS = { has: (type: string) => usesPowder(type) };
 
 export const price = (s: GameState, g: string) => (GOODS[g]?.price ?? 1) * inflation(s);
 

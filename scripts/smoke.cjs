@@ -84,7 +84,7 @@ async function run(browser, name, opts) {
   await closeWin();
   if (name === 'phone' && (await p.locator('#agenda.open').count())) await tap('#agenda .ag-head', 'fold the agenda');
   // roadmap 5: the map screen stays a map, not a page of text. A soft limit: 40–50 words is fine, 90 is not.
-  const words = await p.evaluate(() => { let n = 0; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); while (w.nextNode()) { const e = w.currentNode.parentElement; if (e.closest('#map, #toast, [hidden]') || !e.offsetParent) continue; n += (w.currentNode.textContent.match(/[A-Za-zÀ-ÿ]{2,}/g) || []).length; } return n; });
+  const words = await p.evaluate(() => { let n = 0; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); while (w.nextNode()) { const e = w.currentNode.parentElement; if (e.closest('#map, #toast, [hidden]') || !e.offsetParent) continue; n += (w.currentNode.textContent.match(/[A-Za-zÀ-ÿ]{2,}/g) || []).filter(x => x !== 'yr').length; } return n; }); // 'yr' is a unit (+0.8/yr), not prose
   if (words > 50) problems.push(`${name}: the map screen shows ${words} words (50 at most, agenda included)`);
   console.log(`${name}: the map screen shows ${words} words`);
   // every deck and every tab in it

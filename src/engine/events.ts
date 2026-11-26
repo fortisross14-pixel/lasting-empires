@@ -27,6 +27,7 @@ import { getGeo } from './map';
 import { createBattle, makeSide, genericGeneral, transferProvince } from './battle';
 import { cityFalls } from './history';
 import { courtOptions } from './drafts';
+import { raise } from './technology';
 
 export type { EventDef, EventOption, Vars } from './eventkit';
 
@@ -54,7 +55,7 @@ function annexNation(s: GameState, other: string) {
   const o = s.nations[other];
   for (const p of provsOf(s, other)) { p.owner = s.player; p.core = s.player; p.control = Math.max(p.control, 50); }
   const room = armyCap(s) + 4 - s.troops.length;
-  for (const t of o.army.slice(0, Math.max(0, room))) s.troops.push({ uid: uid(s), type: t.type, vet: t.vet, str: t.str });
+  for (const t of o.army.slice(0, Math.max(0, room))) raise(s, s.player, t.type, t.vet, t.str, () => uid(s));
   player(s).gold += Math.max(0, Math.round(o.gold));
   o.alive = false; o.army = [];
   s.wars = s.wars.filter(w => w.a !== other && w.b !== other);
@@ -67,13 +68,14 @@ const BEST: Record<'inf' | 'cav', string[]> = { inf: ['line_infantry', 'musketee
 /** Companies of the best kind the player can field today; returns the troop name. */
 function addTroops(s: GameState, kind: 'inf' | 'cav', n: number) {
   const type = BEST[kind].find(t => !TROOPS[t].tech || hasTech(s, TROOPS[t].tech!)) ?? 'levy';
-  for (let i = 0; i < n; i++) s.troops.push({ uid: uid(s), type, vet: 1, str: 100 });
-  return TROOPS[type].name;
+  let got = type;
+  for (let i = 0; i < n; i++) got = raise(s, s.player, type, 1, 100, () => uid(s)) ?? got; // within the realm's means
+  return TROOPS[got].name;
 }
 /** A realm of the AI raises extra companies of its age. */
 function aiBoost(s: GameState, n: string, k: number) {
   const type = s.year < 1470 ? 'men_at_arms' : s.year < 1552 ? 'pikemen' : s.year < 1685 ? 'musketeers' : 'line_infantry';
-  for (let i = 0; i < k; i++) s.nations[n].army.push({ uid: uid(s), type, vet: 0, str: 100 });
+  for (let i = 0; i < k; i++) raise(s, n, type, 0, 100, () => uid(s));
 }
 /** A lost battle: a share of the player's army is gone (at least one company). */
 function lose(s: GameState, frac: number) {
@@ -126,7 +128,7 @@ export const EVENTS: EventDef[] = [
     options: [
       { label: 'Gold now, and Lemnos after (40 ducats)', can: s => player(s).gold < 40 ? 'Needs 40 ducats' : null, run: s => {
         player(s).gold -= 40;
-        for (let i = 0; i < 3; i++) s.troops.push({ uid: uid(s), type: 'men_at_arms', vet: 2, str: 100 });
+        for (let i = 0; i < 3; i++) raise(s, s.player, 'men_at_arms', 2, 100, () => uid(s));
         s.characters.push({ uid: uid(s), name: 'Giovanni Giustiniani', role: 'general', skill: 5, traits: ['cautious', 'inspiring'], born: 1418, dies: 1453 + 6, rarity: 'legendary', xp: 0 });
         return [good('The Genoese arrive', 'Three veteran companies and a legendary general join the defence.', 'helm')];
       } },
@@ -275,7 +277,7 @@ export const EVENTS: EventDef[] = [
       } },
       { label: 'Let Italy mind itself', run: s => {
         if (!atWar(s, 'france', 'naples')) declareWar(s, 'france', 'naples');
-        for (let i = 0; i < 3; i++) s.nations.france.army.push({ uid: uid(s), type: pick(s, ['men_at_arms', 'knights', 'bombard', 'pikemen']), vet: 1, str: 100 });
+        for (let i = 0; i < 3; i++) raise(s, 'france', pick(s, ['men_at_arms', 'knights', 'bombard', 'pikemen']), 1, 100, () => uid(s));
         return [neutral('Italy burns', 'France and Naples go to war without you.', 'sword')];
       } },
     ],
@@ -328,8 +330,8 @@ export const EVENTS: EventDef[] = [
       { label: 'Hire veterans (−45 ducats)', can: s => player(s).gold < 45 ? 'Needs 45 ducats' : null, run: s => {
         player(s).gold -= 45;
         const types = hasTech(s, 'musket') ? ['musketeers', 'cuirassiers'] : ['arquebusiers', 'knights'];
-        for (const t of types) s.troops.push({ uid: uid(s), type: t, vet: 1, str: 100 });
-        return [good('Veterans arrive', `${types.map(t => TROOPS[t].name).join(' and ')} join your army.`, 'banner')];
+        const got = types.map(t => raise(s, s.player, t, 1, 100, () => uid(s))).filter((t): t is string => !!t); // the nearest your people can field
+        return [good('Veterans arrive', `${got.length ? got.map(t => TROOPS[t].name).join(' and ') : 'Their captains'} join your army.`, 'banner')];
       } },
       { label: 'Keep out of Germany', run: () => [neutral('Peace at home', 'You watch from afar.')] },
     ],
@@ -1008,7 +1010,7 @@ export const EVENTS: EventDef[] = [
     text: () => 'Imam Ahmad ibn Ibrahim of Adal has declared holy war. His army carries Ottoman matchlocks; churches and monasteries burn across the highlands. The Emperor writes to the King of Portugal for help.',
     options: [
       { label: 'Call the Portuguese', can: s => alive(s, 'portugal') ? null : 'Portugal is gone', hint: 'Musketeers and a legendary captain', run: s => {
-        for (let i = 0; i < 2; i++) s.troops.push({ uid: uid(s), type: 'arquebusiers', vet: 1, str: 100 });
+        for (let i = 0; i < 2; i++) raise(s, s.player, 'arquebusiers', 1, 100, () => uid(s));
         addRel(s, P(s), 'portugal', 30); s.flags.claim_adal = 1;
         const g = giveLegend(s, 'cristovao');
         return [good('Four hundred musketeers', 'Two companies of Portuguese Arquebusiers land at Massawa. Portugal +30, and a claim on Adal.', 'anchor'), ...(g ? [good(g, 'Vasco da Gama\'s son leads them.', 'helm')] : [])];

@@ -49,12 +49,15 @@ function isOpen() {
   return innerWidth > 760 && !guided;
 }
 
+/** On the map a line shows four words at most (the map stays a map); the full title is in the list and the label. */
+const shortTitle = (t: string) => { const w = t.split(/\s+/); return w.length > 4 ? w.slice(0, 4).join(' ') + '…' : t; };
+
 /** One line of the agenda: the tier, what it is, one line of why, and a tap to go. `brief`: the title alone, for the
  *  panel over the map (the map stays a map); the why is in the full list and read out to screen readers. */
 export function agendaRow(a: Attention, onGo: () => void, brief = false, grouped = false) {
   return h('button', { class: `ag-row t-${a.tier}${brief ? ' brief' : ''}`, onclick: onGo, 'aria-label': `${TIER_NAMES[a.tier]}: ${a.title}. ${a.text}` },
     h('span', { class: 'ag-i', html: icon(a.icon, 18) }),
-    h('span', { class: 'ag-t' }, brief || grouped ? null : h('small', { class: 'ag-tier' }, `${TIER_MARKS[a.tier]} ${TIER_NAMES[a.tier]}`), h('b', {}, brief ? h('span', { class: 'ag-mark', 'aria-hidden': 'true' }, TIER_MARKS[a.tier] + ' ') : null, brief ? a.short ?? a.title : a.title), brief ? null : h('span', { class: 'ag-sub' }, a.text)),
+    h('span', { class: 'ag-t' }, brief || grouped ? null : h('small', { class: 'ag-tier' }, `${TIER_MARKS[a.tier]} ${TIER_NAMES[a.tier]}`), h('b', {}, brief ? h('span', { class: 'ag-mark', 'aria-hidden': 'true' }, TIER_MARKS[a.tier] + ' ') : null, brief ? shortTitle(a.short ?? a.title) : a.title), brief ? null : h('span', { class: 'ag-sub' }, a.text)),
     h('span', { class: 'a-go', html: icon('next', 14) }));
 }
 

@@ -8,6 +8,8 @@ import { TROOPS, RECIPES, type Recipe } from '../data/troops';
 import { LEGENDS } from '../data/characters';
 import { player, hasTech, rand, uid, genCharacter, courtCap, courtCount, provsOf, log, inflation } from './core';
 import { CARDS, buyCost, randomCard, removeCard, handOf, handLimit, addCard, poolOf, type CardType } from './cards';
+import { canForgeRecipe } from './technology';
+import { raise } from './technology';
 
 // ---------- buying cards ----------
 export function buyBlocked(s: GameState, cat: Cat, type?: CardType): string | null {
@@ -71,7 +73,7 @@ export function hireWithCard(s: GameState, handUid: number): string | null {
 }
 
 export function takeDraftOption(s: GameState, opt: DraftOption) {
-  if (opt.t === 'troop') s.troops.push({ uid: uid(s), type: opt.type, vet: opt.vet, str: 100 });
+  if (opt.t === 'troop') raise(s, s.player, opt.type, opt.vet, 100, () => uid(s));
   else if (opt.t === 'card') s.hand.push({ uid: uid(s), card: opt.card });
   else if (opt.t === 'char') {
     s.characters.push(opt.ch);
@@ -114,6 +116,9 @@ export function mergePreview(s: GameState, aUid: number, bUid: number): MergeRes
   }
   const r = RECIPES.find(x => (x.a === A && x.b === B) || (x.a === B && x.b === A));
   if (!r) return { error: 'These cards do not combine' };
+  // the realm's means first: no Knights without horses, whatever cards it holds (research is told separately)
+  const can = canForgeRecipe(s, s.player, r);
+  if (!can.ok && can.missing.length) return { error: can.why! };
   const vet = Math.max(ta?.vet ?? 0, tb?.vet ?? 0);
   const cost = Math.round(r.cost * inflation(s));
   // two companies make a better kind of company and keep 90% of their joint strength; equipment upgrades one

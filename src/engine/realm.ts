@@ -11,6 +11,7 @@ import { RARITY } from '../data/characters';
 import { BUILDINGS } from '../data/techs';
 import { buildingAllowed } from './core';
 import { makeSide, createBattle, toBattleUnits, genericGeneral, finishBattle } from './battle';
+import { fitType } from './technology';
 
 // ---------- rank ----------
 export interface RankDef { id: string; name: string; min: number; missions: number; viceroys: number; }
@@ -151,6 +152,7 @@ export function createNation(s: GameState, o: { id: string; name: string; adj: s
     ruler: { name: o.ruler ?? 'the rebel council', traits: [], arch: 'martial', skill: 3, from: s.year, to: s.year + 20 },
   };
   s.nations[id] = n;
+  n.army = n.army.flatMap(t => { const f = fitType(s, id, t.type); return f ? [{ ...t, type: f }] : []; }); // within its people's means
   for (const pid of o.provinces) { const p = s.provinces[pid]; p.owner = id; p.control = 50; }
   s.flags['dev0_' + id] = o.provinces.reduce((a, pid) => a + s.provinces[pid].dev, 0);
   return n;

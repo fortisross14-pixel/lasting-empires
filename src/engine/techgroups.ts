@@ -7,6 +7,7 @@ import { TROOPS } from '../data/troops';
 import { borders, atWar, provsOf } from './core';
 import { provRegion } from './overseas';
 import { later } from './eventkit';
+import { capsOf, researchBlock } from './technology';
 
 export const groupOf = (s: GameState, id = s.player): TechGroup => groupOfCulture(s.nations[id]?.culture ?? '');
 export const groupDef = (s: GameState, id = s.player) => TECH_GROUPS[groupOf(s, id)];
@@ -21,28 +22,13 @@ export function contactGroups(s: GameState, id = s.player): Set<TechGroup> {
   cache = { key, groups: out };
   return out;
 }
-/** Has this realm met a people who know the things a bridge study opens? */
-function hasContactFor(s: GameState, bridge: string, id: string): boolean {
-  if (id === s.player && s.flags.first_contact) return true; // the strangers have come (checkFirstContact)
-  const opened = Object.entries(BRIDGE_FOR).filter(([, b]) => b === bridge).map(([tech]) => tech);
-  for (const other of contactGroups(s, id)) if (opened.some(t => !TECH_GROUPS[other].closed.includes(t))) return true;
-  return false;
-}
-/** Does this realm need the study at all? Only where its group keeps something closed. */
-export const needsBridge = (s: GameState, bridge: string, id = s.player) => groupDef(s, id).closed.some(t => BRIDGE_FOR[t] === bridge);
-/** Why a technology cannot yet be studied by this realm, or null if it can. A closed technology needs its bridge
- *  study first; a bridge study needs contact with a people who know what it opens (a shared border or a war). */
+/** Does this realm need a strangers' study at all? Only where it lacks something the study opens. */
+export const needsBridge = (s: GameState, bridge: string, id = s.player) => (TECH[bridge]?.grants ?? []).some(c => !capsOf(s, id).has(c));
+/** Why a technology cannot yet be studied by this realm, or null if it can: its capabilities (technology.ts), and for
+ *  a strangers' study a realm in contact that has what it opens. The First Contact event counts as that contact. */
 export function closedBecause(s: GameState, tech: string, id = s.player): string | null {
-  const g = groupDef(s, id);
-  if (TECH[tech]?.bridge) {
-    if (!needsBridge(s, tech, id)) return 'Not needed: your people know these things already';
-    if (!hasContactFor(s, tech, id)) return `Needs contact with a people who know it: a shared border, or a war`;
-    return null;
-  }
-  if (!g.closed.includes(tech)) return null;
-  const bridge = BRIDGE_FOR[tech];
-  if (bridge && !s.techs.includes(bridge)) return `Unknown in ${g.name.replace(/^The /, 'the ')}: first study ${TECH[bridge].name}`;
-  return null;
+  if (TECH[tech]?.bridge && id === s.player && s.flags.first_contact && needsBridge(s, tech, id)) return null;
+  return researchBlock(s, tech, id);
 }
 
 /** The European types in the order of their class line, to find a type's place. */
@@ -69,11 +55,11 @@ export function localUnit(group: TechGroup, type: string): string | null {
  *  the world (a colony in a region where it holds land), or met it on a border or in war? The first time, the
  *  First Contact event tells the player, and the bridge studies open. */
 export function checkFirstContact(s: GameState) {
-  if (s.flags.first_contact || !groupDef(s).closed.length) return;
+  if (s.flags.first_contact || capsOf(s).has('gunpowder')) return;
   const mine = new Set(provsOf(s, s.player).map(p => provRegion(p.id)));
-  const knows = (owner: string) => !!s.nations[owner]?.alive && owner !== s.player && !TECH_GROUPS[groupOf(s, owner)].closed.includes('firearms');
+  const knows = (owner: string) => !!s.nations[owner]?.alive && owner !== s.player && capsOf(s, owner).has('gunpowder');
   const landed = Object.values(s.provinces).find(p => knows(p.owner) && mine.has(provRegion(p.id)));
-  const met = landed ? null : [...contactGroups(s)].some(g => !TECH_GROUPS[g].closed.includes('firearms')) ? Object.values(s.nations).find(n => knows(n.id) && (borders(s, s.player, n.id) || atWar(s, s.player, n.id))) : null;
+  const met = landed ? null : Object.values(s.nations).find(n => knows(n.id) && (borders(s, s.player, n.id) || atWar(s, s.player, n.id)));
   const who = landed?.owner ?? met?.id;
   if (!who) return;
   s.flags.first_contact = s.year;

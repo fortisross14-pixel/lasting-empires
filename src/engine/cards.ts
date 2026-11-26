@@ -7,6 +7,7 @@ import { getGeo, neighbours } from './map';
 import type { GameState, Cat, Role, MissionKind } from '../types';
 import { CATS } from '../types';
 import { TROOPS, EQUIPMENT } from '../data/troops';
+import { canEverRecruit, canRecruitUnit, canAcquireEquipment, raise } from './technology';
 import { TECH, TECHS, BUILDINGS, TECH_RATES, type TechTrack, type BuildingGroup } from '../data/techs';
 import { GOVS } from '../data/governments';
 import { RULER_ARCHS } from '../data/nations';
@@ -142,11 +143,16 @@ export const UNIT_LINES: Record<UnitClass, string[]> = {
 export const CLASS_NAME: Record<UnitClass, string> = { levy: 'Levy Infantry', inf: 'Infantry', shot: 'Ranged', cav: 'Cavalry', art: 'Artillery' };
 /** The unit a class card hires now. */
 /** The unit a class card hires now: the last of the realm's own line that its research allows (techgroups.ts). */
-export const unitFor = (s: GameState, cls: UnitClass) => { const line = groupDef(s).lines[cls] ?? UNIT_LINES[cls]; return [...line].reverse().find(t => techOk(s, TROOPS[t].tech)) ?? line[0]; };
-/** Can this realm raise this kind of troop at all? (No horses or guns in the Americas.) */
-export const classOpen = (s: GameState, cls: UnitClass) => !!groupDef(s).lines[cls]?.length;
+/** Its means count first (technology.ts): an Inca realm's Hire Cavalry finds no horsemen, not Jinetes. Returns the
+ *  most basic of the line the realm could field when its research has none yet, and null when it can field none. */
+export const unitFor = (s: GameState, cls: UnitClass): string | null => {
+  const line = (groupDef(s).lines[cls] ?? []).filter(t => canEverRecruit(s, s.player, t));
+  return [...line].reverse().find(t => techOk(s, TROOPS[t].tech)) ?? line[0] ?? null;
+};
+/** Can this realm raise this kind of troop at all? (No horses or guns where the people have none.) */
+export const classOpen = (s: GameState, cls: UnitClass) => unitFor(s, cls) != null;
 /** The unit a troop card hires. */
-export const cardTroop = (s: GameState, d: HandCardDef) => (d.cls ? unitFor(s, d.cls) : d.troop!);
+export const cardTroop = (s: GameState, d: HandCardDef): string | null => (d.cls ? unitFor(s, d.cls) : d.troop!);
 const CLASS_CARDS: [string, UnitClass, string, number, string][] = [
   ['hire_levy', 'levy', 'Levy Infantry', 3, 'Peasants with spears: cheap, and the base for many recipes.'],
   ['hire_infantry', 'inf', 'Hire Infantry', 2.5, 'Your best foot soldiers, of the kind your people raise.'],
@@ -162,12 +168,12 @@ for (const t of Object.values(TROOPS).filter(t => t.draftable && t.kind !== 'shi
 const SHIP_WEIGHT: Record<string, number> = { galley: 1.4, caravel: 1.2, carrack: 1.2, galleon: 1.2, man_of_war: 1 };
 for (const t of Object.values(TROOPS).filter(t => t.draftable && t.kind === 'ship')) {
   add({ id: 'ship_' + t.id, name: t.name, cat: 'military', kind: 'ship', troop: t.id, icon: t.icon, text: `${t.desc} Carries ${t.transport} companies.`,
-    weight: s => (techOk(s, t.tech) && provsOf(s, s.player).some(p => p.buildings.includes('harbour') || (getGeo().coastal[p.id] && p.dev >= 3)) ? SHIP_WEIGHT[t.id] ?? 1 : 0) });
+    weight: s => (canRecruitUnit(s, s.player, t.id).ok && provsOf(s, s.player).some(p => p.buildings.includes('harbour') || (getGeo().coastal[p.id] && p.dev >= 3)) ? SHIP_WEIGHT[t.id] ?? 1 : 0) });
 }
 for (const e of Object.values(EQUIPMENT)) {
   add({ id: 'eq_' + e.id, name: e.name, cat: 'military', kind: 'equip', equip: e.id, icon: e.icon, text: e.desc,
     // plate and warhorses are European kit: the merge recipes make European troops (knights, men-at-arms)
-    weight: s => (techOk(s, e.tech) && (e.id === 'banner' || groupDef(s).mercenaries) ? (e.id === 'banner' ? 0.6 : e.tech ? 1.8 : 1.2) : 0) });
+    weight: s => (canAcquireEquipment(s, s.player, e.id).ok && (e.id === 'banner' || groupDef(s).mercenaries) ? (e.id === 'banner' ? 0.6 : e.tech ? 1.8 : 1.2) : 0) });
 }
 add({ id: 'hire_general', name: 'Recruit a General', cat: 'military', kind: 'hire', role: 'general', icon: 'helm', text: 'Meet three captains, keep one. Costs 1 manpower.', weight: () => 1.1 });
 add({ id: 'march_orders', name: 'March Orders', cat: 'military', kind: 'mission', missions: ['conquer', 'raid', 'base'], icon: 'sword', text: 'Send a general and troops to conquer or raid an enemy province within a quarter\'s march, or to set up an invasion base near a far one.', weight: s => (s.wars.some(w => w.a === s.player || w.b === s.player) ? 0.6 : 0.2) });
@@ -183,10 +189,10 @@ add({ id: 'ambush', name: 'Ambush', cat: 'military', kind: 'instant', icon: 'eye
   play: s => { s.flags.ambush = 1; return 'Scouts are ready for the next battle'; } });
 add({ id: 'condottieri', name: 'Swiss Captain', cat: 'military', kind: 'instant', icon: 'pike', text: 'Pay 35 ducats: hire a 1-star company of Swiss Pikes (no manpower needed).', weight: s => (groupDef(s).mercenaries ? 0.6 : 0),
   can: s => player(s).gold < 35 ? 'Needs 35 ducats' : s.troops.length >= armyCap(s) ? 'Army is at full size' : null,
-  play: s => { player(s).gold -= 35; s.troops.push({ uid: uid(s), type: 'swiss', vet: 1, str: 100 }); return 'Swiss Pikes join your army'; } });
+  play: s => { player(s).gold -= 35; const t = raise(s, s.player, 'swiss', 1, 100, () => uid(s)); return `${t ? TROOPS[t].name : 'The captain'} join${t ? '' : 's'} your army`; } });
 add({ id: 'conquistadors', name: 'Conquistadors', cat: 'military', kind: 'instant', icon: 'gun', text: 'Veterans return from overseas: gain a 1-star troop for free.', weight: never,
   can: s => s.troops.length >= armyCap(s) ? 'Army is at full size' : null,
-  play: s => { const type = hasTech(s, 'firearms') ? 'arquebusiers' : 'men_at_arms'; s.troops.push({ uid: uid(s), type, vet: 1, str: 100 }); return `${TROOPS[type].name} join your army`; } });
+  play: s => { const want = hasTech(s, 'firearms') ? 'arquebusiers' : 'men_at_arms'; const type = raise(s, s.player, want, 1, 100, () => uid(s)) ?? want; return `${TROOPS[type].name} join your army`; } });
 
 // ---------- diplomacy ----------
 add({ id: 'hire_diplomat', name: 'Engage a Diplomat', cat: 'diplomacy', kind: 'hire', role: 'diplomat', icon: 'scroll', text: 'Meet three envoys, keep one. Costs 1 manpower.', weight: () => 1.1 });
@@ -452,12 +458,16 @@ export function cardBlocked(s: GameState, def: HandCardDef): string | null {
     if (def.cls === 'levy' && !govOf(s).levies) return 'Only a Feudal Monarchy raises levies';
     if (player(s).manpower < 1) return 'Needs 1 manpower';
     if (s.troops.length >= armyCap(s)) return `Army is at full size (${armyCap(s)})`;
-    if (player(s).gold < troopHireCost(s, cardTroop(s, def))) return `Needs ${troopHireCost(s, cardTroop(s, def))} ducats`;
+    const type = cardTroop(s, def);
+    if (!type) return 'Your people raise no soldiers of this kind';
+    const can = canRecruitUnit(s, s.player, type);
+    if (!can.ok) return can.why!; // an old single-unit card the realm cannot field: kept, but not playable
+    if (player(s).gold < troopHireCost(s, type)) return `Needs ${troopHireCost(s, type)} ducats`;
     return null;
   }
   if (def.kind === 'hire') return player(s).manpower < 1 ? 'Needs 1 manpower' : null;
   if (def.kind === 'ship') return shipBlocked(s, def.troop!);
-  if (def.kind === 'equip') return s.troops.some(t => t.mission == null) ? null : 'No troop at home to equip';
+  if (def.kind === 'equip') { const can = canAcquireEquipment(s, s.player, def.equip!); if (!can.ok) return can.why; return s.troops.some(t => t.mission == null) ? null : 'No troop at home to equip'; }
   if (def.kind === 'mission') return null;
   if (def.can) { const r = def.can(s); if (r) return r; }
   if (def.target === 'nation' && !Object.values(s.nations).some(n => n.alive && n.id !== s.player)) return 'No other nation';
@@ -484,7 +494,7 @@ export function playCard(s: GameState, handUid: number, target: string): string 
   if (def.kind === 'troop') {
     const gen = s.characters.find(c => String(c.uid) === target && c.mission == null && (c.role === 'general' || c.role === 'conqueror'));
     player(s).manpower -= 1;
-    const type = cardTroop(s, def);
+    const type = cardTroop(s, def)!; // cardBlocked has made sure there is one
     player(s).gold -= troopHireCost(s, type);
     takeGoods(s, hireNeeds(type, TROOPS[type].kind));
     const o = rollOutcome(s, gen);
