@@ -358,7 +358,7 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
     if (show(0)) boxAppend(row);
     const turnsInto = becomesOnMission(kind, ch, naval && ships.length > 0);
     if (turnsInto && show(0)) boxAppend(h('p', { class: 'bad' }, `${ch.name} will become ${/^[aeiou]/i.test(turnsInto) ? 'an' : 'a'} ${roleName[turnsInto].toLowerCase()} for good: new skills, no going back.`));
-    if (!['conquer', 'raid'].includes(kind) && show(0)) boxAppend(h('div', { class: 'oddsbox' }, h('small', { class: 'muted' }, `Outcome odds with a ${RARITY[ch.rarity].name} ${roleName[ch.role].toLowerCase()}:`), oddsLine(ch)));
+    if (!['conquer', 'raid'].includes(kind) && !DIPLO.includes(kind) && show(0)) boxAppend(h('div', { class: 'oddsbox' }, h('small', { class: 'muted' }, `Outcome odds with a ${RARITY[ch.rarity].name} ${roleName[ch.role].toLowerCase()}:`), oddsLine(ch)));
     const turns = missionTurns(S, kind, ch, target, building);
     const facts: (string | HTMLElement)[] = [qText(turns)];
     // the one thing that decides this task, said first and large in the decision panel

@@ -92,7 +92,7 @@ export function showReveal(title: string, subtitle: string | undefined, items: R
   // an age opens (or its page is asked for) with its plate, the name written across the sky
   const era = ERAS.find(e => e.name === title);
   const plate = era ? h('div', { class: 'age-plate' }, h('img', { src: `art/age_${era.id}.webp`, alt: '', width: '960', height: '640', decoding: 'async' }), h('h2', {}, title)) : null;
-  openModal(h('div', { class: 'mbox reveal' + (alarm ? ' alarm' : '') + (plate ? ' has-plate' : '') }, alarm ? h('div', { class: 'alarm-band', html: icon('sword', 28) }) : null, plate ?? h('h2', {}, title), story ? becauseBand(story) : null, subtitle ? h('p', { class: 'muted' }, subtitle) : null, row, story ? changesBox(story) : null,
+  openModal(h('div', { class: 'mbox reveal' + (alarm ? ' alarm' : '') + (plate ? ' has-plate' : '') }, alarm ? h('div', { class: 'alarm-band', html: icon('sword', 28) }) : null, plate ?? h('h2', {}, title), story ? becauseBand(story) : null, subtitle ? h('p', { class: 'muted' }, subtitle) : null, row, story && (story.changes.length || title !== 'Battle report') ? changesBox(story) : null,
     h('div', { class: 'mrow' }, story ? seeItButton(story, done) : null, h('button', { class: 'btn primary', onclick: done }, 'Continue'))));
   if (alarm) sfx('drum');
   void flipAll(flips).then(() => { const s = stingFor(items, alarm); if (s) sfx(s, 0.12); });

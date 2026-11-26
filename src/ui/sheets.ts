@@ -561,7 +561,7 @@ function rulesTab(body: HTMLElement) {
     h('h3', {}, 'Finding your way'),
     h('p', {}, 'The buttons at the right of the map: search, home (your realm and its border), the next danger, the next army and the mission targets. Each press of danger or army moves on to the next one. Agenda lines that are about one place put a pin on it: ! urgent, ✦ an opportunity, ▾ a risk.'),
     h('p', {}, 'Colour is never the only sign. In Menu → Settings, Patterns on the map hatches realms at war with you, dots your allies and rings your subjects; High contrast darkens greys and lines; Interface size and Spacing make windows larger or fit more in them.'),
-    h('p', { class: 'muted' }, 'Keys: Ctrl+Z or U undo · / search · H home · T next danger · A next army · G mission targets · Escape goes back one step. In search, a word lists things: idle, war, unrest, short, agenda; a role (merchant, general…) lists everyone of that role.'));
+    h('p', { class: 'muted' }, 'Keys: Ctrl+Z or U undo · / search · H home · T next danger · R next army · G mission targets · W A S D or the arrows move the map, Q and E zoom, Shift moves faster · Escape goes back one step. In search, a word lists things: idle, war, unrest, short, agenda; a role (merchant, general…) lists everyone of that role.'));
 }
 
 export function chronicleSheet(body: HTMLElement) {

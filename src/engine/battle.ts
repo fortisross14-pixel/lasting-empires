@@ -1,5 +1,6 @@
 // Battles: three rounds, each side commits a face-down tactic, then both flip.
 import { rememberBattle } from './arc';
+import { pushBattleReport } from './report';
 import { TERRAINS, LANDING_FIRE, terrainOf, type Terrain } from '../data/terrain';
 import { troopsNear } from './army';
 import { commanderFate } from './commanders';
@@ -422,6 +423,7 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
         lines.push('The fleet clears the way. The army goes ashore.');
         if (res.lost.length) lines.push(`Lost: ${res.lost.join(', ')}.`);
         log(s, title, 'good');
+        pushBattleReport(s, b, owner0);
         landPhase(s, b.follow.missionId!);
         return { title, lines, good };
       }
@@ -498,6 +500,7 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
   log(s, title, good ? 'good' : 'bad');
   // land that changes hands in a battle you fought is a moment of the reign (arc.ts)
   if (playerInvolved && prov && owner0 !== prov.owner && (owner0 === s.player || prov.owner === s.player)) rememberBattle(s, b, prov.name, prov.owner === s.player, title);
+  pushBattleReport(s, b, owner0); // the report: outcome, and each side's losses
   return { title, lines, good };
 }
 

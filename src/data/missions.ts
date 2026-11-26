@@ -10,7 +10,22 @@ export interface MissionDef {
   cards?: string[];       // cards handed over at the start, so the lesson can begin at once
   gold?: number;          // ducats handed over at the start
   steps?: { g: Goal; hint: string }[]; // guided: done in order, each with a hint
+  /** Tags worked out from the data (src/engine/missiontags.ts) can be set by hand here instead. */
+  difficulty?: 'beginner' | 'easy' | 'medium' | 'difficult';
+  regions?: ('Europe' | 'Middle East' | 'Africa' | 'Asia' | 'Americas')[];
+  topics?: ('Military' | 'Diplomacy' | 'Exploration' | 'Trade' | 'Research' | 'Building' | 'People' | 'Government')[];
 }
+
+/** How hard each mission is, judged by hand from what the realm faces (a new mission without one is rated by
+ *  missionTags from its realm's size, goals and time). */
+export const MISSION_DIFFICULTY: Record<string, 'easy' | 'medium' | 'difficult'> = {
+  conqueror: 'easy', treasure_fleets: 'easy', akbar: 'easy', peter: 'easy', kangxi: 'easy',
+  golden_age: 'medium', sea_road: 'medium', lion_st_mark: 'medium', third_rome: 'medium', aeiou: 'medium', gold_mali: 'medium',
+  lion_north: 'medium', rule_waves: 'medium', long_war: 'medium', liberte: 'medium', african_world: 'medium', mughal_europe: 'medium',
+  fifth_sun: 'difficult', dutch_golden_age: 'difficult', thirteen: 'difficult', prussia_rise: 'difficult', maratha_rise: 'difficult',
+  abubakari: 'difficult', aztec_armada: 'difficult', rome_reborn: 'difficult', swiss_navy: 'difficult', irish_revenge: 'difficult',
+  ethiopia_crusade: 'difficult', japan_australia: 'difficult', papal_empire: 'difficult', colonies_strike: 'difficult',
+};
 
 const NEW_WORLD = ['caribbean', 'mexico', 'north_america', 'brazil', 'andes', 'plata'];
 const ITALY = ['venice', 'milan', 'florence', 'naples', 'papacy', 'genoa', 'savoy'];

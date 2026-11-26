@@ -107,7 +107,6 @@ export function showGameMenu() {
   openModal(h('div', { class: 'mbox narrow gmenu' },
     h('div', { class: 'gm-head' }, h('h2', {}, 'Menu'), h('button', { class: 'iconbtn', 'aria-label': 'Close', onclick: closeModal, html: icon('close', 18) })),
     h('div', { class: 'gm-list' },
-      row('hourglass', 'Tasks under way', S.missions.length ? 'Your people at work, and when they finish' : 'Nobody is at work right now', () => openSheet('missions'), S.missions.length ? String(S.missions.length) : ''),
       row('gear', 'Settings', `${(DIFFICULTY[S.difficulty ?? STANDARD] ?? DIFFICULTY[STANDARD]).name} · reminders ${settings().warn ? 'on' : 'off'}`, () => showSettings())),
     h('p', { class: 'muted small gm-save' }, `Saved in slot ${slot} every season.`),
     h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: () => { saveNow(); closeModal(); showTitle(); } }, 'Save and exit to title'), h('button', { class: 'btn primary', onclick: closeModal }, 'Continue'))));

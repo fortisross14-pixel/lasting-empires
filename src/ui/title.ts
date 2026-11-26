@@ -26,6 +26,7 @@ import {
 } from './state';
 import { start, toast, SEASONS } from './app';
 import { armBack, setScreenBack } from './modal';
+import { missionTags, matches, EMPTY_FILTER, DIFFICULTIES, LENGTHS_TAG, REGIONS_TAG, TOPICS, SHORT_YEARS, MEDIUM_YEARS, type MissionTags, type MissionFilter } from '../engine/missiontags';
 
 // ---------- shell ----------
 export function boot(data: { save?: string; slot?: number }) {
@@ -114,9 +115,18 @@ export function missionCard(m: MissionDef) {
   const pv = previewFor(m.start);
   return h('button', { type: 'button', class: 'mcard' + (m.wild ? ' wild' : '') + (done ? ' done' : '') + (m.beginner ? ' beginner' : ''), onclick: () => showMissionDetail(m) },
     h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon(done ? 'laurel' : m.icon, 24) }), h('div', {}, h('b', {}, m.name), h('small', {}, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`)), m.wild ? h('span', { class: 'mc-wild' }, 'Wild') : null),
+    tagRow(m),
     h('div', { class: 'mc-foot' },
       h('span', { class: 'mc-realms' }, ...m.nations.map(n => { const nn = pv.nations[n]; return h('span', { class: 'mc-realm' }, nn ? shield(n, nn.color, true) : null, nn?.name ?? n); })),
       h('span', { class: 'mc-state' }, done ? '✓ Done' : 'Details ›')));
+}
+
+/** A mission's tags in one quiet row: difficulty first, then length, where and what. */
+export function tagRow(m: MissionDef) {
+  const t = tagsOf(m);
+  return h('div', { class: 'mc-tags' },
+    h('span', { class: 'mt mt-d mt-' + t.difficulty }, DIFF_NAME[t.difficulty]), h('span', { class: 'mt' }, t.length.charAt(0).toUpperCase() + t.length.slice(1)),
+    ...t.regions.map(r => h('span', { class: 'mt' }, r)), ...t.topics.map(x => h('span', { class: 'mt mt-topic' }, x)));
 }
 
 /** A mission's full briefing, with the button that starts it. */
@@ -130,7 +140,8 @@ export function showMissionDetail(m: MissionDef) {
     // laptop first: the briefing and the button on the left, the steps on the right; every text capped
     h('div', { class: 'md-body md-grid' },
       h('section', { class: 'md-brief' },
-        h('p', { class: 'md-meta' }, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`, m.wild ? ' · Wild' : m.beginner ? ' · Beginner' : ' · Historic'),
+        h('p', { class: 'md-meta' }, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`, m.wild ? ' · Wild' : ' · Real history'),
+        tagRow(m),
         done ? h('div', { class: 'mc-done' }, done.realm ? `✓ Completed with ${done.realm} in ${done.year}` : '✓ Completed') : null,
         h('p', { class: 'md-lede' }, capped(m.text, 30)),
         m.beginner ? h('div', { class: 'mc-learn' }, `You learn: ${m.beginner}`) : null,
@@ -159,42 +170,58 @@ export function section(key: string, title: string, openByDefault: boolean, ...k
 }
 
 export let missionYear = 1451;
-/** The missions screen. `focus`: open that section (beginner or historic) and bring it into view. */
+/** The filter of the missions screen, kept on this device. */
+export const FILTER_KEY = 'lasting-empires.mission-filter';
+const filterOf = (): MissionFilter => ({ ...EMPTY_FILTER, ...kvJson<Partial<MissionFilter>>(FILTER_KEY, {}) });
+const saveFilter = (f: MissionFilter) => kvSet(FILTER_KEY, JSON.stringify(f));
+/** The tags of every mission, worked out once (each needs the world of its start year). */
+let tagCache: Record<string, MissionTags> | null = null;
+export const tagsOf = (m: MissionDef) => ((tagCache ??= {})[m.id] ??= missionTags(m, previewFor(m.start)));
+const LENGTH_NAME: Record<string, string> = { short: `Short (up to ${SHORT_YEARS} years)`, medium: `Medium (up to ${MEDIUM_YEARS})`, long: 'Long' };
+const DIFF_NAME: Record<string, string> = { beginner: 'Beginner', easy: 'Easy', medium: 'Medium', difficult: 'Difficult' };
+
+/** The missions screen: every mission, filtered by tags (start, real or wild, length, difficulty, region, topic).
+ *  `focus` presets the filter: the beginner lessons, or the real missions. */
 export function showMissions(focus?: 'beg' | 'real') {
   setScreenBack(showTitle); armBack();
-  if (focus) { const f = folds(); f[focus] = true; kvSet(FOLD_KEY, JSON.stringify(f)); if (focus === 'beg' && !MISSIONS.some(m => m.beginner && m.start === missionYear)) missionYear = MISSIONS.find(m => m.beginner && !missionsDone()[m.id])?.start ?? missionYear; }
+  if (focus) saveFilter({ ...EMPTY_FILTER, ...(focus === 'beg' ? { difficulty: ['beginner'] } : { real: ['real'], difficulty: ['easy', 'medium', 'difficult'] }) });
+  const f = filterOf();
+  const d = missionsDone();
+  const list = MISSIONS.filter(m => matches(tagsOf(m), f, !!d[m.id]));
+  const toggle = <K extends keyof MissionFilter>(k: K, v: MissionFilter[K] extends (infer T)[] ? T : never) => {
+    const cur = f[k] as unknown[];
+    (f[k] as unknown[]) = cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v];
+    saveFilter(f); showMissions();
+  };
+  const count = (pred: (t: MissionTags, m: MissionDef) => boolean) => MISSIONS.filter(m => pred(tagsOf(m), m) && (f.completed || !d[m.id])).length;
+  const facet = <K extends keyof MissionFilter>(title: string, k: K, values: { v: MissionFilter[K] extends (infer T)[] ? T : never; label: string; n: number }[]) =>
+    h('div', { class: 'mf-facet' }, h('h3', {}, title), h('div', { class: 'mf-chips' }, values.filter(x => x.n > 0).map(x =>
+      h('button', { class: 'mf-chip' + ((f[k] as unknown[]).includes(x.v) ? ' on' : ''), 'aria-pressed': String((f[k] as unknown[]).includes(x.v)), onclick: () => toggle(k, x.v) }, x.label, h('small', {}, ` ${x.n}`)))));
+  const any = f.start.length + f.real.length + f.length.length + f.difficulty.length + f.regions.length + f.topics.length > 0 || !f.completed;
   const root = clear($('#app'));
   const mine = customMissions();
-  root.append(h('div', { class: 'missions-screen' },
-    h('header', { class: 'pick-top' }, h('button', { class: 'btn ghost small', onclick: () => showTitle() }, '← Back'), h('h1', {}, 'Missions')),
-    (() => {
-      const all = MISSIONS.length, n = doneCount(), d = missionsDone();
-      return h('div', { class: 'mprog' },
-        h('div', { class: 'mprog-t' }, h('b', {}, `${n} of ${all} missions completed`), h('small', {}, START_YEARS.map(y => `${y}: ${MISSIONS.filter(m => m.start === y && d[m.id]).length}/${MISSIONS.filter(m => m.start === y).length}`).join(' · '))),
-        h('i', { class: 'mprog-bar' }, h('i', { style: `width:${Math.round((n / all) * 100)}%` })),
-        h('small', { class: 'muted' }, n === all ? 'Every mission done. A true Lasting Empire!' : 'The great goal: complete every mission, in any order. A realm, a deadline and a few goals each; track them in the Goals window. Win or lose, the world goes on.'));
-    })(),
-    h('div', { class: 'seg mfilter' }, START_YEARS.map(y => h('button', { class: 'seg-b' + (y === missionYear ? ' on' : ''), onclick: () => { missionYear = y; showMissions(); } }, `Start ${y}`, h('small', {}, ` ${MISSIONS.filter(m => m.start === y && missionsDone()[m.id]).length}/${MISSIONS.filter(m => m.start === y).length}`)))),
-    ...(() => {
-      const of = (f: (m: typeof MISSIONS[number]) => boolean) => MISSIONS.filter(m => m.start === missionYear && f(m));
-      const beg = of(m => !!m.beginner), real = of(m => !m.beginner && !m.wild), wild = of(m => !!m.wild);
-      const out: HTMLElement[] = [];
-      const begDone = beg.filter(m => missionsDone()[m.id]).length;
-      if (beg.length) out.push(section('beg', `Beginner · ${begDone}/${beg.length}`, begDone < beg.length,
-        h('p', { class: 'muted' }, `Short guided missions, each teaching one part of the game. Recommended first, never required. ${BEGINNER().length} in all, spread across the three starts.`), h('div', { class: 'mgrid' }, ...beg.map(missionCard))));
-      out.push(section('real', `Historic · ${real.filter(m => missionsDone()[m.id]).length}/${real.length}`, true, h('p', { class: 'muted' }, 'A realm, a deadline and the goals history set it.'), h('div', { class: 'mgrid' }, ...real.map(missionCard))));
-      if (wild.length) out.push(section('wild', `Wild · ${wild.filter(m => missionsDone()[m.id]).length}/${wild.length}`, true, h('p', { class: 'muted' }, 'Alternate history: the lunatic ones.'), h('div', { class: 'mgrid' }, ...wild.map(missionCard))));
-      out.push(section('own', 'Your own missions', true, h('div', { class: 'mgrid' },
-        h('button', { class: 'mcard mc-new', onclick: () => showBuilder() }, h('span', { class: 'mc-i', html: icon('plus', 28) }), h('b', {}, 'Create your own mission'), h('small', {}, 'Choose a realm, a deadline and up to 6 goals')),
-        ...mine.filter(c => ((c as { start?: number }).start ?? 1451) === missionYear).map(c => h('div', { class: 'mcard mc-custom' },
-          h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon('quill', 24) }), h('div', {}, h('b', {}, c.name), h('small', {}, `Your mission · ${(c as { start?: number }).start ?? 1451} – ${c.deadline}`))),
-          h('ul', { class: 'mc-g' }, c.goals.map(g => h('li', {}, goalTitle(g, c.deadline)))),
-          h('div', { class: 'mc-play' }, h('button', { class: 'btn primary small', onclick: () => startMission(c.nation, { ...c, status: 'active' }) }, `Play ${NATIONS.find(x => x.id === c.nation)?.name}`),
-            confirmBtn('Delete', 'Tap again to delete', () => { saveCustom(customMissions().filter(x => x.id !== c.id)); showMissions(); })))))));
-      return out;
-    })(),
-  ));
-  if (focus) requestAnimationFrame(() => (document.querySelector(`details.msec[data-k="${focus}"]`) as HTMLElement | null)?.scrollIntoView({ block: 'start' }));
+  root.append(h('div', { class: 'missions-screen mlist' },
+    h('header', { class: 'pick-top' }, h('button', { class: 'btn ghost small', onclick: () => showTitle() }, '← Back'), h('h1', {}, 'Missions'),
+      h('span', { class: 'mprog-t' }, h('b', {}, `${doneCount()} of ${MISSIONS.length} completed`))),
+    h('div', { class: 'mf-layout' },
+      h('aside', { class: 'mf-panel', 'aria-label': 'Filter the missions' },
+        h('div', { class: 'mf-top' }, h('b', {}, `${list.length} of ${MISSIONS.length} missions`), any ? h('button', { class: 'cap-more', onclick: () => { saveFilter({ ...EMPTY_FILTER }); showMissions(); } }, 'Clear filters') : null),
+        h('label', { class: 'mf-done' }, h('input', { type: 'checkbox', checked: f.completed ? true : undefined, onchange: () => { f.completed = !f.completed; saveFilter(f); showMissions(); } }), 'Show completed missions'),
+        facet('Start', 'start', START_YEARS.map(y => ({ v: y, label: String(y), n: count(t => t.start === y) }))),
+        facet('History', 'real', [{ v: 'real', label: 'Real', n: count(t => t.real) }, { v: 'wild', label: 'Wild', n: count(t => !t.real) }]),
+        facet('Difficulty', 'difficulty', DIFFICULTIES.map(x => ({ v: x, label: DIFF_NAME[x], n: count(t => t.difficulty === x) }))),
+        facet('Length', 'length', LENGTHS_TAG.map(x => ({ v: x, label: LENGTH_NAME[x], n: count(t => t.length === x) }))),
+        facet('Region', 'regions', REGIONS_TAG.map(x => ({ v: x, label: x, n: count(t => t.regions.includes(x)) }))),
+        facet('Topic', 'topics', TOPICS.map(x => ({ v: x, label: x, n: count(t => t.topics.includes(x)) })))),
+      h('section', { class: 'mf-results' },
+        list.length ? h('div', { class: 'mgrid' }, ...list.map(missionCard)) : h('p', { class: 'muted' }, 'No mission has all of these tags. Clear a filter to see more.'),
+        section('own', 'Your own missions', true, h('div', { class: 'mgrid' },
+          h('button', { class: 'mcard mc-new', onclick: () => showBuilder() }, h('span', { class: 'mc-i', html: icon('plus', 28) }), h('b', {}, 'Create your own mission'), h('small', {}, 'Choose a realm, a deadline and up to 6 goals')),
+          ...mine.map(c => h('div', { class: 'mcard mc-custom' },
+            h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon('quill', 24) }), h('div', {}, h('b', {}, c.name), h('small', {}, `Your mission · ${(c as { start?: number }).start ?? 1451} – ${c.deadline}`))),
+            h('ul', { class: 'mc-g' }, c.goals.map(g => h('li', {}, goalTitle(g, c.deadline)))),
+            h('div', { class: 'mc-play' }, h('button', { class: 'btn primary small', onclick: () => startMission(c.nation, { ...c, status: 'active' }) }, `Play ${NATIONS.find(x => x.id === c.nation)?.name}`),
+              confirmBtn('Delete', 'Tap again to delete', () => { saveCustom(customMissions().filter(x => x.id !== c.id)); showMissions(); }))))))))));
 }
 
 /** Goal templates for the builder: a label and how to make the goal from one value. */

@@ -73,6 +73,9 @@ description: Game design rules for Lasting Empires. Use when adding or changing 
 - `HAND_LIMITS` by rank (per deck, in all); permanent cards and burdens do not count (`countsToLimit`). Draws never fail: over the limit the player sells extras (`sellCards`) before End Turn; `trimHand` is the engine's safety net and the sim's choice.
 
 ## Missions
+- Missions are found by tags (`src/engine/missiontags.ts`): start, real or wild, length (from the years), difficulty (`MISSION_DIFFICULTY` by hand, else rated from the realm's size, goals and time), regions (the capital, then where the goals lead, two at most) and topics (from the lesson and the goal kinds). A new mission needs no tag work; set `difficulty`, `regions` or `topics` on it only to override. The missions screen filters by any of them (any value within a facet, all facets together).
+- Diplomatic treaties have no quality grade: they are signed or refused, and a rare or better envoy is a quarter quicker (`FAST_ENVOY`).
+- After every battle the player fights, `pushBattleReport` (`src/engine/report.ts`) puts a Battle report right after it: the outcome, and each side's companies, losses and strength left.
 - Data in `src/data/missions.ts` (`MISSIONS`): start year, nation, `goals`, optional `beginner`, `wild`, extra `cards`/`gold`, and guided `steps` (from the `STEPS` record).
 - Goals are checked every quarter by `checkGoals` in `src/engine/goals.ts`; `goalView` shows each goal's progress. A new goal kind needs a type in `src/types.ts`, a case in `goalView`, and a baseline flag in `newMissionGame` if it counts gains (`goal_*0`, `stat_*`).
 - In mission mode the mission alone decides victory: finishing it shows the celebration screen and the player may play on. Rank only matters in the sandbox.

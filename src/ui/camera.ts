@@ -56,7 +56,7 @@ export function renderCamera() {
     btn('search', 'Search provinces, realms and people  ( / )', openSearch, 0, 'cam-search'),
     btn('crown', 'Home: your realm and its border  ( H )', goHome),
     threats ? btn('sword', 'Next danger  ( T )', goThreat, threats, 'cam-threat') : null,
-    armies ? btn('banner', 'Next army  ( A )', goArmy) : null,
+    armies ? btn('banner', 'Next army  ( R )', goArmy) : null,
     goals ? btn('star', 'Mission targets  ( G )', goGoal) : null].filter((x): x is HTMLElement => !!x));
 }
 
@@ -111,7 +111,7 @@ export function openSearch() {
 }
 
 // ---------- keys (desktop) ----------
-// Ctrl+Z or U undo · / search · H home · T next danger · A next army · G mission targets · Escape closes the top layer (modal.ts).
+// Ctrl+Z or U undo · / search · H home · T next danger · R next army · G mission targets · WASD or arrows move · Q / E zoom · Escape closes the top layer (modal.ts).
 addEventListener('keydown', e => {
   if (!S) return;
   const t = e.target as HTMLElement | null;
@@ -126,5 +126,38 @@ addEventListener('keydown', e => {
   if (e.key === '/') { e.preventDefault(); if (!modalOpen) openSearch(); return; }
   if (modalOpen || win || (sheet && sheet.kind !== 'province' && sheet.kind !== 'nation')) return;
   const k = e.key.toLowerCase();
-  if (k === 'h') goHome(); else if (k === 't') goThreat(); else if (k === 'a') goArmy(); else if (k === 'g') goGoal();
+  if (k === 'h') goHome(); else if (k === 't') goThreat(); else if (k === 'r') goArmy(); else if (k === 'g') goGoal();
 });
+
+// ---------- moving the map from the keyboard: WASD or the arrows, Q / E to zoom, Shift for speed ----------
+/** How much of the view a held key moves in a second, and how fast Q / E zoom. */
+export const PAN_PER_SECOND = 0.9, ZOOM_PER_SECOND = 1.9;
+const PAN_KEYS: Record<string, [number, number]> = { w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0], arrowup: [0, -1], arrowdown: [0, 1], arrowleft: [-1, 0], arrowright: [1, 0] };
+const held = new Set<string>();
+let fast = false, last = 0, running = false;
+function panStep(t: number) {
+  if (!held.size || !document.getElementById('board')) { running = false; return; }
+  const dt = Math.min(0.05, (t - (last || t)) / 1000); last = t;
+  let dx = 0, dy = 0, z = 1;
+  for (const k of held) { const v = PAN_KEYS[k]; if (v) { dx += v[0]; dy += v[1]; } if (k === 'q') z *= Math.pow(ZOOM_PER_SECOND, dt); if (k === 'e') z /= Math.pow(ZOOM_PER_SECOND, dt); }
+  const sp = PAN_PER_SECOND * dt * (fast ? 2.2 : 1);
+  if (dx || dy) map.panBy(dx * sp, dy * sp);
+  if (z !== 1) map.zoomBy(z);
+  requestAnimationFrame(panStep);
+}
+const mapKeysAllowed = (e: KeyboardEvent) => {
+  const t = e.target as HTMLElement | null;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return false;
+  return !!document.getElementById('board') && !modalOpen && !win && !e.ctrlKey && !e.metaKey && !e.altKey;
+};
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  fast = e.shiftKey;
+  if (!(k in PAN_KEYS) && k !== 'q' && k !== 'e') return;
+  if (!mapKeysAllowed(e)) return;
+  e.preventDefault();
+  held.add(k);
+  if (!running) { running = true; last = 0; requestAnimationFrame(panStep); }
+});
+addEventListener('keyup', e => { held.delete(e.key.toLowerCase()); fast = e.shiftKey; });
+addEventListener('blur', () => held.clear());

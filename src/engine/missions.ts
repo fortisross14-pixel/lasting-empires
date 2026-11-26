@@ -180,6 +180,8 @@ export const GRACE_GAIN = [4, 10, 14, 20, 28];
 
 export const graceCost = (s: GameState) => Math.round(20 * inflation(s));
 
+/** Diplomats of these rarities need a quarter less of talks (a treaty has no quality grade: a better envoy is quicker). */
+export const FAST_ENVOY: Character['rarity'][] = ['rare', 'epic', 'legendary'];
 /** How many turns (quarters) a mission takes. */
 export function missionTurns(s: GameState, kind: MissionKind, ch: Character, target: string, building?: string): number {
   switch (kind) {
@@ -212,7 +214,8 @@ export function missionTurns(s: GameState, kind: MissionKind, ch: Character, tar
     default: {
       // the journey out, then talks; the envoy comes home afterwards
       const talks = { relations: 0, trade: 1, alliance: 1, marriage: 1, peace: 0 }[kind as 'relations'] ?? 0;
-      return Math.max(1, envoyTravel(s, target) + talks - (hasTech(s, 'chancery') ? 1 : 0) - (ch.traits.includes('envoy') ? 1 : 0));
+      // a better envoy is quicker at the table: a rare, epic or legendary diplomat needs a quarter less of talks
+      return Math.max(1, envoyTravel(s, target) + talks - (hasTech(s, 'chancery') ? 1 : 0) - (ch.traits.includes('envoy') ? 1 : 0) - (FAST_ENVOY.includes(ch.rarity) ? 1 : 0));
     }
   }
 }
@@ -695,6 +698,7 @@ function resolveOther(s: GameState, m: Mission, ch: Character) {
     }
     const ok = rand(s) < p;
     const tname = tn.name;
+    let talks = false;
     if (ok) {
       switch (m.kind) {
         case 'relations': addRel(s, s.player, target, 25); learnGoal(s, target); items.push({ title: 'Friendship', text: `Relations with ${tname} +25.${goalOf(s, target) && goalOf(s, target) !== s.player ? ` Your envoy learns where their ambition lies: ${nationName(s, goalOf(s, target)!)}.` : goalOf(s, target) === s.player ? ' Your envoy learns what they want: your lands.' : ''}`, tone: 'good', kind: 'scroll' }); break;
@@ -706,17 +710,11 @@ function resolveOther(s: GameState, m: Mission, ch: Character) {
         }
         case 'alliance': addTreaty(s, s.player, target, 'alliance'); addRel(s, s.player, target, 15); me.prestige += 3; items.push({ title: 'Alliance sealed', text: `${tname} will stand with you in war.`, tone: 'good', kind: 'hands' }); break;
         case 'marriage': addTreaty(s, s.player, target, 'marriage'); addRel(s, s.player, target, 20); me.prestige += 4; items.push({ title: 'A royal wedding', text: `The houses of ${me.name} and ${tname} are joined. Relations improve every year.`, tone: 'good', kind: 'ring' }); break;
-        case 'peace': s.queue.push({ kind: 'peace', enemy: target, offered: false }); items.push({ title: 'They will talk', text: `${tname} agrees to come to the table. Set the terms next.`, tone: 'good', kind: 'dove' }); break;
+        case 'peace': talks = true; items.push({ title: 'They will talk', text: `${tname} agrees to come to the table. Set the terms next.`, tone: 'good', kind: 'dove' }); break;
         case 'vassalize': makeSubject(s, target, 'vassal'); me.prestige += 6; items.push({ title: `${tname} bends the knee`, text: 'A new vassal: it pays tribute and joins your wars.', tone: 'good', kind: 'crown' }); break;
         case 'integrate': integrate(s, target); me.prestige += 8; items.push({ title: `${tname} joins the realm`, text: 'Its provinces are now yours. Their culture may be foreign: watch their happiness.', tone: 'good', kind: 'hands' }); break;
       }
-      const o = rollOutcome(s, ch);
-      if (o >= 2) {
-        addRel(s, s.player, target, o * 5);
-        if (o >= 3) { drawCat(s, 'diplomacy'); me.prestige += o === 4 ? 6 : 2; }
-        if (m.kind === 'trade' && o >= 3) s.flags['trade_bonus_' + target] = (s.flags['trade_bonus_' + target] ?? 0) + (o - 2);
-        items.unshift(outcomeItem(o, `The court is charmed: relations +${o * 5}${o >= 3 ? ', a Diplomacy card' : ''}${m.kind === 'trade' && o >= 3 ? `, trade +${o - 2} ducats` : ''}.`));
-      }
+      // no quality grade for a treaty: it is signed or it is not (a better envoy is quicker instead: FAST_ENVOY)
       gainXp(s, ch, items);
       log(s, `${MISSION_INFO[m.kind].name} with ${tname} succeeded.`, 'good');
     } else {
@@ -725,6 +723,8 @@ function resolveOther(s: GameState, m: Mission, ch: Character) {
       log(s, `${MISSION_INFO[m.kind].name} with ${tname} failed.`, 'bad');
     }
     push(s, { kind: 'reveal', title: MISSION_INFO[m.kind].name, subtitle: `${ch.name} in ${tname} · ${Math.round(p * 100)}% chance`, items });
+    // the envoy's news comes first; only then the table where the terms are set
+    if (talks) s.queue.push({ kind: 'peace', enemy: target, offered: false });
     finish(s, m); return;
   }
 

@@ -2519,3 +2519,25 @@ body:has(#pickbar) #timeline, body:has(#pickbar) #goalbar, body:has(#pickbar) #m
 [data-style="chancery"] .b-slot .k-back, [data-style="chancery"] .k-back.small { background: repeating-linear-gradient(45deg, #1b1a1714 0 2px, transparent 2px 8px), repeating-linear-gradient(-45deg, #1b1a1714 0 2px, transparent 2px 8px), var(--card); }
 [data-style="chancery"] .k-back .c-rose { opacity: 1; color: var(--text); margin-top: 18px; }
 [data-style="chancery"] .k-back .c-backlabel { margin-top: 8px; }
+/* missions, by tags: the filter at the left, every matching mission at the right */
+.missions-screen.mlist { max-width: 1400px; }
+.mlist .pick-top .mprog-t { margin-left: auto; color: var(--muted); }
+.mf-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 28px; align-items: start; margin-top: 12px; }
+.mf-panel { position: sticky; top: 8px; display: flex; flex-direction: column; gap: 14px; padding: 14px 16px; background: var(--card); border: 1.5px solid var(--text); box-shadow: var(--shadow); }
+.mf-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.mf-done { display: flex; gap: 8px; align-items: center; font-size: calc(14.5px * var(--ts, 1)); cursor: pointer; }
+.mf-facet h3 { margin: 0 0 6px; font-family: var(--f-title); font-weight: 400; font-size: calc(16px * var(--ts, 1)); color: var(--text); }
+.mf-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mf-chip { min-height: 34px; padding: 4px 10px; border: 1.2px solid var(--text); background: var(--panel); color: var(--text); font: inherit; font-size: calc(14px * var(--ts, 1)); cursor: pointer; }
+.mf-chip small { color: var(--muted); }
+.mf-chip.on { background: var(--act); color: var(--act-ink); border-color: var(--act-deep); }
+.mf-chip.on small { color: inherit; opacity: .8; }
+.mf-results .mgrid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.mc-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 2px; }
+.mc-tags .mt { padding: 1px 7px; border: 1px solid #1b1a1740; font: 600 calc(11.5px * var(--ts, 1))/1.5 var(--f-body); color: var(--muted); background: var(--panel); }
+.mc-tags .mt-topic { color: var(--lapis); border-color: #2f5d8a55; }
+.mc-tags .mt-d { color: var(--text); border-color: var(--text); }
+.mc-tags .mt-beginner, .mc-tags .mt-easy { color: var(--good); border-color: var(--good); }
+.mc-tags .mt-difficult { color: var(--wax); border-color: var(--wax); }
+.md-brief .mc-tags { margin: 0; }
+@media (max-width: 860px) { .mf-layout { grid-template-columns: 1fr; } .mf-panel { position: static; } }

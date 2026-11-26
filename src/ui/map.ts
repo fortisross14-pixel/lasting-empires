@@ -366,6 +366,12 @@ export class MapView {
     v.y = Math.min(Math.max(v.y, -v.h * 0.3), this.H - v.h * 0.7);
   }
 
+  /** Slide the view by a share of its own size (keyboard panning: 0.01 moves a hundredth of the width). */
+  panBy(fx: number, fy: number) {
+    this.vb.x += fx * this.vb.w; this.vb.y += fy * this.vb.h;
+    this.clampVb(); this.apply();
+  }
+
   zoomBy(f: number, cx?: number, cy?: number) {
     const v = this.vb;
     const px = cx ?? v.x + v.w / 2, py = cy ?? v.y + v.h / 2;

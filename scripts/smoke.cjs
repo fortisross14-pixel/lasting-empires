@@ -112,7 +112,8 @@ async function run(browser, name, opts) {
   for (const r of rows) {
     // the realm and its records open from the coat of arms; tasks and settings from the menu
     if (r === 'Realm and ruler' || r === 'Chronicle') { await tap('#top .crest', 'the coat of arms'); if (r === 'Chronicle') await tap('#sheet .crown-link >> text=Chronicle', 'Chronicle'); }
-    else { await tap('.menu-b', 'Menu'); if (r === rows[0]) await shot('menu'); await tap(`.gm-row >> text=${r}`, r); }
+    else if (r === 'Tasks under way') { await tap('#top .tasks-b', 'the Tasks button'); await shot('tasks'); }
+    else { await tap('.menu-b', 'Menu'); await shot('menu'); await tap(`.gm-row >> text=${r}`, r); }
     if (r === 'Settings') {
       // the accessibility settings at their largest must not break a screen; then back to the designed ones
       for (const sel of ['[aria-label="Interface size"] .seg-b >> nth=2', '[aria-label="Spacing"] .seg-b >> nth=1']) await tap('#modal ' + sel, sel);

@@ -234,8 +234,11 @@ export function renderTop() {
     h('div', { class: 'top-btns' },
       false && sc ? h('button', { class: 'tbtn goals-b' + (sheet?.kind === 'goals' ? ' on' : '') + ' st-' + sc!.status, onclick: () => toggleSheet('goals'), title: 'Mission goals', 'aria-label': 'Mission goals' },
         h('span', { html: icon('star', 18) }), h('span', { class: 'tb-l' }, 'Goals'), h('span', { class: 'badge' }, goalsBadge)) : null,
+      // the tasks under way are a main part of the game: their own button, with how many are out
+      h('button', { class: 'tbtn tasks-b' + (sheet?.kind === 'missions' ? ' on' : ''), onclick: () => toggleSheet('missions'), title: 'Tasks under way', 'aria-label': `Tasks under way: ${S.missions.length}` },
+        h('span', { html: icon('hourglass', 18) }), h('span', { class: 'tb-l' }, 'Tasks'), S.missions.length ? h('span', { class: 'badge' }, String(S.missions.length)) : null),
       h('button', { class: 'tbtn menu-b', onclick: () => showGameMenu(), title: 'Menu', 'aria-label': 'Menu' },
-        h('span', { html: icon('list', 18) }), h('span', { class: 'tb-l' }, 'Menu'), S.missions.length ? h('span', { class: 'badge' }, String(S.missions.length)) : null),
+        h('span', { html: icon('list', 18) }), h('span', { class: 'tb-l' }, 'Menu')),
       undoCount() ? h('button', { class: 'tbtn undo-b', onclick: undoLast, title: `Undo: ${undoLabel()}  ( Ctrl+Z )`, 'aria-label': `Undo: ${undoLabel()}. ${undoCount()} step${undoCount() > 1 ? 's' : ''} can be taken back this season` },
         h('span', { html: icon('undo', 18) }), h('span', { class: 'tb-l' }, 'Undo'), undoCount() > 1 ? h('span', { class: 'badge' }, String(undoCount())) : null) : null,
       settings().skip ? h('button', { class: 'tbtn skip-b', onclick: onSkipAhead, title: 'Skip ahead until something happens', 'aria-label': `Skip ahead: play up to ${SKIP_MAX} seasons, stopping when something needs you` },

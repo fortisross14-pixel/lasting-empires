@@ -14,6 +14,7 @@ import { taskPreview } from '../src/engine/preview';
 import { redoOptions, rememberRedo, runRoutines } from '../src/engine/routine';
 import { checkTrade } from '../src/engine/trade';
 import { worldAmbitions } from '../src/engine/rivals';
+import { missionTags, matches, EMPTY_FILTER, DIFFICULTIES, REGIONS_TAG, TOPICS } from '../src/engine/missiontags';
 import { advanceMissions, GIFT_STEPS, giftCost, envoyCost } from '../src/engine/missions';
 import { pivotOptions, offerAmbition, beginAmbition, endAmbition, decisiveMoments, rememberBattle, GRAND_AMBITIONS } from '../src/engine/arc';
 import { openAge } from '../src/engine/ages';
@@ -444,6 +445,26 @@ check('sweetening a diplomatic offer: the gift is paid, raises the odds, and the
   if (dip2) ok(!!launchMission(s, 'relations', dip2.uid, target.id, [], undefined, card.uid, undefined, [], undefined, 3), 'a gift was sent without the ducats for it');
 });
 
+check('missions by tags: every mission is tagged, and the filters combine', () => {
+  const worlds: Record<number, ReturnType<typeof newGame>> = {};
+  for (const m of MISSIONS) {
+    worlds[m.start] ??= newGame('castile', 71, m.start);
+    const t = missionTags(m, worlds[m.start]);
+    ok(DIFFICULTIES.includes(t.difficulty), `${m.id} has no difficulty`);
+    ok(t.regions.length >= 1 && t.regions.length <= 2 && t.regions.every(r => REGIONS_TAG.includes(r)), `${m.id} has ${t.regions.length} regions`);
+    ok(t.topics.length >= 1 && t.topics.every(x => TOPICS.includes(x)), `${m.id} has no topic`);
+    eq(t.difficulty === 'beginner', !!m.beginner, `${m.id}: beginner tag and lesson disagree`);
+    eq(t.real, !m.wild, `${m.id}: real or wild is wrong`);
+  }
+  const t = missionTags(MISSIONS.find(m => m.id === 'b_constantinople')!, worlds[1451]);
+  ok(matches(t, EMPTY_FILTER, false), 'an empty filter hides a mission');
+  ok(matches(t, { ...EMPTY_FILTER, start: [1451, 1600] }, false), 'any of two start years did not match');
+  ok(!matches(t, { ...EMPTY_FILTER, start: [1600] }, false), 'a wrong start year matched');
+  ok(!matches(t, { ...EMPTY_FILTER, difficulty: ['beginner'], real: ['wild'] }, false), 'two facets did not both have to hold');
+  ok(!matches(t, { ...EMPTY_FILTER, completed: false }, true), 'a completed mission showed with completed hidden');
+  ok(missionTags(MISSIONS.find(m => m.id === 'golden_age')!, worlds[1451]).regions.includes('Europe'), 'Castile is not in Europe');
+});
+
 check('skip ahead never passes a card, a prompt or a finished task', () => {
   for (const n of ['portugal', 'venice', 'ming']) {
     const s = newGame(n, 4242); answer(s);
@@ -683,6 +704,35 @@ function field(seed: number, terrain: string, mine: string[], theirs: string[], 
   b.terrain = terrain;
   return { s, b };
 }
+
+check('a peace envoy\'s news comes before the table, and a battle ends with its report', () => {
+  const s = newGame('castile', 72); answer(s);
+  // a peace mission that succeeds: the report first, then the terms
+  const dip = s.characters.find(c => c.role === 'diplomat')!;
+  s.missions.push({ id: 7201, kind: 'peace', char: dip.uid, troops: [], target: 'granada', turnsLeft: 1, total: 2, progress: 0, bonus: 0.9 } as unknown as typeof s.missions[number]);
+  dip.mission = 7201;
+  let tries = 0;
+  for (; tries < 30; tries++) {
+    const copy = JSON.parse(JSON.stringify(s)) as typeof s; copy.seed = (copy.seed ?? 0) + tries; copy.queue = [];
+    advanceMissions(copy);
+    const r = copy.queue.findIndex(p => p.kind === 'reveal'), pc = copy.queue.findIndex(p => p.kind === 'peace');
+    if (pc < 0) continue;
+    ok(r >= 0 && r < pc, 'the peace table opened before the envoy\'s report');
+    break;
+  }
+  ok(tries < 30, 'no peace mission succeeded in 30 tries');
+  // a battle you fight leaves a report right after it: outcome, and each side's companies
+  const { s: s2, b } = field(73, 'plains', ['men_at_arms', 'men_at_arms', 'crossbow'], ['levy', 'levy']);
+  s2.queue = [{ kind: 'battle', battle: b }];
+  autoResolve(s2, b); finishBattle(s2, b);
+  const rep = s2.queue[1];
+  ok(rep?.kind === 'reveal' && rep.title === 'Battle report', 'no battle report right after the battle');
+  if (rep?.kind === 'reveal') {
+    eq(rep.items.length, 3, 'the report is not an outcome and two sides');
+    ok(/fought/.test(rep.items[1].text) && /Strength left/.test(rep.items[1].text), `your side's line says nothing of the fight: ${rep.items[1].text}`);
+    ok(/^(.* taken|Attack succeeded|Attack beaten back)$/.test(rep.items[0].title), `an attack's outcome reads oddly: ${rep.items[0].title}`);
+  }
+});
 
 check('text size: every font size in the stylesheet scales with --ts', () => {
   const css = readFileSync('src/styles.css', 'utf8');
