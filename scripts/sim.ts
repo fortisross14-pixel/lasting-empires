@@ -141,7 +141,8 @@ function botTurn(s: GameState) {
         // a mission that asks for posts in given regions: look for a partner there first (any realm known and open)
         const want = s.scenario?.status === 'active' ? s.scenario.goals.find(g => g.k === 'posts') as { k: 'posts'; regions?: string[] } | undefined : undefined;
         const inRegion = want?.regions ? Object.values(s.nations).find(n => n.alive && n.id !== s.player && want.regions!.includes(provRegion(n.capital)) && !postBlocked(s, n.id))?.id : undefined;
-        const partner = inRegion ?? (want && !want.regions ? Object.values(s.nations).find(n => n.alive && n.id !== s.player && !postBlocked(s, n.id))?.id : undefined) ?? s.routes[0]?.partner;
+        // when the mission names regions, the post slots are kept for them
+        const partner = want?.regions ? inRegion : (want ? Object.values(s.nations).find(n => n.alive && n.id !== s.player && !postBlocked(s, n.id))?.id : undefined) ?? s.routes[0]?.partner;
         if (partner && !postBlocked(s, partner) && me.gold > (want ? 40 : 100)) launchMission(s, 'post', m.uid, partner, [], undefined, h.uid);
       }
     } else if (kind === 'research') {

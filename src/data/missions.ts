@@ -195,7 +195,7 @@ export const MISSIONS: MissionDef[] = [
     text: 'Sekigahara is won and Japan is one. Keep every province, build, and let the land grow rich in peace.',
     goals: [{ k: 'own', provinces: ['kyoto', 'omi', 'settsu', 'kawachi', 'harima', 'tajima', 'iwami', 'suo', 'sanuki', 'tosa', 'hakata', 'bungo', 'higo', 'hyuga', 'satsuma', 'owari', 'echizen', 'etchu', 'kai', 'suruga', 'edo', 'echigo', 'mutsu', 'nanbu', 'oshima'], label: 'Every province of Japan' },
       { k: 'built', n: 6 }, { k: 'devGain', n: 20 }] },
-  { id: 'venice_china', name: "Marco Polo's Heirs", icon: 'ship', release: 2, regions: ['Europe', 'Asia'], start: 1451, deadline: 1550, nations: ['venice'], wild: true, difficulty: 'medium',
+  { id: 'venice_china', name: "Marco Polo's Heirs", icon: 'ship', release: 2, regions: ['Europe', 'Asia'], start: 1451, deadline: 1550, nations: ['venice'], wild: true, difficulty: 'medium', cards: ['trading_post', 'trading_post'], gold: 60,
     text: 'Venice does not wait for Portugal: its merchants sail for the Indies and Cathay themselves.',
     goals: [{ k: 'discover', regions: ['india', 'china'] }, { k: 'posts', n: 2, regions: ['india', 'china'] }] },
 ];
