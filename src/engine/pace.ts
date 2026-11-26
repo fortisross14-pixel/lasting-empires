@@ -21,6 +21,7 @@ import { NO_STATE } from '../data/nations';
 import { NATIVE_EMPIRES } from '../data/overseas';
 import { happinessOf } from './society';
 import type { YearReport } from './turn';
+import { techOpenTo } from './technology';
 
 /** Is there anything this mission card could be used on right now? */
 export function cardHasTarget(s: GameState, cardId: string): boolean {
@@ -34,9 +35,9 @@ export function cardHasTarget(s: GameState, cardId: string): boolean {
       return foes.size > 0 && Object.values(s.provinces).some(p => foes.has(p.owner) && provKnown(s, p.id) && ok(p.id));
     }
     if (DIPLO.includes(kind)) return Object.values(s.nations).some(n => n.alive && n.id !== s.player && n.id !== NO_STATE && ok(n.id));
-    if (kind === 'research') return TECHS.some(t => (!d.track || t.track === d.track) && !s.techs.includes(t.id) && t.age <= ageIndex(s) && ok(t.id));
+    if (kind === 'research') return TECHS.some(t => techOpenTo(s, s.player, t.id) && (!d.track || t.track === d.track) && !s.techs.includes(t.id) && t.age <= ageIndex(s) && ok(t.id));
     if (kind === 'build') {
-      const bs = Object.values(BUILDINGS).filter(b => b.group === d.group && (!b.tech || s.techs.includes(b.tech)));
+      const bs = Object.values(BUILDINGS).filter(b => b.group === d.group && (!b.only || b.only.includes(s.player)) && (!b.tech || s.techs.includes(b.tech)));
       return mine().some(p => bs.some(b => ok(p.id, b.id)));
     }
     if (kind === 'develop' || kind === 'found' || kind === 'grow' || kind === 'grace' || kind === 'convert' || kind === 'assimilate') return mine().some(p => ok(p.id));

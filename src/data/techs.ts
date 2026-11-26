@@ -1,5 +1,6 @@
 // Research and buildings.
-import type { Capability } from './heritage';
+import type { Capability, Heritage } from './heritage';
+import { NATIONAL_TECHS, NATIONAL_BUILDINGS } from './national';
 
 export type TechTrack = 'military' | 'economy' | 'state';
 type Rates = Partial<Record<'military' | 'diplomacy' | 'internal' | 'economy' | 'research' | 'culture', number>>;
@@ -39,6 +40,12 @@ export interface TechDef {
   grants?: Capability[];
   /** Capabilities the realm must have before it can study this at all (no firearms without gunpowder). */
   needs?: Capability[];
+  /** A national tradition: only these nations may study it. */
+  only?: string[];
+  /** A regional tradition: only realms of these heritages may study it. */
+  heritage?: Heritage[];
+  /** A national tradition the nation already has when the game begins. */
+  known?: boolean;
 }
 
 // About four per field in each age. Costs rise by age so that a study takes 2–7 years.
@@ -65,7 +72,6 @@ export const TECHS: TechDef[] = [
   { id: 'embassies', name: 'Resident Embassies', track: 'state', age: 0, year: 1480, cost: 27, req: ['chancery'], desc: '+1 court seat. Alliances need 15 less relation.', fx: { seats: 1, rates: { diplomacy: 0.1 } } },
 
   // ---------- Age of Discovery ----------
-  { id: 'tercio_doctrine', needs: ['gunpowder', 'iron'], name: 'Tercio Doctrine', track: 'military', age: 1, year: 1495, cost: 38, req: ['pike_square', 'firearms'], desc: 'Pikemen + Arquebusiers → Tercio.' },
   { id: 'star_forts', name: 'Star Forts', track: 'military', age: 1, year: 1500, cost: 34, req: ['bronze_cannon'], desc: 'Walls can rise one level higher than the age allows. +1 wall level in your capital.' },
   { id: 'wheellock', needs: ['gunpowder'], name: 'Wheellock', track: 'military', age: 1, year: 1515, cost: 38, req: ['firearms'], desc: 'Pistols: Jinetes → Reiters, Knights → Cuirassiers.' },
   { id: 'naval_gunnery', needs: ['cannon', 'ships'], name: 'Naval Gunnery', track: 'military', age: 1, year: 1510, cost: 38, req: ['bronze_cannon'], desc: 'Build Galleons. Carrack + Bronze Casting → Galleon. +1 navy size.', fx: { navy: 1 } },
@@ -82,7 +88,7 @@ export const TECHS: TechDef[] = [
 
   // ---------- Age of Reformation ----------
   { id: 'musket', needs: ['gunpowder'], name: 'Musket', track: 'military', age: 2, year: 1530, cost: 46, req: ['firearms'], desc: 'Arquebusiers → Musketeers, Tercio → Tercio Viejo.' },
-  { id: 'standing_army', name: 'Standing Army', track: 'military', age: 2, year: 1560, cost: 49, req: ['tercio_doctrine'], desc: '+3 army size, troop upkeep −20%, +0.2 Military cards a year.', fx: { army: 3, upkeep: 0.2, rates: { military: 0.2 } } },
+  { id: 'standing_army', name: 'Standing Army', track: 'military', age: 2, year: 1560, cost: 49, req: ['pike_and_shot'], desc: '+3 army size, troop upkeep −20%, +0.2 Military cards a year.', fx: { army: 3, upkeep: 0.2, rates: { military: 0.2 } } },
   { id: 'siege_engineering', name: 'Siege Engineering', track: 'military', age: 2, year: 1545, cost: 46, req: ['star_forts'], desc: 'Sappers and trenches: +5% battle strength, +1 army size.', fx: { battle: 0.05, army: 1 } },
   { id: 'military_drill', name: 'Military Drill', track: 'military', age: 2, year: 1590, cost: 53, req: ['standing_army'], desc: 'Reiters + Muskets → Dragoons. +10% battle strength.', fx: { battle: 0.1 } },
 
@@ -144,6 +150,8 @@ export const TECHS: TechDef[] = [
   { id: 'metric_system', name: 'Metric System', track: 'state', age: 5, year: 1799, cost: 76, desc: 'One measure for all: +5% income, +0.2 Research cards.', fx: { income: 0.05, rates: { research: 0.2 } } },
 ];
 
+// the national and regional traditions (data/national.ts), in the same research
+TECHS.push(...NATIONAL_TECHS);
 export const TECH: Record<string, TechDef> = Object.fromEntries(TECHS.map(t => [t.id, t]));
 
 export type BuildingGroup = 'internal' | 'economy';
@@ -157,6 +165,8 @@ export interface BuildingDef {
   np?: number;                  // nation points a year
   match?: string[];             // raw materials that double its output
   gives: string[];              // what it does, one line each, for the build screen
+  /** A national building: only these nations may build it. */
+  only?: string[];
 }
 
 export const BUILDINGS: Record<string, BuildingDef> = {
@@ -180,6 +190,8 @@ export const BUILDINGS: Record<string, BuildingDef> = {
   bank: { id: 'bank', name: 'Bank', group: 'economy', site: 'town', cost: 60, turns: 3, tech: 'banking', salary: 1, gold: 2.5, icon: 'coin', rates: { economy: 0.2 }, gives: ['+2.5 ducats a year', '+0.2 Economy cards a year'], desc: '+2.5 ducats, +0.2 Economy cards.' },
   manufactory: { id: 'manufactory', name: 'Manufactory', group: 'economy', site: 'town', cost: 80, turns: 4, tech: 'manufactories', salary: 1.5, gold: 4, icon: 'anvil', rates: { economy: 0.2 }, gives: ['+4 ducats a year', '+0.2 Economy cards a year', 'Makes 4 loads a year of the chosen good'], desc: '+4 ducats, +0.2 Economy cards. Makes 4 loads a year of the province\'s chosen good.' },
 };
+// the national buildings (data/national.ts)
+for (const b of NATIONAL_BUILDINGS) BUILDINGS[b.id] = b;
 
 /** Card-rate bonuses from research. */
 export const TECH_RATES: Record<string, Rates> = Object.fromEntries(TECHS.filter(t => t.fx?.rates).map(t => [t.id, t.fx!.rates!]));

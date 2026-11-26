@@ -66,6 +66,9 @@ export const CULTURE_HERITAGE: Record<string, Heritage> = {
   swahili: 'east_african', amhara: 'east_african', somali: 'east_african',
   nahua: 'mesoamerican', purepecha: 'mesoamerican', maya: 'mesoamerican', mixtec: 'mesoamerican', zapotec: 'mesoamerican', native: 'mesoamerican',
   quechua: 'andean', chimu: 'andean', muisca: 'andean',
+  // peoples of the later starts
+  nubian: 'east_african', harari: 'east_african', malagasy: 'east_african', fur: 'west_african', maba: 'west_african', fulani: 'west_african', fon: 'west_african', nupe: 'west_african',
+  iroquois: 'mesoamerican', mapuche: 'andean', shan: 'mainland_sea', bugis: 'maritime_sea', baltic: 'eastern_european', kalmyk: 'steppe', baluch: 'islamic',
 };
 
 /** Nations that differ from their heritage: capabilities added or taken away. Kept short on purpose: the template
@@ -86,6 +89,9 @@ export const NATION_CAPS: Record<string, { add?: Capability[]; remove?: Capabili
   kongo: { remove: ['horses'] }, mutapa: { heritage: 'east_african', remove: ['ships'] }, benin: { remove: ['horses'] }, oyo: {},
   tarascan: {},                                     // Purépecha copper and bronze: within the regional armour, not iron
   ryukyu: { add: ['ocean'], remove: ['horses'] },
+  mapuche: { add: ['horses', 'iron'] },            // Mapuche horsemen and iron lances by 1600
+  iroquois: { add: ['gunpowder', 'iron'] },        // trade muskets and iron tools by 1700
+  thirteen_colonies: {},
 };
 
 /** What had spread to each heritage by a later start date (on top of its 1451 template): the state of the world in

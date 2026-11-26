@@ -9,6 +9,7 @@ import { partners, routeBlocked } from './trade';
 import { TECHS, TECH } from '../data/techs';
 import { GOODS } from '../data/goods';
 import { nationName, ageIndex } from './core';
+import { techOpenTo } from './technology';
 
 /** Tasks that make sense to do again on the same target. */
 export const REDO_KINDS: MissionKind[] = ['relations', 'develop', 'grow', 'convert', 'assimilate', 'artwork', 'pilgrimage', 'explore', 'patronage', 'route'];
@@ -75,7 +76,7 @@ export function runRoutines(s: GameState): string[] {
     const ch = hc && free(s, hc.card);
     if (hc && ch) {
       const d = CARDS[hc.card];
-      const tech = TECHS.filter(t => (!d.track || t.track === d.track) && !s.techs.includes(t.id) && t.age <= ageIndex(s) && !s.missions.some(m => m.kind === 'research' && m.target === t.id) && !missionBlocked(s, 'research', t.id))
+      const tech = TECHS.filter(t => techOpenTo(s, s.player, t.id) && (!d.track || t.track === d.track) && !s.techs.includes(t.id) && t.age <= ageIndex(s) && !s.missions.some(m => m.kind === 'research' && m.target === t.id) && !missionBlocked(s, 'research', t.id))
         .sort((a, b) => techCost(s, a.id) - techCost(s, b.id))[0];
       if (tech && !launchMission(s, 'research', ch.uid, tech.id, [], undefined, hc.uid)) done.push(`${ch.name} begins to study ${tech.name}`);
     }

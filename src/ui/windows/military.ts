@@ -17,6 +17,8 @@ import { toast, act, SEASONS, placeName, qText } from '../app';
 import { closeWin, renderWin } from './frame';
 import { openSheet, peopleSection } from '../sheets';
 import { confirmBox } from '../modal';
+import { RECIPES, EQUIPMENT } from '../../data/troops';
+import { canForgeRecipe, linesOf } from '../../engine/technology';
 
 // ---------- category panels ----------
 /** What each troop card hires now, and what research brings next. */
@@ -26,7 +28,7 @@ export function unitsPanel() {
     if (!classOpen(S, cls)) continue; // a kind your people cannot raise (no horses in the Americas)
     const now = unitFor(S, cls);
     if (!now) continue; // a kind of soldier your people cannot field
-    const line = groupDef(S).lines[cls] ?? UNIT_LINES[cls];
+    const line = linesOf(S, S.player)[cls] ?? UNIT_LINES[cls];
     const next = line.slice(line.indexOf(now) + 1)[0];
     const d = TROOPS[now];
     box.append(h('div', { class: 'unit-row' },
@@ -146,12 +148,11 @@ export function warsTab(body: HTMLElement) {
 
 export function recipeBook(knownOnly = false) {
   const d: HTMLElement = knownOnly ? h('div', { class: 'recipes' }) : h('details', { class: 'recipes' }, h('summary', {}, 'Recipe book'));
+  // from the recipes themselves, and only those this realm could ever forge (technology.ts): no Knights for the Inca
+  const nm = (id: string) => TROOPS[id]?.name ?? EQUIPMENT[id]?.name ?? id;
   const rows: [string, string, string, string?][] = [
-    ['Levy Infantry', 'Long Pikes', 'Pikemen', 'pike_square'], ['Levy Infantry', 'Plate Armour', 'Men-at-Arms'], ['Levy or Crossbow', 'Arquebuses', 'Arquebusiers', 'firearms'],
-    ['Jinetes', 'Plate Armour', 'Knights'], ['Men-at-Arms', 'Warhorses', 'Knights'], ['Pikemen', 'Arquebusiers', 'Tercio', 'tercio_doctrine'],
-    ['Bombard', 'Bronze Casting', 'Field Cannon', 'bronze_cannon'], ['Jinetes', 'Pistols', 'Reiters', 'wheellock'], ['Knights', 'Pistols', 'Cuirassiers', 'wheellock'],
-    ['Arquebusiers', 'Muskets', 'Musketeers', 'musket'], ['Tercio', 'Muskets', 'Tercio Viejo', 'musket'], ['Reiters', 'Muskets', 'Dragoons', 'military_drill'],
-    ['Musketeers', 'Bayonets', 'Line Infantry', 'bayonet'], ['Two of the same troop', '', '×1.8 strength in one company'], ['Any troop', 'Regimental Colours', '+1 star'],
+    ...RECIPES.filter(r => canForgeRecipe(S, S.player, r).missing.length === 0).map(r => [nm(r.a), nm(r.b), nm(r.out), r.tech] as [string, string, string, string?]),
+    ['Two of the same troop', '', '×1.8 strength in one company'], ['Any troop', 'Regimental Colours', '+1 star'],
   ];
   const shown = knownOnly ? rows.filter(([, , , t]) => !t || S.techs.includes(t)) : rows;
   if (knownOnly && shown.length < rows.length) d.append(h('p', { class: 'muted' }, `${rows.length - shown.length} more recipes unlock with research.`));

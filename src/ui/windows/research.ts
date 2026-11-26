@@ -14,10 +14,13 @@ import { S } from '../state';
 import { toast, qLabel, qText } from '../app';
 import { renderWin } from './frame';
 import { openPlanner } from '../planner';
+import { techOpenTo } from '../../engine/technology';
 
 // Research tab filters: which age and which field are shown.
 export let techAge: number | 'all' | null = null;
-export let techTrack: TechTrack | 'all' = 'all';
+export let techTrack: TechTrack | 'all' | 'national' = 'all';
+/** A study of the realm's own tradition (data/national.ts): open to a few realms only. */
+const isNational = (id: string) => !!(TECH[id] as { only?: string[] }).only;
 export const TRACK_NAME: Record<TechTrack, string> = { military: 'Military', economy: 'Economy', state: 'Statecraft' };
 export const TRACK_ICON: Record<TechTrack, string> = { military: 'sword', economy: 'coin', state: 'crown' };
 
@@ -61,7 +64,7 @@ export function techCard(t: (typeof TECHS)[number]): HTMLElement {
   return h('div', { class: `tcard tr-${t.track}${known ? ' known' : m ? ' active' : why ? ' locked' : ''}`, role: 'button', tabindex: '0', onclick: tap },
     h('span', { class: 'tc-side' }, h('span', { class: 'tc-ico', html: icon(TRACK_ICON[t.track], 26) }), h('b', { class: 'tc-pts' }, known ? '✓' : String(cost)), h('small', {}, known ? 'known' : 'points')),
     h('span', { class: 'tc-body' },
-      h('span', { class: 'tc-head' }, h('b', { class: 'tc-name' }, t.name), infoToggle([more], `About ${t.name}`)),
+      h('span', { class: 'tc-head' }, h('b', { class: 'tc-name' }, t.name), isNational(t.id) ? h('small', { class: 'tc-nat' }, ' · national') : null, infoToggle([more], `About ${t.name}`)),
       h('small', { class: 'tc-status' }, status),
       unlocks.length ? h('span', { class: 'tc-unl' }, unlocks.map(u => h('i', {}, u))) : null,
       more,
@@ -71,16 +74,17 @@ export function techCard(t: (typeof TECHS)[number]): HTMLElement {
 export function techTab(body: HTMLElement) {
   const now = ageIndex(S);
   if (techAge == null || (techAge !== 'all' && techAge > now)) techAge = now;
-  const inAge = (a: number) => TECHS.filter(t => t.age === a);
+  const inAge = (a: number) => TECHS.filter(t => t.age === a && techOpenTo(S, S.player, t.id));
   const ages = h('div', { class: 'seg tfilter' },
     AGE_NAMES.map((name, i) => i > now
       ? h('button', { class: 'seg-b locked', onclick: () => toast(`The Age of ${name} has not begun. Its research stays hidden until then.`) }, name)
       : h('button', { class: 'seg-b' + (techAge === i ? ' on' : ''), onclick: () => { techAge = i; renderWin(); } }, name, h('small', {}, ` ${inAge(i).filter(t => S.techs.includes(t.id)).length}/${inAge(i).length}`))),
     h('button', { class: 'seg-b' + (techAge === 'all' ? ' on' : ''), onclick: () => { techAge = 'all'; renderWin(); } }, 'All'));
-  const tracks = h('div', { class: 'seg tfilter' }, (['all', 'military', 'economy', 'state'] as const).map(tr =>
-    h('button', { class: 'seg-b' + (techTrack === tr ? ' on' : ''), onclick: () => { techTrack = tr; renderWin(); } }, tr === 'all' ? 'All fields' : TRACK_NAME[tr])));
+  const hasNational = TECHS.some(t => isNational(t.id) && techOpenTo(S, S.player, t.id));
+  const tracks = h('div', { class: 'seg tfilter' }, ([...(['all', 'military', 'economy', 'state'] as const), ...(hasNational ? ['national' as const] : [])]).map(tr =>
+    h('button', { class: 'seg-b' + (techTrack === tr ? ' on' : ''), onclick: () => { techTrack = tr; renderWin(); } }, tr === 'all' ? 'All fields' : tr === 'national' ? 'National' : TRACK_NAME[tr])));
   body.append(ages, tracks);
-  const list = TECHS.filter(t => t.age <= now && (!t.bridge || needsBridge(S, t.id)) && (techAge === 'all' || t.age === techAge) && (techTrack === 'all' || t.track === techTrack));
+  const list = TECHS.filter(t => techOpenTo(S, S.player, t.id) && t.age <= now && (!t.bridge || needsBridge(S, t.id)) && (techAge === 'all' || t.age === techAge) && (techTrack === 'all' || (techTrack === 'national' ? isNational(t.id) : t.track === techTrack)));
   // studies under way first, then what you can start, then the rest, then what you know
   const rank = (t: (typeof TECHS)[number]) => S.techs.includes(t.id) ? 3 : S.missions.some(x => x.kind === 'research' && x.target === t.id) ? 0 : missionBlocked(S, 'research', t.id) ? 2 : 1;
   list.sort((a, b) => rank(a) - rank(b) || a.age - b.age || a.cost - b.cost);

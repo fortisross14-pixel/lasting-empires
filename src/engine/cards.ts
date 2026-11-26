@@ -7,7 +7,7 @@ import { getGeo, neighbours } from './map';
 import type { GameState, Cat, Role, MissionKind } from '../types';
 import { CATS } from '../types';
 import { TROOPS, EQUIPMENT } from '../data/troops';
-import { canEverRecruit, canRecruitUnit, canAcquireEquipment, raise } from './technology';
+import { canEverRecruit, canRecruitUnit, canAcquireEquipment, raise, linesOf, techOpenTo } from './technology';
 import { TECH, TECHS, BUILDINGS, TECH_RATES, type TechTrack, type BuildingGroup } from '../data/techs';
 import { GOVS } from '../data/governments';
 import { RULER_ARCHS } from '../data/nations';
@@ -18,6 +18,8 @@ import { shortfallCost, takeGoods, hireNeeds, postCap } from './trade';
 import { setCardPool, acceptCap, giftCost, sendGift, churchHead } from './culture';
 import {
   ageId, ageDef, pioneerNow, enemiesOf, player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore, techFx, ageIndex, govOf, courtCount, courtCap } from './core';
+import { NATIONAL_CARDS } from '../data/national';
+import { nationalCan, nationalTarget, nationalTargetOk, playNational } from './national';
 
 export type CardTarget = 'none' | 'nation' | 'mission' | 'troop';
 export type CardKind = 'troop' | 'ship' | 'equip' | 'hire' | 'mission' | 'instant';
@@ -125,7 +127,7 @@ const stab = (s: GameState, d: number) => { const p = player(s); p.stability = c
 const techOk = (s: GameState, t?: string) => !t || hasTech(s, t);
 const never = () => 0;
 setCardPool((s, cat) => Object.fromEntries(Object.values(CARDS).filter(c => c.cat === cat && !c.burden && !c.permanent && c.weight(s) > 0).map(c => [c.id, true as const])));
-const trackOpen = (s: GameState, t: TechTrack) => (TECHS.some(x => x.track === t && x.age <= ageIndex(s) && !s.techs.includes(x.id)) ? 1.8 : 0);
+const trackOpen = (s: GameState, t: TechTrack) => (TECHS.some(x => techOpenTo(s, s.player, x.id) && x.track === t && x.age <= ageIndex(s) && !s.techs.includes(x.id)) ? 1.8 : 0);
 
 export const CARDS: Record<string, HandCardDef> = {};
 const add = (d: HandCardDef) => { CARDS[d.id] = d; };
@@ -146,7 +148,7 @@ export const CLASS_NAME: Record<UnitClass, string> = { levy: 'Levy Infantry', in
 /** Its means count first (technology.ts): an Inca realm's Hire Cavalry finds no horsemen, not Jinetes. Returns the
  *  most basic of the line the realm could field when its research has none yet, and null when it can field none. */
 export const unitFor = (s: GameState, cls: UnitClass): string | null => {
-  const line = (groupDef(s).lines[cls] ?? []).filter(t => canEverRecruit(s, s.player, t));
+  const line = (linesOf(s, s.player)[cls] ?? []).filter(t => canEverRecruit(s, s.player, t));
   return [...line].reverse().find(t => techOk(s, TROOPS[t].tech)) ?? line[0] ?? null;
 };
 /** Can this realm raise this kind of troop at all? (No horses or guns where the people have none.) */
@@ -314,6 +316,17 @@ add({ id: 'breakthrough', name: 'Breakthrough', cat: 'research', kind: 'instant'
 add({ id: 'greek_scholars', name: 'Greek Scholars', cat: 'research', kind: 'instant', target: 'mission', icon: 'book', text: 'Refugees from Constantinople: a study gains 7 research.', weight: never,
   targetOk: (s, t) => s.missions.some(m => String(m.id) === t && m.kind === 'research'),
   play: (s, t) => { const m = s.missions.find(x => String(x.id) === t)!; m.progress += 7; return `+7 research on ${TECH[m.target].name}`; } });
+
+// National cards (src/data/national.ts): drawn only by the realms they name, a little more often than common cards.
+for (const c of NATIONAL_CARDS) {
+  const target = nationalTarget(c);
+  add({ id: c.id, name: c.name, cat: c.cat, kind: 'instant', icon: c.icon, text: c.text, target: target === 'none' ? undefined : target,
+    improve: target === 'troop' || undefined,
+    weight: s => (c.only.includes(s.player) ? (c.weight ?? 1.2) : 0),
+    can: s => nationalCan(s, c),
+    targetOk: target === 'none' ? undefined : (s, t) => nationalTargetOk(s, c, t),
+    play: (s, t) => playNational(s, c, t) });
+}
 
 // ---------- drawing ----------
 export const handOf = (s: GameState, cat: Cat) => s.hand.filter(h => CARDS[h.card]?.cat === cat);

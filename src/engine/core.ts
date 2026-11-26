@@ -13,6 +13,7 @@ import { tradeIncome } from './trade';
 import { artGold } from './culture';
 import { TRAITS, FIRST_NAMES, SURNAMES, RARITY, RARITY_ORDER, OUTCOME_ODDS, OUTCOMES } from '../data/characters';
 import { getGeo, neighbours } from './map';
+import { NATIONAL_FX } from '../data/national';
 
 // ---------- RNG (mulberry32, state kept in the save) ----------
 /** Highest fortress level by age (0 = no walls, 5 = the great star fortresses). Star Forts adds one. */
@@ -107,6 +108,7 @@ export function techFx(s: GameState, k: Exclude<keyof TechFx, 'rates'>): number 
     const add = (fx?: TechFx) => { for (const [key, x] of Object.entries(fx ?? {})) if (typeof x === 'number') v[key] = (v[key] ?? 0) + x; };
     for (const id of s.techs) add(TECH[id]?.fx);
     add(GOVS[gov]?.fx);
+    add(NATIONAL_FX[s.player]?.fx); // the realm's own strength (data/national.ts)
     c = { n: s.techs.length, gov, v }; FX_CACHE.set(s.techs, c);
   }
   return c.v[k] ?? 0;
@@ -456,6 +458,7 @@ export const outcomeName = (o: number) => OUTCOMES[o].name;
 export function buildingAllowed(s: GameState, provId: string, b: string): string | null {
   const p = s.provinces[provId];
   const def = BUILDINGS[b];
+  if (def.only && !def.only.includes(p?.owner ?? s.player)) return `A building of ${def.only.map(n => s.nations[n]?.name ?? n).join(' and ')}`;
   if (def.tech && !hasTech(s, def.tech)) return `Needs ${TECH[def.tech].name}`;
   if (def.coastal && !getGeo().coastal[provId]) return 'Coastal provinces only';
   if (def.site === 'town' && !p.settlement) return 'No town here yet: found a settlement first';

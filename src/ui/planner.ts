@@ -37,6 +37,7 @@ import { missionsLeft } from '../engine/realm';
 import { S, map, win, preferChar, RARITY_ORDER_I, setPreferChar } from './state';
 import { refresh, toast, act, missionTitle, placeName, qLabel, qText, offerUndo, undoBegin, SEASONS } from './app';
 import { taskPreview } from '../engine/preview';
+import { techOpenTo } from '../engine/technology';
 import { openWin, closeWin } from './windows/frame';
 import { closeSheet, oddsLine, costBenefit } from './sheets';
 import { goodsNote, openPostPicker } from './windows/economy';
@@ -90,10 +91,10 @@ export function missionTargets(handUid: number, all = false): TargetRow[] {
       rows.push({ label: n.name, sub: `Relations ${getRel(S, S.player, n.id)}`, color: n.color, acts: [{ label: MISSION_INFO[kind].name, kind, target: n.id, why }] });
     }
   } else if (kind === 'research') {
-    for (const t of TECHS.filter(t => (!d.track || t.track === d.track) && (!t.bridge || needsBridge(S, t.id)) && !S.techs.includes(t.id) && t.age <= ageIndex(S))) rows.push({ label: t.name, sub: `${techCost(S, t.id)} points · ${techYears(t.id)} · ${t.desc}`, acts: [{ label: 'Study', kind, target: t.id, why: missionBlocked(S, 'research', t.id) }] });
+    for (const t of TECHS.filter(t => techOpenTo(S, S.player, t.id) && (!d.track || t.track === d.track) && (!t.bridge || needsBridge(S, t.id)) && !S.techs.includes(t.id) && t.age <= ageIndex(S))) rows.push({ label: t.name, sub: `${techCost(S, t.id)} points · ${techYears(t.id)} · ${t.desc}`, acts: [{ label: 'Study', kind, target: t.id, why: missionBlocked(S, 'research', t.id) }] });
   } else if (kind === 'build') {
     for (const p of provsOf(S, S.player)) {
-      const acts = Object.values(BUILDINGS).filter(b => b.group === d.group && (!b.tech || S.techs.includes(b.tech))).map(b => ({ label: b.name, kind, target: p.id, building: b.id, why: missionBlocked(S, 'build', p.id, b.id) })).filter(a => !a.why || a.why.startsWith('Needs') && !a.why.startsWith('Needs Ocean') || a.why.startsWith('No free'));
+      const acts = Object.values(BUILDINGS).filter(b => b.group === d.group && (!b.only || b.only.includes(S.player)) && (!b.tech || S.techs.includes(b.tech))).map(b => ({ label: b.name, kind, target: p.id, building: b.id, why: missionBlocked(S, 'build', p.id, b.id) })).filter(a => !a.why || a.why.startsWith('Needs') && !a.why.startsWith('Needs Ocean') || a.why.startsWith('No free'));
       if (acts.length) rows.push({ label: p.name, sub: `${TIERS[tierOf(p)].name} · town ${builtAt(p, 'town')}/${townSlots(p)} · countryside ${builtAt(p, 'rural')}/${ruralSlots(p)}`, acts });
     }
   } else if (kind === 'grace') {

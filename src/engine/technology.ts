@@ -9,6 +9,7 @@ import { TECH, TECHS } from '../data/techs';
 import { TROOPS, EQUIPMENT, type Recipe } from '../data/troops';
 import { borders, atWar, hasTreaty } from './core';
 import { TECH_GROUPS, groupOfCulture } from '../data/techgroups';
+import { HERITAGE_LINES } from '../data/national';
 
 export type { Capability, Heritage };
 export interface Availability { ok: boolean; why: string | null; missing: Capability[]; }
@@ -82,16 +83,25 @@ function check(have: Set<Capability>, needs: Capability[]): Availability {
 }
 
 /** Can this realm raise this soldier or ship? For the player the research it needs counts too. */
+/** A unit of another nation's or another heritage's tradition (null: open to this realm). */
+function foreignUnit(s: GameState, id: string, type: string): string | null {
+  const t = TROOPS[type];
+  if (t?.only && !t.only.includes(id)) return `${t.name}: a tradition of ${t.only.map(n => s.nations[n]?.name ?? n).join(' and ')}`;
+  if (t?.heritages && !t.heritages.includes(heritageOf(s, id))) return `${t.name}: not of your people's traditions`;
+  return null;
+}
 export function canRecruitUnit(s: GameState, id: string, type: string): Availability {
   const t = TROOPS[type];
   if (!t) return { ok: false, why: 'Unknown troop', missing: [] };
+  const foreign = foreignUnit(s, id, type);
+  if (foreign) return { ok: false, why: foreign, missing: [] };
   const c = check(capsOf(s, id), unitNeeds(type));
   if (!c.ok) return c;
   if (id === s.player && t.tech && !s.techs.includes(t.tech)) return { ok: false, why: `Needs ${TECH[t.tech]?.name ?? 'research'}`, missing: [] };
   return OK;
 }
 /** Capabilities only (no research): can this realm ever field this soldier as things stand? */
-export const canEverRecruit = (s: GameState, id: string, type: string) => check(capsOf(s, id), unitNeeds(type)).ok;
+export const canEverRecruit = (s: GameState, id: string, type: string) => !foreignUnit(s, id, type) && check(capsOf(s, id), unitNeeds(type)).ok;
 
 /** Can this realm make or use this equipment? */
 export function canAcquireEquipment(s: GameState, id: string, eq: string): Availability {
@@ -109,6 +119,8 @@ export function canForgeRecipe(s: GameState, id: string, r: Recipe): Availabilit
     const c = TROOPS[part] ? check(capsOf(s, id), unitNeeds(part)) : check(capsOf(s, id), equipNeeds(part));
     if (!c.ok) return c;
   }
+  const foreign = foreignUnit(s, id, r.out);
+  if (foreign) return { ok: false, why: foreign, missing: ['plate'] as Capability[] }; // never forgeable here: treated like a missing means
   const out = check(capsOf(s, id), unitNeeds(r.out));
   if (!out.ok) return out;
   if (id === s.player && r.tech && !s.techs.includes(r.tech)) return { ok: false, why: `Needs ${TECH[r.tech]?.name ?? 'research'}`, missing: [] };
@@ -123,11 +135,24 @@ export function teacherOf(s: GameState, id: string, c: Capability): string | nul
   return null;
 }
 
+/** Is this study one this realm's traditions allow at all? National and regional traditions belong to their own;
+ *  the screens leave the others out entirely (they can never apply). */
+export function techOpenTo(s: GameState, id: string, techId: string): boolean {
+  const t = TECH[techId];
+  if (!t) return false;
+  if (t.only && !t.only.includes(id)) return false;
+  if (t.heritage && !t.heritage.includes(heritageOf(s, id))) return false;
+  return true;
+}
+/** Is this building one of the realm's own traditions, or open to all? */
+export const buildingOpenTo = (id: string, only?: string[]) => !only || only.includes(id);
+
 /** Why a study cannot be made yet, from the realm's means (null: nothing in its way here). A strangers' study needs
  *  something it opens to be missing, and a realm in contact that has it; any other study needs its capabilities. */
 export function researchBlock(s: GameState, techId: string, id = s.player): string | null {
   const t = TECH[techId];
   if (!t) return 'Unknown study';
+  if (!techOpenTo(s, id, techId)) return `A tradition of ${t.only ? t.only.map(n => s.nations[n]?.name ?? n).join(' and ') : 'another people'}`;
   const have = capsOf(s, id);
   if (t.bridge) {
     const missing = (t.grants ?? []).filter(c => !have.has(c));
@@ -161,10 +186,18 @@ export function adoptByContact(s: GameState): { nation: string; cap: Capability;
   return out;
 }
 
+/** National formations and the generic form other realms field instead. */
+const SUBSTITUTE: Record<string, string> = { tercio: 'pike_and_shot', old_tercio: 'pike_and_shot', inca_guard: 'mace_warriors', jaguar_warriors: 'macuahuitl_warriors', eagle_warriors: 'macuahuitl_warriors' };
 /** The nearest soldier this realm can field in place of one it cannot: the best of the same kind in its own line
  *  that its means allow, else its most basic foot. Null only when it has no soldier of that kind at all. */
 export function fitUnit(s: GameState, id: string, type: string, lines: Partial<Record<string, string[]>>): string | null {
   if (canEverRecruit(s, id, type)) return type;
+  // a national formation other realms field in its generic form (the Tercio is Spain's Pike and Shot)
+  const generic = SUBSTITUTE[type];
+  if (generic && canEverRecruit(s, id, generic)) return generic;
+  // the realm's own soldier of the same place in the line, if it can field that
+  const local = localFor(s, id, type);
+  if (local && local !== type && canEverRecruit(s, id, local)) return local;
   const kind = TROOPS[type]?.kind;
   const cls = type === 'levy' ? 'levy' : kind === 'cav' ? 'cav' : kind === 'shot' ? 'shot' : kind === 'art' ? 'art' : kind === 'ship' ? 'ship' : 'inf';
   if (cls === 'ship') return ['galleon', 'carrack', 'galley'].find(t => canEverRecruit(s, id, t)) ?? null;
@@ -181,7 +214,8 @@ export function fitUnit(s: GameState, id: string, type: string, lines: Partial<R
 export function fitAllArmies(s: GameState, linesOf: (id: string) => Partial<Record<string, string[]>>): number {
   let changed = 0;
   const fit = <T extends { type: string }>(id: string, list: T[]): T[] => list.flatMap(t => {
-    const f = fitUnit(s, id, t.type, linesOf(id));
+    const local = TROOPS[t.type]?.kind === 'ship' ? t.type : localFor(s, id, t.type) ?? t.type;
+    const f = fitUnit(s, id, local, linesOf(id));
     if (f !== t.type) changed++;
     return f ? [{ ...t, type: f }] : [];
   });
@@ -193,10 +227,34 @@ export function fitAllArmies(s: GameState, linesOf: (id: string) => Partial<Reco
   return changed;
 }
 
+/** The soldiers a realm raises, by kind: its heritage's own line where it has one, else its region's. */
+export function linesOf(s: GameState, id: string): Partial<Record<string, string[]>> {
+  const group = TECH_GROUPS[groupOfCulture(s.nations[id]?.culture ?? '')].lines;
+  return { ...group, ...(HERITAGE_LINES[heritageOf(s, id)] ?? {}) };
+}
+/** The European types in order, to find what a type stands for in another realm's line. */
+const EURO_LINES = TECH_GROUPS.western.lines as Record<string, string[]>;
+/** The realm's own soldier in place of a European (or another people's) type: same kind, same place in the line. */
+export function localFor(s: GameState, id: string, type: string): string | null {
+  const lines = linesOf(s, id);
+  if (Object.values(lines).some(l => l?.includes(type))) return type;
+  const kind = TROOPS[type]?.kind;
+  if (kind === 'ship') return type;
+  for (const [cls, line] of Object.entries(EURO_LINES)) {
+    const i = line.indexOf(type);
+    if (i < 0) continue;
+    const mine = lines[cls];
+    return mine?.length ? mine[Math.min(i, mine.length - 1)] : null;
+  }
+  const cls = type === 'levy' ? 'levy' : kind === 'cav' ? 'cav' : kind === 'shot' ? 'shot' : kind === 'art' ? 'art' : 'inf';
+  const mine = lines[cls] ?? lines.inf;
+  return mine?.length ? mine[mine.length - 1] : null;
+}
+
 /** The soldier a realm gets in place of `type`, within its means (null: none of that kind). For events and cards
  *  that hand out troops by name: three Men-at-Arms for Castile are three Elite Warriors for the Aztecs. */
 export function fitType(s: GameState, id: string, type: string): string | null {
-  return fitUnit(s, id, type, TECH_GROUPS[groupOfCulture(s.nations[id]?.culture ?? '')].lines);
+  return fitUnit(s, id, type, linesOf(s, id));
 }
 /** Add a company to a realm's army (or the player's troops or fleet), fitted to its means. Returns the type raised. */
 export function raise(s: GameState, id: string, type: string, vet = 0, str = 100, newUid: () => number): string | null {

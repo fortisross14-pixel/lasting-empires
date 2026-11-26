@@ -9,6 +9,7 @@ import { NO_STATE } from '../data/nations';
 import { provsOf, addTreaty, declareWar, initialSettlement, uid } from './core';
 import { provRegion, regionState } from './overseas';
 import { getGeo } from './map';
+import { techOpenTo, capsOf } from './technology';
 
 /** Realms that appear only in the later starts, in the nations.ts row format. */
 export interface LaterNation { id: string; name: string; adj: string; color: string; culture: string; religion: string; capital: string; personality: Personality; gold: number; army: string }
@@ -24,7 +25,7 @@ export const laterOwner = (id: string, year: number) => ROWS[id]?.[year];
 // troop upgrades by the year they had spread (as the AI uses them)
 const UPGRADES: [string, string, number][] = [
   ['levy', 'pikemen', 1470], ['men_at_arms', 'pikemen', 1475], ['crossbow', 'arquebusiers', 1485], ['bombard', 'field_cannon', 1495],
-  ['pikemen', 'tercio', 1518], ['jinetes', 'reiters', 1540], ['knights', 'cuirassiers', 1550], ['arquebusiers', 'musketeers', 1552],
+  ['pikemen', 'pike_and_shot', 1518], ['pike_and_shot', 'tercio', 1534], ['jinetes', 'reiters', 1540], ['knights', 'cuirassiers', 1550], ['arquebusiers', 'musketeers', 1552],
   ['tercio', 'old_tercio', 1565], ['reiters', 'dragoons', 1615], ['musketeers', 'line_infantry', 1685], ['old_tercio', 'line_infantry', 1695],
 ];
 /** What an old troop type has become by a later start: the common troops of that age, not its elite. */
@@ -92,7 +93,8 @@ export function setupLaterPlayer(s: GameState, year: number) {
   const st = STARTS[year];
   if (!st) return;
   const me = s.nations[s.player];
-  s.techs = TECHS.filter(t => t.year < st.techBefore).map(t => t.id);
+  // what the realm would know by then: open to its traditions, within its means, and no strangers' studies by date
+  s.techs = TECHS.filter(t => t.year < st.techBefore && !t.bridge && techOpenTo(s, s.player, t.id) && (t.needs ?? []).every(c => capsOf(s, s.player).has(c))).map(t => t.id);
   s.gov = st.gov[s.player] ?? 'feudal';
   const ps = provsOf(s, s.player).sort((a, b) => b.dev - a.dev);
   const add = (p: (typeof ps)[number], b: string) => { if (!p.buildings.includes(b) && BUILDINGS[b] && (!BUILDINGS[b].tech || s.techs.includes(BUILDINGS[b].tech!))) { p.buildings.push(b); p.grades[b] = 1; } };

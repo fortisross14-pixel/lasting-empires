@@ -20,12 +20,12 @@ import { NO_STATE } from '../data/nations';
 import { getGeo } from './map';
 import { warScore, makeSubject, subjectsOf } from './diplo';
 import { createBattle, makeSide, toBattleUnits, genericGeneral, autoResolve, finishBattle } from './battle';
-import { canEverRecruit } from './technology';
+import { canEverRecruit, localFor, linesOf } from './technology';
 
 // When AI nations get each troop type (they lag behind the player's research a little).
 const AI_UPGRADES: [string, string, number][] = [
   ['levy', 'pikemen', 1470], ['men_at_arms', 'pikemen', 1475], ['crossbow', 'arquebusiers', 1485],
-  ['bombard', 'field_cannon', 1495], ['pikemen', 'tercio', 1518], ['jinetes', 'reiters', 1540],
+  ['bombard', 'field_cannon', 1495], ['pikemen', 'pike_and_shot', 1518], ['pike_and_shot', 'tercio', 1534], ['jinetes', 'reiters', 1540],
   ['knights', 'cuirassiers', 1550], ['arquebusiers', 'musketeers', 1552], ['tercio', 'old_tercio', 1565],
   ['reiters', 'dragoons', 1615], ['musketeers', 'line_infantry', 1685], ['old_tercio', 'line_infantry', 1695],
 ];
@@ -33,14 +33,15 @@ const AI_UPGRADES: [string, string, number][] = [
 function aiRecruitPool(s: GameState, n: Nation): [string, number][] {
   // the year says what an AI realm would reach for (a stand-in for its research); its means say what it can have
   const year = s.year, g = groupOf(s, n.id);
-  return aiRecruitPoolEuro(year).map(([t, w]) => [localUnit(g, t), w] as [string | null, number])
+  void g;
+  return aiRecruitPoolEuro(year).map(([t, w]) => [localFor(s, n.id, t), w] as [string | null, number])
     .filter((x): x is [string, number] => !!x[0] && canEverRecruit(s, n.id, x[0]));
 }
 function aiRecruitPoolEuro(year: number): [string, number][] {
   const pool: [string, number][] = [['levy', 3], ['crossbow', 2], ['jinetes', 1.5], ['men_at_arms', 1.5], ['knights', 0.7], ['bombard', 0.4]];
   if (year >= 1465) pool.push(['pikemen', 2]);
   if (year >= 1478) pool.push(['arquebusiers', 2]);
-  if (year >= 1510) pool.push(['tercio', 0.8]);
+  if (year >= 1510) pool.push(['pike_and_shot', 0.8], ['tercio', 0.8]); // the Tercio only where it is Spanish (technology.ts)
   if (year >= 1545) pool.push(['musketeers', 1.5]);
   if (year >= 1600) pool.push(['dragoons', 0.6]);
   if (year >= 1675) pool.push(['line_infantry', 1.5]);
@@ -163,7 +164,7 @@ export function aiEconomy(s: GameState, n: Nation) {
   }
   for (const t of n.fleet) t.str = Math.min(100, t.str + 20);
   // upgrade old units
-  const own = Object.values(groupDef(s, n.id).lines).flat();
+  const own = [...Object.values(linesOf(s, n.id)).flat(), 'pike_and_shot', 'tercio', 'old_tercio']; // formations made by forging, within its means
   const upgradeOf = (type: string) => AI_UPGRADES.find(([from, to, y]) => from === type && s.year >= y && own.includes(to) && canEverRecruit(s, n.id, to));
   const old = n.army.filter(t => upgradeOf(t.type));
   w.arms = old.length ? w.arms + ARMS_RATE * old.length : Math.min(w.arms, 1);

@@ -18,6 +18,13 @@ const ALIAS: Record<string, string> = {
   unit_janissaries: 'unit_arquebusiers',
   unit_slingers: 'unit_crossbow', unit_archers: 'unit_crossbow', unit_horse_archers_foot: 'unit_crossbow',
   unit_sahel_horse: 'unit_jinetes', unit_horse_archers: 'unit_jinetes', unit_sipahis: 'unit_knights', unit_war_elephants: 'unit_knights',
+  // the national troops of phase 2 (docs/HISTORY-PLAN.md), until they have their own paintings
+  unit_inca_spearmen: 'unit_levy', unit_mace_warriors: 'unit_men_at_arms', unit_andean_slingers: 'unit_crossbow', unit_inca_guard: 'unit_men_at_arms',
+  unit_macuahuitl_warriors: 'unit_men_at_arms', unit_atlatl_skirmishers: 'unit_crossbow', unit_jaguar_warriors: 'unit_men_at_arms', unit_eagle_warriors: 'unit_men_at_arms',
+  unit_ming_spearmen: 'unit_pikemen', unit_chinese_crossbow: 'unit_crossbow', unit_early_handgunners: 'unit_arquebusiers', unit_chinese_cavalry: 'unit_jinetes', unit_chinese_artillery: 'unit_bombard',
+  unit_ashigaru: 'unit_pikemen', unit_samurai: 'unit_men_at_arms', unit_yumi_archers: 'unit_crossbow', unit_teppo_ashigaru: 'unit_arquebusiers', unit_mounted_samurai: 'unit_knights',
+  unit_bornean_spearmen: 'unit_levy', unit_malay_swordsmen: 'unit_men_at_arms', unit_island_skirmishers: 'unit_crossbow', unit_lantaka_gunners: 'unit_field_cannon',
+  unit_lancaran: 'unit_galley', unit_jong: 'unit_carrack', unit_junk: 'unit_carrack', unit_dhow: 'unit_caravel', unit_pike_and_shot: 'unit_tercio',
   card_eq_long_pike: 'unit_pikemen', card_eq_arquebus: 'unit_arquebusiers', card_eq_bronze: 'unit_field_cannon', card_eq_pistols: 'unit_reiters', card_eq_musket: 'unit_musketeers', card_eq_bayonet: 'unit_line_infantry',
 };
 

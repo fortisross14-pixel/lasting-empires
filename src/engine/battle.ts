@@ -14,6 +14,7 @@ import { TROOPS, TACTICS, TRAIT_TACTIC, TRAIT_TACTIC_CHANCE } from '../data/troo
 import { rand, pick, weighted, uid, clamp, hasTech, rulerMod, log, nationName, addRel, player, findWar, promoteRarity, hasCore, alliesOf, enemiesOf, troopPower, techFx, push } from './core';
 import { landPhase } from './missions';
 import { landDefence } from './ai';
+import { nationalDefence } from './national';
 
 export const breakLevel = (side: BattleSide) => (side.general?.traits.includes('inspiring') ? 0.25 : 0.35);
 /** Strength in the fight: a company held in reserve does not count until it is sent in. */
@@ -204,8 +205,11 @@ function effectiveFort(b: Battle): number {
 }
 
 /** What the ground does to both sides' tactics this round (data/terrain.ts). */
-function ground(b: Battle, am: Mods, dm: Mods, round: number) {
+function ground(s: GameState, b: Battle, am: Mods, dm: Mods, round: number) {
   const t = TERRAINS[(b.terrain ?? 'plains') as Terrain];
+  // a national card still in force (Highland Ambush, Frontier Defence): the player's defenders fight harder
+  const nd = b.def.player && !b.naval ? nationalDefence(s, b.terrain ?? 'plains') : 0;
+  if (nd) { dm.melee *= 1 + nd; dm.fire *= 1 + nd; }
   if (t) {
     am.cav *= t.attCav; dm.cav *= t.defCav;
     am.fire *= t.fire * t.attAll; am.melee *= t.attAll;
@@ -228,7 +232,7 @@ export function playRound(s: GameState, b: Battle, playerTactic: string | null):
   const attCountered = TACTICS[attTac].counteredBy.includes(defTac);
   const defCountered = TACTICS[defTac].counteredBy.includes(attTac);
   const am = mods(attTac, attCountered), dm = mods(defTac, defCountered);
-  ground(b, am, dm, r);
+  ground(s, b, am, dm, r);
   const ef = effectiveFort(b);
   const attOut = attackOutput(s, b.att, r, am, b.naval);
   const defOut = attackOutput(s, b.def, r, dm, b.naval);

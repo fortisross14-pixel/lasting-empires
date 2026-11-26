@@ -60,6 +60,9 @@ import { f1, workshopRow } from './windows/economy';
 import { armBack, sheetFrom, confirmBox, charDetail, setSheetFrom, openModal, closeModal } from './modal';
 import { openCardModal, openPlanner } from './planner';
 import { openWin } from './windows/frame';
+import { NATIONAL_FX } from '../data/national';
+import { HERITAGES } from '../data/heritage';
+import { heritageOf } from '../engine/technology';
 
 export function toggleSheet(kind: string, arg?: string) {
   if (sheet && sheet.kind === kind && sheet.arg === arg) closeSheet(); else openSheet(kind, arg);
@@ -250,7 +253,7 @@ export function provinceSheet(id: string, body0: HTMLElement) {
   const goodsRows = [{ good: p.good, v: out }, ...side.map(x => ({ good: x.good, v: x.v }))];
   const yields = h('div', { class: 'pgoods' }, h('h3', {}, 'Produces'), ...goodsRows.map(r => {
     const gd = GOODS[r.good];
-    const best = Object.values(BUILDINGS).filter(b => b.match?.includes(r.good)).map(b => b.name);
+    const best = Object.values(BUILDINGS).filter(b => b.match?.includes(r.good) && (!b.only || b.only.includes(S.player))).map(b => b.name);
     const more = h('small', { class: 'pgood-more', hidden: true }, `${gd?.desc ?? ''}${best.length ? ` ${best.join(' or ')} double${best.length > 1 ? '' : 's'} it.` : ''}`);
     return h('button', { class: 'pgood', onclick: () => { more.hidden = !more.hidden; } },
       h('span', { class: 'gico-in', style: `color:${gd?.color}`, html: icon(gd?.icon ?? 'star', 18) }), h('span', { class: 'pg-n' }, gd?.name ?? r.good), h('b', {}, `${f1(r.v)}/yr`), more);
@@ -296,7 +299,7 @@ export function provinceSheet(id: string, body0: HTMLElement) {
     const builds: HTMLElement[] = [];
     for (const [siteName, label] of [['town', 'Build in town'], ['rural', 'Build in the countryside']] as const) {
       const rows: HTMLElement[] = []; let ready = 0;
-      for (const b of Object.values(BUILDINGS).filter(b => b.site === siteName)) {
+      for (const b of Object.values(BUILDINGS).filter(b => b.site === siteName && (!b.only || b.only.includes(S.player)))) {
         const why = buildingAllowed(S, id, b.id);
         if (b.tech && !S.techs.includes(b.tech)) continue; // not researched yet: not shown
         if (why === 'Coastal provinces only' || why === 'Already built') continue;
@@ -383,6 +386,8 @@ export function nationSheet(id: string, body: HTMLElement) {
     stat('Provinces', provsOf(S, id).length), stat('Ruler', n.ruler.name),
     stat('Status', war ? 'At war with you' : tre.length ? tre.join(', ') : 'Neutral')));
   body.append(h('p', { class: 'temper' }, h('b', {}, TEMPERS[n.personality].name), '. ', TEMPERS[n.personality].text));
+  // its tradition (data/heritage.ts) and, for the great civilisations, its own strength (data/national.ts)
+  body.append(h('p', { class: 'muted' }, h('b', {}, `${HERITAGES[heritageOf(S, id)].name} tradition.`), NATIONAL_FX[id] ? ` ${NATIONAL_FX[id].name}.` : ''));
   if (goal) body.append(h('p', { class: 'goal' + (goal === S.player ? ' bad' : '') }, h('span', { html: icon('eye', 14) }), ' ',
     known ? (goal === S.player ? 'What it wants: your lands.' : `What it wants: the lands of ${nationName(S, goal)}.`) : 'What it wants is not known to you. An embassy, a spy or an alliance would tell.'));
   if (deedsKnown(S, id) && n.deeds?.length) body.append(h('div', { class: 'deeds' }, h('h3', {}, 'Lately'), h('ul', {}, n.deeds.map(d => h('li', {}, h('b', {}, String(d.year)), ' ', d.text)))));
@@ -623,6 +628,8 @@ export function realmSheet(body: HTMLElement) {
   body.append(h('div', { class: 'ruler' },
     shield(S.player, me.color),
     h('div', {}, h('b', {}, me.ruler.name), h('p', { class: 'muted' }, `${arch?.name ?? ''} monarch · reigns since ${me.ruler.from}`), h('p', {}, arch?.desc ?? ''))));
+  const nat = NATIONAL_FX[S.player];
+  body.append(h('p', { class: 'muted' }, h('b', {}, `${HERITAGES[heritageOf(S, S.player)].name} tradition.`), nat ? ` ${nat.name}: ${nat.text}.` : ` ${HERITAGES[heritageOf(S, S.player)].text}`));
   const rates = cardRates(S);
   body.append(h('h3', {}, 'Cards each year'));
   body.append(h('table', { class: 'ledger' }, h('tbody', {}, CATS.map(c => h('tr', {}, h('td', {}, CAT_INFO[c].name, h('small', { class: 'muted' }, ' ' + rates[c].parts.map(p => `${p.label} ${signed(p.v)}`).join(' · '))), h('td', {}, rates[c].rate.toFixed(2)))))));

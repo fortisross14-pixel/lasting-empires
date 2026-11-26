@@ -56,3 +56,37 @@ These 15 units have no painting; until they do, each borrows the nearest Europea
 | horse_archers | Horse Archers | jinetes | Steppe horse archers turning to shoot |
 | sipahis | Sipahis | knights | Ottoman sipahi cavalry with lance and round shield |
 | war_elephants | War Elephants | knights | An armoured war elephant with a howdah |
+
+### The national troops (phase 2 of docs/HISTORY-PLAN.md)
+
+27 more, same format. Each borrows a European painting until it has its own.
+
+| id | Unit | Borrows now | Subject to paint |
+|---|---|---|---|
+| inca_spearmen | Inca Spearmen | levy | Andean foot with bronze-tipped spears, checkered tunics, cotton armour |
+| mace_warriors | Mace Warriors | men_at_arms | Inca warriors with star-headed bronze maces and small shields |
+| andean_slingers | Andean Slingers | crossbow | Highland slingers with woven wool slings, mountains behind |
+| inca_guard | Inca Imperial Guard | men_at_arms | Elite guard in gold-trimmed tunics, tall feathered headdresses |
+| macuahuitl_warriors | Macuahuitl Warriors | men_at_arms | Mexica warriors with obsidian-edged macuahuitl and round chimalli shields |
+| atlatl_skirmishers | Atlatl Skirmishers | crossbow | Skirmishers hurling darts with spear-throwers |
+| jaguar_warriors | Jaguar Warriors | men_at_arms | Warriors in jaguar-skin suits and helmets |
+| eagle_warriors | Eagle Warriors | men_at_arms | Warriors in feathered eagle suits with beaked helmets |
+| ming_spearmen | Ming Spearmen | pikemen | Ming infantry with long spears, red coats, brigandine |
+| chinese_crossbow | Chinese Crossbowmen | crossbow | Ranks of Chinese crossbowmen loading and shooting |
+| early_handgunners | Early Handgunners | arquebusiers | Ming soldiers with hand cannon on poles |
+| chinese_cavalry | Chinese Cavalry | jinetes | Ming horsemen with lances and lamellar armour |
+| chinese_artillery | Chinese Artillery | bombard | Bronze Ming cannon on a wooden frame, gunners beside it |
+| ashigaru | Ashigaru | pikemen | Japanese foot with long yari and conical jingasa hats |
+| samurai | Samurai | men_at_arms | Samurai in laced armour with katana and naginata |
+| yumi_archers | Yumi Archers | crossbow | Japanese archers with tall asymmetric bows |
+| teppo_ashigaru | Teppō Ashigaru | arquebusiers | Ashigaru firing matchlocks in a line |
+| mounted_samurai | Mounted Samurai | knights | Mounted samurai with bow and banner on his back |
+| bornean_spearmen | Bornean Spearmen | levy | Bornean warriors with spears and long wooden shields |
+| malay_swordsmen | Malay Swordsmen | men_at_arms | Malay warriors with kris and kampilan |
+| island_skirmishers | Island Skirmishers | crossbow | Island fighters with blowpipes and javelins |
+| lantaka_gunners | Lantaka Gunners | field_cannon | Small bronze swivel guns fired from a stockade |
+| lancaran | Lancaran | galley | A Malay oared warship with tanja sails |
+| jong | Jong | carrack | A great Javanese trading junk with multiple masts |
+| junk | Junk | carrack | A Chinese war junk with battened sails |
+| dhow | Dhow | caravel | An Arab dhow with a lateen sail |
+| pike_and_shot | Pike and Shot | tercio | A mixed formation: a pike block with musketeers at its corners |

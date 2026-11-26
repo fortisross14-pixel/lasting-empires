@@ -1,4 +1,5 @@
 // Troops, equipment, merge recipes and battle tactics.
+import { NATIONAL_TROOPS, EUROPEAN_HULLS } from './national';
 
 export type TroopKind = 'inf' | 'cav' | 'shot' | 'art' | 'ship';
 
@@ -12,6 +13,10 @@ export interface TroopType {
   siege?: number;
   pike?: boolean;       // enables Pike Wall
   transport?: number;   // ships: companies carried by sea
+  /** Only realms of these heritages can field it (data/heritage.ts); unset: any realm with the means. */
+  heritages?: import('./heritage').Heritage[];
+  /** Only these nations can field it (a national unit). */
+  only?: string[];
 }
 
 export const TROOPS: Record<string, TroopType> = {
@@ -24,12 +29,12 @@ export const TROOPS: Record<string, TroopType> = {
   pikemen:     { id: 'pikemen', name: 'Pikemen', kind: 'inf', melee: 3, fire: 0, def: 5, upkeep: 1.0, tier: 2, tech: 'pike_square', draftable: true, icon: 'pike', desc: 'A hedge of long pikes. Horsemen break on it.', pike: true },
   arquebusiers:{ id: 'arquebusiers', name: 'Arquebusiers', kind: 'shot', melee: 1, fire: 4, def: 1, upkeep: 1.2, tier: 2, tech: 'firearms', draftable: true, icon: 'gun', desc: 'Matchlock guns. Slow to reload, deadly in a volley.' },
   swiss:       { id: 'swiss', name: 'Swiss Pikes', kind: 'inf', melee: 5, fire: 0, def: 6, upkeep: 2.0, tier: 3, draftable: false, icon: 'pike', desc: 'Mercenary pike columns. Feared across Europe.', pike: true },
-  tercio:      { id: 'tercio', name: 'Tercio', kind: 'inf', melee: 5, fire: 4, def: 6, upkeep: 2.5, tier: 4, tech: 'tercio_doctrine', draftable: false, icon: 'tercio', desc: 'Pike square with sleeves of shot. Queen of the battlefield.', pike: true },
+  tercio:      { only: ['castile', 'aragon'], id: 'tercio', name: 'Tercio', kind: 'inf', melee: 5, fire: 4, def: 6, upkeep: 2.5, tier: 4, tech: 'tercio_doctrine', draftable: false, icon: 'tercio', desc: 'Pike square with sleeves of shot. Queen of the battlefield.', pike: true },
   field_cannon:{ id: 'field_cannon', name: 'Field Cannon', kind: 'art', melee: 0, fire: 6, def: 2, upkeep: 2.0, tier: 3, tech: 'bronze_cannon', draftable: false, icon: 'cannon', desc: 'Light bronze guns that keep up with the army.', siege: 2 },
   reiters:     { id: 'reiters', name: 'Reiters', kind: 'cav', melee: 4, fire: 3, def: 3, upkeep: 2.0, tier: 3, tech: 'wheellock', draftable: false, icon: 'pistol', desc: 'Pistol cavalry that ride in, fire and wheel away.' },
   cuirassiers: { id: 'cuirassiers', name: 'Cuirassiers', kind: 'cav', melee: 7, fire: 2, def: 6, upkeep: 3.0, tier: 4, tech: 'wheellock', draftable: false, icon: 'lance', desc: 'Armoured horse with pistols and swords.' },
   musketeers:  { id: 'musketeers', name: 'Musketeers', kind: 'shot', melee: 2, fire: 6, def: 2, upkeep: 1.8, tier: 3, tech: 'musket', draftable: false, icon: 'gun', desc: 'Heavy muskets on rests. Their volleys break pike squares.' },
-  old_tercio:  { id: 'old_tercio', name: 'Tercio Viejo', kind: 'inf', melee: 7, fire: 6, def: 8, upkeep: 3.5, tier: 5, tech: 'musket', draftable: false, icon: 'tercio', desc: 'Veteran tercio with musket sleeves. Almost unbreakable.', pike: true },
+  old_tercio:  { only: ['castile', 'aragon'], id: 'old_tercio', name: 'Tercio Viejo', kind: 'inf', melee: 7, fire: 6, def: 8, upkeep: 3.5, tier: 5, tech: 'musket', draftable: false, icon: 'tercio', desc: 'Veteran tercio with musket sleeves. Almost unbreakable.', pike: true },
   dragoons:    { id: 'dragoons', name: 'Dragoons', kind: 'cav', melee: 4, fire: 4, def: 4, upkeep: 2.2, tier: 4, tech: 'military_drill', draftable: false, icon: 'horse', desc: 'Mounted musketeers. Ride fast, fight on foot.' },
   line_infantry:{ id: 'line_infantry', name: 'Line Infantry', kind: 'shot', melee: 5, fire: 7, def: 5, upkeep: 2.6, tier: 5, tech: 'bayonet', draftable: false, icon: 'gun', desc: 'Flintlocks with bayonets. Pike and shot in one man.' },
   // the soldiers of the rest of the world (data/techgroups.ts): each fills the place a European type holds
@@ -75,6 +80,10 @@ export const EQUIPMENT: Record<string, EquipType> = {
 
 export interface Recipe { a: string; b: string; out: string; tech?: string; cost: number; }
 
+// the units of the wider world and the reference civilisations (data/national.ts), and who builds Europe's hulls
+Object.assign(TROOPS, NATIONAL_TROOPS);
+for (const [id, hs] of Object.entries(EUROPEAN_HULLS)) if (TROOPS[id]) TROOPS[id].heritages = hs;
+
 // a and b are troop or equipment ids; order does not matter.
 export const RECIPES: Recipe[] = [
   { a: 'levy', b: 'long_pike', out: 'pikemen', tech: 'pike_square', cost: 10 },
@@ -84,8 +93,8 @@ export const RECIPES: Recipe[] = [
   { a: 'jinetes', b: 'plate', out: 'knights', cost: 18 },
   { a: 'men_at_arms', b: 'warhorse', out: 'knights', cost: 15 },
   { a: 'men_at_arms', b: 'long_pike', out: 'pikemen', tech: 'pike_square', cost: 5 },
-  { a: 'pikemen', b: 'arquebusiers', out: 'tercio', tech: 'tercio_doctrine', cost: 25 },
-  { a: 'swiss', b: 'arquebusiers', out: 'tercio', tech: 'tercio_doctrine', cost: 15 },
+  { a: 'pikemen', b: 'arquebusiers', out: 'pike_and_shot', tech: 'pike_and_shot', cost: 22 },
+  { a: 'swiss', b: 'arquebusiers', out: 'pike_and_shot', tech: 'pike_and_shot', cost: 14 },
   { a: 'bombard', b: 'bronze', out: 'field_cannon', tech: 'bronze_cannon', cost: 15 },
   { a: 'jinetes', b: 'pistols', out: 'reiters', tech: 'wheellock', cost: 15 },
   { a: 'knights', b: 'pistols', out: 'cuirassiers', tech: 'wheellock', cost: 20 },

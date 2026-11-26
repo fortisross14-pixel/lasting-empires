@@ -61,6 +61,10 @@ import { search, homeView, threatPlaces, armyPlaces, fold } from '../src/engine/
 import { missionCap } from '../src/engine/realm';
 import { player, provsOf, genCharacter } from '../src/engine/core';
 import type { GameState, BattleUnit, BattleGeneral } from '../src/types';
+import { NATIONAL_TECHS, NATIONAL_CARDS, NATIONAL_BUILDINGS } from '../src/data/national';
+import { nationalCardsOf, nationalCan, nationalDefence, nationalIntro } from '../src/engine/national';
+import { techOpenTo, canEverRecruit as canEverT, linesOf as linesOfT } from '../src/engine/technology';
+import { buildingAllowed } from '../src/engine/core';
 
 let failed = 0, passed = 0;
 function check(name: string, fn: () => void) {
@@ -784,7 +788,7 @@ check('historical means: what each realm can field follows its heritage, for the
   const mi = newGame('ming', 85); answer(mi);
   ok(capsOf(mi).has('gunpowder') && capsOf(mi).has('cannon') && researchBlock(mi, 'firearms') === null, 'Ming starts without gunpowder');
   const br = newGame('brunei', 86); answer(br);
-  ok(capsOf(br).has('ships') && capsOf(br).has('ocean') && canEverRecruit(br, 'brunei', 'galley'), 'Brunei has no ships');
+  ok(capsOf(br).has('ships') && capsOf(br).has('ocean') && canEverRecruit(br, 'brunei', 'lancaran') && !canEverRecruit(br, 'brunei', 'galley'), 'Brunei has no ships');
   // Japan learned the matchlock in 1543: not in 1451, yes by 1600
   ok(!capsOf(newGame('japan', 87)).has('gunpowder'), 'Japan has guns in 1451');
   const later = newGame('castile', 88, 1600); answer(later);
@@ -801,6 +805,35 @@ check('only discovered realms: no envoy, contract or trade partner beyond the kn
   ok(!worldAmbitions(s).some(a => !nationKnownT(s, a.nation)), 'the ambitions list shows an undiscovered realm');
   const near = Object.values(s.nations).find(n => n.alive && n.id !== s.player && nationKnownT(s, n.id));
   if (near) ok(!/not discovered/.test(blockedFor(s, 'relations', near.id) ?? ''), 'a known neighbour is refused as undiscovered');
+});
+
+check('civilisations: national techs, buildings, troops and cards belong to their own realms', () => {
+  for (const id of ['inca', 'aztec', 'castile', 'ming', 'brunei']) {
+    const s = newGame(id, 120); answer(s);
+    ok(NATIONAL_TECHS.some(t => t.only?.includes(id) && techOpenTo(s, id, t.id) && s.techs.includes(t.id)), `${id} has no national technology`);
+    ok(nationalCardsOf(id).length >= 5, `${id} has fewer than five national cards`);
+    ok(NATIONAL_BUILDINGS.some(b => b.only.includes(id)), `${id} has no national building`);
+    ok(nationalIntro(s, id).length > 40, `${id} has no introduction`);
+    for (const c of NATIONAL_CARDS.filter(c => !c.only.includes(s.player))) eq(CARDS[c.id].weight(s), 0, `${id} draws ${c.name}`);
+    for (const t of NATIONAL_TECHS.filter(t => t.only && !t.only.includes(id))) ok(!techOpenTo(s, id, t.id), `${id} may study ${t.name}`);
+  }
+  const inca = newGame('inca', 121); answer(inca);
+  ok(linesOfT(inca, 'inca').inf?.includes('mace_warriors') && canEverT(inca, 'inca', 'inca_spearmen'), 'the Inca lack their own foot');
+  ok(inca.troops.every(t => !/men_at_arms|knights|crossbow|arquebus/.test(t.type)), `the Inca field European troops: ${inca.troops.map(t => t.type).join(', ')}`);
+  ok(!canEverT(inca, 'inca', 'tercio') && !canEverT(inca, 'inca', 'samurai'), 'the Inca may raise a Tercio or samurai');
+  const cas = newGame('castile', 122); answer(cas);
+  ok(canEverT(cas, 'castile', 'tercio') && !canEverT(cas, 'castile', 'jaguar_warriors'), 'the Tercio is not Castilian, or Castile has Jaguar Warriors');
+  const fr = newGame('france', 123); answer(fr);
+  ok(!canEverT(fr, 'france', 'tercio') && canEverT(fr, 'france', 'pike_and_shot'), 'France raises the Tercio, or no Pike and Shot');
+  const ja = newGame('japan', 124); answer(ja);
+  ok(canEverT(ja, 'japan', 'samurai') || canEverT(ja, 'japan', 'ashigaru'), 'Japan has no samurai or ashigaru');
+  // a national card that needs a tech says so; the Highland Ambush only helps on hills and mountains
+  ok(/Needs/.test(nationalCan(inca, NATIONAL_CARDS.find(c => c.id === 'elite_guard')!) ?? ''), 'the Elite Guard card can be played without its technology');
+  CARDS.highland_ambush.play!(inca, '');
+  ok(nationalDefence(inca, 'mountains') > 0 && nationalDefence(inca, 'plains') === 0, 'Highland Ambush helps on the wrong ground');
+  const nb = NATIONAL_BUILDINGS[0];
+  const other = Object.values(fr.provinces).find(p => p.owner === 'france')!;
+  ok(!!buildingAllowed(fr, other.id, nb.id), `France may build the ${nb.name}`);
 });
 
 check('text size: every font size in the stylesheet scales with --ts', () => {
@@ -870,7 +903,7 @@ check('regions: the Inca cannot study gunpowder or raise horse, Castile is as it
   ok(closedBecause(inca, 'navigation'), "Strangers' Arms opened the ocean too");
   ok(!closedBecause(cas, 'firearms'), 'Castile may not study firearms');
   ok(techCost(inca, 'guilds') > techCost(cas, 'guilds'), 'research costs the same in Cuzco as in Toledo');
-  eq(unitFor(inca, 'inf'), 'elite_warriors', 'Inca infantry'); eq(unitFor(cas, 'inf'), 'men_at_arms', 'Castilian infantry');
+  eq(unitFor(inca, 'inf'), 'mace_warriors', 'Inca infantry'); eq(unitFor(cas, 'inf'), 'men_at_arms', 'Castilian infantry');
   ok(!classOpen(inca, 'cav') && classOpen(cas, 'cav'), 'Inca horse');
   ok(!inca.troops.some(t => ['crossbow', 'jinetes', 'men_at_arms', 'knights', 'levy', 'bombard'].includes(t.type)), `European troops in the Inca army: ${inca.troops.map(t => t.type).join(', ')}`);
   ok(!Object.values(inca.nations).filter(n => groupOf(inca, n.id) === 'american').some(n => n.army.some(t => ['crossbow', 'jinetes', 'knights', 'arquebusiers'].includes(t.type))), 'European troops in an American army');

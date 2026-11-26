@@ -22,7 +22,7 @@ import type { GameState, Nation, Ruler, RevealItem, Heir, Character } from '../t
 import { CATS } from '../types';
 import { NATIONS, START_REL, RULERS, RULER_NAMES, RULER_ARCHS, archFromTraits, NO_STATE, ARMIES } from '../data/nations';
 import { getGeo } from './map';
-import { BUILDINGS } from '../data/techs';
+import { BUILDINGS, TECHS } from '../data/techs';
 import { TROOPS } from '../data/troops';
 import { CORE } from '../data/core';
 import {
@@ -43,7 +43,7 @@ import { AMBITIONS, ambitionOptions } from './drafts';
 import { START_FLEETS, yearlyFleet } from './navy';
 import { initSociety, yearlySociety } from './society';
 import { yearlySubjects, unionClaim, autoSurrender } from './diplo';
-import { canAcquireEquipment, fitAllArmies, adoptByContact } from './technology';
+import { canAcquireEquipment, fitAllArmies, adoptByContact, linesOf, techOpenTo } from './technology';
 import { CAPABILITIES } from '../data/heritage';
 import { deed } from './rivals';
 
@@ -242,6 +242,8 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   s.stats.kings = [];
   me.ruler.from = r.from;
   for (const c of CATS) { drawCat(s, c); drawCat(s, c); }
+  // the national traditions the realm already has when the game begins (data/national.ts: known)
+  for (const t of TECHS) if (t.known && techOpenTo(s, nationId, t.id) && !s.techs.includes(t.id)) s.techs.push(t.id);
   // a first piece of equipment only where the realm can use it (no plate harness for peoples without the craft)
   if (canAcquireEquipment(s, nationId, 'plate').ok) addCard(s, 'eq_plate'); else if (canAcquireEquipment(s, nationId, 'banner').ok) addCard(s, 'eq_banner');
   addCard(s, 'peace_envoy', true);
@@ -253,7 +255,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   if (len?.years && s.startYear + len.years < s.endYear) { s.endYear = s.startYear + len.years; s.length = len.id; }
   s.steward = { on: diff(s).steward, share: STEWARD_DEFAULT };
   s.flags.rank0 = ranking(s).findIndex(x => x.id === nationId) + 1;
-  fitAllArmies(s, id => groupDef(s, id).lines); // every army within its realm's means (technology.ts)
+  fitAllArmies(s, id => linesOf(s, id)); // every army within its realm's means, in its own soldiers (technology.ts)
   settleArmies(s);
   s.stock = startStock(s);
   // wars you inherit on the first day: say so plainly
@@ -654,7 +656,7 @@ function fromV6(s: GameState) {
   });
   if (refund) { s.np += refund; log(s, `${refund} equipment card${refund > 1 ? 's' : ''} your people cannot use exchanged for ${refund} nation point${refund > 1 ? 's' : ''}.`, 'neutral'); }
   const mine = { troops: s.troops, fleet: s.fleet };
-  fitAllArmies(s, id => groupDef(s, id).lines);
+  fitAllArmies(s, id => linesOf(s, id));
   s.troops = mine.troops; s.fleet = mine.fleet; // the player's own companies are kept as they are
 }
 const MIGRATIONS: Record<number, (s: GameState) => void> = { 2: fromV2, 3: fromV3, 4: fromV4, 5: fromV5, 6: fromV6 };

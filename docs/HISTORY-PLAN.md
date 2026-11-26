@@ -48,7 +48,16 @@ Chronicle tell the empire's story.
   are their own; Castile keeps its medieval kit; Ming has gunpowder; Brunei has ships; Japan gets guns by 1600, not
   in 1451. Balance: 9 campaigns against main, same survival, top-3 5 → 4, wins 3 → 4 (within the spread).
 
-## Phase 2 — Civilisation content (next)
+## Phase 2 — Civilisation content ✅
+
+Done: the data is in `src/data/national.ts`, read by `src/engine/technology.ts` (troop lines, who may study what)
+and `src/engine/national.ts` (national cards, the defence bonus, introductions). Each of the five has national troops,
+4–5 national technologies (some known at the start), a national building, 5–6 national cards and a national strength
+shown on the realm page; Japan and maritime Southeast Asia have their own troop lines too. The Tercio is Castile's
+and Aragon's; everyone else with pikes and guns gets Pike and Shot. Research has a National filter. Left for later:
+civilisation-specific forge recipes, and distinct content for every smaller realm (they use their heritage lines).
+
+The plan as written:
 
 1. **National units for the five reference civilisations**, reusing existing mechanics: Inca (Andean Levy, Inca
    Spearmen, Andean Slingers, Mace Warriors, Imperial Guard), Aztec (Mexica Levy, Spear and Macuahuitl Warriors, Atlatl
@@ -64,7 +73,7 @@ Chronicle tell the empire's story.
 5. **Every playable nation** gets at least one distinctive technology, card and unit or building, reusing regional
    content where a smaller realm needs it.
 
-## Phase 3 — Contact and diffusion
+## Phase 3 — Contact and diffusion (next)
 
 1. Per-nation **known technologies** for the AI (lightweight research in place of the date stand-in), favouring its
    heritage and temper.

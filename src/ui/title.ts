@@ -27,6 +27,7 @@ import {
 import { start, toast, SEASONS } from './app';
 import { armBack, setScreenBack } from './modal';
 import { missionTags, matches, EMPTY_FILTER, DIFFICULTIES, LENGTHS_TAG, REGIONS_TAG, TOPICS, SHORT_YEARS, MEDIUM_YEARS, type MissionTags, type MissionFilter } from '../engine/missiontags';
+import { NATIONAL_INTRO } from '../data/national';
 
 // ---------- shell ----------
 export function boot(data: { save?: string; slot?: number }) {
@@ -361,7 +362,7 @@ export function showPicker(initial?: string) {
         h('div', { class: 'pick-t' },
           h('b', {}, n.name), h('span', { class: 'np-diff ' + d.cls }, d.label),
           h('small', {}, `${ps.length} province${ps.length > 1 ? 's' : ''} · capital ${cap?.name ?? '?'} · ${RELIGION_NAMES[cap?.religion ?? ''] ?? ''} · ${CULTURE_NAMES[n.culture]}`),
-          h('small', { class: 'muted' }, (pickYear === 1451 ? def.blurb : undefined) ?? (near.size ? `Neighbours: ${[...near].slice(0, 5).map(o => preview.nations[o].name).join(', ')}.` : 'No neighbours by land.')))),
+          h('small', { class: 'muted' }, (pickYear === 1451 ? NATIONAL_INTRO[id] ?? def.blurb : undefined) ?? (near.size ? `Neighbours: ${[...near].slice(0, 5).map(o => preview.nations[o].name).join(', ')}.` : 'No neighbours by land.')))),
       h('div', { class: 'pick-opts' }, difficultySeg(), lengthSeg()),
       h('label', { class: 'tutopt' }, h('input', { type: 'checkbox', id: 'tutcheck', checked: wantTutorial ? true : undefined, onchange: (e: Event) => { setWantTutorial((e.target as HTMLInputElement).checked); } }), 'Show me how to play'),
       h('button', { class: 'btn primary', onclick: () => chooseNation(id, pickYear) }, `Play as ${n.name} in ${pickYear}`));
