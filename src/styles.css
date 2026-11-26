@@ -2471,3 +2471,51 @@ body:has(#pickbar) #timeline, body:has(#pickbar) #goalbar, body:has(#pickbar) #m
 .shop-b .shop-i, [data-style="chancery"] .shop-b .shop-i { background: var(--text); color: var(--panel); }
 .shop-b .shop-t { flex: 1; overflow: hidden; }
 .shop-b .shop-t b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ======================================================================================================
+   Laptop first (Nov 2026): the game is played on a laptop (1440 × 900 and up) or a tablet; phones are not a target.
+   Pages use the width in two columns; every block is capped (src/ui/brief.ts).
+   ====================================================================================================== */
+.cap-more { display: inline; padding: 0 2px; margin: 0; min-height: 0; border: 0; border-bottom: 1px solid currentColor; background: none; color: var(--lapis); font: inherit; font-style: normal; font-size: .92em; cursor: pointer; }
+/* the mission page */
+.mdetail .md-body.md-grid { max-width: 1180px; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 28px 48px; align-items: start; padding-top: 18px; }
+.md-brief { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 12px; }
+.md-brief .md-lede { margin: 0; font-size: calc(19px * var(--ts, 1)); line-height: 1.45; font-style: italic; }
+.md-brief .md-meta { margin: 0; font-size: calc(15px * var(--ts, 1)); color: var(--muted); }
+.md-brief .mc-learn { font-size: calc(15px * var(--ts, 1)); }
+.md-brief .md-play .btn { min-height: 56px; font-size: calc(17px * var(--ts, 1)); }
+.md-plan { padding: 16px 20px 18px; background: var(--card); border: 1.5px solid var(--text); box-shadow: var(--shadow); }
+.md-plan .mhead { margin: 0 0 12px; }
+.md-plan .md-steps { gap: 14px; padding-left: 26px; }
+.md-plan .md-steps li { font-size: calc(17px * var(--ts, 1)); }
+.md-plan .md-steps li::marker { font-family: var(--f-title); font-weight: 700; }
+.md-plan .md-steps small { margin-top: 3px; font-size: calc(14.5px * var(--ts, 1)); line-height: 1.4; }
+@media (max-width: 860px) { .mdetail .md-body.md-grid { grid-template-columns: 1fr; } .md-brief { position: static; } }
+/* pages inside a window use the laptop's width (they were 640 px, a phone's column) */
+.win-page > .mbox, [data-style="chancery"] .win-page > .mbox { width: min(1100px, 100%); }
+.win-page > .mbox.narrow { width: min(760px, 100%); }
+/* the planner: choices on the left, the decision at the right, in view while you choose */
+.pl-cols.has-side { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); gap: 24px; align-items: start; }
+.pl-side { position: sticky; top: 0; display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; background: var(--card); border: 1.5px solid var(--text); box-shadow: var(--shadow); }
+.pl-verdict { display: flex; flex-direction: column; gap: 2px; padding-left: 12px; border-left: 5px solid var(--text); }
+.pl-verdict b { font-family: var(--f-title); font-weight: 600; font-size: calc(24px * var(--ts, 1)); line-height: 1.15; }
+.pl-verdict span { font-size: calc(15px * var(--ts, 1)); }
+.pl-verdict.t-good { border-left-color: var(--good); } .pl-verdict.t-good b { color: var(--good); }
+.pl-verdict.t-bad { border-left-color: var(--wax); } .pl-verdict.t-bad b { color: var(--wax); }
+.pl-line { margin: 0; font-size: calc(15px * var(--ts, 1)); line-height: 1.4; }
+.pl-warn { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.pl-warn li { font-size: calc(14.5px * var(--ts, 1)); font-weight: 600; }
+.pl-warn li::before { content: '▾ '; color: var(--wax); }
+.pl-why { margin: 0; color: var(--wax); font-weight: 600; font-size: calc(14.5px * var(--ts, 1)); }
+.pl-details summary { cursor: pointer; color: var(--muted); font-size: calc(14px * var(--ts, 1)); }
+.pl-details .facts { margin-top: 6px; }
+.pl-details .pl-after { margin: 6px 0; padding-left: 18px; font-size: calc(13.5px * var(--ts, 1)); color: var(--muted); }
+.pl-side .pl-foot { margin: 0; justify-content: space-between; }
+.pl-side .pl-foot .btn.primary { flex: 1; min-height: 52px; font-size: calc(17px * var(--ts, 1)); }
+.pl-side .gift { margin: 0; }
+.pl-side .gift-seg { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 900px) { .pl-cols.has-side { grid-template-columns: 1fr; } .pl-side { position: static; } }
+/* the face-down tactics before a round: a card back, not an empty card */
+[data-style="chancery"] .b-slot .k-back, [data-style="chancery"] .k-back.small { background: repeating-linear-gradient(45deg, #1b1a1714 0 2px, transparent 2px 8px), repeating-linear-gradient(-45deg, #1b1a1714 0 2px, transparent 2px 8px), var(--card); }
+[data-style="chancery"] .k-back .c-rose { opacity: 1; color: var(--text); margin-top: 18px; }
+[data-style="chancery"] .k-back .c-backlabel { margin-top: 8px; }

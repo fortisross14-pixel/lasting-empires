@@ -11,6 +11,13 @@ const ALIAS: Record<string, string> = {
   card_pacify: 'card_charter', card_tolerance: 'card_charter', card_sermon: 'card_religious_mission', card_holy_see: 'card_religious_mission',
   card_relic: 'card_religious_mission', card_unrest: 'unit_rebels', card_patronage: 'role_artist', card_royal_grace: 'role_leader',
   card_embrace_culture: 'role_leader', card_festival: 'card_royal_feast',
+  // units of the peoples outside Europe have no painting of their own yet (listed in docs/art-prompts-units.md):
+  // each borrows the nearest painting of its kind, so no battle shows an empty tile
+  unit_warriors: 'unit_levy', unit_militia: 'unit_levy', unit_spearmen: 'unit_levy', unit_azaps: 'unit_levy',
+  unit_elite_warriors: 'unit_men_at_arms', unit_shield_warriors: 'unit_men_at_arms', unit_rajput_swords: 'unit_men_at_arms',
+  unit_janissaries: 'unit_arquebusiers',
+  unit_slingers: 'unit_crossbow', unit_archers: 'unit_crossbow', unit_horse_archers_foot: 'unit_crossbow',
+  unit_sahel_horse: 'unit_jinetes', unit_horse_archers: 'unit_jinetes', unit_sipahis: 'unit_knights', unit_war_elephants: 'unit_knights',
   card_eq_long_pike: 'unit_pikemen', card_eq_arquebus: 'unit_arquebusiers', card_eq_bronze: 'unit_field_cannon', card_eq_pistols: 'unit_reiters', card_eq_musket: 'unit_musketeers', card_eq_bayonet: 'unit_line_infantry',
 };
 

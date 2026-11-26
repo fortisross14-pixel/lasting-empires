@@ -33,3 +33,26 @@ Row 4: 13. Mongol-style horse archers at the gallop, shooting backwards.
 Tiles 1–15 become: `warriors`, `elite_warriors`, `slingers`, `spearmen`, `shield_warriors`, `archers`,
 `sahel_horse`, `azaps`, `janissaries`, `horse_archers_foot`, `sipahis`, `militia`, `horse_archers`, `rajput_swords`,
 `war_elephants`.
+
+## Still to paint (November 2026): the troops of the peoples outside Europe
+
+These 15 units have no painting; until they do, each borrows the nearest European painting of its kind (`ALIAS` in
+`src/ui/art.ts`). Same format as the set above: `art/unit_<id>.webp`, 256 × 256, hand-coloured woodcut on cream paper.
+
+| id | Unit | Borrows now | Subject to paint |
+|---|---|---|---|
+| warriors | Warriors | levy | Tribal foot warriors with clubs and hide shields |
+| elite_warriors | Elite Warriors | men_at_arms | Veteran warriors in quilted armour, feathered |
+| militia | Militia | levy | Town militia with spears and padded coats |
+| spearmen | Spearmen | levy | African or Asian spearmen with tall shields |
+| shield_warriors | Shield Warriors | men_at_arms | Close ranks of warriors behind big oval shields |
+| azaps | Azaps | levy | Ottoman light infantry, bows and short spears, red caps |
+| janissaries | Janissaries | arquebusiers | Ottoman janissaries in white börk hats with matchlocks |
+| rajput_swords | Rajput Swordsmen | men_at_arms | Rajput swordsmen with talwar and round shields |
+| slingers | Slingers | crossbow | Slingers whirling slings |
+| archers | Archers | crossbow | Foot archers with recurve bows |
+| horse_archers_foot | Archers | crossbow | Steppe archers on foot |
+| sahel_horse | Sahel Horse | jinetes | Sahel cavalry in quilted horse armour with lances |
+| horse_archers | Horse Archers | jinetes | Steppe horse archers turning to shoot |
+| sipahis | Sipahis | knights | Ottoman sipahi cavalry with lance and round shield |
+| war_elephants | War Elephants | knights | An armoured war elephant with a howdah |

@@ -1,4 +1,5 @@
 // Before a game: the title screen, campaign slots, missions and their builder, and the realm picker.
+import { capped } from './brief';
 import { stopMusic } from './music';
 import type { GameState } from '../types';
 import { NATIONS } from '../data/nations';
@@ -126,21 +127,24 @@ export function showMissionDetail(m: MissionDef) {
   const root = clear($('#app'));
   root.append(h('div', { class: 'missions-screen mdetail' },
     h('header', { class: 'pick-top' }, h('button', { class: 'btn ghost small', onclick: () => showMissions() }, '← Missions'), h('h1', {}, m.name)),
-    h('div', { class: 'md-body' },
-      h('p', { class: 'md-meta' }, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`, m.wild ? ' · Wild' : m.beginner ? ' · Beginner' : ' · Historic'),
-      done ? h('div', { class: 'mc-done' }, done.realm ? `✓ Completed with ${done.realm} in ${done.year}` : '✓ Completed') : null,
-      m.beginner ? h('div', { class: 'mc-learn' }, `You learn: ${m.beginner}`) : null,
-      h('p', { class: 'mc-t' }, m.text),
-      h('h2', { class: 'mhead' }, m.steps?.length ? 'Steps, in order' : 'Goals'),
-      m.steps?.length
-        ? h('ol', { class: 'md-steps' }, m.steps.map(st => h('li', {}, h('b', {}, goalTitle(st.g, m.deadline)), h('small', {}, st.hint))))
-        : h('ul', { class: 'mc-g' }, m.goals.map(g => h('li', {}, goalTitle(g, m.deadline)))),
-      m.cards?.length || m.gold ? h('p', { class: 'muted' }, 'You start with: ', [m.cards?.length ? `${m.cards.length} extra card${m.cards.length > 1 ? 's' : ''}` : '', m.gold ? `${m.gold} ducats` : ''].filter(Boolean).join(' and ')) : null,
-      !m.beginner && !laurels().course && beginnersDone() === 0 ? h('p', { class: 'md-tip' }, 'New to the game? The beginner missions teach one system each, in a few minutes.') : null,
-      m.beginner ? null : h('div', { class: 'pick-opts md-opts' }, difficultySeg()),
-      h('div', { class: 'md-play' }, m.nations.map(n => { const nn = pv.nations[n];
-        return h('button', { class: 'btn primary', onclick: () => startMission(n, m.id) },
-          nn ? shield(n, nn.color, true) : null, ` ${done ? 'Play again as' : 'Start mission as'} ${nn?.name ?? n}`); })))));
+    // laptop first: the briefing and the button on the left, the steps on the right; every text capped
+    h('div', { class: 'md-body md-grid' },
+      h('section', { class: 'md-brief' },
+        h('p', { class: 'md-meta' }, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`, m.wild ? ' · Wild' : m.beginner ? ' · Beginner' : ' · Historic'),
+        done ? h('div', { class: 'mc-done' }, done.realm ? `✓ Completed with ${done.realm} in ${done.year}` : '✓ Completed') : null,
+        h('p', { class: 'md-lede' }, capped(m.text, 30)),
+        m.beginner ? h('div', { class: 'mc-learn' }, `You learn: ${m.beginner}`) : null,
+        m.cards?.length || m.gold ? h('p', { class: 'muted' }, 'You start with ', [m.cards?.length ? `${m.cards.length} extra card${m.cards.length > 1 ? 's' : ''}` : '', m.gold ? `${m.gold} ducats` : ''].filter(Boolean).join(' and '), '.') : null,
+        m.beginner ? null : h('div', { class: 'pick-opts md-opts' }, difficultySeg()),
+        h('div', { class: 'md-play' }, m.nations.map(n => { const nn = pv.nations[n];
+          return h('button', { class: 'btn primary', onclick: () => startMission(n, m.id) },
+            nn ? shield(n, nn.color, true) : null, ` ${done ? 'Play again as' : 'Start as'} ${nn?.name ?? n}`); })),
+        !m.beginner && !laurels().course && beginnersDone() === 0 ? h('p', { class: 'md-tip' }, 'New to the game? The beginner missions teach one system each.') : null),
+      h('section', { class: 'md-plan' },
+        h('h2', { class: 'mhead' }, m.steps?.length ? `${m.steps.length} steps, in order` : `${m.goals.length} goal${m.goals.length > 1 ? 's' : ''}`),
+        m.steps?.length
+          ? h('ol', { class: 'md-steps' }, m.steps.map(st => h('li', {}, h('b', {}, goalTitle(st.g, m.deadline)), h('small', {}, capped(st.hint, 16)))))
+          : h('ul', { class: 'mc-g' }, m.goals.map(g => h('li', {}, goalTitle(g, m.deadline))))))));
   window.scrollTo(0, 0);
 }
 

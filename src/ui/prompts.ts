@@ -320,8 +320,8 @@ export function showBattle(b: Battle) {
       slotFoe.append(tacticCard(last.theirs, { small: true, cls: last.theirC ? 'countered' : '' }));
       slotMe.append(tacticCard(last.mine, { small: true, cls: last.myC ? 'countered' : '' }));
     } else if (!b.done) {
-      slotFoe.append(b.scout ? tacticCard(b.enemyNext, { small: true, cls: 'scouted' }) : backCard('?', { small: true }));
-      slotMe.append(backCard('?', { small: true }));
+      slotFoe.append(b.scout ? tacticCard(b.enemyNext, { small: true, cls: 'scouted' }) : backCard('Their tactic', { small: true }));
+      slotMe.append(backCard('Your tactic', { small: true }));
     }
     box.append(h('div', { class: 'b-mid' }, slotFoe, h('div', { class: 'vs' }, last ? h('div', { class: 'dmg' },
       h('span', { class: 'good' }, `You deal ${last.dmgThem}`), h('span', { class: 'bad' }, `You take ${last.dmgMe}`),

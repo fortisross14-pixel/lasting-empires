@@ -1,4 +1,4 @@
-// Drives the built game (dist/index.html) in a headless browser at tablet and phone size: every deck window and tab,
+// Drives the built game (dist/index.html) in a headless browser at laptop and tablet size: every deck window and tab,
 // the side panels, the menu, a card, turns and skip-ahead, the missions screens and the battle test.
 // Fails on any page error or sideways scroll, and writes the screenshots to docs/screens/ (not kept in git).
 //   npm run build && npm run smoke
@@ -8,7 +8,8 @@ let chromium, devices;
 try { ({ chromium, devices } = require('playwright')); } catch { console.error('Playwright is not installed: npm i -D playwright && npx playwright install chromium'); process.exit(2); }
 const PAGE = 'file://' + path.resolve(__dirname, '../dist/index.html');
 const OUT = path.resolve(__dirname, '../docs/screens');
-const SIZES = [['tablet', { viewport: { width: 1180, height: 820 }, deviceScaleFactor: 1 }], ['phone', { ...devices['iPhone 13'], viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 }]];
+// laptop first (the game is played on a laptop, or a tablet at most); phones are not a target
+const SIZES = [['laptop', { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 }], ['tablet', { viewport: { width: 1180, height: 820 }, deviceScaleFactor: 1 }]];
 const problems = [];
 
 async function run(browser, name, opts) {
@@ -66,7 +67,7 @@ async function run(browser, name, opts) {
     if (await p.locator(target).count()) {
       await tap(target + ' >> nth=0', 'a target');
       for (let i = 0; i < 3 && /^Next/.test((await p.locator('.pl-foot .btn.primary').first().textContent().catch(() => '')) || ''); i++) await tap('.pl-foot .btn.primary', 'Next step');
-      if (!(await p.locator('.pv .pv-grid').count())) problems.push(`${name}: the planner shows no preview of what the task commits`);
+      if (!(await p.locator('.pl-side .pl-line').count())) problems.push(`${name}: the planner shows no decision panel (what the task commits)`);
       await shot('preview');
       const before = await p.evaluate(() => __game().missions.length);
       await tap('.pl-foot .btn.primary', 'Send them'); await wait(500);
@@ -153,5 +154,5 @@ async function run(browser, name, opts) {
   for (const [name, opts] of SIZES) await run(browser, name, opts);
   await browser.close();
   if (problems.length) { console.log(problems.join('\n')); console.log(`${problems.length} problem(s)`); process.exit(1); }
-  console.log('Smoke test passed at tablet and phone size. Screens are in docs/screens/.');
+  console.log('Smoke test passed at laptop and tablet size. Screens are in docs/screens/.');
 })();

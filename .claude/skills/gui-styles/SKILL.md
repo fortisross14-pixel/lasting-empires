@@ -5,6 +5,11 @@ description: Interface rules for Lasting Empires — layout, touch targets, the 
 
 # Lasting Empires — GUI rules
 
+## Laptop first, and the text cap
+- The owner plays on a **laptop** (design and check at 1440 × 900) and at most a tablet (1180 × 820). Phones are not a target: do not shrink a screen into a phone column. Pages inside windows are up to 1100 px wide (`.win-page > .mbox`); use the width with two columns (the mission page: briefing left, steps right; the planner: choices left, the decision panel right).
+- **Text cap:** every block is a headline and one short line (about 24 words). Longer text goes through `capped(text, words)` (`src/ui/brief.ts`): its first sentence shows, the rest behind More. A decision shows the deciding fact large first (the odds, or your strength against theirs), then one line of cost, time and who goes, then only the warnings that change a plan; everything else folds into Details.
+- The map screen stays a map: about 40–50 words in all, agenda included (the smoke test fails above 50).
+
 ## Layout
 - One-screen app: top bar (crest, year, resources, Goals, Menu, Skip, End Turn) · map · bottom tabs (Military, Diplomacy, Internal, Economy, Research, People).
 - End Turn carries the count of things still open (`todo`, from `attention(S)`): `!N` in the war colour when N are urgent, else the plain count in ink. A deck tab shows a dot when one of its cards can be played now.
@@ -25,7 +30,7 @@ description: Interface rules for Lasting Empires — layout, touch targets, the 
 ## Touch
 - Minimum target 40–44px. No hover-only information: anything in a `title` must also be reachable by tapping.
 - Map: tap selects (pointer capture + `elementFromPoint`), drag pans, pinch zooms.
-- Test at 1180×820 (tablet landscape) and 390×844 (phone). The page must never scroll sideways.
+- Test at 1440×900 (laptop) and 1180×820 (tablet). The page must never scroll sideways.
 
 ## Style: Ink & Cartography (style B)
 One style, `data-style="chancery"` on `<html>`; its rules are the override block at the end of `src/styles.css` ("Style B").
@@ -65,7 +70,10 @@ One style, `data-style="chancery"` on `<html>`; its rules are the override block
 - A task sent flies as a small card to its target (`flyCard` in `planner.ts`); it never delays the game and is off under reduced motion.
 - Ink reveals use `@keyframes inkdraw` (clip-path). Keep motion under 300ms, and wrap it all in `@media (prefers-reduced-motion: reduce)` off-switches.
 
-## Phone
+## Small screens (not a target)
+- Under 760 px layouts fall back to one column so nothing breaks, but no work goes into phones.
+
+## Phone (legacy rules, kept so narrow windows do not break)
 - Under 480px the top bar drops labels (icons + numbers), the crest shows only the shield, and End Turn shrinks; nothing may wrap to a second line.
 - Windows fill the screen below the top bar; tab rows scroll sideways inside themselves, never the page.
 - Test with Playwright `devices['iPhone 13']` (390×844) and 1180×820; check `scrollWidth <= innerWidth` on every screen and that `pageerror` is empty.
@@ -76,5 +84,5 @@ One style, `data-style="chancery"` on `<html>`; its rules are the override block
 - `web-design-guidelines`: check changed UI files against the pinned rules (accessibility, focus, touch, animation).
 
 ## Testing screens
-- `npm run build && npm run smoke`: `scripts/smoke.cjs` drives `dist/index.html` with Playwright (preinstalled; `require('playwright')`) at both sizes through every deck window and tab, the panels, the menu, turns and the battle test. It fails on any page error or sideways scroll and writes screenshots to `docs/screens/` (not in git): look at the ones your change touches. Add a step there for every new screen.
+- `npm run build && npm run smoke`: `scripts/smoke.cjs` drives `dist/index.html` with Playwright (preinstalled; `require('playwright')`) at laptop and tablet size through every deck window and tab, the panels, the menu, turns and the battle test. It fails on any page error or sideways scroll and writes screenshots to `docs/screens/` (not in git): look at the ones your change touches. Add a step there for every new screen.
 - Publish the artifact from `dist/lasting-empires.html`; GitHub Pages serves the root `index.html` written by the build.

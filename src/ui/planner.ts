@@ -337,8 +337,11 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
     box.append(h('div', { class: 'pl-head' }, h('span', { class: 'a-ico', html: icon(info.icon, 22) }),
       h('div', {}, h('h2', {}, `${info.name}${kind === 'build' ? ': ' + BUILDINGS[building!].name : ''}`), h('p', { class: 'muted' }, `${info.verb} ${tname} · uses ${CARDS[card.card].name}`))));
     if (STEPS) box.append(h('ol', { class: 'pl-steps', 'aria-label': 'Steps' }, STEPS.map((l, i) => h('li', { class: i === step ? 'on' : i < step ? 'done' : '', 'aria-current': i === step ? 'step' : undefined }, h('span', { class: 'ps-n' }, i < step ? '✓' : String(i + 1)), l))));
-    box.append(body);
+    const cols = h('div', { class: 'pl-cols' }, body);
+    box.append(cols);
     const box0 = box; void box0;
+    let side: HTMLElement | null = null; // the decision panel, on the last step (laptop: a column at the right)
+    let giftEl: HTMLElement | null = null;
     const boxAppend = (...els: (HTMLElement | null)[]) => body.append(...els.filter((e): e is HTMLElement => !!e));
     if (show(0)) boxAppend(h('h3', {}, `Choose ${/^[aeiou]/i.test(roleName[role]) ? 'an' : 'a'} ${roleName[role].toLowerCase()}`));
     const row = h('div', { class: 'cards-row wrap' });
@@ -358,6 +361,16 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
     if (!['conquer', 'raid'].includes(kind) && show(0)) boxAppend(h('div', { class: 'oddsbox' }, h('small', { class: 'muted' }, `Outcome odds with a ${RARITY[ch.rarity].name} ${roleName[ch.role].toLowerCase()}:`), oddsLine(ch)));
     const turns = missionTurns(S, kind, ch, target, building);
     const facts: (string | HTMLElement)[] = [qText(turns)];
+    // the one thing that decides this task, said first and large in the decision panel
+    let verdict: { big: string; label: string; tone: 'good' | 'bad' | 'neutral' } | null = null;
+    const chanceVerdict = (p: number) => ({ big: `${Math.round(p * 100)}% chance`, label: p >= 0.75 ? 'Likely to succeed' : p >= 0.5 ? 'A fair chance' : 'Unlikely to succeed', tone: (p >= 0.75 ? 'good' : p >= 0.5 ? 'neutral' : 'bad') as 'good' | 'bad' | 'neutral' });
+    if (DIPLO.includes(kind)) verdict = chanceVerdict(diploChance(S, kind, ch, target, GIFT_STEPS[gift].bonus));
+    else if (kind === 'explore') verdict = chanceVerdict(exploreChance(S, ch));
+    else if (kind === 'colonize') verdict = chanceVerdict(colonizeChance(S, target, ch));
+    else if (!['conquer', 'raid', 'base', 'conquista', 'route'].includes(kind)) {
+      const great = OUTCOME_ODDS[ch.rarity][3] + OUTCOME_ODDS[ch.rarity][4], poor = OUTCOME_ODDS[ch.rarity][0];
+      verdict = { big: `${Math.round(great)}% a great result`, label: `${Math.round(poor)}% a poor one, with a ${RARITY[ch.rarity].name.toLowerCase()} ${roleName[ch.role].toLowerCase()}`, tone: great >= 30 ? 'good' : poor >= 30 ? 'bad' : 'neutral' };
+    }
     if (DIPLO.includes(kind)) facts.push(`${Math.round(diploChance(S, kind, ch, target, GIFT_STEPS[gift].bonus) * 100)}% chance`, `Journey ${envoyCost(S, target)} ducats · back at court ${qText(Math.max(1, envoyTravel(S, target)))} after`, CARDS[card.card].permanent ? 'The card stays in your hand' : 'The card is used up');
     if (kind === 'research') facts.push(`${researchRate(S, ch, TECH[target]?.track)} research a year · ${techCost(S, target)} needed`);
     facts.push(kind === 'route' ? 'A quick errand: does not use up one of the year\'s tasks' : `Tasks left this year: ${missionsLeft(S)}`);
@@ -406,7 +419,7 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
       }
       if (kind === 'base') facts.push(`Marches ${qText(missionTurns(S, 'base', ch, target))} to a camp near ${S.provinces[target].name}; then one quarter at half strength while it is built, and the enemy is warned`);
       if (kind === 'base') { /* no odds: the attack comes later */ }
-      else if (kind === 'conquista') facts.push(`${Math.round(conquistaChance(S, target, ch, picked) * 100)}% chance against the ${nationName(S, S.provinces[target].owner)}`);
+      else if (kind === 'conquista') { const c = conquistaChance(S, target, ch, picked); facts.push(`${Math.round(c * 100)}% chance against the ${nationName(S, S.provinces[target].owner)}`); verdict = chanceVerdict(c); }
       else {
         const prov = S.provinces[target];
         const enemy = S.nations[prov.owner];
@@ -414,6 +427,8 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
         const spied = (enemy.spiedUntil ?? 0) > S.year;
         const theirs = Math.round(armyPower([...enemy.army].sort((a, b) => armyPower([b]) - armyPower([a])).slice(0, kind === 'raid' ? 3 : 6)));
         facts.push(h('span', {}, `Your strength ${mine} vs `, h('b', {}, spied ? `${theirs}` : `~${Math.round(theirs * 0.8)}–${Math.round(theirs * 1.25)}`), ` · fort ${prov.fort}`));
+        const edge = mine / Math.max(1, theirs * (1 + 0.25 * prov.fort));
+        verdict = { big: `Your ${mine} against ${spied ? theirs : `about ${Math.round(theirs * 0.8)}–${Math.round(theirs * 1.25)}`}`, label: `${edge >= 1.3 ? 'You are clearly stronger' : edge >= 0.95 ? 'An even fight' : 'They are stronger'}${prov.fort ? ` · their walls, level ${prov.fort}` : ''}`, tone: edge >= 1.3 ? 'good' : edge >= 0.95 ? 'neutral' : 'bad' };
         const ground = terrainOf(prov), lent = kind === 'conquer' ? alliedHelp(S, prov.owner, prov.id) : [];
         const bySea = !!attackRoute(S, prov.id)?.naval;
         if (ground !== 'plains' || bySea) facts.push(h('span', { class: 'fact-ground' }, groundLine(ground, bySea)));
@@ -427,7 +442,7 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
     if (DIPLO.includes(kind) && (!STEPS || step === 2)) {
       // a different kind of choice: how much to sweeten the offer, with the odds moving as you choose
       const base = diploChance(S, kind, ch, target, 0);
-      boxAppend(h('section', { class: 'gift' }, h('h3', {}, 'Sweeten the offer'),
+      giftEl = (h('section', { class: 'gift' }, h('h3', {}, 'Sweeten the offer'),
         h('div', { class: 'seg gift-seg', role: 'radiogroup', 'aria-label': 'Gift' }, GIFT_STEPS.map((g, i) => {
           const cost = giftCost(S, i), p = Math.round(diploChance(S, kind, ch, target, g.bonus) * 100);
           const tooDear = i > 0 && player(S).gold < envoyCost(S, target) + cost;
@@ -441,8 +456,9 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
     if (!STEPS || step === 2) {
       // what sending it commits: the dry run, so these numbers are what launching will do
       const pv = taskPreview(S, { kind, char: ch.uid, target, troops: picked, building, card: cardUid, good, ships, trade: trade ? { dir: trade.dir, amount: trade.amount } : undefined, gift });
-      if (!pv.blocked) boxAppend(previewBox(pv));
-      boxAppend(h('div', { class: 'facts' }, facts.map(f => h('span', { class: 'fact' }, f))));
+      side = decisionPanel(verdict, pv, facts, giftEl);
+      cols.classList.add('has-side');
+      cols.append(side);
     }
     else if (step === 1) boxAppend(h('div', { class: 'facts' }, h('span', { class: 'fact' }, `${picked.length} of ${maxTroops()} companies chosen`)));
     const why = (kind === 'route' && trade ? routeBlocked(S, trade.good, trade.dir, target, trade.amount) : missionBlocked(S, kind, target, building)) ?? (military && !picked.length ? 'Choose at least one troop' : null) ?? (naval && transportOf(S, ships, ch) < picked.length ? 'Not enough ships to carry these troops' : null);
@@ -455,7 +471,7 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
         h('button', { class: 'btn primary' + (stepWhy ? ' blocked' : ''), onclick: () => { if (stepWhy) return toast(stepWhy, 'bad'); step++; draw(); box.scrollTop = 0; } }, `Next: ${STEPS[step + 1]}`)));
       return;
     }
-    box.append(h('div', { class: 'mrow pl-foot' },
+    (side ?? box).append(why && side ? h('p', { class: 'pl-why' }, why) : '', h('div', { class: 'mrow pl-foot' },
       h('button', { class: 'btn ghost', onclick: back }, '‹ Back'),
       h('button', { class: 'btn primary' + (why ? ' blocked' : ''), onclick: () => {
         if (why) return toast(why, 'bad');
@@ -475,19 +491,24 @@ export function openPlanner(kind: MissionKind, target: string, building: string 
   openPage(box);
 }
 
-/** The commitment, in four short lines and a list of what becomes harder: cost, time, who is away, the card. */
-function previewBox(pv: ReturnType<typeof taskPreview>) {
-  const cost = [pv.ducats > 0 ? `${pv.ducats} ducats` : '', pv.manpower > 0 ? `${pv.manpower} manpower` : '', ...pv.goods.map(g => `${g.n} ${g.name.toLowerCase()}`)].filter(Boolean).join(' · ') || 'Nothing now';
-  const row = (k: string, v: string) => h('div', { class: 'pv-r' }, h('span', { class: 'pv-k' }, k), h('b', {}, v));
-  return h('section', { class: 'pv', 'aria-label': 'What this commits' },
-    h('h3', { class: 'pv-h' }, 'If you send them'),
-    h('div', { class: 'pv-grid' },
-      row('Costs', cost),
-      row('Takes', pv.turns ? `${qText(pv.turns)} · done by ${SEASONS[pv.endQuarter]} ${pv.endYear}` : 'Under a season'),
-      row('Away', pv.ties.join(', ')),
-      row('Card', pv.cardKept ? 'Stays in your hand' : 'Used up')),
-    pv.after.length ? h('ul', { class: 'pv-after' }, pv.after.map(x => h('li', {}, x))) : null,
-    h('p', { class: 'pv-undo muted small' }, 'You can take it back until the season ends, unless the game answers at once.'));
+/** What sending commits, capped (M8 follow-up): the deciding fact large (the odds, or your strength against
+ *  theirs), one line of cost, time, who goes and the card, and only the warnings that change a plan. Everything else
+ *  (ground, routes, outcome tables, the year's count of tasks) folds into Details. */
+function decisionPanel(verdict: { big: string; label: string; tone: string } | null, pv: ReturnType<typeof taskPreview>, facts: (string | HTMLElement)[], gift: HTMLElement | null) {
+  const cost = [pv.ducats > 0 ? `${pv.ducats} ducats` : '', pv.manpower > 0 ? `${pv.manpower} manpower` : '', ...pv.goods.map(g => `${g.n} ${g.name.toLowerCase()}`)].filter(Boolean).join(', ') || 'Nothing to pay';
+  const when = pv.turns ? `done by ${SEASONS[pv.endQuarter]} ${pv.endYear}` : 'done this season';
+  const who = pv.ties.length > 1 ? `${pv.ties[0].split(',')[0]} and ${pv.ties.slice(1).join(' and ')} go` : `${pv.ties[0]?.split(',')[0] ?? 'Someone'} goes`;
+  // only what changes a plan: the year's last task, nobody left to defend, the last card of its kind, debt
+  const warn = pv.after.filter(x => /^Your last task|No companies left|^Your last |treasury/.test(x));
+  return h('aside', { class: 'pl-side', 'aria-label': 'Your decision' },
+    verdict ? h('div', { class: 'pl-verdict t-' + verdict.tone }, h('b', {}, verdict.big), h('span', {}, verdict.label)) : null,
+    gift,
+    pv.blocked ? null : h('p', { class: 'pl-line' }, `${cost} · ${when} · ${who} · card ${pv.cardKept ? 'kept' : 'used up'}.`),
+    warn.length ? h('ul', { class: 'pl-warn' }, warn.map(x => h('li', {}, x))) : null,
+    h('details', { class: 'pl-details' }, h('summary', {}, 'Details'),
+      h('div', { class: 'facts' }, facts.map(f => h('span', { class: 'fact' }, f))),
+      pv.after.length ? h('ul', { class: 'pl-after' }, pv.after.map(x => h('li', {}, x))) : null,
+      h('p', { class: 'muted small' }, 'You can take it back until the season ends, unless the game answers at once.')));
 }
 
 // ---------- a played card travels (roadmap 2.11) ----------
