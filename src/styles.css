@@ -2604,3 +2604,4 @@ body:has(#pickbar) #timeline, body:has(#pickbar) #goalbar, body:has(#pickbar) #m
 .mc-stars i { font-style: normal; color: var(--gold); }
 .mc-stars i.off { opacity: .28; filter: grayscale(1); }
 [data-style="chancery"] .mc-stars i { color: #9a6b12; }
+.build-row .bld-pic { display: block; width: 128px; height: 128px; margin: 6px auto 4px; border-radius: 6px; }

@@ -7,7 +7,7 @@ line icon. So the sheets can come in any order, one at a time.
 
 ## Received
 
-Sheet 1 (`units-world.png`, 15 troops) and sheet 2 (`units-americas.png`, 8 troops) are in the game (November 2026).
+All seven sheets are in the game (November 2026): 42 troops and ships, 27 national and specialist cards (four share a painting) and 15 national buildings (shown when a row of the build list is opened). Nothing on this list borrows a painting any more.
 
 ## How to make a sheet
 
