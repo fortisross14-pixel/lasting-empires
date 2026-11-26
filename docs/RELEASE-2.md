@@ -76,6 +76,13 @@ be cut to medium if you would rather have quicker games.
 4. **Briefs in the game's voice**: every mission's text within the Release 1 length (two to three sentences); no
    mission screen over the word cap.
 
+## Stars (in the game since November 2026)
+
+Every mission but a lesson is won for one, two or three stars: ★ at Gentle, ★★ at Standard, ★★★ at Hard. The best
+result is kept on this device and shown on the mission's card and page, with the total on the title screen. Release
+2's difficulty targets below are for Standard; each scenario is also checked at Hard, to be sure three stars can be
+earned.
+
 ## How each one is made and checked
 
 - Data first (`src/data/missions.ts`), in batches of about eight, each batch pushed to main and live.
