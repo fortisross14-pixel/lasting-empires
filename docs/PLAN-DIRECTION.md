@@ -144,8 +144,8 @@ The highest-return change: navigation, pacing, onboarding and perceived intellig
   explorers. The gift is the first of these.
 - **Balance with the arc** (M7): measured once against main on 21 campaigns, no change needed; watch it when the score
   formula is next tuned (`docs/BALANCE.md`).
-- **The rest of the roadmap** (`docs/ROADMAP.md`): Phase 6, shipping (store wrappers, achievements in Game Center and
-  Play Games), was outside this plan.
+- **No store release is planned.** The game is played from GitHub Pages; the roadmap's Phase 6 (store wrappers,
+  Game Center and Play Games achievements) is not wanted.
 
 ## Order and why
 

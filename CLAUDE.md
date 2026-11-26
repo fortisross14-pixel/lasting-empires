@@ -10,3 +10,5 @@
   (`.github/workflows/pages.yml`) on each push to main: it type-checks, tests, builds, then publishes `index.html`,
   `sw.js`, the manifest and `art/`, `fonts/`, `icons/`, `sound/`. A new top-level folder the game loads must be added
   to its "Stage the site" step.
+- The owner plays from GitHub Pages only and does not plan a store release: push finished work to `main` without
+  asking (no branch is needed) and check that the Pages deploy runs. Skip store, packaging and release work.
