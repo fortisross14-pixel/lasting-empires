@@ -37,6 +37,14 @@ People menu and no hand limit (current): without a hand limit every drawn card i
 
 1,038 provinces, research by age, hand limit by rank (current): AI realms now develop at 0.14 + 0.025 × √provinces a year (chance of +1 development; Ming about +1 every 2.5 years, a small realm every 5) and every crown's prestige fades 2% a year (was 1.5%). Before: the simulated player won 9 of 9, mostly on prestige (600–900 against 150–200) and on growth no AI matched. Now `reasonable` 9 runs: top 3 in 8, first in 5, often by a narrow margin (Castile 928 against Ming 979); `greedy` top 3 in 2 of 3, first in 2; `passive` survives small and never reaches the top. Hand limits per deck/in all: Small Kingdom 8/22, Kingdom 10/28, Great Kingdom 12/34, Empire 15/40 (lower limits for small realms widened the gap between big and small starts: Portugal fell to 0 of 3 in the top 3).
 
+### Europe and the rest of the world (owner's rule, November 2026)
+
+Towards the end of the game the European powers should in general be the strongest, as history went in those
+centuries; a realm outside Europe must still be able to turn that around, but only with play of high quality.
+For the sims: a `reasonable` bot playing Mali, Vijayanagara, Japan or Muscovy should finish first rarely (about 2
+in 8 campaigns), and a European `reasonable` bot about as often as before. Check with
+`MODE=reasonable SEEDS=2 NATIONS=mali,vijayanagara,japan,muscovy LIST=1 RIVALS=1`.
+
 ## Levers (where to tune)
 
 - **Income:** `provinceIncome`, `tradeValue` (1 + 0.07 × partner development, capped at 4, each extra route ×0.8), building gold in `src/data/techs.ts`, settlement tiers (`TIERS`), price level (income follows 70% of inflation).
