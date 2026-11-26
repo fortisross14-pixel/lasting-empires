@@ -146,3 +146,22 @@ roadmap phase 2 (event paintings, faces, age plates, title scenes). The old requ
 ### Sheet B: 3 columns × 2 rows, wide tiles (3:2)
 > Same style. One image: a grid of exactly 3 columns × 2 rows of wide tiles (3:2), thin white gaps, no text. In order:
 > 1 Age of Crusade: knights before a besieged walled city · 2 Age of Discovery: caravels leaving a harbour toward an unknown coast · 3 Age of Reformation: a printing press and a door with a nailed notice · 4 Age of Absolutism: a king in a vast palace hall with courtiers · 5 Age of Enlightenment: scholars around a telescope and an orrery · 6 Age of Revolutions: crowds with flags storming a fortress.
+
+## Title scene, redrawn in the game's language (M8 · A8.4, November 2026)
+
+The current title paintings (`art/title_wide.webp`, `art/title_tall.webp`) are painterly and cinematic; the game is
+woodcut cards, washed parchment maps and ink. Until they are redrawn, CSS tones them toward the game (sepia wash, fewer
+colours, engraving lines, a paper edge). The redraw should:
+
+- **Technique:** hand-coloured engraving or woodcut, as in the troop and role cards: firm black line, cross-hatched
+  shadow, flat watercolour washes in the house palette (paper #f6f1e6, ink #1b1a17, wax red only for one small accent
+  such as a seal, lapis #2f5d8a, leaf gold #a8781f, sea #dfe7e3). No photographic light, no lens blur, no glossy skin.
+- **Scene:** the same council at a table: a ruler and three advisers over a map of the world, a window on a harbour.
+  The map on the table should look like the in-game map (washed realm colours, ink borders).
+- **Composition:** wide 2400 × 1350 with the right 40% calm (the title sheet lies over it on tablets); tall
+  1200 × 2100 with the top third calm for the name. Deliver as `.webp`, under 400 KB each.
+- **Prompt (for an image model, then retouched by hand):** "Hand-coloured woodcut engraving, 16th century council
+  chamber, a crowned ruler and three advisers leaning over a large painted world map on a table, harbour with
+  carracks through a tall window, firm black linework, cross-hatching, flat muted watercolour washes on cream paper,
+  limited palette of ink black, faded lapis blue, ochre gold and one small red wax seal, no gradients, no photographic
+  lighting, wide composition with empty calm space on the right."

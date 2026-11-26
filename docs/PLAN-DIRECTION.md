@@ -120,14 +120,32 @@ The highest-return change: navigation, pacing, onboarding and perceived intellig
   cap) is refused with the reason, and the preview counts it. A negotiation table with live acceptance and a route
   choice for explorers remain ideas for later.
 
-### M8 — One visual language and accessibility
-- [ ] **A8.1 Emphasis levels:** urgent (war colour, solid), actionable (gold), reference (quiet ink, denser),
-  unavailable (folded "not yet" group). Red only for danger and war; primary affirmative buttons in gold/green.
-- [ ] **A8.2** Military window: the current decision large, inventory dense and collapsible.
-- [ ] **A8.3 Settings:** UI scale, high contrast, colour-blind-safe map overlays (patterns as well as hues),
-  compact/comfortable density.
-- [ ] **A8.4** Title illustration redrawn toward the engraved/watercolour in-game style (art brief in
-  `docs/art-brief.md`).
+### M8 — One visual language and accessibility ✅
+- [x] **A8.1 Emphasis levels** (the M8 block at the end of `src/styles.css`, written into the `gui-styles` skill):
+  urgent and danger in the war red (`--wax`); actionable in a deep green (`--act`): primary buttons, End Turn, the
+  Cards button, what is selected; reference in ink (headings, resource icons, counts, costs); unavailable faded. Red no
+  longer marks a plain "go" button or a heading. Playable-card dots on the deck tabs are gold (an opportunity).
+- [x] **A8.2 The Military window:** the Army and Wars tabs open on **Decide now** (or **Worth doing now**): the
+  military lines of the agenda, large, each a jump. Below, the inventory is reference: a long list of garrisons folds
+  to its headers (the capital and any garrison with a selected company stay open).
+- [x] **A8.3 Settings:** Interface size (100 / 112 / 125%: windows, dialogs, panels, agenda and camera as a whole),
+  Spacing (comfortable / compact), High contrast, and Patterns on the map (wars hatched, allies dotted, subjects ringed,
+  as well as coloured). The smoke test runs the largest settings at 390 px with no sideways scroll.
+- [x] **A8.4 Title illustration:** toned toward the game's engraved, washed look in CSS (sepia wash, fewer colours,
+  engraving lines, a paper edge). A real redraw is briefed with sizes, palette and a prompt in `docs/art-brief.md`.
+
+## What is left
+
+- **A new title painting** (A8.4): the brief is written; the picture needs an artist or an image model and a hand
+  retouch. The CSS treatment carries it until then.
+- **A clicks-per-year measure** (A5.4): the simulator's bot does not tap, so taps saved by the routines and the agenda
+  are not measured; it needs a scripted human-style player in the smoke test.
+- **More decision shapes** (A7.4): a negotiation table with live acceptance in diplomacy, and a route choice for
+  explorers. The gift is the first of these.
+- **Balance with the arc** (M7): measured once against main on 21 campaigns, no change needed; watch it when the score
+  formula is next tuned (`docs/BALANCE.md`).
+- **The rest of the roadmap** (`docs/ROADMAP.md`): Phase 6, shipping (store wrappers, achievements in Game Center and
+  Play Games), was outside this plan.
 
 ## Order and why
 

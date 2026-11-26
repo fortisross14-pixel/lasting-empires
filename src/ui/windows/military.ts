@@ -11,7 +11,8 @@ import { troopCard, troopDetails } from '../cards';
 import { navyCap, transportOf } from '../../engine/navy';
 import { warScore } from '../../engine/diplo';
 import { garrisons, moveTroops, travel, locOf, READY_STR, healOf } from '../../engine/army';
-import { S, forge, setForge } from '../state';
+import { S, forge, setForge, todo } from '../state';
+import { agendaRow, jumpTo } from '../agenda';
 import { toast, act, SEASONS, placeName, qText } from '../app';
 import { closeWin, renderWin } from './frame';
 import { openSheet, peopleSection } from '../sheets';
@@ -35,7 +36,22 @@ export function unitsPanel() {
   return box;
 }
 
+/** What needs a military decision now, large, at the top of the Army and Wars tabs (M8): armies on the march,
+ *  land held by the enemy, rivals gathering on the border, and cards someone can carry against an enemy. */
+export function decisionNow(body: HTMLElement) {
+  const now = todo.filter(a => a.cat === 'military' || a.id.startsWith('warning:') || a.id.startsWith('ambition:'));
+  if (!now.length) return;
+  body.append(h('section', { class: 'now-box' + (now.some(a => a.tier === 'urgent') ? ' urgent' : '') },
+    h('h3', { class: 'now-h' }, now.some(a => a.tier === 'urgent') ? 'Decide now' : 'Worth doing now'),
+    h('div', { class: 'now-list' }, now.map(a => agendaRow(a, () => jumpTo(a))))));
+}
+
+/** Garrisons the player folded or opened in the Army tab (this session only; the default depends on the list). */
+const garFold = new Map<string, boolean>();
+const foldOf = (g: string, byDefault: boolean) => garFold.get(g) ?? byDefault;
+
 export function armyTab(body: HTMLElement) {
+  decisionNow(body);
   // where troops stand now, plus the capital, barracks and bases
   const gs = [...new Set([...garrisons(S), ...S.troops.filter(t => !t.moving && t.loc).map(t => t.loc!)])];
   body.append(h('p', { class: 'muted' }, 'Troops stand in the capital, in provinces with Barracks, or at an invasion base. They heal every season: fastest with Barracks, then the capital, at half speed on the march or in camp. Only troops within a quarter\'s march can attack or defend a province. Tap troops to select them, then move them.'));
@@ -45,8 +61,13 @@ export function armyTab(body: HTMLElement) {
   const toggle = (uid: number) => { setForge(forge.includes(uid) ? forge.filter(x => x !== uid) : [...forge, uid]); renderWin(); };
   const groups: [string, typeof S.troops][] = gs.map(g => [g, S.troops.filter(t => t.loc === g && !t.moving)]);
   const moving = S.troops.filter(t => t.moving), away = S.troops.filter(t => t.mission != null && !t.moving);
+  // a long list of garrisons folds to its header, all but the capital and any holding a selected company
+  const many = groups.length > 3;
   for (const [g, ts] of groups) {
-    body.append(h('div', { class: 'garrison' }, h('b', {}, placeName(g)), h('small', {}, `${g === player(S).capital ? 'capital · ' : g.startsWith('base:') ? 'camp · ' : S.provinces[g]?.buildings.includes('barracks') ? 'barracks · ' : ''}${ts.filter(t => t.mission == null).length} companies · power ${Math.round(armyPower(ts.filter(t => t.mission == null)))}`),
+    const folded = foldOf(g, many && g !== player(S).capital && !ts.some(t => sel.includes(t.uid)));
+    body.append(h('div', { class: 'garrison' + (folded ? ' folded' : '') },
+      h('button', { class: 'gar-fold', 'aria-expanded': String(!folded), 'aria-label': `${folded ? 'Show' : 'Hide'} the companies in ${placeName(g)}`, onclick: () => { garFold.set(g, !folded); renderWin(); } }, folded ? '▸' : '▾'),
+      h('b', {}, placeName(g)), h('small', {}, `${g === player(S).capital ? 'capital · ' : g.startsWith('base:') ? 'camp · ' : S.provinces[g]?.buildings.includes('barracks') ? 'barracks · ' : ''}${ts.filter(t => t.mission == null).length} companies · power ${Math.round(armyPower(ts.filter(t => t.mission == null)))}`),
       (() => { // several at once: choose everyone here, or call every free company elsewhere to this place
         const here = ts.filter(t => t.mission == null).map(t => t.uid);
         const callable = garrisons(S).includes(g) ? S.troops.filter(t => t.mission == null && !t.moving && t.loc !== g && t.str > 0).map(t => t.uid) : [];
@@ -54,6 +75,7 @@ export function armyTab(body: HTMLElement) {
           here.length > 1 ? h('button', { class: 'btn ghost small', onclick: () => { const all = here.every(u => sel.includes(u)); setForge(all ? sel.filter(u => !here.includes(u)) : [...new Set([...sel, ...here])]); renderWin(); } }, here.every(u => sel.includes(u)) ? 'Clear' : 'Select all') : null,
           callable.length ? h('button', { class: 'btn ghost small', onclick: () => { setForge([]); act(() => moveTroops(S, callable, g), `${callable.length} ${callable.length === 1 ? 'company' : 'companies'} called to ${placeName(g)}`, `${callable.length} ${callable.length === 1 ? 'company' : 'companies'} called to ${placeName(g)}`); } }, `Call all here (${callable.length})`) : null);
       })()));
+    if (folded) continue;
     const row = h('div', { class: 'cards-row wrap' });
     if (!ts.length) row.append(h('p', { class: 'muted' }, 'Empty.'));
     for (const t of ts) row.append(troopCard(t, { small: true, selected: sel.includes(t.uid), dim: t.mission != null || t.str < 100, badge: t.mission === -5 ? 'defending' : t.str < 100 ? `+${healOf(S, t).q}% a season` : undefined, onclick: () => t.mission === -5 ? toast('Standing ready to defend') : t.mission != null ? toast('Away on a task') : (t.str < 100 && toast(`Heals ${healOf(S, t).q}% a season${healOf(S, t).why.length ? ': ' + healOf(S, t).why.join(', ') : ''}. ${t.str < READY_STR ? 'Too weak to attack until half strength, but it can march.' : 'Ready to fight.'}`), toggle(t.uid)) }));
@@ -92,6 +114,7 @@ export function navyTab(body: HTMLElement) {
 }
 
 export function warsTab(body: HTMLElement) {
+  decisionNow(body);
   const wars = S.wars.filter(w => w.a === S.player || w.b === S.player);
   body.append(h('h3', {}, `Wars (${wars.length})`));
   if (!wars.length) body.append(h('p', { class: 'muted' }, 'At peace. Declare war from a province or a realm in Diplomacy.'));

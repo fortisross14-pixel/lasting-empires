@@ -19,6 +19,9 @@ description: Interface rules for Lasting Empires — layout, touch targets, the 
 ## Title screen
 - Play first, learn second: **Continue** (the latest unfinished campaign) and **Start a realm** (`.start-b`, the picker) are the big buttons; the primary colour goes to Continue when there is one, else to Start. Below, **Learn and challenge**: three tiles (`.learn-t`) for the beginner missions, the historic challenges (`showMissions('beg' | 'real')` opens and scrolls to that section) and the battle test. Never show a lock on anything playable.
 
+## Accessibility settings
+- Device settings beside text size: interface size (`data-ui` m/l zooms windows, dialogs, panels, agenda and camera, not the map or bars), spacing (`data-density="compact"`), high contrast (`data-contrast="high"`), and map patterns (`data-patterns="on"`: `marked()` in `map.ts` hatches wars, dots allies, rings subjects). A new screen must not scroll sideways at interface size 125% on 390 px.
+
 ## Touch
 - Minimum target 40–44px. No hover-only information: anything in a `title` must also be reachable by tapping.
 - Map: tap selects (pointer capture + `elementFromPoint`), drag pans, pinch zooms.
@@ -26,9 +29,10 @@ description: Interface rules for Lasting Empires — layout, touch targets, the 
 
 ## Style: Ink & Cartography (style B)
 One style, `data-style="chancery"` on `<html>`; its rules are the override block at the end of `src/styles.css` ("Style B").
-- **Tokens**: `--ink` #f6f1e6 (paper), `--panel` #fbf8f1, `--card` #fffdf8, `--text` #1b1a17 (ink), `--wax`/`--gold` #b3261e (the one accent), `--sea` #dfe7e3. All colours come from tokens; never add a literal surface colour.
+- **Tokens**: `--ink` #f6f1e6 (paper), `--panel` #fbf8f1, `--card` #fffdf8, `--text` #1b1a17 (ink), `--wax`/`--gold` #b3261e (danger), `--act` #2f5d3b (action), `--leaf` (opportunity), `--lapis` (a chosen or linked thing), `--sea` #dfe7e3.
+- **Four levels of emphasis** (the M8 block at the end of `src/styles.css`): urgent or dangerous = `--wax` (war, alarms, losses, over the limit, urgent badges); actionable = `--act` (the main button of a screen, End Turn, the Cards button, what is selected); reference = ink and `--muted` (headings, inventory, counts, resource icons); unavailable = faded (`.blocked`) and folded. Red is never decoration and never a plain "go" button. All colours come from tokens; never add a literal surface colour.
 - **Fonts**: Cormorant SC for titles (`--f-display`, `--f-title`), EB Garamond for body (`--f-body`), shipped as `woff2` in `fonts/` and declared by `fonts/fonts.css` (inlined by `scripts/build.mjs`). No third family: a new one must be added to `fonts/` with its licence, to the Google link for the artifact page, and to the service worker list, so think twice.
-- **Shades**: no blurred shadows. Depth is a hard ink offset: `--shadow` (3px 3px 0) for buttons and cards, `--shadow-lg` (5px) for windows and modals. Frames are 1.2–1.5px ink lines. Active tab = ink background, paper text. The crimson accent is for the one main action (End Turn, primary buttons, progress), never decoration.
+- **Shades**: no blurred shadows. Depth is a hard ink offset: `--shadow` (3px 3px 0) for buttons and cards, `--shadow-lg` (5px) for windows and modals. Frames are 1.2–1.5px ink lines. Active tab = ink background, paper text. The main action is green (`--act`); red is kept for danger.
 - **Map**: realm colours are washed toward the paper with `wash(hex, k)` in `map.ts` (0.42 for others, `MINE_WASH` 0.3 for the player, 0.12 for the picked realm). The player's land reads first by the band of full colour along the inside of its border (`mineBand`), not by a darker fill.
 - **Text size**: write every font size as `calc(Npx * var(--ts, 1))`; a check in `npm test` fails on a bare `font-size: Npx`. The two bars set `--ts: 1` (fixed height). Anything with a fixed height that holds text needs a rule under `:root[data-text]` to let it grow. Test new screens at 130% (`localStorage` setting `text: 1.3`) on 390 px.
 - **Colour is never the only signal**: good and bad carry a mark as well (✓ ✕ on messages, ▴ ▾ in lists and on news cards, the outcome marks on outcomes). A new realm colour must stay apart from its neighbours' for colour-blind players: differ in lightness, not only in hue.

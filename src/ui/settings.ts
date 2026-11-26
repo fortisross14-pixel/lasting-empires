@@ -19,6 +19,14 @@ export interface Settings {
   quickBattles: boolean;
   /** Text size: 1, 1.15 or 1.3 times the designed size. */
   text: number;
+  /** Interface size: windows, dialogs and panels as a whole (icons and touch targets too): 1, 1.12 or 1.25. */
+  ui: number;
+  /** Darker greys and firmer lines. */
+  contrast: boolean;
+  /** Compact windows (more on screen) or comfortable (the designed spacing). */
+  density: 'comfortable' | 'compact';
+  /** Patterns on the map as well as colours: wars hatched, allies dotted, subjects ringed. */
+  patterns: boolean;
   /** The Empire Agenda over the map: 'auto' opens it on wide screens, folds it on phones. */
   agenda: 'auto' | 'open' | 'closed';
   /** The difficulty and open-game length chosen last, offered again next time. */
@@ -27,7 +35,7 @@ export interface Settings {
 }
 
 const KEY = 'lasting-empires.settings';
-const DEFAULTS: Settings = { warn: false, skip: true, calm: false, sfx: 1, music: 0.5, haptics: true, quickBattles: false, text: 1, agenda: 'auto', difficulty: STANDARD, length: 'age' };
+const DEFAULTS: Settings = { warn: false, skip: true, calm: false, sfx: 1, music: 0.5, haptics: true, quickBattles: false, text: 1, ui: 1, contrast: false, density: 'comfortable', patterns: false, agenda: 'auto', difficulty: STANDARD, length: 'age' };
 
 let cache: Settings | null = null;
 export function settings(): Settings {
@@ -43,6 +51,8 @@ export function setSetting<K extends keyof Settings>(k: K, v: Settings[K]) {
 }
 /** The text sizes offered. Every font size in the stylesheet is multiplied by `--ts`. */
 export const TEXT_SIZES = [1, 1.15, 1.3];
+/** The interface sizes offered. */
+export const UI_SIZES = [1, 1.12, 1.25];
 /** Settings that live on the page itself: `data-motion="calm"` switches the animations off in the stylesheet,
  *  `--ts` scales the text. */
 export function applySettings() {
@@ -50,4 +60,9 @@ export function applySettings() {
   const ts = TEXT_SIZES.includes(settings().text) ? settings().text : 1;
   if (ts === 1) document.documentElement.style.removeProperty('--ts'); else document.documentElement.style.setProperty('--ts', String(ts));
   if (ts === 1) delete document.documentElement.dataset.text; else document.documentElement.dataset.text = ts > 1.2 ? 'l' : 'm';
+  const root = document.documentElement.dataset, st = settings();
+  if (st.ui > 1.2) root.ui = 'l'; else if (st.ui > 1) root.ui = 'm'; else delete root.ui;
+  if (st.contrast) root.contrast = 'high'; else delete root.contrast;
+  if (st.density === 'compact') root.density = 'compact'; else delete root.density;
+  if (st.patterns) root.patterns = 'on'; else delete root.patterns;
 }

@@ -480,6 +480,20 @@ export class MapView {
     }
   }
 
+  /** A realm's colour with a mark drawn over it (the colour-blind setting): hatching for war, dots for an ally, rings
+   *  for a subject. One pattern a realm and mark, made once. */
+  private marked(base: string, kind: 'war' | 'ally' | 'subject', key: string): string {
+    const id = 'mk_' + kind + '_' + key.replace(/[^a-z0-9_]/gi, '');
+    if (!this.svg.querySelector('#' + id)) {
+      const pat = svgEl('pattern', { id, patternUnits: 'userSpaceOnUse', width: 8, height: 8 });
+      pat.append(svgEl('rect', { width: 8, height: 8, fill: base }));
+      if (kind === 'war') pat.append(svgEl('path', { d: 'M-2 2 L2 -2 M0 8 L8 0 M6 10 L10 6', stroke: '#1b1a17', 'stroke-width': 1.3, 'stroke-opacity': 0.7 }));
+      else if (kind === 'ally') pat.append(svgEl('circle', { cx: 4, cy: 4, r: 0.8, fill: '#1b1a17', 'fill-opacity': 0.45 }));
+      else pat.append(svgEl('circle', { cx: 4, cy: 4, r: 2.2, fill: 'none', stroke: '#1b1a17', 'stroke-width': 0.9, 'stroke-opacity': 0.7 }));
+      this.svg.querySelector('defs')!.append(pat);
+    }
+    return id;
+  }
   /** Diagonal stripes of the occupier's and the old owner's colours, for land taken in a war not yet ended. */
   private stripes(a: string, b: string, key: string): string {
     const id = 'occ_' + key.replace(/[^a-z0-9_]/gi, '');
@@ -732,7 +746,10 @@ export class MapView {
       const lbl = this.labels[id];
       const occ = this.mode === 'political' && p.occupiedFrom && s.nations[p.occupiedFrom]?.alive && atWar(s, p.owner, p.occupiedFrom);
       // skip provinces whose look has not changed since the last draw
-      const key = `${known ? 1 : 0}|${p.owner}|${p.name}|${occ ? p.occupiedFrom : ''}|${this.mode}|${this.picked}|${this.realm}|${this.revealAll ? 1 : 0}|${p.control < 30 ? 1 : 0}|${this.mode === 'political' ? '' : this.fill(s, p, maxPop)}|${nat?.overlord === s.player ? 1 : 0}|${nat?.capital === id ? 1 : 0}|${p.owner !== s.player && atWar(s, s.player, p.owner) ? 1 : 0}|${p.good}|${nat?.color}`;
+      // colour-blind setting: a pattern for the realm's standing with you, as well as its colour
+      const mark = this.mode === 'political' && !occ && document.documentElement.dataset.patterns === 'on' && p.owner !== s.player && p.owner !== NO_STATE
+        ? (atWar(s, s.player, p.owner) ? 'war' : nat?.overlord === s.player ? 'subject' : hasTreaty(s, s.player, p.owner, 'alliance') ? 'ally' : '') : '';
+      const key = `${mark}|${known ? 1 : 0}|${p.owner}|${p.name}|${occ ? p.occupiedFrom : ''}|${this.mode}|${this.picked}|${this.realm}|${this.revealAll ? 1 : 0}|${p.control < 30 ? 1 : 0}|${this.mode === 'political' ? '' : this.fill(s, p, maxPop)}|${nat?.overlord === s.player ? 1 : 0}|${nat?.capital === id ? 1 : 0}|${p.owner !== s.player && atWar(s, s.player, p.owner) ? 1 : 0}|${p.good}|${nat?.color}`;
       if (this.paint.get(id) === key) continue;
       this.paint.set(id, key);
       dirty.add(g.land[id]);
@@ -747,7 +764,8 @@ export class MapView {
       }
       if (!known) { c.style.fill = ''; for (const k of ['mine', 'subject', 'enemy', 'unrest', 'native']) c.classList.remove(k); continue; }
       const occupied = this.mode === 'political' && p.occupiedFrom && s.nations[p.occupiedFrom]?.alive && atWar(s, p.owner, p.occupiedFrom);
-      c.style.fill = occupied ? `url(#${this.stripes(nat?.color ?? '#777', s.nations[p.occupiedFrom!].color, p.owner + '_' + p.occupiedFrom)})` : this.fill(s, p, maxPop) ?? wash(nat?.color ?? '#777', p.owner === this.picked ? 0.12 : p.owner === s.player && !this.revealAll ? MINE_WASH : 0.42);
+      if (!occupied && mark) { c.style.fill = `url(#${this.marked(wash(nat?.color ?? '#777', p.owner === this.picked ? 0.12 : 0.42), mark, p.owner)})`; }
+      else c.style.fill = occupied ? `url(#${this.stripes(nat?.color ?? '#777', s.nations[p.occupiedFrom!].color, p.owner + '_' + p.occupiedFrom)})` : this.fill(s, p, maxPop) ?? wash(nat?.color ?? '#777', p.owner === this.picked ? 0.12 : p.owner === s.player && !this.revealAll ? MINE_WASH : 0.42);
       const pol = this.mode === 'political';
       c.classList.toggle('native', p.owner === NO_STATE && pol);
       c.classList.toggle('mine', !this.revealAll && p.owner === s.player);

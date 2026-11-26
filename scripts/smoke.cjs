@@ -112,7 +112,18 @@ async function run(browser, name, opts) {
     // the realm and its records open from the coat of arms; tasks and settings from the menu
     if (r === 'Realm and ruler' || r === 'Chronicle') { await tap('#top .crest', 'the coat of arms'); if (r === 'Chronicle') await tap('#sheet .crown-link >> text=Chronicle', 'Chronicle'); }
     else { await tap('.menu-b', 'Menu'); if (r === rows[0]) await shot('menu'); await tap(`.gm-row >> text=${r}`, r); }
-    if (r === 'Settings') { await shot('settings'); if (!(await p.locator('#modal h3:has-text("routines")').count())) problems.push(`${name}: Settings shows no chancellor's routines`); }
+    if (r === 'Settings') {
+      // the accessibility settings at their largest must not break a screen; then back to the designed ones
+      for (const sel of ['[aria-label="Interface size"] .seg-b >> nth=2', '[aria-label="Spacing"] .seg-b >> nth=1']) await tap('#modal ' + sel, sel);
+      for (const lbl of ['High contrast', 'Patterns on the map']) await p.evaluate(l => [...document.querySelectorAll('#modal .set-row')].find(r => r.textContent.includes(l))?.querySelector('input')?.click(), lbl);
+      await wait(); await shot('settings-big');
+      await p.evaluate(() => document.querySelector('#modal .btn.primary')?.click()); await wait();
+      await tap('#tabs .tab >> nth=0', 'Military at 125%'); await shot('military-big'); await closeWin(); await shot('map-patterns');
+      await tap('.menu-b', 'Menu'); await tap('.gm-row >> text=Settings', 'Settings again');
+      for (const sel of ['[aria-label="Interface size"] .seg-b >> nth=0', '[aria-label="Spacing"] .seg-b >> nth=0']) await tap('#modal ' + sel, sel);
+      for (const lbl of ['High contrast', 'Patterns on the map']) await p.evaluate(l => [...document.querySelectorAll('#modal .set-row')].find(r => r.textContent.includes(l))?.querySelector('input')?.click(), lbl);
+      await wait();
+      await shot('settings'); if (!(await p.locator('#modal h3:has-text("routines")').count())) problems.push(`${name}: Settings shows no chancellor's routines`); }
     if (r === 'Chronicle') { await shot('chronicle'); await tap('#sheet .seg-b >> text=Rules', 'the Rules page'); await shot('rules'); await tap('#sheet .seg-b >> text=Annals', 'the Annals'); await tap('#sheet .btn.wide', 'the history of the realm'); await shot('history'); }
     await p.evaluate(() => { const m = document.querySelector('#modal'); if (m && !m.hidden) m.querySelector('.btn.primary, .iconbtn')?.click(); document.querySelector('#sheet:not([hidden]) .iconbtn')?.click(); }); await wait();
   }

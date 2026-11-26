@@ -14,7 +14,7 @@ import { icon } from './icons';
 import { markTurn, stopReasons, SKIP_MAX } from '../engine/pace';
 import { agendaGroups, jumpTo } from './agenda';
 import { DIFFICULTY, LENGTHS, STANDARD } from '../data/difficulty';
-import { settings, setSetting, TEXT_SIZES, type Settings } from './settings';
+import { settings, setSetting, TEXT_SIZES, UI_SIZES, type Settings } from './settings';
 import { S, shield, sheet, modalOpen, todo, seenTodo, saveNow, exportSaveFile, setCv, setWin, setPendingReport } from './state';
 import { TUTORIAL, refresh, toast, SEASONS, clearUndo, undoBegin, undoCommit } from './app';
 import { runRoutines, ROUTINES } from '../engine/routine';
@@ -119,7 +119,7 @@ export function onSkipAhead() {
 /** Settings of this device, and the choices this campaign was started with. */
 export function showSettings() {
   const st = settings();
-  const toggle = (k: 'warn' | 'skip' | 'calm' | 'haptics' | 'quickBattles', label: string, sub: string) => h('label', { class: 'set-row' },
+  const toggle = (k: 'warn' | 'skip' | 'calm' | 'haptics' | 'quickBattles' | 'contrast' | 'patterns', label: string, sub: string) => h('label', { class: 'set-row' },
     h('span', { class: 'gm-t' }, h('b', {}, label), h('small', {}, sub)),
     h('input', { type: 'checkbox', class: 'set-sw', role: 'switch', checked: st[k] ? true : undefined, onchange: (e: Event) => { setSetting(k, (e.target as HTMLInputElement).checked as Settings[typeof k]); refresh(); } }));
   const d = DIFFICULTY[S.difficulty ?? STANDARD] ?? DIFFICULTY[STANDARD];
@@ -141,6 +141,14 @@ export function showSettings() {
       h('div', { class: 'set-row' }, h('span', { class: 'gm-t' }, h('b', {}, 'Text size'), h('small', {}, 'Larger text in cards, windows and messages.')),
         h('div', { class: 'seg set-seg', role: 'radiogroup', 'aria-label': 'Text size' }, TEXT_SIZES.map(v =>
           h('button', { class: 'seg-b' + (st.text === v ? ' on' : ''), role: 'radio', 'aria-checked': String(st.text === v), onclick: () => { setSetting('text', v); closeModal(); showSettings(); refresh(); } }, `${Math.round(v * 100)}%`)))),
+      h('div', { class: 'set-row' }, h('span', { class: 'gm-t' }, h('b', {}, 'Interface size'), h('small', {}, 'Windows, dialogs and panels as a whole: text, icons and buttons.')),
+        h('div', { class: 'seg set-seg', role: 'radiogroup', 'aria-label': 'Interface size' }, UI_SIZES.map(v =>
+          h('button', { class: 'seg-b' + (st.ui === v ? ' on' : ''), role: 'radio', 'aria-checked': String(st.ui === v), onclick: () => { setSetting('ui', v); closeModal(); showSettings(); refresh(); } }, `${Math.round(v * 100)}%`)))),
+      h('div', { class: 'set-row' }, h('span', { class: 'gm-t' }, h('b', {}, 'Spacing'), h('small', {}, 'Compact shows more in each window, for small laptop and handheld screens.')),
+        h('div', { class: 'seg set-seg', role: 'radiogroup', 'aria-label': 'Spacing' }, ([['Comfortable', 'comfortable'], ['Compact', 'compact']] as const).map(([label, v]) =>
+          h('button', { class: 'seg-b' + (st.density === v ? ' on' : ''), role: 'radio', 'aria-checked': String(st.density === v), onclick: () => { setSetting('density', v); closeModal(); showSettings(); refresh(); } }, label)))),
+      toggle('contrast', 'High contrast', 'Darker greys and firmer lines.'),
+      toggle('patterns', 'Patterns on the map', 'Wars hatched, allies dotted, subjects ringed, as well as coloured: for colour-blind players.'),
       h('div', { class: 'set-row' }, h('span', { class: 'gm-t' }, h('b', {}, 'Save file'), h('small', {}, 'Download a copy of your campaigns. Load it from the title screen.')),
         h('button', { class: 'btn small', onclick: () => { saveNow(); const r = exportSaveFile(); if (r) toast(r, 'bad'); } }, 'Export'))),
     h('h3', {}, 'This campaign'),

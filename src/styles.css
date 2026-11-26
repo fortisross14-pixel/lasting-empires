@@ -2391,3 +2391,83 @@ body:has(#pickbar) #timeline, body:has(#pickbar) #goalbar, body:has(#pickbar) #m
 .gift-seg .gift-b b { font-size: calc(14px * var(--ts, 1)); font-weight: 600; }
 .gift-seg .gift-b small { font-size: calc(13px * var(--ts, 1)); }
 @media (max-width: 480px) { .gift-seg { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ======================================================================================================
+   M8 · One visual language (docs/PLAN-DIRECTION.md). Four levels of emphasis, and red only for danger.
+     urgent / danger  → --wax (war, alarms, losses, over the limit, an urgent badge)
+     actionable       → --act (the main button of a screen, End Turn, your cards, what is selected)
+     reference        → ink and --muted (headings, inventory, counts)
+     unavailable      → faded and folded (.blocked, "not yet" groups)
+   ====================================================================================================== */
+:root[data-style="chancery"] { --act: #2f5d3b; --act-deep: #1f4029; --act-ink: #fbf8f1; --act-soft: #2f5d3b1f; }
+
+/* actionable: the one main action is green, not red */
+[data-style="chancery"] .btn.primary { background: var(--act); color: var(--act-ink); border-color: var(--text); }
+[data-style="chancery"] .btn.primary:hover { background: var(--act-deep); }
+[data-style="chancery"] #top #endturn { background: var(--act); color: var(--act-ink); }
+[data-style="chancery"] #top #endturn:hover { background: var(--act-deep); }
+#handbtn { background: var(--act, #2f5d3b); }
+[data-style="chancery"] .seg-b.on, [data-style="chancery"] .win-tab.on, .pl-steps li.on { box-shadow: inset 0 -2px 0 var(--text); }
+.pl-steps li.on .ps-n { background: var(--act); border-color: var(--act); }
+.set-sw:checked::after { background: var(--act); }
+.card.mini.sel { outline-color: var(--act); box-shadow: 3px 3px 0 var(--act); }
+.card.mini.sel .c-strip { background: var(--act); }
+[data-style="chancery"] .tcard.active { box-shadow: 3px 3px 0 var(--act); border-color: var(--act); }
+.card.mini .m-bar i { background: var(--act); }
+.tab-dot { background: var(--leaf); }
+.pnext .a-ico { color: var(--act); }
+
+/* reference: headings, icons and counts in ink, so red keeps its meaning */
+[data-style="chancery"] .sh-body h3, [data-style="chancery"] .mbox h3, [data-style="chancery"] .eyebrow, [data-style="chancery"] .pick-h, .mbox.history .eyebrow, .fold > summary b { color: var(--text); }
+[data-style="chancery"] h3.sec-h, [data-style="chancery"] #win h3, [data-style="chancery"] #sheet h3 { color: var(--text); }
+[data-style="chancery"] .chip .ico, .gm-i, .b-ground .ico, .crown-link span, .gb-i, .goal .ico { color: var(--text); }
+.gm-badge, [data-style="chancery"] .tab.on .tab-c, .m-might { background: var(--text); }
+.shop-c { color: var(--text); }
+.mc-state, .hist-list b { color: var(--lapis); }
+/* the agenda's opportunity, the goal bar's crown and a selected agenda tier keep their own colours (leaf, ink) */
+
+/* unavailable: quieter still */
+.btn.blocked, .seg-b.blocked { opacity: .5; }
+
+/* ---------- accessibility settings (Menu → Settings) ---------- */
+/* high contrast: darker greys, firmer lines */
+:root[data-contrast="high"] { --muted: #2f2c27; --line: #6f6758; }
+:root[data-contrast="high"] .card, :root[data-contrast="high"] .btn, :root[data-contrast="high"] .chip, :root[data-contrast="high"] .ag-row, :root[data-contrast="high"] .gm-row { border-width: 2px; }
+:root[data-contrast="high"] .muted, :root[data-contrast="high"] small { color: var(--muted); }
+:root[data-contrast="high"] #map .prov { stroke: #1b1a17aa; }
+/* compact: more on screen in the windows, for laptops and the Steam Deck */
+:root[data-density="compact"] .win-body { padding-top: 8px; }
+:root[data-density="compact"] .cards-row { gap: 6px; }
+:root[data-density="compact"] .cards-row .card { zoom: .86; }
+:root[data-density="compact"] .gm-row, :root[data-density="compact"] .amb-row { min-height: 46px; padding-top: 5px; padding-bottom: 5px; }
+:root[data-density="compact"] .garrison { padding-top: 4px; }
+/* interface size: windows, dialogs and panels grow as a whole (icons and targets too); the map and bars keep theirs */
+:root[data-ui="m"] .win-body, :root[data-ui="m"] #modal .mbox, :root[data-ui="m"] .sh-body, :root[data-ui="m"] #agenda, :root[data-ui="m"] #cam { zoom: 1.12; }
+:root[data-ui="l"] .win-body, :root[data-ui="l"] #modal .mbox, :root[data-ui="l"] .sh-body, :root[data-ui="l"] #agenda, :root[data-ui="l"] #cam { zoom: 1.25; }
+/* the decision of the moment, big, above the inventory (M8 · A8.2) */
+.now-box { margin: 0 0 14px; padding: 10px 12px 4px; background: var(--card); border: 1.5px solid var(--text); box-shadow: var(--shadow-lg, 5px 5px 0 #1b1a17); }
+.now-box.urgent { border-color: var(--wax); box-shadow: 5px 5px 0 var(--wax); }
+[data-style="chancery"] #win .now-box h3.now-h { margin: 0 0 4px; font-size: calc(19px * var(--ts, 1)); }
+[data-style="chancery"] #win .now-box.urgent h3.now-h { color: var(--wax); }
+#win .now-box h3.now-h::after { display: none; }
+.now-box .ag-row { min-height: 60px; }
+.now-box .ag-row .ag-t b { font-size: calc(16px * var(--ts, 1)); }
+/* the inventory below it is reference: quieter and denser */
+.garrison + .cards-row .card { --card-shadow: 2px 2px 0 var(--text); }
+.garrison .gar-fold { align-self: center; width: 32px; height: 32px; margin-left: -6px; padding: 0; background: none; border: 0; color: var(--text); font-size: calc(14px * var(--ts, 1)); cursor: pointer; }
+.garrison.folded { opacity: .85; }
+/* the title scene drawn toward the game's own engraved, washed look (M8 · A8.4): fewer and softer colours, a sepia
+   wash, fine engraving lines and a paper edge, so the first screen and the map speak one language. A redrawn
+   picture is briefed in docs/art-brief.md; until then this treatment carries it. */
+.title-bg { filter: sepia(.38) saturate(.62) contrast(1.06) brightness(1.03); }
+.title-bg::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background:
+    repeating-linear-gradient(118deg, #241c1714 0 1px, transparent 1px 3px),
+    radial-gradient(120% 100% at 50% 45%, transparent 55%, #f6f1e655 85%, #f6f1e6aa 100%);
+  mix-blend-mode: multiply; }
+@media (prefers-contrast: more) { .title-bg { filter: none; } .title-bg::after { display: none; } }
+/* M8 follow-ups: decorative red removed; long labels never run into their price */
+.howto summary, [data-style="chancery"] .howto summary { color: var(--text); }
+.shop-b .shop-i, [data-style="chancery"] .shop-b .shop-i { background: var(--text); color: var(--panel); }
+.shop-b .shop-t { flex: 1; overflow: hidden; }
+.shop-b .shop-t b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
