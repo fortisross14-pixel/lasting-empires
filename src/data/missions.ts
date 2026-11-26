@@ -197,7 +197,7 @@ export const MISSIONS: MissionDef[] = [
       { k: 'built', n: 6 }, { k: 'devGain', n: 20 }] },
   { id: 'venice_china', name: "Marco Polo's Heirs", icon: 'ship', release: 2, regions: ['Europe', 'Asia'], start: 1451, deadline: 1550, nations: ['venice'], wild: true, difficulty: 'medium', cards: ['trading_post', 'trading_post'], gold: 60,
     text: 'Venice does not wait for Portugal: its merchants sail for the Indies and Cathay themselves.',
-    goals: [{ k: 'discover', regions: ['india', 'china'] }, { k: 'posts', n: 2, regions: ['india', 'china'] }] },
+    goals: [{ k: 'discover', regions: ['india', 'china'] }, { k: 'posts', n: 1, regions: ['india', 'china'] }] },
 ];
 // ---------- the beginner missions, step by step ----------
 const STEPS: Record<string, { cards?: string[]; deadline?: number; steps: { g: Goal; hint: string }[] }> = {
