@@ -65,6 +65,7 @@ import { NATIONAL_TECHS, NATIONAL_CARDS, NATIONAL_BUILDINGS } from '../src/data/
 import { nationalCardsOf, nationalCan, nationalDefence, nationalIntro } from '../src/engine/national';
 import { techOpenTo, canEverRecruit as canEverT, linesOf as linesOfT } from '../src/engine/technology';
 import { buildingAllowed } from '../src/engine/core';
+import { recordYear as recordYearT, realmLook as realmLookT, awards as awardsT, annalKind as annalKindT } from '../src/engine/records';
 import { studiesOf as studiesOfT, knows as knowsT, meetWeapons as meetWeaponsT, missingChain as missingChainT } from '../src/engine/diffusion';
 
 let failed = 0, passed = 0;
@@ -866,6 +867,28 @@ check('contact and diffusion: realms learn from those they meet; the player stud
   // the path to a study names every missing step
   const chain = missingChainT(s, 'line_infantry_drill' in TECH ? 'line_infantry_drill' : TECHS[TECHS.length - 1].id);
   ok(chain.every(id => !s.techs.includes(id)), 'the path lists a known study');
+});
+
+check('the Imperial Chronicle: a baseline, a row a year, the world every ten years, no year twice after a reload', () => {
+  const s = newGame('castile', 140); answer(s);
+  const R = s.records!;
+  ok(R.me.length === 1 && R.world.length === 1 && R.me[0].y === s.year, 'no baseline at the start');
+  ok(Object.keys(R.world[0].r).includes('castile') && Object.keys(R.world[0].r).length >= 10, 'the baseline does not hold the leading powers');
+  play(s, 4 * 12);
+  ok(R.me.length === 13 && new Set(R.me.map(r => r.y)).size === R.me.length, `a row a year expected, got ${R.me.length}`);
+  ok(R.world.length === 2 && R.world[1].y === 1460, `the world counted at the start and in 1460 expected, got ${R.world.map(w => w.y).join(', ')}`);
+  // a reload: the same year measured again replaces itself
+  const back = migrate(JSON.parse(JSON.stringify(s)));
+  recordYearT(back); recordYearT(back);
+  ok(new Set(back.records!.me.map(r => r.y)).size === back.records!.me.length, 'a reload doubled a year');
+  // a realm that falls keeps its name and colour
+  const gone = Object.keys(R.world[0].r).find(id => id !== s.player)!;
+  ok(realmLookT(s, gone)[0] === R.names[gone][0], 'a measured realm has no kept name');
+  // honours need a real gain; the annals sort lines by kind
+  for (const a of awardsT(s)) ok(!/\+0 /.test(a.why), `an award for nothing: ${a.title} ${a.why}`);
+  eq(annalKindT('Peace with France.'), 'diplomacy', 'peace is diplomacy'); eq(annalKindT('Defeat at Toro'), 'war', 'a defeat is war');
+  // the measures stay small: a decade is a few kilobytes
+  ok(JSON.stringify(R).length < 20000, `the records of twelve years take ${JSON.stringify(R).length} bytes`);
 });
 
 check('text size: every font size in the stylesheet scales with --ts', () => {

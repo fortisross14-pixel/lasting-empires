@@ -325,6 +325,7 @@ export interface GameState {
   missions: Mission[];
   techs: string[];
   /** Studies the player has seen others use, and how (engine/diffusion.ts). */
+  records?: import('./engine/records').Records; // the Imperial Chronicle's measures (engine/records.ts)
   exposed?: Record<string, { from: string; year: number; how: 'border' | 'war' | 'treaty' | 'court' | 'battle' }>;
   firedEvents: string[];
   usedLegends: string[];

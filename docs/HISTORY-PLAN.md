@@ -100,7 +100,20 @@ The plan as written:
 6. Locked technology cards list every missing prerequisite and contact with a link to each; a compact dependency view
    in the technology's page.
 
-## Phase 4 — The Imperial Chronicle (next)
+## Phase 4 — The Imperial Chronicle ✅
+
+Done. `src/engine/records.ts` keeps the data: the player's realm measured every year (score, rank, prestige,
+development, provinces, treasury, income, army, navy, battles, technologies), the 20 leading powers every ten years
+and at the start and the end, names and colours of every realm measured (kept when it falls), the player's wars with
+their results, and the firsts of its civilisation. A year measured twice replaces itself; seventy years take about
+13 KB. `src/ui/chronicle-page.ts` is the full-screen Chronicle, from Menu → The Imperial Chronicle or the realm's
+page: Overview, World Powers (sortable, up to five realms compared on any measure, change of place), Economy,
+Military (army by type, war archive), Civilisation (tradition, capabilities, firsts), Hall of Fame (honours earned
+from real gains, monarchs, generals, the distinguished) and Annals (filterable). Charts (`src/ui/chart.ts`): fine
+lines in national colours, one measure each, names at the line ends and a legend, a reading under the pointer.
+Rules & Reference is its own entry in the menu. Older saves start their records on the year they are loaded.
+
+The plan as written:
 
 1. **Data first**: a yearly snapshot for every realm (score, rank, prestige, development, provinces, treasury,
    income, army and navy power, battles), a baseline at the start and a final one at the end, no duplicates after a
@@ -111,7 +124,7 @@ The plan as written:
 3. **Rules & Reference** as its own entry in the main menu.
 4. Charts in the game's own style (parchment, national colours, fine lines); laptop layout first.
 
-## Phase 5 — Validation and balance
+## Phase 5 — Validation and balance (next)
 
 1. Verify national content and dates; review regional technologies.
 2. Multi-seed simulations across diverse starting nations and full campaign lengths; measure save size and speed.

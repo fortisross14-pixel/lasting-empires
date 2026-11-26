@@ -86,3 +86,6 @@ One style, `data-style="chancery"` on `<html>`; its rules are the override block
 ## Testing screens
 - `npm run build && npm run smoke`: `scripts/smoke.cjs` drives `dist/index.html` with Playwright (preinstalled; `require('playwright')`) at laptop and tablet size through every deck window and tab, the panels, the menu, turns and the battle test. It fails on any page error or sideways scroll and writes screenshots to `docs/screens/` (not in git): look at the ones your change touches. Add a step there for every new screen.
 - Publish the artifact from `dist/lasting-empires.html`; GitHub Pages serves the root `index.html` written by the build.
+
+## Charts (the Chronicle)
+- Use `lineChart` / `barList` from `src/ui/chart.ts`: one measure per chart (never two y-axes), the realm's own colour, the player's line stronger, names at the line ends for four or fewer and a legend for two or more, a reading under the pointer. Every chart sits beside a table or tiles with the same numbers. New measures go in `FIELDS` in `src/engine/records.ts` (append only: rows are positional).

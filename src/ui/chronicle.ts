@@ -36,12 +36,12 @@ export function thenAndNow(s: GameState): { label: string; then: string; now: st
 }
 
 /** The chronicle as a page section. `final`: the words of an ending rather than of a reign under way. */
-export function chronicleSection(s: GameState, final = false): HTMLElement {
+export function chronicleSection(s: GameState, final = false, numbers = true): HTMLElement {
   const moments = decisiveMoments(s);
   const amb = ambitionLines(s);
   return h('section', { class: 'chron' },
     h('h3', {}, final ? 'The reign in brief' : 'So far'),
-    h('div', { class: 'chron-now' }, thenAndNow(s).map(r => h('div', { class: 'cn-r' }, h('small', {}, r.label), h('b', {}, r.then ? `${r.then} → ${r.now}` : r.now)))),
+    !numbers ? null : h('div', { class: 'chron-now' }, thenAndNow(s).map(r => h('div', { class: 'cn-r' }, h('small', {}, r.label), h('b', {}, r.then ? `${r.then} → ${r.now}` : r.now)))),
     amb.length ? h('h3', {}, 'Ambitions') : null,
     amb.length ? h('ul', { class: 'chron-amb' }, amb.map(a => h('li', { class: 't-' + a.tone }, h('span', { class: 'ca-m', 'aria-hidden': 'true' }, a.mark), a.text))) : null,
     h('h3', {}, 'The choices that decided it'),

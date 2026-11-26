@@ -8,6 +8,7 @@ import { borders, atWar, provsOf } from './core';
 import { provRegion } from './overseas';
 import { later } from './eventkit';
 import { capsOf, researchBlock } from './technology';
+import { recordFirst } from './records';
 
 export const groupOf = (s: GameState, id = s.player): TechGroup => groupOfCulture(s.nations[id]?.culture ?? '');
 export const groupDef = (s: GameState, id = s.player) => TECH_GROUPS[groupOf(s, id)];
@@ -63,6 +64,7 @@ export function checkFirstContact(s: GameState) {
   const who = landed?.owner ?? met?.id;
   if (!who) return;
   s.flags.first_contact = s.year;
+  recordFirst(s, 'contact', `First contact with ${s.nations[who]?.name ?? who}, a people with guns`);
   const prov = landed?.id ?? provsOf(s, who)[0]?.id ?? '';
   later(s, 'first_contact', 0, 0, { nation: who, prov });
 }

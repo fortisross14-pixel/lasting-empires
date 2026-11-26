@@ -18,6 +18,7 @@ import { closeWin, renderWin } from './windows/frame';
 import { openSheet, closeSheet } from './sheets';
 import { pickHand, stopMapPick } from './planner';
 import { showSettings, showTurnReport, yearReport } from './endturn';
+import { openChronicle, openRules } from './chronicle-page';
 
 // ---------- modals ----------
 /** For this long after a dialog opens, a tap on the dark around it does not close it. */
@@ -107,6 +108,8 @@ export function showGameMenu() {
   openModal(h('div', { class: 'mbox narrow gmenu' },
     h('div', { class: 'gm-head' }, h('h2', {}, 'Menu'), h('button', { class: 'iconbtn', 'aria-label': 'Close', onclick: closeModal, html: icon('close', 18) })),
     h('div', { class: 'gm-list' },
+      row('laurel', 'The Imperial Chronicle', 'Rankings, the economy, wars, firsts and the hall of fame', () => openChronicle()),
+      row('book', 'Rules & Reference', 'The numbers behind the game', () => openRules()),
       row('gear', 'Settings', `${(DIFFICULTY[S.difficulty ?? STANDARD] ?? DIFFICULTY[STANDARD]).name} · reminders ${settings().warn ? 'on' : 'off'}`, () => showSettings())),
     h('p', { class: 'muted small gm-save' }, `Saved in slot ${slot} every season.`),
     h('div', { class: 'mrow' }, h('button', { class: 'btn ghost', onclick: () => { saveNow(); closeModal(); showTitle(); } }, 'Save and exit to title'), h('button', { class: 'btn primary', onclick: closeModal }, 'Continue'))));

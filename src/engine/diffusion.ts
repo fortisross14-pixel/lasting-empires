@@ -10,6 +10,7 @@ import type { Capability } from '../data/heritage';
 import { TECH_GROUPS, groupOfCulture } from '../data/techgroups';
 import { neighbours } from './map';
 import { log, nationName } from './core';
+import { recordFirst } from './records';
 import { capsOf, techOpenTo, researchBlock, unitNeeds, bridgeFor, clearCapsMemo } from './technology';
 
 /** How a realm came to know of a thing. */
@@ -167,6 +168,7 @@ export function meetWeapons(s: GameState, enemy: string, types: string[]): strin
   if (seen.length) {
     s.flags.captured_until = s.year + 3; // the Study Captured Equipment card can be drawn for a while
     log(s, `Foreign weapons met: the ${seen.join(' and ')} of ${nationName(s, enemy)}. A strangers' study is open to your scholars.`, 'neutral');
+    recordFirst(s, 'weapons', `First met the ${seen.join(' and ')} of ${nationName(s, enemy)}`);
     clearCapsMemo();
   }
   return seen;
@@ -190,7 +192,7 @@ export function pioneering(s: GameState, techId: string): boolean {
 }
 /** Can the player pioneer this strangers' study alone at all? Never for an animal it has never seen. */
 export const canPioneer = (techId: string) => !(TECH[techId]?.grants ?? []).some(c => NO_PIONEER.includes(c));
-function worldKnows(s: GameState, techId: string): boolean {
+export function worldKnows(s: GameState, techId: string): boolean {
   for (const n of Object.values(s.nations)) if (n.alive && n.id !== s.player && knows(s, n.id, techId)) return true;
   return false;
 }

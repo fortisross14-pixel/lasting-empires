@@ -5,6 +5,7 @@ import { player, provsOf, findWar, makePeace, addRel, getRel, inflation, log, na
 import { neighbours } from './map';
 import { transferProvince } from './battle';
 import { drawCat } from './cards';
+import { endWarRecord } from './records';
 
 /** War score from the player's side: provinces and battles, −100..100. */
 export function warScore(s: GameState, enemy: string): number {
@@ -106,6 +107,7 @@ export function concludePeace(s: GameState, enemy: string, termIds: string[], th
   if (score > 10) { s.stats.wars.won++; player(s).prestige += 5 + Math.round(score / 10); drawCat(s, 'military'); items.push({ title: 'Victory', text: `War score ${score}. Prestige +${5 + Math.round(score / 10)} and a Military card.`, tone: 'good', kind: 'laurel' }); }
   else if (score < -10) { s.stats.wars.lost++; player(s).prestige -= 5; items.push({ title: 'Defeat', text: `War score ${score}. Prestige −5.`, tone: 'bad', kind: 'twist' }); }
   else items.push({ title: 'White peace', text: 'Neither side gains.', tone: 'neutral', kind: 'dove' });
+  endWarRecord(s, enemy, score > 10 ? 'won' : score < -10 ? 'lost' : 'white peace'); // the war archive (records.ts)
   s.imports = s.imports.filter(i => i.from !== enemy);
   makePeace(s, s.player, enemy);
   log(s, `Peace with ${n.name}.`, score > 10 ? 'good' : score < -10 ? 'bad' : 'neutral');

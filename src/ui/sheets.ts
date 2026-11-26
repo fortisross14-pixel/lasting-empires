@@ -63,6 +63,7 @@ import { openWin } from './windows/frame';
 import { NATIONAL_FX } from '../data/national';
 import { HERITAGES } from '../data/heritage';
 import { heritageOf } from '../engine/technology';
+import { openChronicle } from './chronicle-page';
 
 export function toggleSheet(kind: string, arg?: string) {
   if (sheet && sheet.kind === kind && sheet.arg === arg) closeSheet(); else openSheet(kind, arg);
@@ -523,7 +524,7 @@ export function showHistory() {
 }
 
 /** The rules, written from the same tables the engine uses, so this page cannot disagree with the game. */
-function rulesTab(body: HTMLElement) {
+export function rulesTab(body: HTMLElement) {
   const table = (head: string[], rows: (string | number)[][]) => h('div', { class: 'tscroll' }, h('table', { class: 'ptable rules' }, h('thead', {}, h('tr', {}, head.map(x => h('th', {}, x)))), h('tbody', {}, rows.map(r => h('tr', {}, r.map(c => h('td', {}, String(c))))))));
   const pct = (v: number) => `${Math.round(v)}%`;
   body.append(
@@ -622,7 +623,7 @@ export function realmSheet(body: HTMLElement) {
   const link = (ic: string, label: string, f: () => void) => h('button', { class: 'crown-link', onclick: f }, h('span', { html: icon(ic, 20) }), h('b', {}, label));
   body.append(h('div', { class: 'crown-links' },
     S.scenario ? link('star', 'Mission goals', () => openSheet('goals')) : null,
-    link('laurel', 'Chronicle', () => openSheet('chronicle')),
+    link('laurel', 'Chronicle', () => openChronicle()),
     link('book', ageOf(S).name.replace('Age of ', 'The age: '), () => showEra()),
     yearReport ? link('scroll', `The year ${yearReport.year}`, () => showTurnReport()) : null));
   body.append(h('div', { class: 'ruler' },

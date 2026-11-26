@@ -126,7 +126,7 @@ async function run(browser, name, opts) {
       for (const lbl of ['High contrast', 'Patterns on the map']) await p.evaluate(l => [...document.querySelectorAll('#modal .set-row')].find(r => r.textContent.includes(l))?.querySelector('input')?.click(), lbl);
       await wait();
       await shot('settings'); if (!(await p.locator('#modal h3:has-text("routines")').count())) problems.push(`${name}: Settings shows no chancellor's routines`); }
-    if (r === 'Chronicle') { await shot('chronicle'); await tap('#sheet .seg-b >> text=Rules', 'the Rules page'); await shot('rules'); await tap('#sheet .seg-b >> text=Annals', 'the Annals'); await tap('#sheet .btn.wide', 'the history of the realm'); await shot('history'); }
+    if (r === 'Chronicle') { if (!(await p.locator('#modal .cpage').count())) problems.push(`${name}: the realm's Chronicle link opened no Chronicle`); await tap('#modal .cp-tabs .seg-b >> text=Annals', 'the Annals'); await tap('#modal .cp-body .btn.wide', 'the history of the realm'); await shot('history'); }
     await p.evaluate(() => { const m = document.querySelector('#modal'); if (m && !m.hidden) m.querySelector('.btn.primary, .iconbtn')?.click(); document.querySelector('#sheet:not([hidden]) .iconbtn')?.click(); }); await wait();
   }
   // turns: the list of things to do, then six turns and three skips
@@ -134,6 +134,13 @@ async function run(browser, name, opts) {
   for (let i = 0; i < 6; i++) { await p.evaluate(() => document.querySelector('#endturn').click()); await wait(1300); await answer(); }
   for (let i = 0; i < 3; i++) { await p.evaluate(() => document.querySelector('.skip-b')?.click()); await wait(700); await answer(); }
   await shot('later');
+  // the Imperial Chronicle: every part opens, from the menu; then Rules & Reference
+  await tap('.menu-b', 'the menu'); await tap('#modal .gm-row >> nth=0', 'the Chronicle');
+  if (!(await p.locator('#modal .cpage').count())) problems.push(`${name}: the Chronicle did not open`);
+  for (let i = 0; i < 7; i++) { await p.locator('#modal .cp-tabs .seg-b').nth(i).click().catch(() => problems.push(`${name}: Chronicle part ${i} would not open`)); await shot('chronicle-' + i); }
+  await p.evaluate(() => document.querySelector('#modal .cp-head .iconbtn')?.click()); await wait();
+  await tap('.menu-b', 'the menu'); await tap('#modal .gm-row >> nth=1', 'Rules & Reference'); await shot('rules');
+  await p.evaluate(() => document.querySelector('#modal .cp-head .iconbtn')?.click()); await wait();
   const music = await p.evaluate(() => (window.__music || {}).track);
   if (music !== 'europe') problems.push(`${name}: the music for a European realm was not asked for (${music})`);
   const sounds = await p.evaluate(() => (window.__sounds || []).join(' '));

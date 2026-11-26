@@ -29,7 +29,8 @@ import {
 import { getGeo } from './map';
 import { createBattle, makeSide, toBattleUnits, genericGeneral, freeMission, transferProvince, alliedHelp } from './battle';
 import { nationKnown } from './overseas';
-import { exposureMult } from './diffusion';
+import { exposureMult, worldKnows } from './diffusion';
+import { recordTech } from './records';
 
 export const MISSION_INFO: Record<MissionKind, { name: string; role: Role; icon: string; verb: string }> = {
   conquer: { name: 'Conquest', role: 'general', icon: 'sword', verb: 'Conquer' },
@@ -560,7 +561,9 @@ export function quarterlyReturns(s: GameState) {
 function completeResearch(s: GameState, m: Mission, ch: Character) {
   const t = TECH[m.target];
   for (const h of helpersOf(s, m.id)) { const hc = s.characters.find(c => c.uid === h.char); finish(s, h); if (hc) gainXp(s, hc, []); }
+  const firstInWorld = !worldKnows(s, t.id);
   s.techs.push(t.id);
+  recordTech(s, t.id, firstInWorld); // the Chronicle's firsts (records.ts)
   onTech(s, t.id);
   player(s).prestige += 1;
   if (t.fx?.stability) player(s).stability = clamp(player(s).stability + t.fx.stability, -3, 3);
