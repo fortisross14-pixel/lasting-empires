@@ -69,8 +69,8 @@ export function techCard(t: (typeof TECHS)[number]): HTMLElement {
   return h('div', { class: `tcard tr-${t.track}${known ? ' known' : m ? ' active' : why ? ' locked' : ''}`, role: 'button', tabindex: '0', onclick: tap },
     h('span', { class: 'tc-side' }, h('span', { class: 'tc-ico', html: icon(TRACK_ICON[t.track], 26) }), h('b', { class: 'tc-pts' }, known ? '✓' : String(cost)), h('small', {}, known ? 'known' : 'points')),
     h('span', { class: 'tc-body' },
-      h('span', { class: 'tc-head' }, h('b', { class: 'tc-name' }, t.name), isNational(t.id) ? h('small', { class: 'tc-nat' }, ' · national') : null, infoToggle([more], `About ${t.name}`)),
-      h('small', { class: 'tc-status' }, status),
+      h('span', { class: 'tc-head' }, h('b', { class: 'tc-name' }, t.name), infoToggle([more], `About ${t.name}`)),
+      h('small', { class: 'tc-status' }, isNational(t.id) ? `National tradition · ${status}` : status),
       unlocks.length ? h('span', { class: 'tc-unl' }, unlocks.map(u => h('i', {}, u))) : null,
       more,
       !known && !m && why && !why.startsWith('Needs ') ? h('small', { class: 'bad' }, why) : null));

@@ -188,3 +188,19 @@ export const NATIONAL_INTRO: Record<string, string> = {
   ming: 'The Great Ming rules the largest and best-administered state on earth, with gunpowder, examinations and a canal that feeds the capital. Its challenge is to keep so vast a realm working.',
   brunei: 'A sultanate of rivers and harbours on Borneo, rich from the monsoon trade in camphor, spices and porcelain. Its power is in its ships, its merchants and its bronze guns.',
 };
+
+/** The common studies under each tradition's own names (docs/HISTORY-PLAN.md, phase 5): the same effects, the realm's
+ *  own words. A study not listed keeps its name. Applied to the player's realm (engine/national.ts). */
+export const LOCAL_TECH_NAMES: Partial<Record<Heritage, Record<string, string>>> = {
+  andean: { condotta: 'Allied Levies of the Four Quarters', guilds: 'Camayoc Craftsmen', printing: 'Yachaywasi Schools', banking: 'Storehouse Accounts', chancery: 'Imperial Messengers', heraldry: 'Royal Lineages', royal_taxes: 'Labour Tribute', embassies: 'Envoys to the Provinces' },
+  mesoamerican: { condotta: 'Allied City Levies', guilds: 'Craft Wards', printing: 'Calmecac Schools', banking: 'Pochteca Merchants', chancery: 'Tribute Scribes', heraldry: 'Warrior Insignia', royal_taxes: 'Tribute Collectors', embassies: 'Envoys of the Alliance' },
+  east_asian: { condotta: 'Hired Braves', printing: 'Movable Type', chancery: 'Grand Secretariat', heraldry: 'Ranks of Nobility', royal_taxes: 'Single Whip Taxation', embassies: 'Tributary Embassies' },
+  japanese: { condotta: 'Ronin Bands', printing: 'Temple Printing', chancery: 'Shogunal Office', heraldry: 'Family Crests', royal_taxes: 'Land Surveys' },
+  maritime_sea: { condotta: 'Sea Peoples\' Allies', printing: 'Pesantren Schools', chancery: 'Court Scribes', heraldry: 'Royal Regalia', royal_taxes: 'Port Dues' },
+  mainland_sea: { condotta: 'Hired Captains', printing: 'Monastery Schools', chancery: 'Court Scribes', heraldry: 'Royal Regalia' },
+  islamic: { condotta: 'Mercenary Contracts', printing: 'Madrasa Learning', chancery: 'Divan Chancery', heraldry: 'Court Ranks' },
+  south_asian: { condotta: 'Hired Captains', printing: 'Schools of Learning', chancery: 'Royal Secretariat', heraldry: 'Court Ranks' },
+  steppe: { condotta: 'Allied Clans', printing: 'Scribes of the Horde', chancery: 'Khan\'s Secretariat', heraldry: 'Clan Banners', royal_taxes: 'Tribute of the Herds' },
+  west_african: { condotta: 'Hired Horsemen', printing: 'Schools of Timbuktu', chancery: 'Royal Scribes', heraldry: 'Court Titles' },
+  east_african: { condotta: 'Hired Captains', printing: 'Monastic Scriptoria', chancery: 'Royal Scribes', heraldry: 'Court Titles' },
+};

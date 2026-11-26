@@ -70,7 +70,7 @@ export const FACE_FAMILIES = ['western', 'islamic', 'eastasian', 'african', 'ame
 const POOL_FAMILY: Record<string, string> = {
   turkish: 'islamic', arab: 'islamic', persian: 'islamic', steppe: 'islamic', indian: 'islamic',
   chinese: 'eastasian', korean: 'eastasian', japanese: 'eastasian', seasian: 'eastasian',
-  african: 'african', american: 'american',
+  african: 'african', american: 'american', mexica: 'american', andean: 'american',
 };
 export const faceFamily = (culture: string) => POOL_FAMILY[CULTURE_POOL[culture] ?? ''] ?? 'western';
 /** The faces that suit each role, best first, as row × 4 + column. */

@@ -48,6 +48,7 @@ import { CAPABILITIES } from '../data/heritage';
 import { deed } from './rivals';
 import { yearlyAiResearch, yearlyExposure } from './diffusion';
 import { recordYear } from './records';
+import { localiseTechs } from './national';
 
 /** The version new games are saved with. Raise it when the shape of a save changes, add the step to MIGRATIONS,
  *  and first run `npm run make-save` so the old version keeps a test save (scripts/saves/). */
@@ -268,6 +269,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   push(s, { kind: 'draft', draft: 'ambition', options: ambitionOptions(s) });
   rollEvents(s);
   log(s, `${me.ruler.name} rules ${me.name}. It is the spring of ${s.year}.`);
+  localiseTechs(s); // the common studies under the realm's own names (national.ts)
   return s;
 }
 
@@ -687,6 +689,7 @@ export function migrate(s: GameState): GameState {
   if (!canLoad(s.version)) throw new Error(`A save of version ${s.version} cannot be loaded (this game reads ${OLDEST_SAVE} to ${SAVE_VERSION}).`);
   while (s.version < SAVE_VERSION) { MIGRATIONS[s.version](s); s.version++; }
   reconcile(s);
+  localiseTechs(s);
   return s;
 }
 

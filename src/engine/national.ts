@@ -1,7 +1,7 @@
 // National cards and strengths (docs/HISTORY-PLAN.md, phase 2): the effects written as data in src/data/national.ts,
 // read here for the hand of cards, the battle and the realm's page. Only the realms a card names ever draw it.
 import type { GameState } from '../types';
-import { NATIONAL_CARDS, NATIONAL_INTRO, type NationalCard, type NationalEffect } from '../data/national';
+import { NATIONAL_CARDS, NATIONAL_INTRO, LOCAL_TECH_NAMES, type NationalCard, type NationalEffect } from '../data/national';
 import { TROOPS } from '../data/troops';
 import { BUILDINGS, TECH } from '../data/techs';
 import { HERITAGES } from '../data/heritage';
@@ -113,4 +113,15 @@ export function nationalIntro(s: GameState, nation: string): string {
   if (NATIONAL_INTRO[nation]) return NATIONAL_INTRO[nation];
   const h = HERITAGES[heritageOf(s, nation)];
   return `${nationName(s, nation)}, of the ${h.name} tradition: ${h.text.charAt(0).toLowerCase()}${h.text.slice(1)}`;
+}
+
+/** Show the common studies under the player's tradition's own names (data/national.ts). The names are display only,
+ *  shared by every screen; called when a game starts or loads. */
+const ORIGINAL_NAMES = new Map<string, string>();
+export function localiseTechs(s: GameState) {
+  const local = LOCAL_TECH_NAMES[heritageOf(s, s.player)] ?? {};
+  for (const t of Object.values(TECH)) {
+    if (!ORIGINAL_NAMES.has(t.id)) ORIGINAL_NAMES.set(t.id, t.name);
+    t.name = local[t.id] ?? ORIGINAL_NAMES.get(t.id)!;
+  }
 }

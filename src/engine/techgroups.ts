@@ -45,11 +45,15 @@ export function localUnit(group: TechGroup, type: string): string | null {
     if (!mine?.length) return null;
     return mine[Math.min(i, mine.length - 1)];
   }
-  // heavy types made by recipes (knights, tercios): the best of the matching kind the group has
+  // heavy types made by recipes (knights, tercios): the soldier of the matching kind nearest in rank, never one of a
+  // later age (Mamluk knights are sipahis, not dragoons)
   const kind = TROOPS[type]?.kind;
   const cls = kind === 'cav' ? 'cav' : kind === 'shot' ? 'shot' : kind === 'art' ? 'art' : 'inf';
   const mine = lines[cls as keyof typeof lines] ?? lines.inf;
-  return mine?.length ? mine[mine.length - 1] : null;
+  if (!mine?.length) return null;
+  const tier = TROOPS[type]?.tier ?? 1;
+  const early = mine.filter(t => { const tech = TROOPS[t]?.tech; return !tech || !TECH[tech] || TECH[tech].year <= 1470; });
+  return [...(early.length ? early : mine)].sort((a, b) => Math.abs((TROOPS[a]?.tier ?? 1) - tier) - Math.abs((TROOPS[b]?.tier ?? 1) - tier))[0];
 }
 
 /** Once a year, for a realm that must learn from strangers: has a people who know gunpowder come to its part of

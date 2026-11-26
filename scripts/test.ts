@@ -891,6 +891,45 @@ check('the Imperial Chronicle: a baseline, a row a year, the world every ten yea
   ok(JSON.stringify(R).length < 20000, `the records of twelve years take ${JSON.stringify(R).length} bytes`);
 });
 
+check('national content holds together: every study, troop, card and realm it names exists and can be used', () => {
+  const later = newGame('castile', 150, 1700);
+  const exists = (n: string) => !!later.nations[n];
+  for (const t of NATIONAL_TECHS) {
+    for (const r of t.req ?? []) { ok(TECH[r], `${t.id} needs an unknown study ${r}`); ok(TECH[r].year <= t.year, `${t.id} (${t.year}) needs ${r}, dated later (${TECH[r].year})`); }
+    for (const n of t.only ?? []) ok(exists(n), `${t.id} names an unknown realm ${n}`);
+  }
+  for (const b of NATIONAL_BUILDINGS) { ok(!b.tech || TECH[b.tech], `${b.id}: unknown study ${b.tech}`); for (const n of b.only) ok(exists(n), `${b.id} names an unknown realm ${n}`); }
+  for (const c of NATIONAL_CARDS) for (const n of c.only.filter(x => newGame('castile', 151).nations[x])) {
+    const g = newGame(n, 152);
+    for (const e of c.fx) {
+      if ((e.k === 'raise' || e.k === 'promote') && e.tech) ok(techOpenTo(g, n, e.tech), `${c.name}: ${n} can never study ${e.tech}`);
+      if (e.k === 'raise') ok(canEverT(g, n, e.type), `${c.name}: ${n} cannot raise ${e.type}`);
+      if (e.k === 'promote') ok(canEverT(g, n, e.to) && e.from.every(f => TROOPS[f]), `${c.name}: ${n} cannot field ${e.to}`);
+    }
+  }
+  // the common studies wear the tradition's own names, and only while that realm is played
+  const az = newGame('aztec', 153); answer(az);
+  eq(TECH.printing.name, 'Calmecac Schools', 'the Aztec name of printing');
+  const fr = newGame('france', 154); answer(fr);
+  eq(TECH.printing.name, 'Printing Press', 'a European realm still prints');
+  // an Inca court has Andean names, a Mexica court Mexica names
+  const inca = newGame('inca', 155); answer(inca);
+  const mexica = ['Moctezuma', 'Cuauhtémoc', 'Axayacatl', 'Ahuitzotl', 'Tízoc', 'Itzcóatl'];
+  ok(!inca.characters.some(c => mexica.some(m => c.name.includes(m))), `an Inca courtier has a Mexica name: ${inca.characters.map(c => c.name).join(', ')}`);
+});
+
+check('no troop ahead of its time: the armies of 1451 and 1600 hold nothing dated decades later', () => {
+  for (const [y, lim] of [[1451, 1470], [1600, 1620]] as const) {
+    const s = newGame('castile', 160, y);
+    for (const n of Object.values(s.nations)) for (const t of [...n.army, ...(n.fleet ?? [])]) {
+      const tech = TROOPS[t.type]?.tech;
+      ok(!tech || !TECH[tech] || TECH[tech].year <= lim, `${n.id} fields ${t.type} (${tech && TECH[tech]?.year}) in ${y}`);
+    }
+  }
+  const ming = newGame('ming', 161);
+  ok(!ming.troops.some(t => t.type === 'dragoons'), 'Ming rides dragoons in 1451');
+});
+
 check('text size: every font size in the stylesheet scales with --ts', () => {
   const css = readFileSync('src/styles.css', 'utf8');
   const bare = css.match(/font-size:\s*[\d.]+px/g) ?? [];

@@ -45,7 +45,7 @@ const POOL_GROUP: Record<string, TechGroup> = {
   slavic: 'eastern', hungarian: 'eastern', greek: 'eastern',
   turkish: 'islamic', arab: 'islamic', persian: 'islamic', steppe: 'islamic',
   indian: 'indian', chinese: 'eastasian', korean: 'eastasian', japanese: 'eastasian', seasian: 'eastasian',
-  african: 'african', american: 'american',
+  african: 'african', american: 'american', mexica: 'american', andean: 'american',
 };
 /** The study that opens each closed technology. */
 export const BRIDGE_FOR: Record<string, string> = {

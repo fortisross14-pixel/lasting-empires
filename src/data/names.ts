@@ -22,6 +22,9 @@ export const NAME_POOLS: Record<string, NamePool> = {
   seasian: { first: ['Le', 'Ramathibodi', 'Mansur', 'Sultan', 'Paramesvara', 'Tabinshwehti', 'Naresuan', 'Ang', 'Raden', 'Ratu'], last: ['Thanh Tong', 'Shah', 'Iskandar', 'Muzaffar', 'Bayinnaung', 'Chan', 'Wijaya', 'Hayam Wuruk'], rulers: ['Le Thanh Tong', 'Ramathibodi', 'Mansur Shah', 'Bayinnaung', 'Naresuan', 'Ang Chan', 'Hayam Wuruk'] },
   african: { first: ['Sunni', 'Askia', 'Musa', 'Nzinga', 'Afonso', 'Mvemba', 'Ewuare', 'Idris', 'Zara', 'Lebna', 'Amina'], last: ['Ali', 'Muhammad', 'Keita', 'Mbemba', 'Alooma', 'Yaqob', 'Dengel', 'Mutota', 'Tunde'], rulers: ['Sunni Ali', 'Askia', 'Mansa Musa', 'Nzinga', 'Ewuare', 'Idris', 'Zara Yaqob', 'Lebna Dengel', 'Mutota'] },
   steppe: { first: ['Ahmed', 'Mengli', 'Hajji', 'Muhammad', 'Abu al-Khayr', 'Dayan', 'Altan', 'Esen', 'Ibak', 'Tokhtamysh'], last: ['Giray', 'Khan', 'Bahadur', 'Taishi', 'Noyan', 'Shaybani'], rulers: ['Hajji Giray', 'Mengli Giray', 'Ahmed Khan', 'Abu al-Khayr', 'Dayan Khan', 'Altan Khan', 'Esen Taishi'] },
+  // the Mexica and the Andean peoples have names of their own (docs/HISTORY-PLAN.md, phase 5): no Inca scholar called Moctezuma
+  mexica: { first: ['Moctezuma', 'Cuauhtémoc', 'Axayacatl', 'Ahuitzotl', 'Tízoc', 'Itzcóatl', 'Tlacaélel', 'Cuitláhuac', 'Chimalpopoca', 'Nezahualpilli'], last: ['Ilhuicamina', 'Xocoyotzin', 'of Texcoco', 'of Tlacopan', 'of Tlatelolco', 'of Tenochtitlan'], rulers: ['Moctezuma Ilhuicamina', 'Axayacatl', 'Tízoc', 'Ahuitzotl', 'Moctezuma Xocoyotzin', 'Cuitláhuac', 'Cuauhtémoc'] },
+  andean: { first: ['Pachacuti', 'Túpac', 'Huayna', 'Atahualpa', 'Huáscar', 'Manco', 'Sinchi', 'Cusi', 'Titu', 'Sayri', 'Rumiñahui', 'Quizquiz'], last: ['Yupanqui', 'Cápac', 'Inca', 'Roca', 'Huallpa', 'Cusi'], rulers: ['Pachacuti', 'Túpac Inca Yupanqui', 'Huayna Cápac', 'Huáscar', 'Atahualpa', 'Manco Inca', 'Sayri Túpac'] },
   american: { first: ['Moctezuma', 'Cuauhtémoc', 'Axayacatl', 'Ahuitzotl', 'Pachacuti', 'Túpac', 'Huayna', 'Atahualpa', 'Tangaxuan', 'Minchançaman'], last: ['Ilhuicamina', 'Xocoyotzin', 'Yupanqui', 'Cápac', 'Inca', 'II'], rulers: ['Moctezuma', 'Axayacatl', 'Ahuitzotl', 'Pachacuti', 'Túpac Inca', 'Huayna Cápac', 'Tangaxuan', 'Minchançaman'] },
 };
 
@@ -37,7 +40,7 @@ export const CULTURE_POOL: Record<string, string> = {
   guaycuru: 'american',
   arawak: 'american',
   ge: 'american',
-  mapuche: 'american',
+  mapuche: 'andean',
   yaqui: 'american',
   inuit: 'american',
   dene: 'american',
@@ -80,7 +83,7 @@ export const CULTURE_POOL: Record<string, string> = {
   diaguita: 'american',
   guarani: 'american',
   tupi: 'american',
-  muisca: 'american',
+  muisca: 'andean',
   aymara: 'american',
   mixtec: 'american',
   malagasy: 'african',
@@ -103,7 +106,7 @@ export const CULTURE_POOL: Record<string, string> = {
   han: 'chinese', korean: 'korean', japanese: 'japanese',
   viet: 'seasian', cham: 'seasian', khmer: 'seasian', thai: 'seasian', burmese: 'seasian', malay: 'seasian', javanese: 'seasian', moluccan: 'seasian',
   wolof: 'african', manding: 'african', songhai: 'african', edo: 'african', hausa: 'african', kanuri: 'african', bantu: 'african', swahili: 'african', amhara: 'african',
-  nahua: 'american', purepecha: 'american', maya: 'american', quechua: 'american', chimu: 'american',
+  nahua: 'mexica', purepecha: 'american', maya: 'american', quechua: 'andean', chimu: 'andean',
 };
 
 export const poolFor = (culture: string): NamePool | null => NAME_POOLS[CULTURE_POOL[culture] ?? ''] ?? null;

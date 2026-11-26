@@ -206,7 +206,9 @@ export function fitUnit(s: GameState, id: string, type: string, lines: Partial<R
   const cls = type === 'levy' ? 'levy' : kind === 'cav' ? 'cav' : kind === 'shot' ? 'shot' : kind === 'art' ? 'art' : kind === 'ship' ? 'ship' : 'inf';
   if (cls === 'ship') return ['galleon', 'carrack', 'galley'].find(t => canEverRecruit(s, id, t)) ?? null;
   const line = lines[cls] ?? [];
-  const best = [...line].reverse().find(t => canEverRecruit(s, id, t));
+  // the best of its line it can field, and that is not ahead of its time
+  const inTime = (t: string) => { const tech = TROOPS[t]?.tech; return !tech || !TECH[tech] || TECH[tech].year <= s.year + 10; };
+  const best = [...line].reverse().find(t => canEverRecruit(s, id, t) && inTime(t)) ?? [...line].find(t => canEverRecruit(s, id, t));
   if (best) return best;
   // a kind it cannot raise at all (no horses, no guns): stand in foot soldiers, as the realm would
   if (cls === 'cav' || cls === 'art') return [...(lines.inf ?? []), ...(lines.levy ?? [])].reverse().find(t => canEverRecruit(s, id, t)) ?? null;
@@ -242,17 +244,26 @@ const EURO_LINES = TECH_GROUPS.western.lines as Record<string, string[]>;
 export function localFor(s: GameState, id: string, type: string): string | null {
   const lines = linesOf(s, id);
   if (Object.values(lines).some(l => l?.includes(type))) return type;
+  // a realm with no line of its own (Europe and its neighbours) keeps a type it can field: Knights stay Knights
+  if (!HERITAGE_LINES[heritageOf(s, id)] && canEverRecruit(s, id, type)) return type;
   const kind = TROOPS[type]?.kind;
   if (kind === 'ship') return type;
   for (const [cls, line] of Object.entries(EURO_LINES)) {
     const i = line.indexOf(type);
     if (i < 0) continue;
     const mine = lines[cls];
-    return mine?.length ? mine[Math.min(i, mine.length - 1)] : null;
+    if (!mine?.length) return null;
+    const pick = mine[Math.min(i, mine.length - 1)], tech = TROOPS[pick]?.tech;
+    return !tech || !TECH[tech] || TECH[tech].year <= s.year + 10 ? pick : mine[0];
   }
   const cls = type === 'levy' ? 'levy' : kind === 'cav' ? 'cav' : kind === 'shot' ? 'shot' : kind === 'art' ? 'art' : 'inf';
   const mine = lines[cls] ?? lines.inf;
-  return mine?.length ? mine[mine.length - 1] : null;
+  if (!mine?.length) return null;
+  // the soldier of the realm's own line nearest in rank (never a jump to its best: horse archers are not dragoons)
+  const tier = TROOPS[type]?.tier ?? 1;
+  // and never one ahead of its time
+  const inTime = mine.filter(t => { const tech = TROOPS[t]?.tech; return !tech || !TECH[tech] || TECH[tech].year <= s.year + 10; });
+  return [...(inTime.length ? inTime : mine.slice(0, 1))].sort((a, b) => Math.abs((TROOPS[a]?.tier ?? 1) - tier) - Math.abs((TROOPS[b]?.tier ?? 1) - tier) || (TROOPS[a]?.tier ?? 1) - (TROOPS[b]?.tier ?? 1))[0];
 }
 
 /** The soldier a realm gets in place of `type`, within its means (null: none of that kind). For events and cards
