@@ -124,7 +124,21 @@ The plan as written:
 3. **Rules & Reference** as its own entry in the main menu.
 4. Charts in the game's own style (parchment, national colours, fine lines); laptop layout first.
 
-## Phase 5 — Validation and balance (next)
+## Phase 5 — Validation and balance ✅
+
+Done. Content checks join the tests: every study, troop, card and realm the national content names exists and can
+be used by the realms it is for; no army of 1451 or 1600 holds a troop dated decades later (this found Ming
+dragoons, European reiters and Mamluk dragoons in 1451, now gone: a stand-in soldier is the nearest in rank and
+never one of a later age). The common studies wear each tradition's own names (Calmecac Schools, Pochteca
+Merchants, Yachaywasi Schools, Movable Type…), and Inca and Mexica courts have names of their own. Playtests of the
+Inca, Aztecs, Castile and Ming in the browser: no errors, own troops, own names. Sims: 32 campaigns across
+Europe, the five civilisations, the wider world and the 1600 start, all survived; turns no slower (1,350–1,430 s
+for eight campaigns) and the new records add about 4% to a save. Realms far from Europe were too easy after
+phase 3 (rivals waited twice for their weapons: the upgrade years and the regional lag); the regional lag is
+halved (`LAG_PER_COST` 20), bringing them back near their old results; the rule is in docs/BALANCE.md. The art
+still missing is listed sheet by sheet in docs/art-request.md.
+
+The plan as written:
 
 1. Verify national content and dates; review regional technologies.
 2. Multi-seed simulations across diverse starting nations and full campaign lengths; measure save size and speed.

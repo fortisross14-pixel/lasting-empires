@@ -26,7 +26,7 @@ export const NO_PIONEER: Capability[] = ['horses', 'elephants'];
 export const SPECIALIST_SHARE = 0.35;
 /** Years an AI realm lags the date of a study, by how far its region is from where the study began (the tech group's
  *  cost), and the years a teacher next door saves. */
-export const LAG_PER_COST = 40, BASE_LAG = 2, CONTACT_SAVES = 6, AI_PER_YEAR = 3;
+export const LAG_PER_COST = 20, BASE_LAG = 2, CONTACT_SAVES = 6, AI_PER_YEAR = 3;
 
 // ---------- who is in contact with whom, worked out once a year ----------
 let contactMemo: { key: string; map: Map<string, Map<string, ExposureHow>> } = { key: '', map: new Map() };
