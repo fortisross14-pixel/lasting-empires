@@ -108,7 +108,7 @@ export function forgeView(body: HTMLElement) {
     else body.append(h('div', { class: 'forge-res' }, troopCard({ type: r.out, vet: r.vet, str: 100, might: r.might }, {}),
       h('div', {}, h('b', {}, `${TROOPS[r.out].name} ${'★'.repeat(r.vet)}${r.might > 1 ? ` ×${r.might.toFixed(1)}` : ''}`),
         h('p', {}, `Power ${r.before.toFixed(1)} → ${r.after.toFixed(1)} (×${(r.after / Math.max(0.1, r.before)).toFixed(2)})`),
-        h('p', { class: 'muted' }, r.tech ? `Needs research: ${TECH[r.tech].name}` : `${r.cost} ducats · frees a company slot`),
+        h('p', { class: 'muted' }, r.tech ? `Needs research: ${TECH[r.tech].name}` : `${r.cost} ducats${r.goods ? ` · ${Object.entries(r.goods).map(([g, n]) => `${n} ${g}`).join(', ')} from the warehouses` : ''} · frees a company slot`),
         h('button', { class: 'btn primary' + (r.tech || player(S).gold < r.cost ? ' blocked' : ''), onclick: () => { const a = forge[0], b = forge[1]; setForge([]); act(() => doMerge(S, a, b), 'Forged!'); } }, 'Forge'))));
   } else body.append(h('p', { class: 'fact' }, forge.length ? 'Pick a second card' : 'Pick the first card'));
   const pickF = (uid: number) => { setForge(forge.includes(uid) ? forge.filter(x => x !== uid) : [...forge.slice(-1), uid]); renderWin(); };

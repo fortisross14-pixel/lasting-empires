@@ -97,6 +97,7 @@ export interface Nation {
   deeds?: { year: number; text: string }[]; // what it has lately done, newest first
   learned?: import('./data/heritage').Capability[]; // capabilities adopted through contact (engine/technology.ts)
   exposure?: Partial<Record<import('./data/heritage').Capability, number>>; // years of contact towards each, so far
+  early?: string[];                // studies learned from a teacher before its region reached them (engine/diffusion.ts)
 }
 
 export interface Province {
@@ -323,6 +324,8 @@ export interface GameState {
   characters: Character[];
   missions: Mission[];
   techs: string[];
+  /** Studies the player has seen others use, and how (engine/diffusion.ts). */
+  exposed?: Record<string, { from: string; year: number; how: 'border' | 'war' | 'treaty' | 'court' | 'battle' }>;
   firedEvents: string[];
   usedLegends: string[];
   queue: Prompt[];

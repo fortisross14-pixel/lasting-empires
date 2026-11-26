@@ -19,6 +19,8 @@ import { setCardPool, acceptCap, giftCost, sendGift, churchHead } from './cultur
 import {
   ageId, ageDef, pioneerNow, enemiesOf, player, provsOf, clamp, uid, pick, addRel, hasTech, nationName, armyCap, rand, weighted, hasGood, inflation, log, TIERS, tierOf, grade, rollOutcome, outcomeName, hasCore, techFx, ageIndex, govOf, courtCount, courtCap } from './core';
 import { NATIONAL_CARDS } from '../data/national';
+import { exposureOf, SPECIALIST_SHARE } from './diffusion';
+import { techCost } from './missions';
 import { nationalCan, nationalTarget, nationalTargetOk, playNational } from './national';
 
 export type CardTarget = 'none' | 'nation' | 'mission' | 'troop';
@@ -316,6 +318,30 @@ add({ id: 'breakthrough', name: 'Breakthrough', cat: 'research', kind: 'instant'
 add({ id: 'greek_scholars', name: 'Greek Scholars', cat: 'research', kind: 'instant', target: 'mission', icon: 'book', text: 'Refugees from Constantinople: a study gains 7 research.', weight: never,
   targetOk: (s, t) => s.missions.some(m => String(m.id) === t && m.kind === 'research'),
   play: (s, t) => { const m = s.missions.find(x => String(x.id) === t)!; m.progress += 7; return `+7 research on ${TECH[m.target].name}`; } });
+
+// Foreign specialists (diffusion.ts): a study of something others already know goes faster with someone who has seen
+// it done. Each gives a share of the study's cost at once; drawn only while there is something foreign to learn.
+const foreignStudy = (s: GameState, t: string, tracks: TechTrack[] | 'bridge') => {
+  const m = s.missions.find(x => String(x.id) === t && x.kind === 'research');
+  const d = m && TECH[m.target];
+  if (!d || !exposureOf(s, d.id)) return false;
+  return tracks === 'bridge' ? !!d.bridge : !d.bridge && tracks.includes(d.track);
+};
+const specialist = (s: GameState, t: string) => {
+  const m = s.missions.find(x => String(x.id) === t)!;
+  const gain = Math.round(techCost(s, m.target) * SPECIALIST_SHARE);
+  m.progress += gain;
+  return `+${gain} research on ${TECH[m.target].name}`;
+};
+const exposedCount = (s: GameState) => Object.keys(s.exposed ?? {}).filter(id => !s.techs.includes(id)).length;
+add({ id: 'foreign_weapons', name: 'Study Foreign Weapons', cat: 'research', kind: 'instant', target: 'mission', icon: 'gun', text: 'Foreign arms taken apart in your arsenal: a military study of something others know gains a third of its cost.', weight: s => (exposedCount(s) ? 0.6 : 0),
+  targetOk: (s, t) => foreignStudy(s, t, ['military']), play: specialist });
+add({ id: 'foreign_scholars', name: 'Invite Foreign Scholars', cat: 'research', kind: 'instant', target: 'mission', icon: 'book', text: 'Learned men from abroad join your court: a statecraft study of something others know gains a third of its cost.', weight: s => (exposedCount(s) ? 0.6 : 0),
+  targetOk: (s, t) => foreignStudy(s, t, ['state']), play: specialist });
+add({ id: 'foreign_artisans', name: 'Recruit Foreign Artisans', cat: 'research', kind: 'instant', target: 'mission', icon: 'hammer', text: 'Craftsmen from abroad set up shop: an economy study of something others know gains a third of its cost.', weight: s => (exposedCount(s) ? 0.6 : 0),
+  targetOk: (s, t) => foreignStudy(s, t, ['economy']), play: specialist });
+add({ id: 'captured_equipment', name: 'Study Captured Equipment', cat: 'research', kind: 'instant', target: 'mission', icon: 'anvil', text: 'Weapons taken on the field are studied: a strangers\' study gains a third of its cost.', weight: s => ((s.flags.captured_until ?? 0) >= s.year ? 1 : 0),
+  targetOk: (s, t) => foreignStudy(s, t, 'bridge'), play: specialist });
 
 // National cards (src/data/national.ts): drawn only by the realms they name, a little more often than common cards.
 for (const c of NATIONAL_CARDS) {

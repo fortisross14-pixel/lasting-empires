@@ -73,7 +73,20 @@ The plan as written:
 5. **Every playable nation** gets at least one distinctive technology, card and unit or building, reusing regional
    content where a smaller realm needs it.
 
-## Phase 3 — Contact and diffusion (next)
+## Phase 3 — Contact and diffusion ✅
+
+Done in `src/engine/diffusion.ts`. Each AI realm knows what its region reaches alone (a study's date plus a lag
+from its tech group's distance and its temper, worked out rather than stored) and learns up to six years sooner from
+a neighbour, partner or enemy who knows it (`early`, the only thing saved). AI recruiting, re-arming and ships now
+wait for the realm's own study of each kind. The player keeps `exposed`: what its contacts know (borders, wars,
+treaties) and strange weapons met in battle, with a notice. A study seen is 10% cheaper; one ahead of its time
+known nowhere is 10% dearer; a strangers' study with no teacher can be worked out alone at 2.5× (never horses or
+elephants). Four specialist cards (Study Foreign Weapons, Invite Foreign Scholars, Recruit Foreign Artisans, Study
+Captured Equipment) give a third of a foreign study at once. Forging plate harness takes 2 weapons from the
+warehouses. Each study's page says who knows it and shows the whole path of missing studies, each step a link.
+Foreigners at court come only through the specialist cards: courtiers carry no people of their own.
+
+The plan as written:
 
 1. Per-nation **known technologies** for the AI (lightweight research in place of the date stand-in), favouring its
    heritage and temper.
@@ -87,7 +100,7 @@ The plan as written:
 6. Locked technology cards list every missing prerequisite and contact with a link to each; a compact dependency view
    in the technology's page.
 
-## Phase 4 — The Imperial Chronicle
+## Phase 4 — The Imperial Chronicle (next)
 
 1. **Data first**: a yearly snapshot for every realm (score, rank, prestige, development, provinces, treasury,
    income, army and navy power, battles), a baseline at the start and a final one at the end, no duplicates after a

@@ -15,6 +15,7 @@ import { toast, qLabel, qText } from '../app';
 import { renderWin } from './frame';
 import { openPlanner } from '../planner';
 import { techOpenTo } from '../../engine/technology';
+import { exposureLine, missingChain } from '../../engine/diffusion';
 
 // Research tab filters: which age and which field are shown.
 export let techAge: number | 'all' | null = null;
@@ -55,11 +56,15 @@ export function techCard(t: (typeof TECHS)[number]): HTMLElement {
   const cost = techCost(S, t.id);
   const status = known ? 'Known' : m ? `Studying · ${Math.floor(m.progress)}/${cost} · ${qLabel(m.turnsLeft)} left` : techYears(t.id);
   const unlocks = techUnlocks(t.id);
+  const chain = known ? [] : missingChain(S, t.id), exposure = exposureLine(S, t.id);
   const tap = () => known ? toast(t.desc) : m ? toast(`Being studied: ${qText(m.turnsLeft)} left`) : why ? toast(why, 'bad') : !card ? toast(`Needs a ${TRACK_NAME[t.track]} study card (buy one in the Cards tab)`, 'bad') : openPlanner('research', t.id, undefined, card.uid);
   // what it does, what it needs and what it opens: one tap on ⓘ away
   const more = h('span', { class: 'tc-more', hidden: true },
     h('span', { class: 'tc-desc' }, t.desc),
     !known && t.req?.length ? h('small', { class: 'tc-req' + (t.req.every(r => S.techs.includes(r)) ? '' : ' bad') }, 'Needs ' + t.req.map(r => TECH[r].name + (S.techs.includes(r) ? ' ✓' : '')).join(', ')) : null,
+    // the whole way there, each step a link to why it is not open yet
+    !known && chain.length > (t.req?.length ?? 0) ? h('small', { class: 'tc-req' }, 'Path: ', ...chain.flatMap((r, i) => [i ? ' → ' : '', h('button', { class: 'linkish', onclick: (e: Event) => { e.stopPropagation(); const w = missionBlocked(S, 'research', r); toast(`${TECH[r].name}: ${w ?? 'ready to study'}`, w ? 'bad' : 'good'); } }, TECH[r].name)]), ` → ${t.name}`) : null,
+    exposure ? h('small', { class: 'tc-exp' }, exposure) : null,
     AGE_TECH[t.id] ? h('span', { class: 'tech-age' }, `Opens the ${ERA[AGE_TECH[t.id]].name} for the whole world`) : null);
   return h('div', { class: `tcard tr-${t.track}${known ? ' known' : m ? ' active' : why ? ' locked' : ''}`, role: 'button', tabindex: '0', onclick: tap },
     h('span', { class: 'tc-side' }, h('span', { class: 'tc-ico', html: icon(TRACK_ICON[t.track], 26) }), h('b', { class: 'tc-pts' }, known ? '✓' : String(cost)), h('small', {}, known ? 'known' : 'points')),

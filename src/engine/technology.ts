@@ -157,8 +157,12 @@ export function researchBlock(s: GameState, techId: string, id = s.player): stri
   if (t.bridge) {
     const missing = (t.grants ?? []).filter(c => !have.has(c));
     if (!missing.length) return 'Not needed: your people know these things already';
-    if (!missing.some(c => teacherOf(s, id, c))) return `Needs contact with a people who have ${missing.map(capName).join(' and ')}: a shared border, a war or a trade treaty`;
-    return null;
+    if (missing.some(c => teacherOf(s, id, c))) return null;
+    // the player may still study it from what it once saw (diffusion.ts), or work it out alone at a far higher
+    // price, except an animal it has never seen
+    if (id === s.player && s.exposed?.[techId]) return null;
+    if (id === s.player && !missing.some(c => c === 'horses' || c === 'elephants')) return null;
+    return `Needs contact with a people who have ${missing.map(capName).join(' and ')}: a shared border, a war or a trade treaty`;
   }
   const missing = (t.needs ?? []).filter(c => !have.has(c));
   return missing.length ? missingWhy(missing) : null;

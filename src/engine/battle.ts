@@ -15,6 +15,7 @@ import { rand, pick, weighted, uid, clamp, hasTech, rulerMod, log, nationName, a
 import { landPhase } from './missions';
 import { landDefence } from './ai';
 import { nationalDefence } from './national';
+import { meetWeapons } from './diffusion';
 
 export const breakLevel = (side: BattleSide) => (side.general?.traits.includes('inspiring') ? 0.25 : 0.35);
 /** Strength in the fight: a company held in reserve does not count until it is sent in. */
@@ -384,6 +385,8 @@ export function finishBattle(s: GameState, b: Battle): BattleOutcome {
   const attWon = b.winner === 'att';
   const prov = s.provinces[b.province];
   const owner0 = prov?.owner;
+  // strange weapons in the enemy's ranks: a notice, and the strangers' study opens (diffusion.ts)
+  if (playerInvolved && eSide.nation && eSide.nation !== s.player) meetWeapons(s, eSide.nation, eSide.units.map(u => u.type));
   const lines: string[] = [];
   let good = false;
   let title = '';

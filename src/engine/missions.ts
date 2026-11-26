@@ -29,6 +29,7 @@ import {
 import { getGeo } from './map';
 import { createBattle, makeSide, toBattleUnits, genericGeneral, freeMission, transferProvince, alliedHelp } from './battle';
 import { nationKnown } from './overseas';
+import { exposureMult } from './diffusion';
 
 export const MISSION_INFO: Record<MissionKind, { name: string; role: Role; icon: string; verb: string }> = {
   conquer: { name: 'Conquest', role: 'general', icon: 'sword', verb: 'Conquer' },
@@ -144,7 +145,8 @@ export const DIPLO: MissionKind[] = ['relations', 'trade', 'alliance', 'marriage
 export function techCost(s: GameState, techId: string): number {
   const t = TECH[techId];
   // ideas ahead of their time are dear, and dearer far from the centres of the age (data/techgroups.ts)
-  return Math.round(t.cost * (1 + Math.max(0, t.year - s.year) / 20) * groupDef(s).cost);
+  // and cheaper when seen in others' hands, dearer when first in the known world (diffusion.ts)
+  return Math.round(t.cost * (1 + Math.max(0, t.year - s.year) / 20) * groupDef(s).cost * exposureMult(s, techId));
 }
 
 export function researchRate(s: GameState, ch: Character, track?: string): number {

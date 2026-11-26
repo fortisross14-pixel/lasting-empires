@@ -10,6 +10,8 @@ import { player, hasTech, rand, uid, genCharacter, courtCap, courtCount, provsOf
 import { CARDS, buyCost, randomCard, removeCard, handOf, handLimit, addCard, poolOf, type CardType } from './cards';
 import { canForgeRecipe } from './technology';
 import { raise } from './technology';
+import { unitNeeds } from './technology';
+import { shortfallCost, takeGoods } from './trade';
 
 // ---------- buying cards ----------
 export function buyBlocked(s: GameState, cat: Cat, type?: CardType): string | null {
@@ -83,7 +85,9 @@ export function takeDraftOption(s: GameState, opt: DraftOption) {
 }
 
 // ---------- forging ----------
-export interface MergeResult { out: string; vet: number; cost: number; tech?: string; recipe?: Recipe; might: number; before: number; after: number; }
+export interface MergeResult { out: string; vet: number; cost: number; tech?: string; recipe?: Recipe; might: number; before: number; after: number; goods?: Record<string, number>; }
+/** Knowing plate is not making it: a harness takes weapons from the warehouses (what is missing is bought dear). */
+export const PLATE_GOODS: Record<string, number> = { weapons: 2 };
 
 /** Two companies forged into one keep most of their strength: about 1.8 times the stronger alone. */
 export const FORGE_KEEP = 0.9;
@@ -120,11 +124,12 @@ export function mergePreview(s: GameState, aUid: number, bUid: number): MergeRes
   const can = canForgeRecipe(s, s.player, r);
   if (!can.ok && can.missing.length) return { error: can.why! };
   const vet = Math.max(ta?.vet ?? 0, tb?.vet ?? 0);
-  const cost = Math.round(r.cost * inflation(s));
+  const goods = unitNeeds(r.out).includes('plate') && !unitNeeds(troop.type).includes('plate') ? PLATE_GOODS : undefined;
+  const cost = Math.round(r.cost * inflation(s)) + (goods ? shortfallCost(s, goods) : 0);
   // two companies make a better kind of company and keep 90% of their joint strength; equipment upgrades one
   const before = Math.max(ta ? full(ta) : 0, tb ? full(tb) : 0);
   const might = ta && tb ? Math.min(MAX_MIGHT, Math.max(1, Math.round((FORGE_KEEP * (full(ta) + full(tb)) / base(r.out, vet)) * 10) / 10)) : (troop.might ?? 1);
-  const res = { out: r.out, vet, cost, recipe: r, might, before, after: base(r.out, vet) * might };
+  const res = { out: r.out, vet, cost, recipe: r, might, before, after: base(r.out, vet) * might, ...(goods ? { goods } : {}) };
   if (r.tech && !hasTech(s, r.tech)) return { ...res, tech: r.tech };
   return res;
 }
@@ -140,6 +145,7 @@ export function doMerge(s: GameState, aUid: number, bUid: number): string | null
   const strs = [...s.troops, ...s.fleet].filter(t => parts.includes(t.uid)).map(t => t.str);
   const str = Math.round(strs.reduce((a, b) => a + b, 0) / strs.length);
   player(s).gold -= res.cost;
+  if (res.goods) takeGoods(s, res.goods);
   s.troops = s.troops.filter(t => !parts.includes(t.uid));
   s.fleet = s.fleet.filter(t => !parts.includes(t.uid));
   s.hand = s.hand.filter(h => !parts.includes(h.uid));

@@ -22,7 +22,7 @@ import type { GameState, Nation, Ruler, RevealItem, Heir, Character } from '../t
 import { CATS } from '../types';
 import { NATIONS, START_REL, RULERS, RULER_NAMES, RULER_ARCHS, archFromTraits, NO_STATE, ARMIES } from '../data/nations';
 import { getGeo } from './map';
-import { BUILDINGS, TECHS } from '../data/techs';
+import { BUILDINGS, TECHS, TECH } from '../data/techs';
 import { TROOPS } from '../data/troops';
 import { CORE } from '../data/core';
 import {
@@ -46,6 +46,7 @@ import { yearlySubjects, unionClaim, autoSurrender } from './diplo';
 import { canAcquireEquipment, fitAllArmies, adoptByContact, linesOf, techOpenTo } from './technology';
 import { CAPABILITIES } from '../data/heritage';
 import { deed } from './rivals';
+import { yearlyAiResearch, yearlyExposure } from './diffusion';
 
 /** The version new games are saved with. Raise it when the shape of a save changes, add the step to MIGRATIONS,
  *  and first run `npm run make-save` so the old version keeps a test save (scripts/saves/). */
@@ -258,6 +259,7 @@ export function newGame(nationId: string, seed = Math.floor(Math.random() * 1e9)
   fitAllArmies(s, id => linesOf(s, id)); // every army within its realm's means, in its own soldiers (technology.ts)
   settleArmies(s);
   s.stock = startStock(s);
+  yearlyExposure(s); // what the realm already knows of its neighbours' learning, from the first day (diffusion.ts)
   // wars you inherit on the first day: say so plainly
   const foes = s.wars.filter(w => w.a === nationId || w.b === nationId).map(w => (w.a === nationId ? w.b : w.a));
   if (foes.length) push(s, { kind: 'reveal', alarm: true, title: 'You are at war', subtitle: `Your crown inherits ${foes.length > 1 ? 'these wars' : 'this war'}`, items: foes.map(f => ({ title: `At war with ${s.nations[f].name}`, text: START_WARS[`${nationId}:${f}`] ?? `${s.nations[f].name} is your enemy. Its troops may attack your border provinces: keep garrisons ready. Use March Orders to strike, or a Peace Envoy to end it.`, tone: 'bad' as const, kind: 'sword' })) });
@@ -483,6 +485,13 @@ export function endTurn(s: GameState): YearReport | null {
       const n = s.nations[a.nation];
       if (n) deed(s, n, `Learned ${CAPABILITIES.find(c => c.id === a.cap)?.name.toLowerCase() ?? a.cap} from ${nationName(s, a.from)}.`);
     }
+    // each realm's own studies, quicker with a teacher next door; what the player's contacts show it (diffusion.ts)
+    for (const a of yearlyAiResearch(s)) {
+      const n = s.nations[a.nation];
+      if (n && a.from && TECH[a.tech]?.track === 'military') deed(s, n, `Learned ${TECH[a.tech].name} from ${nationName(s, a.from)}.`);
+    }
+    const seen = yearlyExposure(s);
+    if (seen.length) log(s, `Word of foreign knowledge: ${seen.slice(0, 3).map(t => TECH[t].name).join(', ')}${seen.length > 3 ? ` and ${seen.length - 3} more` : ''}. Studying what others know is cheaper.`, 'neutral');
   } else { autoSurrender(s); checkGoals(s, false); }
   scriptedHistory(s);
   if (!provsOf(s, s.player).length) {

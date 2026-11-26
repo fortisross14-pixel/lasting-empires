@@ -27,7 +27,7 @@ import { pivotOptions, offerAmbition, beginAmbition, endAmbition, decisiveMoment
 import { openAge } from '../src/engine/ages';
 import { ERAS } from '../src/data/eras';
 import { cardHasTarget as hasTarget } from '../src/engine/pace';
-import { BUILDINGS as BLD, TECHS } from '../src/data/techs';
+import { BUILDINGS as BLD, TECHS, TECH } from '../src/data/techs';
 import { missionBlocked as blockedFor } from '../src/engine/missions';
 import { unitFor, classOpen } from '../src/engine/cards';
 import { RETIRED, cardFor, addCard as addCardT } from '../src/engine/cards';
@@ -65,6 +65,7 @@ import { NATIONAL_TECHS, NATIONAL_CARDS, NATIONAL_BUILDINGS } from '../src/data/
 import { nationalCardsOf, nationalCan, nationalDefence, nationalIntro } from '../src/engine/national';
 import { techOpenTo, canEverRecruit as canEverT, linesOf as linesOfT } from '../src/engine/technology';
 import { buildingAllowed } from '../src/engine/core';
+import { studiesOf as studiesOfT, knows as knowsT, meetWeapons as meetWeaponsT, missingChain as missingChainT } from '../src/engine/diffusion';
 
 let failed = 0, passed = 0;
 function check(name: string, fn: () => void) {
@@ -836,6 +837,37 @@ check('civilisations: national techs, buildings, troops and cards belong to thei
   ok(!!buildingAllowed(fr, other.id, nb.id), `France may build the ${nb.name}`);
 });
 
+check('contact and diffusion: realms learn from those they meet; the player studies what it has seen for less', () => {
+  const s = newGame('castile', 130); answer(s);
+  // every AI realm knows what its region has reached by 1451; the Inca and Aztecs know no gunpowder studies
+  ok(!knowsT(s, 'inca', 'firearms') && !knowsT(s, 'aztec', 'firearms'), 'the Inca or Aztecs know firearms');
+  const later = newGame('castile', 132, 1600); answer(later);
+  ok(knowsT(later, 'france', 'firearms') && knowsT(later, 'france', 'pike_square'), 'France in 1600 does not know firearms and the pike square');
+  // the player is exposed to what its neighbours know, and that is cheaper than being first
+  const seen = Object.keys(s.exposed ?? {});
+  for (const id of seen) ok(!s.techs.includes(id), `exposed to a study already known: ${id}`);
+  const fresh = TECHS.find(t => !t.bridge && !s.techs.includes(t.id) && !s.exposed?.[t.id] && techOpenTo(s, 'castile', t.id) && t.year > s.year + 40);
+  if (fresh) { const base = techCost(s, fresh.id); (s.exposed ??= {})[fresh.id] = { from: 'france', year: s.year, how: 'border' }; ok(techCost(s, fresh.id) < base, 'exposure did not make a study cheaper'); }
+  // a year of play: the AI learns, nothing breaks, and no realm learns a study outside its traditions
+  for (let i = 0; i < 4; i++) { endTurn(s); answer(s); }
+  for (const n of Object.values(s.nations)) for (const t of studiesOfT(s, n.id)) ok(techOpenTo(s, n.id, t), `${n.id} knows ${t}, not of its traditions`);
+  // strange weapons on the field: the Inca meeting Castilian arquebusiers open Strangers' Arms and may draw the captured-equipment card
+  const inca = newGame('inca', 131); answer(inca);
+  const met = meetWeaponsT(inca, 'castile', ['arquebusiers', 'knights']);
+  ok(met.length > 0 && !!inca.exposed?.foreign_arms && !!inca.exposed?.foreign_horses, 'meeting guns and horses opened nothing');
+  ok(CARDS.captured_equipment.weight(inca) > 0, 'Study Captured Equipment cannot be drawn after the battle');
+  ok(!closedBecause(inca, 'foreign_horses'), 'horses seen in battle still cannot be studied');
+  ok(techCost(inca, 'foreign_arms') <= TECH.foreign_arms.cost * 2, 'a study seen in battle is still priced as pioneering');
+  // a specialist gives a third of a foreign study at once
+  inca.missions.push({ id: 9901, kind: 'research', char: -1, troops: [], target: 'foreign_arms', turnsLeft: 8, total: 8, progress: 0, bonus: 0 });
+  ok(CARDS.captured_equipment.targetOk!(inca, '9901'), 'the card cannot be played on a strangers\' study');
+  CARDS.captured_equipment.play!(inca, '9901');
+  ok(inca.missions.find(m => m.id === 9901)!.progress >= techCost(inca, 'foreign_arms') * 0.3, 'the specialist gave too little');
+  // the path to a study names every missing step
+  const chain = missingChainT(s, 'line_infantry_drill' in TECH ? 'line_infantry_drill' : TECHS[TECHS.length - 1].id);
+  ok(chain.every(id => !s.techs.includes(id)), 'the path lists a known study');
+});
+
 check('text size: every font size in the stylesheet scales with --ts', () => {
   const css = readFileSync('src/styles.css', 'utf8');
   const bare = css.match(/font-size:\s*[\d.]+px/g) ?? [];
@@ -896,7 +928,9 @@ check('merged cards: the Treatise studies any field, and retired cards come as t
 check('regions: the Inca cannot study gunpowder or raise horse, Castile is as it was', () => {
   const inca = newGame('inca', 71), cas = newGame('castile', 71);
   ok(closedBecause(inca, 'firearms'), 'the Inca may study firearms in 1451');
-  ok(/Needs contact/.test(closedBecause(inca, 'foreign_arms') ?? ''), "the Inca may begin Strangers' Arms without contact");
+  // with no teacher the Inca may still work out guns alone, at a far higher cost (diffusion.ts), but never horses
+  ok(!closedBecause(inca, 'foreign_arms') && techCost(inca, 'foreign_arms') > 2 * TECH.foreign_arms.cost, "the Inca cannot pioneer Strangers' Arms, or it is not dear");
+  ok(/Needs contact/.test(closedBecause(inca, 'foreign_horses') ?? ''), "the Inca may work out horses alone");
   ok(/Not needed/.test(closedBecause(cas, 'foreign_arms') ?? ''), "Castile is offered Strangers' Arms");
   inca.techs.push('foreign_arms');
   ok(!closedBecause(inca, 'firearms'), "firearms still closed after Strangers' Arms");
