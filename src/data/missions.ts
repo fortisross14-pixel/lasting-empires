@@ -14,6 +14,10 @@ export interface MissionDef {
   difficulty?: 'beginner' | 'easy' | 'medium' | 'difficult';
   regions?: ('Europe' | 'Middle East' | 'Africa' | 'Asia' | 'Americas')[];
   topics?: ('Military' | 'Diplomacy' | 'Exploration' | 'Trade' | 'Research' | 'Building' | 'People' | 'Government')[];
+  /** Which release brought it (Release 1 when missing): the missions screen filters by it. */
+  release?: number;
+  /** A scenario's own start, kept short: ships, a colonist, a war (run after the realm is set up). */
+  setup?: (s: import('../types').GameState) => void;
 }
 
 /** How hard each mission is, judged by hand from what the realm faces (a new mission without one is rated by
@@ -160,6 +164,40 @@ export const MISSIONS: MissionDef[] = [
   { id: 'mughal_europe', name: 'The Mughal Grand Tour', icon: 'crown', start: 1700, deadline: 1800, nations: ['mughals'], wild: true,
     text: 'Aurangzeb\'s heirs fancy a palace on the Bosphorus and a summer house in Vienna.',
     goals: [{ k: 'own', provinces: ['constantinople', 'vienna'] }] },
+  // ---------- Release 2 (docs/RELEASE-2.md), batch 1 ----------
+  { id: 'b_monsoon', name: 'Gifts of the Monsoon', icon: 'anchor', release: 2, start: 1451, deadline: 1466, nations: ['brunei'], gold: 60,
+    cards: ['trade_route', 'trading_post', 'monsoon_trade', 'merchant_envoys'], beginner: 'National cards: your realm\'s own',
+    text: 'Brunei lives by the monsoon. Play your own cards, Monsoon Trade and Merchant Envoys, then open routes and a trade post.',
+    goals: [{ k: 'nationalCards', n: 2 }, { k: 'routes', n: 2 }, { k: 'posts', n: 1 }] },
+  { id: 'b_neighbours', name: 'Learning from Neighbours', icon: 'book', release: 2, start: 1451, deadline: 1466, nations: ['korea'],
+    cards: ['study_state', 'study_economy', 'foreign_scholars', 'foreign_artisans'], beginner: 'Contact: learning what others know',
+    text: 'What Ming knows costs Korea less to learn. Study two things your neighbours know, and invite foreign scholars to speed one.',
+    goals: [{ k: 'newTechs', n: 2 }, { k: 'cardPlayed', card: 'foreign_scholars' }] },
+  { id: 'b_societies', name: 'The Warrior Societies', icon: 'helm', release: 2, start: 1451, deadline: 1468, nations: ['aztec'], gold: 60,
+    cards: ['jaguar_promotion', 'eagle_promotion', 'warrior_training', 'claim', 'march_orders'], beginner: 'Promotion: Jaguar and Eagle warriors',
+    setup: s => { if (!s.techs.includes('warrior_societies')) s.techs.push('warrior_societies'); },
+    text: 'Captives make a warrior. Raise Macuahuitl Warriors, promote them to the Jaguar and Eagle societies, and win a battle.',
+    steps: [
+      { g: { k: 'fields', types: ['jaguar_warriors'], n: 1, label: 'A company of Jaguar Warriors' }, hint: 'Play Jaguar Warrior Promotion on a company of Macuahuitl Warriors.' },
+      { g: { k: 'fields', types: ['eagle_warriors'], n: 1, label: 'A company of Eagle Warriors' }, hint: 'Warrior Training raises more; Eagle Promotion makes one an Eagle.' },
+      { g: { k: 'battlesWon', n: 1 }, hint: 'Fabricated Claim, then March Orders against a weak neighbour.' },
+    ], goals: [] },
+  { id: 'b_chronicle', name: "The Sultan's Ledger", icon: 'scroll', release: 2, start: 1600, deadline: 1615, nations: ['ottomans'], beginner: 'The Imperial Chronicle: rank, wealth and rivals',
+    text: 'The greatest power of its age must stay so. Open the Chronicle in the Menu, watch your rivals, and grow.',
+    goals: [{ k: 'rank', top: 3 }, { k: 'devGain', n: 10 }, { k: 'newTechs', n: 2 }] },
+  { id: 'triple_alliance', name: 'The Triple Alliance', icon: 'star', release: 2, start: 1451, deadline: 1519, nations: ['aztec'], difficulty: 'easy',
+    text: 'Tenochtitlan rules the valley. Bring stubborn Tlaxcala and the Purépecha under the alliance before strangers come from the sea.',
+    goals: [{ k: 'ownLands', of: ['tlaxcala', 'tarascan'], label: 'The lands of Tlaxcala and the Purépecha' }, { k: 'capital' }] },
+  { id: 'jagiellon', name: 'The Jagiellonian Century', icon: 'crown', release: 2, start: 1451, deadline: 1525, nations: ['poland'], difficulty: 'easy',
+    text: 'The Teutonic Knights hold the Baltic shore. Break them, make the Order your subject and hold Danzig.',
+    goals: [{ k: 'subjects', of: ['teutonic'] }, { k: 'own', provinces: ['danzig'] }] },
+  { id: 'tokugawa', name: 'The Tokugawa Peace', icon: 'tower', release: 2, start: 1600, deadline: 1640, nations: ['japan'], difficulty: 'easy',
+    text: 'Sekigahara is won and Japan is one. Keep every province, build, and let the land grow rich in peace.',
+    goals: [{ k: 'own', provinces: ['kyoto', 'omi', 'settsu', 'kawachi', 'harima', 'tajima', 'iwami', 'suo', 'sanuki', 'tosa', 'hakata', 'bungo', 'higo', 'hyuga', 'satsuma', 'owari', 'echizen', 'etchu', 'kai', 'suruga', 'edo', 'echigo', 'mutsu', 'nanbu', 'oshima'], label: 'Every province of Japan' },
+      { k: 'built', n: 6 }, { k: 'devGain', n: 20 }] },
+  { id: 'venice_china', name: "Marco Polo's Heirs", icon: 'ship', release: 2, regions: ['Europe', 'Asia'], start: 1451, deadline: 1550, nations: ['venice'], wild: true, difficulty: 'easy',
+    text: 'Venice does not wait for Portugal: its merchants sail for the Indies and Cathay themselves.',
+    goals: [{ k: 'discover', regions: ['india', 'china'] }, { k: 'posts', n: 3, regions: ['india', 'china'] }] },
 ];
 // ---------- the beginner missions, step by step ----------
 const STEPS: Record<string, { cards?: string[]; deadline?: number; steps: { g: Goal; hint: string }[] }> = {

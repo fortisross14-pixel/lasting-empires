@@ -92,10 +92,14 @@ earned.
 - The tests check every new mission: its realm exists in its start year, every province and realm a goal names
   exists, its tags come out as planned, and its text fits.
 
+## After Release 2
+
+Release 3 follows in a few days: more scenarios, and more of them with later start dates (1600, 1700).
+
 ## Order of work
 
-1. The four goals, the release tag and the setup hook, with their tests.
-2. Batch 1 (8): the four lessons, The Triple Alliance, The Jagiellonian Century, Tokugawa Peace, Marco Polo's Heirs.
+1. ✅ The goals (`capability`, `fields`, `battlesWon`, `cardPlayed`, `nationalCards`), the release filter, the New mark and the setup hook.
+2. ✅ Batch 1 (8): the four lessons, The Triple Alliance, The Jagiellonian Century, Tokugawa Peace, Marco Polo's Heirs (in the game; difficulty checked by the bot).
 3. Batch 2 (11): the remaining real scenarios.
 4. Batch 3 (11): the remaining wild scenarios (Thunder of the Andes first).
 5. A last pass over difficulty, from the bot's results and your own play.

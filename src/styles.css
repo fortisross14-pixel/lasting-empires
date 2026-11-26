@@ -2605,3 +2605,4 @@ body:has(#pickbar) #timeline, body:has(#pickbar) #goalbar, body:has(#pickbar) #m
 .mc-stars i.off { opacity: .28; filter: grayscale(1); }
 [data-style="chancery"] .mc-stars i { color: #9a6b12; }
 .build-row .bld-pic { display: block; width: 128px; height: 128px; margin: 6px auto 4px; border-radius: 6px; }
+.mc-newmark { font-size: calc(11px * var(--ts, 1)); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--bad); border: 1px solid currentColor; border-radius: 4px; padding: 1px 6px; margin-left: auto; align-self: flex-start; }

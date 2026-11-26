@@ -8,6 +8,10 @@ import { player, provsOf, armyPower, incomeOf, push, log, nationName, getRel, ha
 import { getGeo } from './map';
 import { provRegion, regionKnown, regionDef } from './overseas';
 import { ranking } from './turn';
+import { capsOf } from './technology';
+import { CAPABILITIES } from '../data/heritage';
+import { CARDS } from './cards';
+import { TROOPS } from '../data/troops';
 
 export interface GoalView {
   title: string;     // what to do
@@ -177,6 +181,26 @@ export function goalView(s: GameState, g: Goal, deadline: number): GoalView {
     case 'route': {
       const k = s.routes.filter(r => r.dir === g.dir).length;
       return { title: `${g.n} ${g.dir === 'sell' ? 'export' : 'import'} route${g.n > 1 ? 's' : ''}`, status: `${k} of ${g.n}`, have: k, need: g.n, met: k >= g.n };
+    }
+    case 'capability': {
+      const have = capsOf(s, s.player).has(g.cap), name = CAPABILITIES.find(c => c.id === g.cap)?.name ?? g.cap;
+      return { title: `Your people know ${name.toLowerCase()}`, status: have ? 'Known' : 'Not yet: a strangers\' study opens it', have: have ? 1 : 0, need: 1, met: have };
+    }
+    case 'fields': {
+      const k = s.troops.filter(t => g.types.includes(t.type)).length;
+      return { title: g.label ?? `Field ${g.n} ${g.types.map(t => TROOPS[t]?.name ?? t).join(' or ')}`, status: `${k} of ${g.n}`, have: k, need: g.n, met: k >= g.n };
+    }
+    case 'battlesWon': {
+      const k = (s.stats.battles[s.player]?.won ?? 0) - (s.flags.goal_won0 ?? 0);
+      return { title: `Win ${g.n} battle${g.n > 1 ? 's' : ''}`, status: `${Math.max(0, k)} of ${g.n} won`, have: k, need: g.n, met: k >= g.n };
+    }
+    case 'cardPlayed': {
+      const n = g.n ?? 1, k = s.flags['played_' + g.card] ?? 0, name = CARDS[g.card]?.name ?? g.card;
+      return { title: `Play ${name}${n > 1 ? ` ${n} times` : ''}`, status: `${Math.min(k, n)} of ${n}`, have: k, need: n, met: k >= n };
+    }
+    case 'nationalCards': {
+      const k = s.flags.stat_national ?? 0;
+      return { title: `Play ${g.n} of your realm's own cards`, status: `${k} of ${g.n} played`, have: k, need: g.n, met: k >= g.n };
     }
     case 'independent': {
       const lord = player(s).overlord;

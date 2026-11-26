@@ -548,6 +548,9 @@ export function playCard(s: GameState, handUid: number, target: string): string 
   if (def.target === 'nation' && !s.nations[target]?.alive) return '!Choose a nation';
   if (def.target && def.target !== 'none' && def.targetOk && !def.targetOk(s, target)) return '!Choose a valid target';
   const msg = def.play(s, target);
+  // counted for mission goals: this card, and national cards in all (goals.ts)
+  s.flags['played_' + def.id] = (s.flags['played_' + def.id] ?? 0) + 1;
+  if (NATIONAL_CARDS.some(c => c.id === def.id)) s.flags.stat_national = (s.flags.stat_national ?? 0) + 1;
   removeCard(s, handUid);
   return msg;
 }

@@ -157,6 +157,9 @@ export function newMissionGame(nationId: string, mission: string | import('../ty
   s.flags.goal_built0 = provsOf(s, s.player).reduce((a, p) => a + p.buildings.length, 0);
   s.flags.goal_works0 = (s.works ?? []).length;
   s.flags.goal_dev0 = provsOf(s, s.player).reduce((a, p) => a + p.dev, 0);
+  s.flags.goal_won0 = s.stats.battles[s.player]?.won ?? 0;
+  // a scenario's own start: ships, a colonist, a war (docs/RELEASE-2.md)
+  if (typeof mission === 'string') MISSION[mission]?.setup?.(s);
   return s;
 }
 

@@ -392,7 +392,13 @@ export type Goal =
   | { k: 'capitalAt'; province: string }                       // your capital is there
   | { k: 'relation'; with: string; n: number }                 // relations of at least n
   | { k: 'treaty'; with: string; kind: 'marriage' | 'alliance' | 'trade' } // a treaty with a realm
-  | { k: 'route'; dir: 'buy' | 'sell'; n: number };            // n trade routes that buy (import) or sell (export)                                 // n people at court                                      // no overlord
+  | { k: 'route'; dir: 'buy' | 'sell'; n: number }
+  // Release 2 (docs/RELEASE-2.md)
+  | { k: 'capability'; cap: import('./data/heritage').Capability } // your people know iron, gunpowder, horses…
+  | { k: 'fields'; types: string[]; n: number; label?: string }  // n companies of these types in your army
+  | { k: 'battlesWon'; n: number }                             // win n battles during the mission
+  | { k: 'cardPlayed'; card: string; n?: number }              // play this card (n times)
+  | { k: 'nationalCards'; n: number };                         // play n of your realm's own cards            // n trade routes that buy (import) or sell (export)                                 // n people at court                                      // no overlord
 export interface Scenario {
   id: string; name: string; text: string; deadline: number; goals: Goal[];
   status: 'active' | 'won' | 'lost'; done?: number;            // year it was won or lost

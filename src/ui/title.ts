@@ -26,7 +26,7 @@ import {
 } from './state';
 import { start, toast, SEASONS } from './app';
 import { armBack, setScreenBack } from './modal';
-import { missionTags, matches, EMPTY_FILTER, DIFFICULTIES, LENGTHS_TAG, REGIONS_TAG, TOPICS, SHORT_YEARS, MEDIUM_YEARS, type MissionTags, type MissionFilter } from '../engine/missiontags';
+import { missionTags, matches, EMPTY_FILTER, LATEST_RELEASE, DIFFICULTIES, LENGTHS_TAG, REGIONS_TAG, TOPICS, SHORT_YEARS, MEDIUM_YEARS, type MissionTags, type MissionFilter } from '../engine/missiontags';
 import { NATIONAL_INTRO } from '../data/national';
 
 // ---------- shell ----------
@@ -114,7 +114,11 @@ export const CUSTOM_KEY = 'lasting-empires.custom-missions';
 export function customMissions(): (Scenario & { nation: string })[] { return kvJson<(Scenario & { nation: string })[]>(CUSTOM_KEY, []); }
 export function saveCustom(list: (Scenario & { nation: string })[]) { kvSet(CUSTOM_KEY, JSON.stringify(list.slice(-12))); }
 
+/** Missions started at least once on this device (to take the New mark off). */
+export const PLAYED_KEY = 'lasting-empires.missions-played';
+export const missionsPlayed = (): string[] => kvJson<string[]>(PLAYED_KEY, []);
 export function startMission(nation: string, mission: string | Scenario) {
+  if (typeof mission === 'string' && !missionsPlayed().includes(mission)) kvSet(PLAYED_KEY, JSON.stringify([...missionsPlayed(), mission]));
   const start = typeof mission === 'string' ? MISSIONS.find(m => m.id === mission)?.start ?? 1451 : (mission as Scenario & { start?: number }).start ?? 1451;
   const beginner = typeof mission === 'string' && !!MISSIONS.find(m => m.id === mission)?.beginner; // lessons are always played as designed
   const g = newMissionGame(nation, mission, start, { difficulty: beginner ? STANDARD : settings().difficulty });
@@ -131,7 +135,7 @@ export function missionCard(m: MissionDef) {
   const done = missionsDone()[m.id];
   const pv = previewFor(m.start);
   return h('button', { type: 'button', class: 'mcard' + (m.wild ? ' wild' : '') + (done ? ' done' : '') + (m.beginner ? ' beginner' : ''), onclick: () => showMissionDetail(m) },
-    h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon(done ? 'laurel' : m.icon, 24) }), h('div', {}, h('b', {}, m.name), h('small', {}, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`)), m.wild ? h('span', { class: 'mc-wild' }, 'Wild') : null),
+    h('div', { class: 'mc-h' }, h('span', { class: 'mc-i', html: icon(done ? 'laurel' : m.icon, 24) }), h('div', {}, h('b', {}, m.name), h('small', {}, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`)), (m.release ?? 1) === LATEST_RELEASE && !done && !missionsPlayed().includes(m.id) ? h('span', { class: 'mc-newmark' }, 'New') : null, m.wild ? h('span', { class: 'mc-wild' }, 'Wild') : null),
     tagRow(m),
     h('div', { class: 'mc-foot' },
       h('span', { class: 'mc-realms' }, ...m.nations.map(n => { const nn = pv.nations[n]; return h('span', { class: 'mc-realm' }, nn ? shield(n, nn.color, true) : null, nn?.name ?? n); })),
@@ -216,7 +220,7 @@ export function showMissions(focus?: 'beg' | 'real') {
   const facet = <K extends keyof MissionFilter>(title: string, k: K, values: { v: MissionFilter[K] extends (infer T)[] ? T : never; label: string; n: number }[]) =>
     h('div', { class: 'mf-facet' }, h('h3', {}, title), h('div', { class: 'mf-chips' }, values.filter(x => x.n > 0).map(x =>
       h('button', { class: 'mf-chip' + ((f[k] as unknown[]).includes(x.v) ? ' on' : ''), 'aria-pressed': String((f[k] as unknown[]).includes(x.v)), onclick: () => toggle(k, x.v) }, x.label, h('small', {}, ` ${x.n}`)))));
-  const any = f.start.length + f.real.length + f.length.length + f.difficulty.length + f.regions.length + f.topics.length > 0 || !f.completed;
+  const any = (f.release?.length ?? 0) + f.start.length + f.real.length + f.length.length + f.difficulty.length + f.regions.length + f.topics.length > 0 || !f.completed;
   const root = clear($('#app'));
   const mine = customMissions();
   root.append(h('div', { class: 'missions-screen mlist' },
@@ -226,6 +230,7 @@ export function showMissions(focus?: 'beg' | 'real') {
       h('aside', { class: 'mf-panel', 'aria-label': 'Filter the missions' },
         h('div', { class: 'mf-top' }, h('b', {}, `${list.length} of ${MISSIONS.length} missions`), any ? h('button', { class: 'cap-more', onclick: () => { saveFilter({ ...EMPTY_FILTER }); showMissions(); } }, 'Clear filters') : null),
         h('label', { class: 'mf-done' }, h('input', { type: 'checkbox', checked: f.completed ? true : undefined, onchange: () => { f.completed = !f.completed; saveFilter(f); showMissions(); } }), 'Show completed missions'),
+        facet('Release', 'release', Array.from({ length: LATEST_RELEASE }, (_, i) => i + 1).map(r => ({ v: r, label: `Release ${r}`, n: count(t => t.release === r) }))),
         facet('Start', 'start', START_YEARS.map(y => ({ v: y, label: String(y), n: count(t => t.start === y) }))),
         facet('History', 'real', [{ v: 'real', label: 'Real', n: count(t => t.real) }, { v: 'wild', label: 'Wild', n: count(t => !t.real) }]),
         facet('Difficulty', 'difficulty', DIFFICULTIES.map(x => ({ v: x, label: DIFF_NAME[x], n: count(t => t.difficulty === x) }))),

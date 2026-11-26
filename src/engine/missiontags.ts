@@ -10,11 +10,13 @@ export type Difficulty = 'beginner' | 'easy' | 'medium' | 'difficult';
 export type Region = 'Europe' | 'Middle East' | 'Africa' | 'Asia' | 'Americas';
 export type Topic = 'Military' | 'Diplomacy' | 'Exploration' | 'Trade' | 'Research' | 'Building' | 'People' | 'Government';
 
-export interface MissionTags { start: number; real: boolean; length: Length; difficulty: Difficulty; regions: Region[]; topics: Topic[]; }
+export interface MissionTags { release: number; start: number; real: boolean; length: Length; difficulty: Difficulty; regions: Region[]; topics: Topic[]; }
 
 export const LENGTHS_TAG: Length[] = ['short', 'medium', 'long'];
 export const DIFFICULTIES: Difficulty[] = ['beginner', 'easy', 'medium', 'difficult'];
 export const REGIONS_TAG: Region[] = ['Europe', 'Middle East', 'Africa', 'Asia', 'Americas'];
+/** The newest release: its missions are marked New until played. */
+export const LATEST_RELEASE = 2;
 export const TOPICS: Topic[] = ['Military', 'Diplomacy', 'Exploration', 'Trade', 'Research', 'Building', 'People', 'Government'];
 /** Years: up to SHORT is short, up to MEDIUM is medium, longer is long. */
 export const SHORT_YEARS = 20, MEDIUM_YEARS = 50;
@@ -39,6 +41,7 @@ const GOAL_TOPIC: Partial<Record<Goal['k'], Topic>> = {
   built: 'Building', devGain: 'Building', works: 'Building',
   court: 'People', hired: 'People', people: 'People', dismissed: 'People',
   gov: 'Government', capital: 'Government',
+  capability: 'Research', fields: 'Military', battlesWon: 'Military', nationalCards: 'People',
 };
 /** A beginner mission names its lesson ("War: March Orders…"): the first word is its topic. */
 const LESSON_TOPIC: Record<string, Topic> = { war: 'Military', diplomacy: 'Diplomacy', people: 'People', trade: 'Trade', buildings: 'Building', research: 'Research', troops: 'Military', the: 'People', development: 'Building', arts: 'People', exploration: 'Exploration' };
@@ -52,6 +55,7 @@ function goalProvinces(s: GameState, g: Goal): string[] {
 
 /** Tag a mission. `world` is the game as it stands at the mission's start (for the realm's size and its capital). */
 export function missionTags(m: MissionDef & { difficulty?: Difficulty; regions?: Region[]; topics?: Topic[] }, world: GameState): MissionTags {
+  const release = m.release ?? 1;
   const years = m.deadline - m.start;
   const length: Length = years <= SHORT_YEARS ? 'short' : years <= MEDIUM_YEARS ? 'medium' : 'long';
   // regions: where the first realm's capital stands, then where the goals lead (two at most)
@@ -86,15 +90,16 @@ export function missionTags(m: MissionDef & { difficulty?: Difficulty; regions?:
       difficulty = score <= 3 ? 'easy' : score <= 5 ? 'medium' : 'difficult';
     }
   }
-  return { start: m.start, real: !m.wild, length, difficulty, regions, topics };
+  return { release, start: m.start, real: !m.wild, length, difficulty, regions, topics };
 }
 
 /** The filter the missions screen keeps: in each facet, any of the chosen values; between facets, all of them. */
-export interface MissionFilter { start: number[]; real: ('real' | 'wild')[]; length: Length[]; difficulty: Difficulty[]; regions: Region[]; topics: Topic[]; completed: boolean; }
-export const EMPTY_FILTER: MissionFilter = { start: [], real: [], length: [], difficulty: [], regions: [], topics: [], completed: true };
+export interface MissionFilter { release: number[]; start: number[]; real: ('real' | 'wild')[]; length: Length[]; difficulty: Difficulty[]; regions: Region[]; topics: Topic[]; completed: boolean; }
+export const EMPTY_FILTER: MissionFilter = { release: [], start: [], real: [], length: [], difficulty: [], regions: [], topics: [], completed: true };
 
 export function matches(t: MissionTags, f: MissionFilter, done: boolean): boolean {
   if (!f.completed && done) return false;
+  if (f.release?.length && !f.release.includes(t.release)) return false;
   if (f.start.length && !f.start.includes(t.start)) return false;
   if (f.real.length && !f.real.includes(t.real ? 'real' : 'wild')) return false;
   if (f.length.length && !f.length.includes(t.length)) return false;
