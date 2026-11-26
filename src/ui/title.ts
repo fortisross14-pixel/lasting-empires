@@ -64,17 +64,33 @@ export function slotsSection() {
 // ---------- mission mode: pick a challenge, or build your own ----------
 // The long goal of the game: complete every mission. Completions are kept on this device, across campaigns.
 export const DONE_KEY = 'lasting-empires.missions-done';
-export type DoneRec = { nation: string; realm: string; year: number; when: number };
+/** `stars`: the hardest level it was won at, 1 Gentle, 2 Standard, 3 Hard (records from before stars count as 1). */
+export type DoneRec = { nation: string; realm: string; year: number; when: number; stars?: number };
 export function missionsDone(): Record<string, DoneRec> { return kvJson<Record<string, DoneRec>>(DONE_KEY, {}); }
+/** Stars for winning at a level of difficulty (data/difficulty.ts: 0 Gentle, 1 Standard, 2 Hard). */
+export const starsFor = (difficulty: number) => Math.max(1, Math.min(3, difficulty + 1));
+export const starsOf = (rec?: DoneRec) => (rec ? rec.stars ?? 1 : 0);
+export const STAR_TEXT = (n: number) => '★'.repeat(n) + '☆'.repeat(3 - n);
+/** Three stars, the ones won in gold and the rest faded (the same glyph, so every font shows them alike). */
+export const starRow = (n: number) => h('span', { class: 'mc-stars', role: 'img', 'aria-label': `${n} of 3 stars` }, ...[0, 1, 2].map(i => h('i', { class: i < n ? 'on' : 'off' }, '★')));
 export function recordMission() {
   const sc = S?.scenario;
   if (!sc || sc.status !== 'won' || sc.custom || !MISSIONS.some(m => m.id === sc.id)) return;
   const done = missionsDone();
-  if (done[sc.id]) return;
-  done[sc.id] = { nation: S.player, realm: player(S).name, year: sc.done ?? S.year, when: Date.now() };
+  const lesson = !!MISSIONS.find(m => m.id === sc.id)?.beginner;
+  const stars = lesson ? 3 : starsFor(S.difficulty ?? STANDARD); // a lesson is played as designed: done is done
+  const was = done[sc.id];
+  if (was && starsOf(was) >= stars) return;
+  done[sc.id] = { nation: S.player, realm: player(S).name, year: sc.done ?? S.year, when: Date.now(), stars };
   kvSet(DONE_KEY, JSON.stringify(done));
   const n = Object.keys(done).filter(id => MISSIONS.some(m => m.id === id)).length;
-  toast(`Mission recorded: ${n} of ${MISSIONS.length} completed`, 'good');
+  if (lesson) toast(`Mission recorded: ${n} of ${MISSIONS.length} completed`, 'good');
+  else toast(`${was ? 'Better result' : 'Mission recorded'}: ${STAR_TEXT(stars)} · ${totalStars().have} of ${totalStars().all} stars`, 'good');
+}
+/** Stars won across every mission that is not a lesson, out of three each. */
+export function totalStars(): { have: number; all: number } {
+  const d = missionsDone(), list = MISSIONS.filter(m => !m.beginner);
+  return { have: list.reduce((a, m) => a + starsOf(d[m.id]), 0), all: list.length * 3 };
 }
 export const doneCount = () => { const d = missionsDone(); return MISSIONS.filter(m => d[m.id]).length; };
 // Nothing is locked: every realm, every start and every mission is open from the first launch. What the player has
@@ -119,7 +135,7 @@ export function missionCard(m: MissionDef) {
     tagRow(m),
     h('div', { class: 'mc-foot' },
       h('span', { class: 'mc-realms' }, ...m.nations.map(n => { const nn = pv.nations[n]; return h('span', { class: 'mc-realm' }, nn ? shield(n, nn.color, true) : null, nn?.name ?? n); })),
-      h('span', { class: 'mc-state' }, done ? '✓ Done' : 'Details ›')));
+      h('span', { class: 'mc-state' }, done ? (m.beginner ? '✓ Done' : starRow(starsOf(done))) : 'Details ›')));
 }
 
 /** A mission's tags in one quiet row: difficulty first, then length, where and what. */
@@ -143,7 +159,9 @@ export function showMissionDetail(m: MissionDef) {
       h('section', { class: 'md-brief' },
         h('p', { class: 'md-meta' }, `${m.start} – ${m.deadline} · ${m.deadline - m.start} years`, m.wild ? ' · Wild' : ' · Real history'),
         tagRow(m),
-        done ? h('div', { class: 'mc-done' }, done.realm ? `✓ Completed with ${done.realm} in ${done.year}` : '✓ Completed') : null,
+        done ? h('div', { class: 'mc-done' }, m.beginner ? '✓' : starRow(starsOf(done)), done.realm ? ` Completed with ${done.realm} in ${done.year}` : ' Completed',
+          !m.beginner && starsOf(done) < 3 ? h('small', { class: 'muted' }, ` · win at ${['Gentle', 'Standard', 'Hard'][starsOf(done)]} for ${starsOf(done) === 1 ? 'the second star' : 'the third star'}`) : null) : null,
+        m.beginner ? null : h('p', { class: 'muted small' }, 'Stars: ★ won at Gentle, ★★ at Standard, ★★★ at Hard.'),
         h('p', { class: 'md-lede' }, capped(m.text, 30)),
         m.beginner ? h('div', { class: 'mc-learn' }, `You learn: ${m.beginner}`) : null,
         m.cards?.length || m.gold ? h('p', { class: 'muted' }, 'You start with ', [m.cards?.length ? `${m.cards.length} extra card${m.cards.length > 1 ? 's' : ''}` : '', m.gold ? `${m.gold} ducats` : ''].filter(Boolean).join(' and '), '.') : null,
@@ -428,7 +446,7 @@ export function showTitle() {
           h('span', { class: 'lt-i', html: icon(done ? 'laurel' : ic, 22) }), h('b', {}, title), h('small', {}, sub));
         return h('div', { class: 'learn-row' },
           tile('book', 'Learn the game', l.course ? 'Course complete ✓' : `Guided missions · ${l.beginners}/${l.beginnerAll}`, () => showMissions('beg'), l.course),
-          tile('star', 'Historic challenges', `${l.historic}/${l.historicAll} won${l.wildAll ? ` · wild ${l.wild}/${l.wildAll}` : ''}`, () => showMissions('real')),
+          tile('star', 'Historic challenges', `${l.historic}/${l.historicAll} won${l.wildAll ? ` · wild ${l.wild}/${l.wildAll}` : ''} · ${totalStars().have}/${totalStars().all} ★`, () => showMissions('real')),
           tile('sword', 'Test a battle', 'Castile against Portugal, 1467', () => startFresh('the battle test', scenarioCastilePortugal)));
       })(),
       SLOTS.some(n => loadSlot(n)) || pending ? h('h2', { class: 'pick-h' }, 'Your campaigns') : null,

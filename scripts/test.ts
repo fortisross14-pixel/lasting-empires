@@ -65,6 +65,7 @@ import { NATIONAL_TECHS, NATIONAL_CARDS, NATIONAL_BUILDINGS } from '../src/data/
 import { nationalCardsOf, nationalCan, nationalDefence, nationalIntro } from '../src/engine/national';
 import { techOpenTo, canEverRecruit as canEverT, linesOf as linesOfT } from '../src/engine/technology';
 import { buildingAllowed } from '../src/engine/core';
+import { ART as ART_T } from '../src/ui/art';
 import { recordYear as recordYearT, realmLook as realmLookT, awards as awardsT, annalKind as annalKindT } from '../src/engine/records';
 import { studiesOf as studiesOfT, knows as knowsT, meetWeapons as meetWeaponsT, missingChain as missingChainT } from '../src/engine/diffusion';
 
@@ -1010,6 +1011,11 @@ check('regions: the Inca cannot study gunpowder or raise horse, Castile is as it
   const own = provsOf(inca, 'inca').map(p => p.id);
   const near = Object.values(inca.provinces).find(p => p.owner === 'natives' && own.some(o => provRegion(o) === provRegion(p.id)));
   if (near) { near.owner = 'castile'; checkFirstContact(inca); ok(inca.flags.first_contact, 'no first contact when Castile lands in the Inca region'); ok(inca.pending?.some(x => x.id === 'first_contact'), 'no First Contact event'); ok(!/Needs contact/.test(closedBecause(inca, 'foreign_arms') ?? ''), "Strangers' Arms still closed after first contact"); }
+});
+
+check('unit and card paintings: every one the game lists is a file', () => {
+  for (const n of ART_T) ok(existsSync(`art/${n}.webp`), `art/${n}.webp is missing`);
+  for (const t of ['inca_spearmen', 'eagle_warriors', 'janissaries', 'war_elephants']) ok(ART_T.has('unit_' + t), `the painting of ${t} is not listed`);
 });
 
 check('event paintings: every one named is a file, and every event named exists', () => {

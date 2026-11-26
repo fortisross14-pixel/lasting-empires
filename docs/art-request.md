@@ -5,6 +5,10 @@ compress the tiles to `art/<id>.webp` (256 × 256) and wire them in. Until a pai
 shows something: a unit borrows the nearest European painting (`ALIAS` in `src/ui/art.ts`), a card or building its
 line icon. So the sheets can come in any order, one at a time.
 
+## Received
+
+Sheet 1 (`units-world.png`, 15 troops) and sheet 2 (`units-americas.png`, 8 troops) are in the game (November 2026).
+
 ## How to make a sheet
 
 1. A new ChatGPT conversation. Attach three tiles we already have, so the style matches:
