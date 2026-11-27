@@ -16,9 +16,9 @@ import { discoverable, provRegion } from '../src/engine/overseas';
 import { hireShip, transportOf } from '../src/engine/navy';
 import { warScore, peaceTerms, concludePeace, enemyDemands, subjectsOf } from '../src/engine/diplo';
 import { TECHS, BUILDINGS } from '../src/data/techs';
-import { provsOf, player, enemiesOf, armyCap, incomeOf, atWar } from '../src/engine/core';
+import { provsOf, player, enemiesOf, armyCap, incomeOf, atWar, armyPower } from '../src/engine/core';
 import { CARDS, playCard, cardBlocked, buyCost } from '../src/engine/cards';
-import { neighbours } from '../src/engine/map';
+import { neighbours, getGeo } from '../src/engine/map';
 import { CATS, type GameState } from '../src/types';
 import { NATIONS, NO_STATE } from '../src/data/nations';
 import { troopsNear } from '../src/engine/army';
@@ -204,6 +204,22 @@ function snap(s: GameState): Row {
 function passiveTurn(s: GameState) {
   for (const h of [...s.hand]) { const d = CARDS[h.card]; if (d.kind === 'instant' && !d.target && !cardBlocked(s, d) && !d.burden) playCard(s, h.uid, ''); }
 }
+/** In a mission: at peace and strong enough, go to war with whoever holds a province the mission asks for (the
+ *  provinces a goal names, or the lands of the realms it names), nearest first. A player would; the bot should. */
+function missionWar(s: GameState) {
+  if (enemiesOf(s, s.player).length || player(s).stability < 0 || R() > 0.35) return;
+  const sc = s.scenario!;
+  const wanted = new Set<string>();
+  for (const g of sc.goals) {
+    if (g.k === 'own') g.provinces.forEach(id => wanted.add(id));
+    if (g.k === 'ownLands') for (const x of getGeo().seeds) if (g.of.includes(x.owner)) wanted.add(x.id);
+    if (g.k === 'gone') provsOf(s, g.nation).forEach(p => wanted.add(p.id));
+  }
+  const mine = armyPower(s.troops);
+  const owners = [...new Set([...wanted].map(id => s.provinces[id]?.owner).filter((o): o is string => !!o && o !== s.player && !!s.nations[o]?.alive && !s.nations[o].overlord))];
+  const t = owners.filter(o => armyPower(s.nations[o].army) < mine * 1.1).sort((a, b) => armyPower(s.nations[a].army) - armyPower(s.nations[b].army))[0];
+  if (t) playerDeclareWar(s, t);
+}
 function greedyExtra(s: GameState) {
   if (!enemiesOf(s, s.player).length && player(s).stability >= 0 && R() < 0.4) {
     const nb = new Set<string>();
@@ -224,7 +240,7 @@ for (const n of (MODE === 'big' ? ['castile'] : PICK)) for (let seed = 1; seed <
   let turns = 0;
   try {
     while (!s.over && turns < Number(process.env.TURNS ?? (MODE === 'big' ? 240 : 1300))) {
-      if (MODE === 'passive') passiveTurn(s); else { botTurn(s); if (MODE === 'greedy') greedyExtra(s); }
+      if (MODE === 'passive') passiveTurn(s); else { botTurn(s); if (MODE === 'greedy') greedyExtra(s); if (s.scenario?.status === 'active') missionWar(s); }
       resolveQueue(s); endTurn(s); resolveQueue(s); turns++;
       if (process.env.REVTRACE && s.revolution) { const r = s.revolution; console.log('  rev', s.year, 'q' + s.quarter, 'orders', s.hand.filter(h => h.card === 'march_orders').length, 'gens', s.characters.filter(c => (c.role === 'general' || c.role === 'conqueror') && c.mission == null).length, 'cap', s.provinces[r.rebelCapital].name, 'block', missionBlocked(s, 'conquer', r.rebelCapital), 'near', troopsNear(s, s.player, r.rebelCapital).length, 'mine', s.troops.length, 'theirs', s.nations[r.rebel]?.army.length, 'missions', s.missions.map(m => m.kind + ':' + (s.provinces[m.target]?.name ?? '')).join(','), 'left', missionsLeft(s)); }
       if (CHECK.includes(s.year) && s.quarter === 0) (rows[s.year] ??= []).push(snap(s));
