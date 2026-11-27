@@ -100,6 +100,6 @@ Release 3 follows in a few days: more scenarios, and more of them with later sta
 
 1. ✅ The goals (`capability`, `fields`, `battlesWon`, `cardPlayed`, `nationalCards`), the release filter, the New mark and the setup hook.
 2. ✅ Batch 1 (8): the four lessons, The Triple Alliance, The Jagiellonian Century, Tokugawa Peace, Marco Polo's Heirs (in the game; difficulty checked by the bot).
-3. Batch 2 (11): the remaining real scenarios.
-4. Batch 3 (11): the remaining wild scenarios (Thunder of the Andes first).
+3. ✅ Batch 2: the remaining real scenarios (10).
+4. ✅ Batch 3: the remaining wild scenarios (12). Changes from the plan: Oman already holds the Swahili ports in 1700, so it takes Pate and must keep them; the Mapuche already know horses and iron, so they must take Chile; the Mamluks and Joseon must still hold their capitals at the deadline (otherwise they would be won on the first day).
 5. A last pass over difficulty, from the bot's results and your own play.

@@ -66,6 +66,7 @@ import { nationalCardsOf, nationalCan, nationalDefence, nationalIntro } from '..
 import { techOpenTo, canEverRecruit as canEverT, linesOf as linesOfT } from '../src/engine/technology';
 import { buildingAllowed } from '../src/engine/core';
 import { ART as ART_T } from '../src/ui/art';
+import { goalView as goalViewT } from '../src/engine/goals';
 import { recordYear as recordYearT, realmLook as realmLookT, awards as awardsT, annalKind as annalKindT } from '../src/engine/records';
 import { studiesOf as studiesOfT, knows as knowsT, meetWeapons as meetWeaponsT, missingChain as missingChainT } from '../src/engine/diffusion';
 
@@ -929,6 +930,22 @@ check('no troop ahead of its time: the armies of 1451 and 1600 hold nothing date
   }
   const ming = newGame('ming', 161);
   ok(!ming.troops.some(t => t.type === 'dragoons'), 'Ming rides dragoons in 1451');
+});
+
+check('Release 2: every scenario can start, names real places, and is not won on the first day', () => {
+  const r2 = MISSIONS.filter(m => m.release === 2);
+  ok(r2.length >= 30, `Release 2 has ${r2.length} scenarios`);
+  for (const m of r2) for (const n of m.nations) {
+    const s = newMissionGame(n, m.id, m.start, { seed: 170 });
+    ok(s.nations[n]?.alive, `${m.id}: ${n} does not exist in ${m.start}`);
+    for (const g of [...m.goals, ...(m.steps ?? []).map(x => x.g)]) {
+      if (g.k === 'own') for (const id of g.provinces) ok(s.provinces[id], `${m.id}: unknown province ${id}`);
+      if (g.k === 'gone' || g.k === 'atWar') ok(s.nations[(g as { nation?: string; with?: string }).nation ?? (g as { with: string }).with], `${m.id}: unknown realm in a goal`);
+    }
+    const all = (m.steps?.length ? m.steps.map(x => x.g) : m.goals).every(g => goalViewT(s, g, m.deadline).met);
+    ok(!all, `${m.id}: every goal is already met at the start`);
+    ok(m.text.split(/\s+/).length <= 30, `${m.id}: the brief is ${m.text.split(/\s+/).length} words (30 at most)`);
+  }
 });
 
 check('text size: every font size in the stylesheet scales with --ts', () => {
