@@ -6,6 +6,7 @@ import { h } from './dom';
 import { handCard, troopCard, charCard, troopDetails } from './cards';
 import { CARDS } from '../engine/cards';
 import { buzz } from './sound';
+import { explainEl } from './explain';
 
 /** How long a finger must rest on a card before its detail opens, in milliseconds. */
 export const HOLD_MS = 450;
@@ -19,6 +20,8 @@ function detailFor(card: HTMLElement): HTMLElement | null {
   return null;
 }
 function show(card: HTMLElement) {
+  // the full page of what it does (explain.ts); the old enlarged card only where there is none
+  if (explainEl(card)) { fired = true; buzz(12); return; }
   const body = detailFor(card);
   if (!body) return;
   fired = true;
@@ -32,7 +35,7 @@ function cancel() { clearTimeout(timer); timer = 0; }
 
 document.addEventListener('pointerdown', e => {
   fired = false;
-  const card = (e.target as Element)?.closest?.('.card[data-card], .card[data-troop], .card[data-char]') as HTMLElement | null;
+  const card = (e.target as Element)?.closest?.('.card[data-card], .card[data-troop], .card[data-char], [data-tech], [data-bld]') as HTMLElement | null;
   if (!card || e.button > 0) return;
   start = { x: e.clientX, y: e.clientY };
   cancel();

@@ -91,7 +91,7 @@ async function run(browser, name, opts) {
   for (let d = 0; d < 6; d++) {
     await tap(`#tabs .tab >> nth=${d}`, `deck ${d}`);
     const tabs = await p.locator('#win .win-tab').count();
-    for (let t = 0; t < tabs; t++) { await tap(`#win .win-tab >> nth=${t}`, `deck ${d} tab ${t}`); await check(`deck ${d} tab ${t}`); if (t === 0 && d === 0) await shot('cards'); if (d === 0 && t === 1) await shot('army'); if (d === 1 && t === 2) await shot('ambitions'); if (d === 3 && t === 1) await shot('goods'); if (d === 4 && t === 1) await shot('research'); }
+    for (let t = 0; t < tabs; t++) { await tap(`#win .win-tab >> nth=${t}`, `deck ${d} tab ${t}`); await check(`deck ${d} tab ${t}`); if (t === 0 && d === 0) { await shot('cards'); const c0 = p.locator('#win .card').first(); if (await c0.count()) { await c0.click({ button: 'right' }); await wait(); if (!(await p.locator('.explain').count())) problems.push(`${name}: right-clicking a card explains nothing`); else await shot('explain'); await p.evaluate(() => document.querySelector('.explain .iconbtn')?.click()); await wait(); } } if (d === 0 && t === 1) await shot('army'); if (d === 1 && t === 2) await shot('ambitions'); if (d === 3 && t === 1) await shot('goods'); if (d === 4 && t === 1) await shot('research'); }
     await closeWin();
   }
   // a person of the court: loyalty and wish

@@ -1,5 +1,6 @@
 // Small stroke icons on a 24×24 grid.
 const P: Record<string, string> = {
+  info: 'M12 3 a9 9 0 1 0 0.01 0 Z M12 11 V17 M12 7.5 V7.6',
   fish: 'M2 12 Q9 4 16 12 Q9 20 2 12 Z M16 12 L22 7 V17 Z M7 11 V11.1',
   meat: 'M14 3 a6.5 6.5 0 0 1 3 12 L12 14 L10.5 9.5 a6.5 6.5 0 0 1 3.5 -6.5 Z M11 14 L6 19 M4 17 L5.5 18.5 L4.5 21 M6 19 L8.5 20.5',
   apple: 'M12 7 C7 4 3 8 5 14 C6 18 9 21 12 19 C15 21 18 18 19 14 C21 8 17 4 12 7 Z M12 7 V3 M12 4.5 Q14.5 2 17 3.5',

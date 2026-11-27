@@ -89,3 +89,6 @@ One style, `data-style="chancery"` on `<html>`; its rules are the override block
 
 ## Charts (the Chronicle)
 - Use `lineChart` / `barList` from `src/ui/chart.ts`: one measure per chart (never two y-axes), the realm's own colour, the player's line stronger, names at the line ends for four or fewer and a legend for two or more, a reading under the pointer. Every chart sits beside a table or tiles with the same numbers. New measures go in `FIELDS` in `src/engine/records.ts` (append only: rows are positional).
+
+## Everything explains itself (src/ui/explain.ts)
+- Screens stay short; what a thing does is one gesture away. Anything that shows a card, troop, person, study or building carries `data-card`, `data-troop`, `data-char`, `data-tech` or `data-bld`: hovering it shows a short tip, right-click or I (while hovering) opens its full page (cost, time, upkeep, effects, needs), and a long press does the same on a tablet. A row with nothing to right-click gets an `infoBtn(kind, id)`. A new kind of thing gets a `tipText` case and an `explain…` page built from its own data, never hand-written prose per item.

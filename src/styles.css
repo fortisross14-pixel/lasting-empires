@@ -2606,3 +2606,26 @@ body:has(#pickbar) #timeline, body:has(#pickbar) #goalbar, body:has(#pickbar) #m
 [data-style="chancery"] .mc-stars i { color: #9a6b12; }
 .build-row .bld-pic { display: block; width: 128px; height: 128px; margin: 6px auto 4px; border-radius: 6px; }
 .mc-newmark { font-size: calc(11px * var(--ts, 1)); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--bad); border: 1px solid currentColor; border-radius: 4px; padding: 1px 6px; margin-left: auto; align-self: flex-start; }
+/* the map views open above their button, which sits at the bottom left */
+#modes { right: auto; left: max(10px, env(safe-area-inset-left, 0px)); bottom: 60px; top: auto; }
+
+/* ---------- what everything does (ui/explain.ts) ---------- */
+#tip { position: fixed; z-index: 90; max-width: 320px; display: grid; gap: 3px; padding: 8px 10px; background: var(--float); color: var(--text); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 18px #0006; font-size: calc(13px * var(--ts, 1)); line-height: 1.35; pointer-events: none; }
+#tip b { font-family: var(--f-title); font-size: calc(15px * var(--ts, 1)); }
+#tip small { color: var(--muted); font-size: calc(11px * var(--ts, 1)); }
+[data-style="chancery"] #tip { background: var(--vellum); color: var(--vellum-ink); border: 1.5px solid var(--vellum-ink); border-radius: 0; box-shadow: 3px 3px 0 #0003; }
+[data-style="chancery"] #tip small { color: var(--vellum-muted); }
+.mbox.explain { width: min(560px, 100%); }
+.ex-head { display: flex; gap: 14px; align-items: center; }
+.ex-head h2 { margin: 0; }
+.ex-head .iconbtn { margin-left: auto; align-self: flex-start; }
+.ex-pic { width: 96px; height: 96px; border-radius: 8px; flex: none; }
+.ex-ico { width: 56px; height: 56px; display: grid; place-items: center; color: var(--gold); flex: none; }
+.ex-lede { font-style: italic; margin: 10px 0 4px; }
+.ex-rows { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 10px 0; }
+.ex-rows dt { font-weight: 700; color: var(--muted); }
+.ex-rows dd { margin: 0; }
+.ex-list h3 { margin: 10px 0 4px; }
+.ex-list ul { margin: 0; padding-left: 18px; }
+.ex-btn { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; color: var(--muted); background: none; border: 0; cursor: pointer; }
+.ex-btn:hover, .ex-btn:focus-visible { color: var(--gold); background: #ffffff12; }

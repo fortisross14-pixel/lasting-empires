@@ -65,6 +65,7 @@ import { HERITAGES } from '../data/heritage';
 import { heritageOf } from '../engine/technology';
 import { openChronicle } from './chronicle-page';
 import { artName } from './art';
+import { infoBtn } from './explain';
 
 export function toggleSheet(kind: string, arg?: string) {
   if (sheet && sheet.kind === kind && sheet.arg === arg) closeSheet(); else openSheet(kind, arg);
@@ -170,8 +171,8 @@ export function costBenefit(bid: string, provId?: string, ch?: Character): HTMLE
 export function buildRow(bid: string, provId: string, blocked: string | null, onclick: () => void) {
   const b = BUILDINGS[bid];
   // one line; tap to see cost and benefit, then build
-  return h('details', { class: `build-row${blocked ? ' blocked' : ''}` },
-    h('summary', {}, h('span', { class: 'a-ico', html: icon(b.icon, 20) }), h('span', { class: 'a-t' }, h('b', {}, b.name), h('small', { class: blocked ? 'bad' : '' }, blocked ?? `${buildingCost(S, bid)} ducats · ready to build`)), h('span', { class: 'br-chev', 'aria-hidden': 'true' }, '▾')),
+  return h('details', { class: `build-row${blocked ? ' blocked' : ''}`, 'data-bld': bid },
+    h('summary', {}, h('span', { class: 'a-ico', html: icon(b.icon, 20) }), h('span', { class: 'a-t' }, h('b', {}, b.name), h('small', { class: blocked ? 'bad' : '' }, blocked ?? `${buildingCost(S, bid)} ducats · ready to build`)), infoBtn('bld', bid, `What the ${b.name} does`), h('span', { class: 'br-chev', 'aria-hidden': 'true' }, '▾')),
     // a national building has its own painting (art/bld_<id>.webp), shown when the row opens
     artName('bld_' + bid) ? h('img', { class: 'bld-pic', src: `art/${artName('bld_' + bid)}.webp`, alt: '', loading: 'lazy', width: '128', height: '128' }) : null,
     costBenefit(bid, provId),

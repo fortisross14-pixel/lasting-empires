@@ -66,7 +66,7 @@ export function techCard(t: (typeof TECHS)[number]): HTMLElement {
     !known && chain.length > (t.req?.length ?? 0) ? h('small', { class: 'tc-req' }, 'Path: ', ...chain.flatMap((r, i) => [i ? ' → ' : '', h('button', { class: 'linkish', onclick: (e: Event) => { e.stopPropagation(); const w = missionBlocked(S, 'research', r); toast(`${TECH[r].name}: ${w ?? 'ready to study'}`, w ? 'bad' : 'good'); } }, TECH[r].name)]), ` → ${t.name}`) : null,
     exposure ? h('small', { class: 'tc-exp' }, exposure) : null,
     AGE_TECH[t.id] ? h('span', { class: 'tech-age' }, `Opens the ${ERA[AGE_TECH[t.id]].name} for the whole world`) : null);
-  return h('div', { class: `tcard tr-${t.track}${known ? ' known' : m ? ' active' : why ? ' locked' : ''}`, role: 'button', tabindex: '0', onclick: tap },
+  return h('div', { class: `tcard tr-${t.track}${known ? ' known' : m ? ' active' : why ? ' locked' : ''}`, role: 'button', tabindex: '0', onclick: tap, 'data-tech': t.id },
     h('span', { class: 'tc-side' }, h('span', { class: 'tc-ico', html: icon(TRACK_ICON[t.track], 26) }), h('b', { class: 'tc-pts' }, known ? '✓' : String(cost)), h('small', {}, known ? 'known' : 'points')),
     h('span', { class: 'tc-body' },
       h('span', { class: 'tc-head' }, h('b', { class: 'tc-name' }, t.name), infoToggle([more], `About ${t.name}`)),
