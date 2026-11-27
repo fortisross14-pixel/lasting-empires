@@ -102,4 +102,7 @@ Release 3 follows in a few days: more scenarios, and more of them with later sta
 2. ✅ Batch 1 (8): the four lessons, The Triple Alliance, The Jagiellonian Century, Tokugawa Peace, Marco Polo's Heirs (in the game; difficulty checked by the bot).
 3. ✅ Batch 2: the remaining real scenarios (10).
 4. ✅ Batch 3: the remaining wild scenarios (12). Changes from the plan: Oman already holds the Swahili ports in 1700, so it takes Pate and must keep them; the Mapuche already know horses and iron, so they must take Chile; the Mamluks and Joseon must still hold their capitals at the deadline (otherwise they would be won on the first day).
-5. A last pass over difficulty, from the bot's results and your own play.
+5. ✅ A first pass over difficulty from the bot's results (two to four games each at Standard; the bot now goes to
+   war for a mission's provinces and works towards its trade posts). The mix as rated: lessons 4; real 2 easy,
+   8 medium, 3 difficult; wild 1 easy, 4 medium, 8 difficult. The bot is a weaker conqueror and trader than a
+   person, so the ratings lean hard; your own play corrects them.
